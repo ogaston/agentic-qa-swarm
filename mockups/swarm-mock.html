@@ -1,0 +1,1298 @@
+<meta charset="UTF-8">
+<title>Agentic QA Swarm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f3f4f6; --surface:#ffffff; --surface-2:#eceef2; --surface-3:#e2e5eb;
+    --border:#d7dbe2; --text:#14171c; --text-muted:#5b6270; --text-faint:#8a90a0;
+    --accent:#5457d6; --accent-soft:#eceeff; --accent-text:#3f42c9;
+    --ok:#0f9d84; --ok-soft:#e3f6f2;
+    --warn:#b8790e; --warn-soft:#faf0dd;
+    --danger:#d33d4a; --danger-soft:#fbe6e8;
+    --shadow: 0 1px 2px rgba(20,23,28,.04), 0 8px 24px rgba(20,23,28,.06);
+    --radius: 12px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1015; --surface:#161922; --surface-2:#1d212c; --surface-3:#262b38;
+      --border:#2b3140; --text:#e7e9ee; --text-muted:#9aa1b2; --text-faint:#6b7183;
+      --accent:#7d80f0; --accent-soft:#252a4a; --accent-text:#a6a8f7;
+      --ok:#33c9ab; --ok-soft:#122a26;
+      --warn:#e0a83f; --warn-soft:#2e260f;
+      --danger:#ef5b66; --danger-soft:#331419;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.45);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1015; --surface:#161922; --surface-2:#1d212c; --surface-3:#262b38;
+    --border:#2b3140; --text:#e7e9ee; --text-muted:#9aa1b2; --text-faint:#6b7183;
+    --accent:#7d80f0; --accent-soft:#252a4a; --accent-text:#a6a8f7;
+    --ok:#33c9ab; --ok-soft:#122a26;
+    --warn:#e0a83f; --warn-soft:#2e260f;
+    --danger:#ef5b66; --danger-soft:#331419;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.45);
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size:14px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  code, .mono{ font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  ::selection{ background:var(--accent-soft); }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  a{ color:inherit; }
+  h1,h2,h3,h4{ text-wrap:balance; margin:0; font-weight:600; }
+  button{ font-family:inherit; font-size:inherit; cursor:pointer; }
+
+  .app{ display:grid; grid-template-columns:236px 1fr; grid-template-rows:56px 1fr; min-height:640px; height:100%; }
+
+  /* Top bar (content column only) */
+  .topbar{
+    grid-column:2; grid-row:1;
+    display:flex; align-items:center; gap:14px;
+    padding:0 24px; border-bottom:1px solid var(--border); background:var(--surface);
+  }
+  .brand-mark{
+    width:22px; height:22px; border-radius:6px; background:var(--accent);
+    display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  .brand-mark svg{ width:13px; height:13px; }
+  .env-dot{ width:6px; height:6px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
+  .topbar-spacer{ flex:1; }
+
+  /* Project dropdown */
+  .project-dropdown{ position:relative; }
+  .project-dropdown-trigger{
+    display:flex; align-items:center; gap:7px; padding:6px 10px; border-radius:8px; border:0;
+    background:transparent; color:var(--text); font-size:13px; font-weight:600; cursor:pointer;
+    transition:background-color .15s ease;
+  }
+  .project-dropdown-trigger:hover{ background:var(--surface-2); }
+  .project-dropdown.open .project-dropdown-trigger{ background:var(--surface-2); }
+  .project-dropdown-trigger .chevs{ width:13px; height:13px; color:var(--text-faint); flex:none; }
+  .project-dropdown-menu{
+    position:absolute; top:calc(100% + 8px); left:0; width:260px; z-index:40;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:6px; display:none;
+  }
+  .project-dropdown.open .project-dropdown-menu{ display:block; }
+  .project-dropdown-search{
+    display:flex; align-items:center; gap:8px; padding:8px 9px; margin-bottom:4px;
+    border-bottom:1px solid var(--border);
+  }
+  .project-dropdown-search input{
+    flex:1; min-width:0; border:0; background:transparent; outline:0; font-size:13px; color:var(--text); font-family:inherit;
+  }
+  .project-dropdown-search input::placeholder{ color:var(--text-faint); }
+  .project-dropdown-search .kbd{
+    font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:5px;
+    background:var(--surface-2); color:var(--text-faint); border:1px solid var(--border); flex:none;
+  }
+  .project-dropdown-list{ max-height:260px; overflow-y:auto; padding-top:2px; display:flex; flex-direction:column; gap:1px; }
+  .project-row{
+    display:flex; align-items:center; gap:10px; width:100%; padding:7px 8px; border:0; border-radius:8px;
+    background:transparent; color:var(--text); font-size:13px; text-align:left; cursor:pointer;
+    transition:background-color .1s ease;
+  }
+  .project-row:hover{ background:var(--surface-2); }
+  .project-icon{
+    width:20px; height:20px; border-radius:6px; flex:none; display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:10px; font-weight:700;
+  }
+  .project-empty{ padding:14px 8px; text-align:center; font-size:12px; color:var(--text-faint); }
+  .topbar-right{ display:flex; align-items:center; gap:10px; }
+  .theme-toggle{
+    display:flex; border-radius:8px; overflow:hidden; background:var(--surface-2);
+  }
+  .theme-toggle button{
+    border:0; background:transparent; color:var(--text-muted); padding:6px 10px; font-size:12px;
+    transition:background-color .15s ease, color .15s ease;
+  }
+  .theme-toggle button:hover{ color:var(--text); }
+  .theme-toggle button.active{ background:var(--surface); color:var(--text); }
+  .theme-toggle button.active:hover{ background:var(--surface); }
+  .user-chip{ display:flex; align-items:center; gap:8px; padding-left:10px; border-left:1px solid var(--border); }
+  .avatar{ width:26px; height:26px; border-radius:50%; background:var(--accent-soft); color:var(--accent-text); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; }
+  .user-chip .who{ font-size:12px; }
+  .user-chip .role{ display:block; color:var(--text-faint); font-size:11px; }
+
+  /* Sidebar (full height, own header) */
+  .sidebar{
+    grid-column:1; grid-row:1/3; border-right:1px solid var(--border); background:var(--surface);
+    padding:14px 12px 18px; display:flex; flex-direction:column; gap:2px; overflow-x:hidden; overflow-y:auto;
+  }
+  .project-switch{
+    display:flex; align-items:center; gap:9px; width:100%; padding:7px 8px; margin-bottom:10px;
+    border:0; border-radius:8px; background:transparent; color:var(--text); text-align:left; cursor:pointer;
+    transition:background-color .15s ease;
+  }
+  .project-switch:hover{ background:var(--surface-2); }
+  .project-switch-name{ font-size:13px; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:-.01em; }
+  .project-switch .chevron{ width:13px; height:13px; color:var(--text-faint); flex:none; }
+  .sidebar-search{
+    display:flex; align-items:center; gap:8px; width:100%; padding:7px 9px; margin-bottom:14px;
+    border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-faint);
+    font-size:12.5px; cursor:pointer; transition:border-color .15s ease;
+  }
+  .sidebar-search:hover{ border-color:var(--text-faint); }
+  .sidebar-search svg{ width:14px; height:14px; flex:none; }
+  .sidebar-search span.label{ flex:1; }
+  .sidebar-search .kbd{
+    font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:5px;
+    background:var(--surface-2); color:var(--text-faint); border:1px solid var(--border);
+  }
+  .nav-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); padding:14px 12px 6px; }
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; border:0;
+    background:transparent; color:var(--text-muted); text-align:left; width:100%; font-size:13px;
+    transition:background-color .15s ease, color .15s ease;
+  }
+  .nav-item:hover{ background:var(--surface-2); color:var(--text); }
+  .nav-item.active{ background:var(--surface-2); color:var(--text); font-weight:600; }
+  .nav-item.active:hover{ background:var(--surface-2); }
+  .nav-item svg{ width:15px; height:15px; flex:none; opacity:.75; }
+  .nav-item.active svg{ opacity:1; }
+
+  /* Main */
+  .main{ grid-column:2; grid-row:2; overflow-y:auto; padding:32px 40px 70px; }
+  .view{ display:none; max-width:1080px; }
+  .view.active{ display:block; }
+
+  .view-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:26px; }
+  .eyebrow{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); margin-bottom:6px; font-weight:600; }
+  .view-head h1{ font-size:27px; letter-spacing:-.01em; }
+  .view-head p{ color:var(--text-muted); margin:8px 0 0; max-width:56ch; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:7px; border-radius:8px; padding:9px 15px; font-size:13px; font-weight:600;
+    border:1px solid var(--border); background:var(--surface); color:var(--text); white-space:nowrap;
+    transition:background-color .12s ease, border-color .12s ease, color .12s ease, transform .08s ease;
+  }
+  .btn:hover{ background:var(--surface-2); border-color:var(--text-faint); }
+  .btn:active{ transform:scale(.97); }
+  .btn-primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn-primary:hover{ background:var(--accent-text); border-color:var(--accent-text); }
+  .btn-primary:disabled{ opacity:.45; cursor:not-allowed; transform:none; }
+  .btn-ghost{ border-color:transparent; background:transparent; }
+  .btn-ghost:hover{ background:var(--surface-3); border-color:transparent; }
+  .btn-sm{ padding:6px 11px; font-size:12px; }
+
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+  .card-pad{ padding:22px 24px; }
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid-3{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .stack{ display:flex; flex-direction:column; gap:16px; }
+  .row{ display:flex; align-items:center; gap:10px; }
+  .row-between{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+
+  .stat-card{ padding:18px 20px; }
+  .stat-label{ font-size:11.5px; color:var(--text-muted); }
+  .stat-value{ font-size:26px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums; }
+  .stat-sub{ font-size:11.5px; color:var(--text-faint); margin-top:4px; }
+
+  /* Trend chart card */
+  .chart-card{ padding:0; overflow:hidden; }
+  .chart-tabs{ display:flex; border-bottom:1px solid var(--border); }
+  .chart-tab{
+    flex:1; display:flex; flex-direction:column; gap:7px; align-items:flex-start; text-align:left;
+    padding:14px 18px; border:0; border-right:1px solid var(--border); border-bottom:2px solid transparent;
+    background:transparent; cursor:pointer; transition:background-color .12s ease, border-color .12s ease;
+  }
+  .chart-tab:last-child{ border-right:0; }
+  .chart-tab:hover{ background:var(--surface-2); }
+  .chart-tab.active{ border-bottom-color:var(--accent); background:var(--surface); }
+  .chart-tab-label{ font-size:11.5px; color:var(--text-muted); font-weight:600; }
+  .chart-tab-row{ display:flex; align-items:baseline; gap:8px; }
+  .chart-tab-value{ font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .chart-tab-delta{ font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; white-space:nowrap; }
+  .chart-tab-delta.up{ background:var(--ok-soft); color:var(--ok); }
+  .chart-tab-delta.down{ background:var(--danger-soft); color:var(--danger); }
+  .chart-wrap{ padding:16px 20px 8px; }
+  .chart-wrap svg{ width:100%; height:auto; display:block; overflow:visible; }
+  .chart-grid{ stroke:var(--border); stroke-width:1; }
+  .chart-axis-y{ fill:var(--text-faint); font-size:10px; font-family:"IBM Plex Sans", sans-serif; }
+  .chart-axis-x{ fill:var(--text-faint); font-size:10px; font-family:"IBM Plex Sans", sans-serif; }
+  .chart-area{ fill:var(--accent); opacity:.12; }
+  .chart-line{ fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  .chart-line-dashed{ fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:4 4; stroke-linecap:round; }
+  .chart-dot{ fill:var(--surface); stroke:var(--accent); stroke-width:2; }
+
+  .pill{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
+  .pill-ok{ background:var(--ok-soft); color:var(--ok); }
+  .pill-warn{ background:var(--warn-soft); color:var(--warn); }
+  .pill-danger{ background:var(--danger-soft); color:var(--danger); }
+  .pill-neutral{ background:var(--surface-2); color:var(--text-muted); }
+  .pill-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+  .status-dot{ display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text-muted); }
+  .status-dot.ok{ color:var(--ok); }
+  .status-dot.warn{ color:var(--warn); }
+  .status-dot.danger{ color:var(--danger); }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint); font-weight:600; padding:0 12px 10px; }
+  td{ padding:13px 12px; border-top:1px solid var(--border); vertical-align:middle; transition:background-color .1s ease; }
+  tr:hover td{ background:var(--surface-2); }
+  .table-wrap{ overflow-x:auto; }
+  [data-view="audit"] thead tr{
+    height:35px;
+    background:#f8f8f8;
+  }
+  [data-view="audit"] thead th{
+    height:35px;
+    background:#f8f8f8;
+    padding:0 12px;
+    vertical-align:middle;
+  }
+
+  .section-title{ font-size:13px; font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+  .section-title .count{ color:var(--text-faint); font-weight:500; font-size:11.5px; }
+
+  /* Nuevo test / upload */
+  .dropzone{
+    border:1.5px dashed var(--border); border-radius:var(--radius); padding:34px 20px; text-align:center;
+    color:var(--text-muted); background:var(--surface-2);
+  }
+  .dropzone svg{ width:26px; height:26px; margin-bottom:10px; color:var(--text-faint); }
+  .dropzone .fname{ font-family:"IBM Plex Mono"; font-size:12.5px; color:var(--text); }
+
+  .repo-card{
+    padding:2px 0; display:flex; align-items:center; gap:12px;
+  }
+  .repo-icon{
+    width:34px; height:34px; border-radius:8px; background:var(--surface-3); flex:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .repo-icon svg{ width:18px; height:18px; color:var(--text); }
+  .repo-name{ font-size:13px; font-weight:600; }
+  .repo-meta{ font-size:11.5px; color:var(--text-faint); margin-top:2px; }
+  .repo-meta .mono{ color:var(--text-muted); }
+  .sync-row{
+    display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted);
+    padding:10px 2px 2px;
+  }
+  .sync-dot{ width:6px; height:6px; border-radius:50%; background:var(--ok); flex:none; }
+
+  .flow-step{ display:flex; gap:12px; padding:12px 0; border-top:1px solid var(--border); }
+  .flow-step:first-child{ border-top:0; }
+  .flow-num{
+    width:22px; height:22px; border-radius:6px; background:var(--surface-3); color:var(--text-muted);
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-family:"IBM Plex Mono"; flex:none; margin-top:1px;
+  }
+  .flow-step.done .flow-num{ background:var(--ok-soft); color:var(--ok); }
+  .flow-title{ font-size:13px; font-weight:600; }
+  .flow-desc{ font-size:12.5px; color:var(--text-muted); margin-top:2px; }
+  .flow-meta{ font-family:"IBM Plex Mono"; font-size:11px; color:var(--text-faint); margin-top:4px; }
+
+  pre.code{
+    margin:0; padding:16px 18px; background:#12131a; color:#d3d7e6; border-radius:var(--radius);
+    font-family:"IBM Plex Mono"; font-size:12px; line-height:1.65; overflow-x:auto; border:1px solid var(--border);
+  }
+  :root[data-theme="light"] pre.code, :root:not([data-theme="dark"]):not([data-theme="light"]) pre.code { }
+  .code-kw{ color:#9d8cff; } .code-str{ color:#7fd0a5; } .code-fn{ color:#6bb8ff; } .code-com{ color:#6b7183; }
+
+  .attack-opt{
+    border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; cursor:pointer; background:var(--surface);
+    transition:border-color .12s ease, background-color .12s ease;
+  }
+  .attack-opt:hover{ border-color:var(--text-faint); }
+  .attack-opt.selected{ border-color:var(--accent); background:var(--accent-soft); }
+  .attack-opt.selected:hover{ border-color:var(--accent); }
+  .attack-opt .row-between{ margin-bottom:4px; }
+  .attack-opt h4{ font-size:13px; }
+  .attack-opt p{ margin:0; font-size:12px; color:var(--text-muted); }
+  .radio{ width:15px; height:15px; border-radius:50%; border:1.5px solid var(--text-faint); flex:none; position:relative; }
+  .attack-opt.selected .radio{ border-color:var(--accent); }
+  .attack-opt.selected .radio::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
+
+  /* Rehearsal / progress */
+  .progress-track{ height:6px; border-radius:999px; background:var(--surface-3); overflow:hidden; }
+  .progress-fill{ height:100%; background:var(--accent); border-radius:999px; transition:width .4s ease; }
+  .progress-fill.ok{ background:var(--ok); }
+
+  .log-line{ font-family:"IBM Plex Mono"; font-size:12px; padding:3px 0; color:var(--text-muted); display:flex; gap:10px; }
+  .log-line .t{ color:var(--text-faint); flex:none; }
+  .log-line.ok .msg{ color:var(--ok); }
+  .log-line.warn .msg{ color:var(--warn); }
+
+  /* Swarm pods */
+  .pod-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(74px,1fr)); gap:8px; }
+  .pod{
+    aspect-ratio:1; border-radius:8px; background:var(--ok-soft); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-family:"IBM Plex Mono"; font-size:10px; color:var(--ok);
+    position:relative;
+  }
+  .pod.running{ background:var(--accent-soft); color:var(--accent-text); }
+  .pod.running::after{
+    content:""; position:absolute; inset:0; border-radius:8px; border:1.5px solid var(--accent); opacity:.5;
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce){ .pod.running::after{ animation:none; } }
+  @keyframes pulse{ 0%,100%{ transform:scale(1); opacity:.6; } 50%{ transform:scale(1.12); opacity:0; } }
+
+  .finding-card{ border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; }
+  .finding-card + .finding-card{ margin-top:12px; }
+  .sev-stripe{ width:3px; border-radius:3px; align-self:stretch; flex:none; }
+  .sev-high{ background:var(--danger); } .sev-med{ background:var(--warn); }
+
+  .divider{ height:1px; background:var(--border); margin:22px 0; }
+
+  .toggle{ width:36px; height:20px; border-radius:999px; background:var(--surface-3); border:1px solid var(--border); position:relative; flex:none; }
+  .toggle.on{ background:var(--ok); border-color:var(--ok); }
+  .toggle::after{ content:""; position:absolute; top:1px; left:1px; width:16px; height:16px; border-radius:50%; background:var(--surface); transition:left .15s ease; }
+  .toggle.on::after{ left:17px; background:#fff; }
+
+  .kv{ display:flex; justify-content:space-between; font-size:12.5px; padding:9px 0; border-top:1px solid var(--border); }
+  .kv:first-child{ border-top:0; }
+  .kv .k{ color:var(--text-muted); }
+  .kv .v{ font-weight:600; }
+
+  .empty-hint{ font-size:12px; color:var(--text-faint); text-align:center; padding:20px; }
+
+  /* Commit trigger */
+  .commit-card{ display:flex; align-items:center; gap:12px; padding:13px 16px; }
+  .commit-icon{ width:30px; height:30px; border-radius:7px; background:var(--surface-3); flex:none; display:flex; align-items:center; justify-content:center; }
+  .commit-icon svg{ width:15px; height:15px; }
+  .commit-title{ font-size:13px; font-weight:600; }
+  .commit-meta{ font-size:11.5px; color:var(--text-faint); margin-top:2px; }
+
+  /* Pipeline */
+  .pipeline{ display:flex; flex-direction:column; }
+  .pl-step{ position:relative; padding-left:38px; padding-bottom:26px; }
+  .pl-step::before{ content:""; position:absolute; left:13px; top:28px; bottom:0; width:1.5px; background:var(--border); }
+  .pl-step:last-child::before{ display:none; }
+  .pl-step:last-child{ padding-bottom:2px; }
+  .pl-icon{
+    position:absolute; left:0; top:0; width:27px; height:27px; border-radius:50%;
+    background:var(--surface-2); border:1.5px solid var(--border); color:var(--text-faint);
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; font-family:"IBM Plex Mono";
+    transition:background .2s, border-color .2s, color .2s;
+  }
+  .pl-step.active .pl-icon{ border-color:var(--accent); color:var(--accent-text); background:var(--accent-soft); }
+  .pl-step.done .pl-icon{ border-color:var(--ok); color:var(--ok); background:var(--ok-soft); }
+  .pl-spinner{ width:12px; height:12px; border-radius:50%; border:2px solid var(--accent-soft); border-top-color:var(--accent); animation:spin .7s linear infinite; }
+  @media (prefers-reduced-motion: reduce){ .pl-spinner{ animation:none; } }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .pl-head-text{ flex:1; }
+  .pl-title{ font-size:14px; font-weight:600; }
+  .pl-sub{ font-size:12px; color:var(--text-muted); margin-top:1px; }
+  .pl-head{ display:flex; align-items:center; gap:12px; min-height:27px; }
+  .pl-body{ margin-top:14px; opacity:0; max-height:0; overflow:hidden; transition:opacity .25s ease; }
+  .pl-step.active .pl-body, .pl-step.done .pl-body{ opacity:1; max-height:none; overflow:visible; }
+  .pl-step.locked .pl-title, .pl-step.locked .pl-sub{ color:var(--text-faint); }
+  .pl-step.done .pl-body{ display:none; }
+  .pl-step.done .pl-summary{ display:block; }
+  .pl-summary{ display:none; margin-top:6px; font-size:12px; color:var(--text-muted); }
+
+  .check-opt{
+    border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; cursor:pointer; background:var(--surface);
+    display:flex; gap:12px; align-items:flex-start;
+    transition:border-color .12s ease, background-color .12s ease;
+  }
+  .check-opt:hover{ border-color:var(--text-faint); }
+  .check-opt.selected{ border-color:var(--accent); background:var(--accent-soft); }
+  .check-opt.selected:hover{ border-color:var(--accent); }
+  .checkbox{ width:16px; height:16px; border-radius:5px; border:1.5px solid var(--text-faint); flex:none; margin-top:1px; position:relative; }
+  .check-opt.selected .checkbox{ border-color:var(--accent); background:var(--accent); }
+  .check-opt.selected .checkbox::after{ content:""; position:absolute; left:4px; top:1px; width:4px; height:8px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(40deg); }
+  .check-opt h4{ font-size:13px; display:flex; align-items:center; gap:8px; }
+  .check-opt p{ margin:4px 0 0; font-size:12px; color:var(--text-muted); }
+  .rec-badge{ font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-text); background:var(--surface); border:1px solid var(--accent); padding:1px 7px; border-radius:999px; }
+
+  .skeleton{ background:linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 37%, var(--surface-3) 63%); background-size:400% 100%; animation:shimmer 1.4s ease infinite; border-radius:6px; }
+  @keyframes shimmer{ 0%{ background-position:100% 0; } 100%{ background-position:0 0; } }
+  @media (prefers-reduced-motion: reduce){ .skeleton{ animation:none; } }
+
+  .pod-lbl{ font-size:11px; font-weight:600; color:var(--text-muted); margin:14px 0 8px; }
+  .pod-lbl:first-child{ margin-top:0; }
+  .pod.pending{ background:var(--surface-3); color:var(--text-faint); border-style:dashed; }
+  .pod.torn-down{ background:transparent; color:var(--text-faint); opacity:.4; }
+  .pod.torn-down::after{ display:none; }
+</style>
+
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="project-dropdown" id="projectDropdown">
+      <button type="button" class="project-dropdown-trigger" id="projectDropdownBtn">
+        <span id="projectDropdownLabel">payments-api</span>
+        <svg class="chevs" viewBox="0 0 24 24" fill="none">
+          <path d="M7 9l5-5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 15l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="project-dropdown-menu" id="projectDropdownMenu">
+        <div class="project-dropdown-search">
+          <input type="text" placeholder="Buscar proyecto…" id="projectSearchInput" autocomplete="off">
+          <span class="kbd">Esc</span>
+        </div>
+        <div class="project-dropdown-list" id="projectDropdownList">
+          <button type="button" class="project-row" data-project="payments-api"><span class="project-icon" style="background:#14171c">P</span>payments-api</button>
+          <button type="button" class="project-row" data-project="ledger-service"><span class="project-icon" style="background:#5457d6">L</span>ledger-service</button>
+          <button type="button" class="project-row" data-project="fraud-detection"><span class="project-icon" style="background:#d33d4a">F</span>fraud-detection</button>
+          <button type="button" class="project-row" data-project="notifications-api"><span class="project-icon" style="background:#0f9d84">N</span>notifications-api</button>
+          <button type="button" class="project-row" data-project="docs-site"><span class="project-icon" style="background:#b8790e">D</span>docs-site</button>
+        </div>
+      </div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-right">
+      <!-- <div class="theme-toggle" role="group" aria-label="Theme">
+        <button type="button" data-theme-btn="light">Light</button>
+        <button type="button" data-theme-btn="dark">Dark</button>
+        <button type="button" data-theme-btn="system" class="active">System</button>
+      </div> -->
+      <div class="user-chip">
+        <span class="avatar">MR</span>
+        <span class="who">Marta R.<span class="role">Backend Lead</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <button type="button" class="project-switch">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12c2-4 5-6 8-6s6 2 8 6c-2 4-5 6-8 6s-6-2-8-6z" stroke="#fff" stroke-width="1.8"/><circle cx="12" cy="12" r="2.1" fill="#fff"/></svg>
+      </span>
+      <span class="project-switch-name">Agentic QA Swarm</span>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="sidebar-search">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span class="label">Buscar</span>
+      <span class="kbd">/</span>
+    </div>
+    <div class="nav-label">Corridas</div>
+    <button class="nav-item active" data-view="dashboard">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M3 12h4v7H3zM10 5h4v14h-4zM17 9h4v10h-4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+      Panel
+    </button>
+    <button class="nav-item" data-view="new">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Corrida
+    </button>
+    <button class="nav-item" data-view="report">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Reportes
+    </button>
+    <div class="nav-label">Administración</div>
+    <button class="nav-item" data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.32 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      Configuración
+    </button>
+    <button class="nav-item" data-view="audit">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M5 5h14v14H5z" stroke="currentColor" stroke-width="1.5"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Log de auditoría
+    </button>
+  </div>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <section class="view active" data-view="dashboard">
+      <div class="view-head">
+        <div>
+          <div class="eyebrow">Panel</div>
+          <h1>payments-api</h1>
+          <p>Pendientes de confirmar y resultados de las últimas corridas.</p>
+        </div>
+        <button class="btn btn-primary" data-start-event="pr">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Ejecutar nueva
+        </button>
+      </div>
+
+      <div class="section-title">Pendientes de confirmación <span class="count">3</span></div>
+      <div class="stack" style="gap:10px; margin-bottom:16px;">
+        <div class="card" style="border-color:var(--accent); background:var(--accent-soft);">
+          <div class="commit-card">
+            <div class="commit-icon" style="background:var(--surface);">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
+            </div>
+            <div style="flex:1;">
+              <div class="commit-title"><span class="pill pill-neutral">PR</span> #184 · feat: concurrent transfers</div>
+              <div class="commit-meta">acme-fintech/payments-api · <span class="mono">c4e21ab</span> · hace 4 min · espera tu confirmación</div>
+            </div>
+            <button class="btn btn-primary btn-sm" data-start-event="pr">Confirmar y ejecutar →</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="commit-card">
+            <div class="commit-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
+            </div>
+            <div style="flex:1;">
+              <div class="commit-title"><span class="pill pill-neutral">Commit</span> push a <span class="mono">main</span></div>
+              <div class="commit-meta">acme-fintech/payments-api · <span class="mono">a1c9e02</span> · hace 2 h · solo notificación</div>
+            </div>
+            <button class="btn btn-sm" data-start-event="commit">Confirmar y ejecutar →</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="commit-card">
+            <div class="commit-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
+            </div>
+            <div style="flex:1;">
+              <div class="commit-title"><span class="pill pill-neutral">Release</span> tag <span class="mono">v2.4.0</span></div>
+              <div class="commit-meta">acme-fintech/payments-api · imagen <span class="mono">ghcr.io/acme/payments-api:2.4.0</span> · hace 1 d</div>
+            </div>
+            <button class="btn btn-sm" data-start-event="tag">Confirmar y ejecutar →</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card chart-card" style="margin-bottom:16px;">
+        <div class="chart-tabs" id="chartTabs">
+          <button type="button" class="chart-tab active" data-metric="ensayo">
+            <span class="chart-tab-label">Ensayos exitosos al primer intento</span>
+            <span class="chart-tab-row"><span class="chart-tab-value">74%</span><span class="chart-tab-delta up">+16pp</span></span>
+          </button>
+          <button type="button" class="chart-tab" data-metric="teardown">
+            <span class="chart-tab-label">Entornos de prueba limpiados</span>
+            <span class="chart-tab-row"><span class="chart-tab-value">100%</span><span class="chart-tab-delta up">+0pp</span></span>
+          </button>
+          <button type="button" class="chart-tab" data-metric="incidentes">
+            <span class="chart-tab-label">Incidentes de política</span>
+            <span class="chart-tab-row"><span class="chart-tab-value">0</span><span class="chart-tab-delta up">-1</span></span>
+          </button>
+        </div>
+        <div class="chart-wrap">
+          <svg id="trendChart" viewBox="0 0 760 220" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-pad" style="padding-bottom:0;">
+          <div class="section-title">Corridas recientes <span class="count">4</span></div>
+        </div>
+        <div class="table-wrap">
+        <table>
+          <thead><tr><th>Evento</th><th>Flujos</th><th>Estado</th><th>Hallazgo</th><th>Duración</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="mono">PR #179</span></td><td>feliz camino + concurrencia</td>
+              <td><span class="status-dot warn"><span class="pill-dot"></span>Hallazgo confirmado</span></td>
+              <td>Doble débito bajo concurrencia</td><td>4m 12s</td>
+              <td><button class="btn btn-sm btn-ghost" data-goto="report">Ver →</button></td>
+            </tr>
+            <tr>
+              <td><span class="mono">tag v2.3.1</span></td><td>feliz camino + estado</td>
+              <td><span class="status-dot ok"><span class="pill-dot"></span>Sin hallazgos</span></td>
+              <td>Sin problemas detectados</td><td>3m 40s</td>
+              <td><button class="btn btn-sm btn-ghost">Ver →</button></td>
+            </tr>
+            <tr>
+              <td><span class="mono">commit 9f2aa1c</span></td><td>feliz camino</td>
+              <td><span class="pill pill-danger"><span class="pill-dot"></span>Requiere revisión</span></td>
+              <td>La aplicación no arrancó</td><td>0m 48s</td>
+              <td><button class="btn btn-sm btn-ghost">Ver →</button></td>
+            </tr>
+            <tr>
+              <td><span class="mono">PR #176</span></td><td>concurrencia</td>
+              <td><span class="status-dot ok"><span class="pill-dot"></span>Sin hallazgos</span></td>
+              <td>—</td><td>3m 58s</td>
+              <td><button class="btn btn-sm btn-ghost">Ver →</button></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- NUEVA EJECUCIÓN (pipeline) -->
+    <section class="view" data-view="new">
+      <div class="view-head">
+        <div>
+          <div class="eyebrow">Nueva corrida</div>
+          <h1>Corrida de pruebas</h1>
+          <p>Se va a preparar un entorno aislado, generar los flujos de prueba y ejecutarlos sin tocar staging.</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:22px;">
+        <div class="commit-card">
+          <div class="commit-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
+          </div>
+          <div style="flex:1;">
+            <div class="repo-name" id="eventRepo">acme-fintech/payments-api</div>
+            <div class="repo-meta" id="eventMeta">PR #184 · <span class="mono">c4e21ab</span> · entorno de prueba</div>
+          </div>
+          <span class="pill pill-ok" id="eventPill"><span class="pill-dot"></span>confirmado</span>
+        </div>
+      </div>
+
+      <div class="pipeline" id="pipeline">
+
+        <!-- Step 1: boot artifact -->
+        <div class="pl-step active" data-step="boot">
+          <div class="pl-icon" id="iconBoot">1</div>
+          <div class="pl-head">
+            <div class="pl-head-text">
+              <div class="pl-title">Artefacto en Docker</div>
+              <div class="pl-sub">Se va a obtener la imagen de Docker de la aplicación y las necesarias para iniciar las pruebas.</div>
+            </div>
+          </div>
+          <div class="pl-body" id="bootBody">
+            <div class="stack" style="gap:8px;">
+              <div class="skeleton" style="height:14px; width:50%;"></div>
+              <div class="skeleton" style="height:72px; width:100%;"></div>
+            </div>
+          </div>
+          <div class="pl-summary" id="bootDone"></div>
+        </div>
+
+        <!-- Step 2: flow selection -->
+        <div class="pl-step locked" data-step="select">
+          <div class="pl-icon" id="iconSelect">2</div>
+          <div class="pl-head">
+            <div class="pl-head-text">
+              <div class="pl-title">Flujos de QA</div>
+              <div class="pl-sub">Se van a proponer los flujos de prueba a partir de lo que la aplicación expone. Tú eliges cuáles ejecutar.</div>
+            </div>
+          </div>
+          <div class="pl-body">
+            <div class="stack" style="gap:10px; margin-top:2px;">
+              <div class="check-opt selected" data-flow="happy">
+                <div class="checkbox"></div>
+                <div>
+                  <h4>Camino feliz · reservar, transferir y liberar <span class="rec-badge">recomendado</span></h4>
+                  <p>Recorre el flujo principal de la aplicación y comprueba que el saldo no queda negativo.</p>
+                </div>
+              </div>
+              <div class="check-opt selected" data-flow="race">
+                <div class="checkbox"></div>
+                <div>
+                  <h4>Concurrencia sobre la misma reserva <span class="rec-badge">recomendado</span></h4>
+                  <p>Lanza varias transferencias al mismo tiempo para detectar un doble débito o un saldo incorrecto.</p>
+                </div>
+              </div>
+              <div class="check-opt" data-flow="state">
+                <div class="checkbox"></div>
+                <div>
+                  <h4>Transiciones de estado inválidas</h4>
+                  <p>Prueba pasos fuera de orden para ver si la aplicación permite estados que no debería.</p>
+                </div>
+              </div>
+              <div class="check-opt" data-flow="mass">
+                <div class="checkbox"></div>
+                <div>
+                  <h4>Campos no documentados</h4>
+                  <p>Envía datos extra no previstos para detectar escrituras que no deberían estar permitidas.</p>
+                </div>
+              </div>
+            </div>
+            <div class="row-between" style="margin-top:16px;">
+              <span style="font-size:12px; color:var(--text-faint);" id="selectSummary">2 flujos seleccionados</span>
+              <button class="btn btn-primary" id="btnGenerate">Aceptar y continuar →</button>
+            </div>
+          </div>
+          <div class="pl-summary" id="selectDone"></div>
+        </div>
+
+        <!-- Step 3: script generation -->
+        <div class="pl-step locked" data-step="generate">
+          <div class="pl-icon" id="iconGenerate">3</div>
+          <div class="pl-head">
+            <div class="pl-head-text">
+              <div class="pl-title">Scripts de prueba</div>
+              <div class="pl-sub">Se van a escribir los scripts de cada flujo para que puedas revisarlos antes de ejecutarlos.</div>
+            </div>
+          </div>
+          <div class="pl-body" id="generateBody">
+            <div class="stack" style="gap:8px;">
+              <div class="skeleton" style="height:14px; width:60%;"></div>
+              <div class="skeleton" style="height:120px; width:100%;"></div>
+            </div>
+          </div>
+          <div class="pl-summary" id="generateDone"></div>
+        </div>
+
+        <!-- Step 4: rehearsal -->
+        <div class="pl-step locked" data-step="rehearsal">
+          <div class="pl-icon" id="iconRehearsal">4</div>
+          <div class="pl-head">
+            <div class="pl-head-text">
+              <div class="pl-title">Ensayo previo</div>
+              <div class="pl-sub">Se va a probar un recorrido simple para comprobar que el entorno responde antes de la corrida completa.</div>
+            </div>
+          </div>
+          <div class="pl-body" id="rehearsalBody"></div>
+          <div class="pl-summary" id="rehearsalDone"></div>
+        </div>
+
+        <!-- Step 5: run -->
+        <div class="pl-step locked" data-step="swarm">
+          <div class="pl-icon" id="iconSwarm">5</div>
+          <div class="pl-head">
+            <div class="pl-head-text">
+              <div class="pl-title">Corrida de pruebas</div>
+              <div class="pl-sub">Se van a ejecutar los flujos seleccionados contra una copia aislada de la aplicación.</div>
+            </div>
+          </div>
+          <div class="pl-body" id="swarmBody"></div>
+          <div class="pl-summary" id="swarmDone"></div>
+        </div>
+
+        <!-- Step 6: done -->
+        <div class="pl-step locked" data-step="finish">
+          <div class="pl-icon" id="iconFinish">6</div>
+          <div class="pl-head">
+            <div class="pl-head-text">
+              <div class="pl-title">Entorno limpiado</div>
+              <div class="pl-sub">Se va a apagar y eliminar el entorno de prueba. El reporte queda listo para revisar.</div>
+            </div>
+          </div>
+          <div class="pl-body" id="finishBody"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- REPORTE -->
+    <section class="view" data-view="report">
+      <div class="view-head">
+        <div>
+          <div class="eyebrow">Reporte</div>
+          <h1>PR #179 · concurrencia sobre una reserva</h1>
+          <p>Un hallazgo confirmado en esta corrida. El entorno de prueba ya se eliminó.</p>
+        </div>
+        <span class="pill pill-neutral">entorno eliminado</span>
+      </div>
+
+      <div class="grid-3" style="margin-bottom:16px;">
+        <div class="card stat-card"><div class="stat-label">Requests totales</div><div class="stat-value">4,000</div></div>
+        <div class="card stat-card"><div class="stat-label">Problemas detectados</div><div class="stat-value" style="color:var(--danger)">3</div></div>
+        <div class="card stat-card"><div class="stat-label">Duración total</div><div class="stat-value">1m 34s</div></div>
+      </div>
+
+      <div class="section-title">Hallazgos <span class="count">1 confirmado</span></div>
+      <div class="finding-card row" style="align-items:stretch; gap:14px;">
+        <div class="sev-stripe sev-high"></div>
+        <div style="flex:1;">
+          <div class="row-between">
+            <h4 style="font-size:14px; margin-bottom:4px;">Doble débito cuando hay varias transferencias a la vez</h4>
+            <span class="pill pill-danger">alta severidad</span>
+          </div>
+          <p style="margin:6px 0 10px; color:var(--text-muted); font-size:13px;">
+            Con 40 solicitudes al mismo tiempo sobre la misma reserva, 3 lograron debitar antes de que el saldo se actualizara, dejándolo en negativo. El problema se reprodujo de forma consistente.
+          </p>
+          <div class="row" style="gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-sm">Ver evidencia cruda</button>
+            <button class="btn btn-sm">Ver 3 requests que fallaron</button>
+            <button class="btn btn-sm btn-ghost">Marcar como ruido</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="card card-pad">
+        <div class="section-title">Resumen enviado a Slack</div>
+        <div style="background:var(--surface-2); border-radius:var(--radius); padding:16px 18px; font-size:13px;">
+          <strong>#payments-eng</strong> · Agentic QA Swarm<br>
+          <span style="color:var(--text-muted)">
+            🔴 <strong>1 hallazgo confirmado</strong> en <span class="mono">PR #179</span> — bajo carga concurrente, una condición de carrera deja el saldo en negativo. El entorno de prueba ya se eliminó. <a href="#" style="color:var(--accent-text); text-decoration:underline;">Ver reporte completo →</a>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" data-view="settings">
+      <div class="view-head">
+        <div>
+          <div class="eyebrow">Configuración</div>
+          <h1>Configuración del proyecto</h1>
+          <p>Conecta el repositorio, elige qué eventos notifican y define cómo se lanzan las corridas.</p>
+        </div>
+      </div>
+
+      <div class="card card-pad" style="margin-bottom:16px;">
+        <div class="section-title">Repositorio conectado</div>
+        <div class="repo-card">
+          <div class="repo-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
+          </div>
+          <div style="flex:1;">
+            <div class="repo-name">acme-fintech/payments-api</div>
+            <div class="repo-meta">GitHub · entorno de prueba <span class="mono">qa-swarm-test</span></div>
+          </div>
+          <span class="pill pill-ok"><span class="pill-dot"></span>conectado</span>
+        </div>
+        <div class="sync-row">
+          <span class="sync-dot"></span>
+          Cada commit, PR y release genera una notificación. Nada se ejecuta hasta que alguien confirma.
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="stack">
+          <div class="card card-pad">
+            <div class="section-title">Eventos que notifican</div>
+            <div class="row-between" style="padding:8px 0;"><span>Commits</span><div class="toggle on"></div></div>
+            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Pull requests</span><div class="toggle on"></div></div>
+            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Tags / releases</span><div class="toggle on"></div></div>
+            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Ejecutar automáticamente al recibir el evento</span><div class="toggle"></div></div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="section-title">Tipos de prueba habilitados</div>
+            <div class="row-between" style="padding:8px 0;"><span>Camino feliz</span><div class="toggle on"></div></div>
+            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Concurrencia</span><div class="toggle on"></div></div>
+            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Estados inválidos</span><div class="toggle on"></div></div>
+            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Campos no documentados</span><div class="toggle"></div></div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card card-pad">
+            <div class="section-title">Entorno de prueba</div>
+            <div class="kv"><span class="k">Nombre</span><span class="v">qa-swarm-test</span></div>
+            <div class="kv"><span class="k">Tope de CPU / memoria</span><span class="v">4 CPU · 8 Gi</span></div>
+            <div class="kv"><span class="k">Ensayo previo</span><span class="v" style="color:var(--ok)">siempre activo</span></div>
+            <div class="kv"><span class="k">Limpieza al terminar</span><span class="v" style="color:var(--ok)">siempre activa</span></div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- AUDIT -->
+    <section class="view" data-view="audit">
+      <div class="view-head">
+        <div>
+          <div class="eyebrow">Administración</div>
+          <h1>Log de auditoría</h1>
+          <p>Historial de confirmaciones, ejecuciones y rechazos.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+        <table>
+          <thead><tr><th>Hora</th><th>Evento</th><th>Actor</th><th>Resultado</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">14:02:08</td><td>PR #184 recibida desde GitHub</td><td>sistema</td><td><span class="status-dot ok"><span class="pill-dot"></span>notificado</span></td></tr>
+            <tr><td class="mono">14:02:11</td><td>Confirmación de corrida</td><td>Marta R.</td><td><span class="status-dot ok"><span class="pill-dot"></span>aprobado</span></td></tr>
+            <tr><td class="mono">14:02:40</td><td>Arranque del entorno de prueba</td><td>sistema</td><td><span class="status-dot ok"><span class="pill-dot"></span>listo</span></td></tr>
+            <tr><td class="mono">14:02:41</td><td>Ensayo previo</td><td>sistema</td><td><span class="status-dot ok"><span class="pill-dot"></span>superado</span></td></tr>
+            <tr><td class="mono">14:03:47</td><td>Limpieza del entorno de prueba</td><td>sistema</td><td><span class="status-dot ok"><span class="pill-dot"></span>completo</span></td></tr>
+            <tr><td class="mono">11:18:02</td><td>Intento de usar un entorno fuera de prueba</td><td>CI pipeline</td><td><span class="pill pill-danger">rechazado</span></td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+  const views = document.querySelectorAll('.view');
+  const navItems = document.querySelectorAll('.nav-item');
+  function showView(name){
+    views.forEach(v => v.classList.toggle('active', v.dataset.view === name));
+    navItems.forEach(n => n.classList.toggle('active', n.dataset.view === name));
+  }
+  navItems.forEach(n => n.addEventListener('click', () => {
+    showView(n.dataset.view);
+    if(n.dataset.view === 'new' && document.getElementById('iconBoot').textContent === '1'){
+      runBoot();
+    }
+  }));
+  document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => showView(b.dataset.goto)));
+
+  // ---------- Project dropdown ----------
+  const projectDropdown = document.getElementById('projectDropdown');
+  const projectDropdownBtn = document.getElementById('projectDropdownBtn');
+  const projectDropdownLabel = document.getElementById('projectDropdownLabel');
+  const projectSearchInput = document.getElementById('projectSearchInput');
+  const projectRows = document.querySelectorAll('.project-row');
+
+  function openProjectDropdown(){
+    projectDropdown.classList.add('open');
+    projectSearchInput.value = '';
+    projectRows.forEach(r => r.style.display = '');
+    setTimeout(() => projectSearchInput.focus(), 0);
+  }
+  function closeProjectDropdown(){
+    projectDropdown.classList.remove('open');
+  }
+  projectDropdownBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    projectDropdown.classList.contains('open') ? closeProjectDropdown() : openProjectDropdown();
+  });
+  document.addEventListener('click', (e) => {
+    if(!projectDropdown.contains(e.target)) closeProjectDropdown();
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') closeProjectDropdown();
+  });
+  projectSearchInput.addEventListener('input', () => {
+    const q = projectSearchInput.value.trim().toLowerCase();
+    projectRows.forEach(r => { r.style.display = r.dataset.project.toLowerCase().includes(q) ? '' : 'none'; });
+  });
+  projectRows.forEach(r => r.addEventListener('click', () => {
+    projectDropdownLabel.textContent = r.dataset.project;
+    closeProjectDropdown();
+  }));
+
+  // ---------- Trend chart ----------
+  const CHART_DATES = ['Aug 14','Aug 15','Aug 16','Aug 17','Aug 18','Aug 19','Aug 20','Aug 21'];
+  const CHART_METRICS = {
+    ensayo:     { values:[58,64,60,68,65,70,66,74], domainMin:50, domainMax:80, ticks:[50,60,70,80] },
+    teardown:   { values:[100,100,97,100,100,100,100,100], domainMin:90, domainMax:100, ticks:[90,95,100] },
+    incidentes: { values:[0,0,1,0,0,0,0,0], domainMin:0, domainMax:3, ticks:[0,1,2,3] }
+  };
+  const trendChart = document.getElementById('trendChart');
+
+  function renderChart(key){
+    const m = CHART_METRICS[key];
+    const W = 760, H = 220, padL = 30, padR = 8, padT = 10, padB = 24;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const n = m.values.length;
+    const xAt = i => padL + (i/(n-1))*plotW;
+    const yAt = v => padT + plotH - ((v - m.domainMin)/(m.domainMax - m.domainMin))*plotH;
+    const pts = m.values.map((v,i) => [xAt(i), yAt(v)]);
+    const baseY = (padT + plotH).toFixed(1);
+
+    const fullPath = pts.map((p,i) => (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+    const areaPath = fullPath + ` L${pts[n-1][0].toFixed(1)},${baseY} L${pts[0][0].toFixed(1)},${baseY} Z`;
+    const solidPath = pts.slice(0, n-1).map((p,i) => (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+    const dashedPath = `M${pts[n-2][0].toFixed(1)},${pts[n-2][1].toFixed(1)} L${pts[n-1][0].toFixed(1)},${pts[n-1][1].toFixed(1)}`;
+
+    const gridLines = m.ticks.map(t => {
+      const yy = yAt(t).toFixed(1);
+      return `<line class="chart-grid" x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}"/>
+              <text class="chart-axis-y" x="0" y="${(+yy+3).toFixed(1)}">${t}</text>`;
+    }).join('');
+
+    const xLabels = CHART_DATES.map((d,i) => {
+      const anchor = i===0 ? 'start' : (i===n-1 ? 'end' : 'middle');
+      return `<text class="chart-axis-x" x="${xAt(i).toFixed(1)}" y="${H-6}" text-anchor="${anchor}">${d}</text>`;
+    }).join('');
+
+    trendChart.innerHTML = `
+      ${gridLines}
+      <path class="chart-area" d="${areaPath}"></path>
+      <path class="chart-line" d="${solidPath}"></path>
+      <path class="chart-line-dashed" d="${dashedPath}"></path>
+      <circle class="chart-dot" cx="${pts[n-1][0].toFixed(1)}" cy="${pts[n-1][1].toFixed(1)}" r="3.5"></circle>
+      ${xLabels}
+    `;
+  }
+  document.querySelectorAll('.chart-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.chart-tab').forEach(t => t.classList.toggle('active', t === tab));
+      renderChart(tab.dataset.metric);
+    });
+  });
+  renderChart('ensayo');
+
+  const root = document.documentElement;
+  document.querySelectorAll('[data-theme-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.themeBtn;
+      if(mode === 'system'){ root.removeAttribute('data-theme'); }
+      else { root.setAttribute('data-theme', mode); }
+      document.querySelectorAll('[data-theme-btn]').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  // ---------- Pipeline: corrida aislada ----------
+  const EVENTS = {
+    pr:     { title: 'PR #184 · feat: concurrent transfers', meta: 'PR #184 · <span class="mono">c4e21ab</span> · entorno de prueba' },
+    commit: { title: 'push a main', meta: 'commit <span class="mono">a1c9e02</span> · entorno de prueba' },
+    tag:    { title: 'tag v2.4.0', meta: 'tag <span class="mono">v2.4.0</span> · imagen <span class="mono">ghcr.io/acme/payments-api:2.4.0</span>' }
+  };
+
+  const FLOWS = {
+    happy: { label: 'Camino feliz', file: 'transfers_happy_path.js', vus: 1 },
+    race:  { label: 'Concurrencia sobre hold', file: 'transfers_concurrency.js', vus: 40 },
+    state: { label: 'Transiciones inválidas', file: 'transfers_invalid_state.js', vus: 8 },
+    mass:  { label: 'Campos no documentados', file: 'transfers_undeclared_fields.js', vus: 8 }
+  };
+
+  const stepEls = {
+    boot: document.querySelector('.pl-step[data-step="boot"]'),
+    select: document.querySelector('.pl-step[data-step="select"]'),
+    generate: document.querySelector('.pl-step[data-step="generate"]'),
+    rehearsal: document.querySelector('.pl-step[data-step="rehearsal"]'),
+    swarm: document.querySelector('.pl-step[data-step="swarm"]'),
+    finish: document.querySelector('.pl-step[data-step="finish"]')
+  };
+
+  let currentEvent = 'pr';
+
+  function setStep(el, state){ el.classList.remove('locked','active','done'); el.classList.add(state); }
+  function selectedFlows(){ return Array.from(document.querySelectorAll('.check-opt.selected')).map(o => o.dataset.flow); }
+
+  function applyEvent(key){
+    currentEvent = key;
+    const e = EVENTS[key];
+    document.getElementById('eventMeta').innerHTML = e.meta;
+  }
+
+  function resetPipeline(){
+    Object.values(stepEls).forEach((el, i) => setStep(el, i === 0 ? 'active' : 'locked'));
+    document.querySelectorAll('.check-opt').forEach(o => o.classList.toggle('selected', o.dataset.flow === 'happy' || o.dataset.flow === 'race'));
+    document.getElementById('iconBoot').textContent = '1';
+    document.getElementById('iconSelect').textContent = '2';
+    document.getElementById('iconGenerate').textContent = '3';
+    document.getElementById('iconRehearsal').textContent = '4';
+    document.getElementById('iconSwarm').textContent = '5';
+    document.getElementById('iconFinish').textContent = '6';
+    document.getElementById('bootBody').innerHTML = `<div class="stack" style="gap:8px;"><div class="skeleton" style="height:14px; width:50%;"></div><div class="skeleton" style="height:72px; width:100%;"></div></div>`;
+    document.getElementById('generateBody').innerHTML = `<div class="stack" style="gap:8px;"><div class="skeleton" style="height:14px; width:60%;"></div><div class="skeleton" style="height:120px; width:100%;"></div></div>`;
+    document.getElementById('rehearsalBody').innerHTML = '';
+    document.getElementById('swarmBody').innerHTML = '';
+    document.getElementById('finishBody').innerHTML = '';
+    ['bootDone','selectDone','generateDone','rehearsalDone','swarmDone'].forEach(id => document.getElementById(id).textContent = '');
+    updateSelectSummary();
+    document.getElementById('btnGenerate').disabled = false;
+  }
+
+  function updateSelectSummary(){
+    const n = selectedFlows().length;
+    document.getElementById('selectSummary').textContent =
+      n === 0 ? 'Selecciona al menos un flujo' :
+      n === 1 ? '1 flujo seleccionado' :
+      n + ' flujos seleccionados';
+    document.getElementById('btnGenerate').disabled = n === 0;
+  }
+
+  document.querySelectorAll('.check-opt').forEach(opt => {
+    opt.addEventListener('click', () => { opt.classList.toggle('selected'); updateSelectSummary(); });
+  });
+
+  function runBoot(){
+    document.getElementById('iconBoot').innerHTML = '<span class="pl-spinner"></span>';
+    document.getElementById('bootBody').innerHTML = `
+      <div class="card card-pad" style="margin-bottom:0;">
+        <div class="stack" style="gap:2px;" id="bootLog"></div>
+      </div>`;
+    const log = document.getElementById('bootLog');
+    const lines = [
+      ['00:00', 'Obteniendo la imagen de la aplicación', ''],
+      ['00:04', 'Arrancando la aplicación', ''],
+      ['00:09', 'Arrancando los servicios de prueba', 'ok'],
+      ['00:14', 'Aplicación lista para probar', 'ok'],
+    ];
+    lines.forEach((l, i) => {
+      setTimeout(() => {
+        const row = document.createElement('div');
+        row.className = 'log-line ' + l[2];
+        row.innerHTML = `<span class="t mono">${l[0]}</span><span class="msg">${l[1]}</span>`;
+        log.appendChild(row);
+      }, i * 450);
+    });
+    setTimeout(() => {
+      setStep(stepEls.boot, 'done');
+      document.getElementById('bootDone').textContent = 'Entorno de prueba listo';
+      document.getElementById('iconBoot').innerHTML = '✓';
+      setStep(stepEls.select, 'active');
+    }, lines.length * 450 + 300);
+  }
+
+  document.getElementById('btnGenerate').addEventListener('click', () => {
+    const chosen = selectedFlows();
+    if(!chosen.length) return;
+    setStep(stepEls.select, 'done');
+    document.getElementById('selectDone').textContent =
+      chosen.length + ' flujo' + (chosen.length>1?'s':'') + ' seleccionado' + (chosen.length>1?'s':'');
+    document.getElementById('iconSelect').innerHTML = '✓';
+    setStep(stepEls.generate, 'active');
+    runGenerate(chosen);
+  });
+
+  function runGenerate(chosen){
+    setTimeout(() => {
+      const scripts = chosen.map(k => {
+        const a = FLOWS[k];
+        return `<span class="code-com">// ${a.file} — generado para este flujo, editable</span>
+<span class="code-kw">import</span> http <span class="code-kw">from</span> <span class="code-str">'k6/http'</span>;
+<span class="code-kw">import</span> { check } <span class="code-kw">from</span> <span class="code-str">'k6'</span>;
+
+<span class="code-kw">export const</span> options = { vus: <span class="code-fn">${a.vus}</span>, iterations: <span class="code-fn">${a.vus}</span> };
+
+<span class="code-kw">export default function</span> () {
+  <span class="code-kw">const</span> hold = http.<span class="code-fn">post</span>(<span class="code-str">\`\${BASE}/accounts/\${ACC}/hold\`</span>);
+  <span class="code-kw">const</span> tx   = http.<span class="code-fn">post</span>(<span class="code-str">\`\${BASE}/transfers\`</span>, { hold_id: hold.json(<span class="code-str">'id'</span>) });
+  <span class="code-fn">check</span>(tx, { <span class="code-str">'saldo nunca negativo'</span>: (r) =&gt; r.json(<span class="code-str">'balance'</span>) &gt;= <span class="code-fn">0</span> });
+}`;
+      }).join('\n\n');
+      document.getElementById('generateBody').innerHTML =
+        `<pre class="code">${scripts}</pre>
+         <div style="font-size:12px; color:var(--text-faint); margin-top:10px;">${chosen.length} flujo${chosen.length>1?'s':''} listo${chosen.length>1?'s':''} para el ensayo</div>`;
+      setStep(stepEls.generate, 'done');
+      document.getElementById('generateDone').textContent = chosen.length + ' script' + (chosen.length>1?'s':'') + ' listos para revisar';
+      document.getElementById('iconGenerate').innerHTML = '✓';
+      setStep(stepEls.rehearsal, 'active');
+      runRehearsal(chosen);
+    }, 1500);
+  }
+
+  function runRehearsal(chosen){
+    document.getElementById('iconRehearsal').innerHTML = '<span class="pl-spinner"></span>';
+    const body = document.getElementById('rehearsalBody');
+    body.innerHTML = `
+      <div class="card card-pad" style="margin-bottom:0;">
+        <div class="row-between" style="margin-bottom:8px;">
+          <span style="font-size:12.5px; color:var(--text-muted);">Progreso del ensayo</span>
+          <span class="mono" id="rehearsalPct" style="font-size:12px;">0%</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="rehearsalBar" style="width:0%"></div></div>
+        <div class="stack" style="gap:2px; margin-top:14px;" id="rehearsalLog"></div>
+      </div>`;
+    const log = document.getElementById('rehearsalLog');
+    const bar = document.getElementById('rehearsalBar');
+    const pct = document.getElementById('rehearsalPct');
+    const lines = [
+      ['00:00.12', 'POST /accounts/42/hold → 201 Created', 'ok'],
+      ['00:00.61', 'POST /transfers → 200 OK', 'ok'],
+      ['00:01.30', 'assert saldo_disponible ≥ 0 → pass', 'ok'],
+    ];
+    lines.forEach((l, i) => {
+      setTimeout(() => {
+        const row = document.createElement('div');
+        row.className = 'log-line ' + l[2];
+        row.innerHTML = `<span class="t mono">${l[0]}</span><span class="msg">${l[1]}</span>`;
+        log.appendChild(row);
+        const p = Math.round(((i+1)/lines.length)*100);
+        bar.style.width = p + '%'; pct.textContent = p + '%';
+      }, i * 500);
+    });
+    setTimeout(() => {
+      bar.classList.add('ok');
+      const row = document.createElement('div');
+      row.className = 'log-line';
+      row.innerHTML = `<span class="t mono">00:01.80</span><span class="msg" style="color:var(--ok); font-weight:600;">Ensayo superado — se puede continuar con la corrida</span>`;
+      log.appendChild(row);
+
+      const gate = document.createElement('div');
+      gate.className = 'card card-pad';
+      gate.style.marginTop = '12px';
+      gate.innerHTML = `
+        <div class="section-title">Listo para la corrida completa</div>
+        <div class="kv"><span class="k">Entorno</span><span class="v" style="color:var(--ok)">copia aislada de la aplicación</span></div>
+        <div class="kv"><span class="k">Staging / producción</span><span class="v" style="color:var(--ok)">no se usa</span></div>
+        <div class="kv"><span class="k">Ensayo</span><span class="v" style="color:var(--ok)">superado</span></div>
+        <div class="kv"><span class="k">Flujos</span><span class="v">${chosen.length} seleccionado${chosen.length>1?'s':''}</span></div>
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary" style="width:100%; justify-content:center;" id="btnConfirmSwarm">Confirmar corrida completa →</button>
+        </div>`;
+      body.appendChild(gate);
+      document.getElementById('btnConfirmSwarm').addEventListener('click', () => {
+        setStep(stepEls.rehearsal, 'done');
+        document.getElementById('rehearsalDone').textContent = 'Ensayo superado';
+        document.getElementById('iconRehearsal').innerHTML = '✓';
+        setStep(stepEls.swarm, 'active');
+        runSwarm(chosen);
+      });
+    }, lines.length * 500 + 200);
+  }
+
+  function runSwarm(chosen){
+    document.getElementById('iconSwarm').innerHTML = '<span class="pl-spinner"></span>';
+    const units = ['app', 'postgres', 'redis'].concat(chosen.map((_, i) => 'runner-' + (i+1)));
+    const body = document.getElementById('swarmBody');
+    body.innerHTML = `
+      <div class="grid-3" style="margin-bottom:14px;">
+        <div class="card stat-card"><div class="stat-label">Servicios</div><div class="stat-value">${units.length}</div><div class="stat-sub">entorno de prueba aislado</div></div>
+        <div class="card stat-card"><div class="stat-label">Estado</div><div class="stat-value" id="swarmState" style="font-size:16px; color:var(--warn)">ejecutando pruebas</div></div>
+        <div class="card stat-card"><div class="stat-label">Tiempo transcurrido</div><div class="stat-value mono" id="swarmClock">00:00</div></div>
+      </div>
+      <div class="card card-pad">
+        <div class="section-title">Entorno de prueba <span class="count" id="podSummary">0/${units.length} listos</span></div>
+        <div class="pod-lbl">Aplicación bajo prueba</div>
+        <div class="pod-grid" id="podGridApp"></div>
+        <div class="pod-lbl">Ejecutores de prueba</div>
+        <div class="pod-grid" id="podGridRun"></div>
+      </div>`;
+    const swarmState = document.getElementById('swarmState');
+    const podSummary = document.getElementById('podSummary');
+    const clockEl = document.getElementById('swarmClock');
+    const clockStart = Date.now();
+    const clockTimer = setInterval(() => {
+      const s = Math.floor((Date.now()-clockStart)/1000);
+      clockEl.textContent = String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+    }, 250);
+
+    const pods = [];
+    units.forEach((name, i) => {
+      const pod = document.createElement('div');
+      pod.className = 'pod pending';
+      pod.textContent = name;
+      (i < 3 ? document.getElementById('podGridApp') : document.getElementById('podGridRun')).appendChild(pod);
+      pods.push(pod);
+    });
+
+    let doneCount = 0;
+    pods.forEach((pod, i) => {
+      const runAt = 200 + i * 80;
+      const doneAt = runAt + 700 + (i % 3) * 160;
+      setTimeout(() => { pod.classList.remove('pending'); pod.classList.add('running'); }, runAt);
+      setTimeout(() => {
+        pod.classList.remove('running'); pod.classList.add('done');
+        doneCount++;
+        podSummary.textContent = doneCount + '/' + units.length + ' listos';
+        if(doneCount === units.length){
+          swarmState.textContent = 'pruebas completadas';
+          swarmState.style.color = 'var(--accent-text)';
+          setTimeout(() => finishRun(pods, clockTimer, swarmState, podSummary, units.length), 700);
+        }
+      }, doneAt);
+    });
+  }
+
+  function finishRun(pods, clockTimer, swarmState, podSummary, totalPods){
+    swarmState.textContent = 'eliminando entorno';
+    swarmState.style.color = 'var(--danger)';
+    pods.forEach((pod, i) => {
+      setTimeout(() => { pod.classList.remove('done'); pod.classList.add('torn-down'); }, i * 40);
+    });
+    setTimeout(() => {
+      clearInterval(clockTimer);
+      swarmState.textContent = 'completado';
+      swarmState.style.color = 'var(--ok)';
+      podSummary.textContent = totalPods + '/' + totalPods + ' terminados · entorno vacío';
+
+      setStep(stepEls.swarm, 'done');
+      document.getElementById('swarmDone').textContent = 'Entorno de prueba eliminado';
+      document.getElementById('iconSwarm').innerHTML = '✓';
+      setStep(stepEls.finish, 'active');
+      document.getElementById('finishBody').innerHTML = `
+        <div class="card card-pad">
+          <div class="row-between">
+            <div>
+              <div style="font-size:13px; font-weight:600;">El entorno de prueba se eliminó</div>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">1 hallazgo confirmado · resumen enviado a #payments-eng</div>
+            </div>
+            <button class="btn btn-primary" data-goto="report">Ver reporte →</button>
+          </div>
+        </div>`;
+      document.querySelectorAll('#finishBody [data-goto]').forEach(b => b.addEventListener('click', () => showView(b.dataset.goto)));
+    }, pods.length * 40 + 400);
+  }
+
+  function startFromEvent(key){
+    applyEvent(key);
+    resetPipeline();
+    showView('new');
+    document.querySelector('.main').scrollTo({ top: 0, behavior: 'smooth' });
+    runBoot();
+  }
+
+  document.querySelectorAll('[data-start-event]').forEach(btn => {
+    btn.addEventListener('click', () => startFromEvent(btn.dataset.startEvent));
+  });
+
+  resetPipeline();
+</script>
