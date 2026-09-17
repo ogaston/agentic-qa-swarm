@@ -25,6 +25,10 @@ U1/U4 -> U2 -> U3
 
 El riesgo numero 1 giraba entorno a la seguridad del sandbox y sus leftover. Por eso en U5, se habla de RBAC/NetworkPolicy, en U4 de gates y politicas, haciendo esto que la confinacion de los procesos se mantenga mas controlada. 
 
+### 5. Pivote a entorno tibio (warm) reutilizable — 2026-09-17
+
+Se abandona el modelo "reconstruir todo por corrida" por un **entorno warm propio de la plataforma** (namespace de prueba de vida larga, aislado de staging/prod): se reutiliza entre corridas para recortar startup y costo, escala hacia abajo en idle y se reconstruye o desmonta periódicamente por higiene. Entre corridas aplica **reset verificado** (restart + clean DB + flush cache + verificación con `reset_verified=true`; cuarentena si falla). Se mantiene: confirmación humana, aislamiento, resource limits, NetworkPolicy, runners deterministas sin LLM, evidencia y fail-closed. La complejidad se configura por **workflows de negocio** (cuotas, timeouts, aprobaciones). Archivos tocados: `specs/prd.md` + `entradas/prd.md` (sincronizados), `unidades-y-tareas.md` (U1/U2/U4/U5), `aidlc-docs/aidlc-state.md`. Riesgo #1 pasa a ser **contaminación entre corridas**; KPI "teardown 100%" pasa a **"reset verificado 100% + higiene de rebuild"**.
+
 
 
 

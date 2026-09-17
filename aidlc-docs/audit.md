@@ -267,10 +267,19 @@ B. B"
 **Context**: INCEPTION — Units Generation aprobada (Step 18) → Step 19 cierre.
 
 ---
+
 ## Post-INCEPTION — Consolidado unidades-y-tareas.md (raíz)
 **Timestamp**: 2026-09-12T03:27:00Z
 **User Input**: "Using AI-DLC, lee los archivos aidlc-docs/inception/application-design/unit-of-work.md, unit-of-work-story-map.md y cualquier plan de tareas generado en aidlc-docs/construction/plans/. Con base en ellos, redacta y genera en la raíz del proyecto el archivo consolidado unidades-y-tareas.md siguiendo estrictamente el formato estructurado con tabla de tareas, números, casillas, historias asociadas y comandos de verificación para cada unidad."
 **AI Response**: "Fuentes releídas y verificadas: unit-of-work.md (5 unidades), unit-of-work-story-map.md (13/13), unit-task-plans/U1-U5.md (37 tareas). aidlc-docs/construction/plans/ NO existe (CONSTRUCTION en SKIP; nada que consolidar desde allí — consignado en el archivo). Generado unidades-y-tareas.md en la raíz del proyecto (a petición explícita; excepción a la convención docs-en-aidlc-docs/): 5 secciones por unidad con responsabilidad/contexto/historias/desplegables/límites/salida + tabla (#, casilla, tarea, historias, comando) + cobertura 13/13 + totales."
 **Context**: Post-cierre INCEPTION — artefacto consolidado a petición (sin código de aplicación; sin reapertura de etapas).
+
+---
+
+## Post-INCEPTION — Pivote a entorno warm reutilizable
+**Timestamp**: 2026-09-17T22:29:02Z
+**User Input**: "I want to update the project to make a slightly different approach. ### New changes - Introduce a *platform-owned warm test environment* instead of rebuilding everything for every run. - Keep it isolated from customer staging and production. - Reuse the environment across QA runs to reduce startup time and cost. - Scale it down when idle and periodically rebuild or fully tear it down. - Reset application state between runs by restarting services, clearing databases, flushing caches, and verifying the reset. - Use Kubernetes to host and manage this environment and run QA jobs. - Keep human confirmation, isolation, resource limits, network restrictions, deterministic runners, evidence collection, and fail-closed behavior. - Support configurable test complexity through business-defined workflows, quotas, timeouts, and approval policies."
+**AI Response**: "Modelo warm aplicado: specs/prd.md reescrito en las secciones afectadas (conflicto #4, one-liner/JTBD/misión, vacío CNCF, veto, objeciones, UC1/UC2/UC3/UC4, principios #3 y #6-nuevo, gates con reset_verified, workflows de negocio, journeys 7.1-7.3, MoSCoW M2-M10/S3-S5/W4, módulos M1-M8 + diagrama, KPIs de reset/higiene, adherencia, red-team, riesgos #1/#5/#7, plan de entrega y sesión 16) y sincronizado a entradas/prd.md; unidades-y-tareas.md actualizado (modelo warm, U5 manifiestos warm, U1 deploy-sobre-warm, U4 workflows + gate reset_verified, U2 warm lifecycle con go-warm-manager/go-reset, reset/cuarentena/rebuild); aidlc-state.md, DECISIONES.md y audit.md registrados. Preservado: confirm humano, aislamiento, limits, NetworkPolicy, runners deterministas, evidencia, fail-closed."
+**Context**: Post-cierre INCEPTION — cambio de requisitos (sin código; artefactos finos de inception/ pendientes de realineación si se retoma el flujo).
 
 ---
