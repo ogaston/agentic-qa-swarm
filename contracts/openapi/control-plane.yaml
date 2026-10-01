@@ -1,0 +1,263 @@
+openapi: 3.1.0
+info:
+  title: Agentic QA Swarm - Control Plane API
+  version: 1.0.0
+  description: Contrato REST sincrono del control plane (forma solamente, sin logica).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://control-plane.example
+security:
+  - bearerAuth: []
+paths:
+  /webhooks/github:
+    post:
+      operationId: handleGithubWebhook
+      summary: Recibe un evento de GitHub (firmado) y crea una notificacion.
+      security: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema: {type: string}
+        - name: X-GitHub-Event
+          in: header
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: true}
+      responses:
+        '202':
+          description: Notificacion creada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Notification'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+  /notifications:
+    get:
+      operationId: listNotifications
+      summary: Inbox de notificaciones.
+      parameters:
+        - name: state
+          in: query
+          schema: {type: string, enum: [pending, confirmed, rejected]}
+      responses:
+        '200':
+          description: Lista de notificaciones.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Notification'}
+        '401': {$ref: '#/components/responses/Error'}
+  /notifications/{id}/confirm:
+    post:
+      operationId: confirmRun
+      summary: Confirma una notificacion (persiste confirmacion auditable).
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [flows]
+              properties:
+                flows:
+                  type: array
+                  minItems: 1
+                  items: {type: string}
+      responses:
+        '201':
+          description: Confirmacion registrada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConfirmationReceipt'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /runs/{id}:
+    get:
+      operationId: getRun
+      summary: Estado de una corrida.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Corrida.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Run'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /reports/{run}:
+    get:
+      operationId: getReport
+      summary: Reporte post-mortem de una corrida.
+      parameters:
+        - {name: run, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Reporte.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Report'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /policies/{name}:
+    put:
+      operationId: setPolicy
+      summary: Define una politica (solo admin).
+      parameters:
+        - {name: name, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Policy'}
+      responses:
+        '200':
+          description: Politica versionada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PolicyVersion'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /audit:
+    get:
+      operationId: queryAudit
+      summary: Consulta del registro de auditoria.
+      parameters:
+        - {name: run, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 500}}
+      responses:
+        '200':
+          description: Entradas de auditoria.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AuditEntry'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /auth/login:
+    post:
+      operationId: login
+      summary: Inicia sesion.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: {type: string}
+                password: {type: string, format: password}
+      responses:
+        '200':
+          description: Sesion iniciada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expires_at]
+                properties:
+                  token: {type: string}
+                  expires_at: {type: string, format: date-time}
+        '401': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Cierra la sesion.
+      responses:
+        '204':
+          description: Sesion cerrada.
+        '401': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Error:
+      description: Error.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+    Notification:
+      type: object
+      required: [id, github_event, repo, sha, state]
+      properties:
+        id: {type: string}
+        github_event: {type: string, enum: [commit, pull_request, tag]}
+        repo: {type: string}
+        sha: {type: string}
+        artifact: {type: string}
+        state: {type: string, enum: [pending, confirmed, rejected]}
+    ConfirmationReceipt:
+      type: object
+      required: [run_id, notification_id, confirmed_by, confirmed_at]
+      properties:
+        run_id: {type: string}
+        notification_id: {type: string}
+        confirmed_by: {type: string}
+        confirmed_at: {type: string, format: date-time}
+    Run:
+      type: object
+      required: [id, state]
+      properties:
+        id: {type: string}
+        state:
+          type: string
+          enum: [confirmed, warm_ready, deploying, inferring, rehearsing, running, resetting, reporting, done, failed]
+        trace_id: {type: string}
+    Report:
+      type: object
+      required: [run_id, findings]
+      properties:
+        run_id: {type: string}
+        findings:
+          type: array
+          items:
+            type: object
+            required: [id, severity, summary]
+            properties:
+              id: {type: string}
+              severity: {type: string, enum: [low, medium, high, critical]}
+              summary: {type: string}
+    Policy:
+      type: object
+      required: [value]
+      properties:
+        value: {type: object, additionalProperties: true}
+    PolicyVersion:
+      type: object
+      required: [name, version]
+      properties:
+        name: {type: string}
+        version: {type: integer}
+    AuditEntry:
+      type: object
+      required: [at, actor, action]
+      properties:
+        at: {type: string, format: date-time}
+        actor: {type: string}
+        action: {type: string}
+        run_id: {type: string}
