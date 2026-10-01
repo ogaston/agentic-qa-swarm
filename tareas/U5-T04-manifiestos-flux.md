@@ -73,7 +73,7 @@ K='docker run --rm --security-opt label=disable -v '"$PWD"':/w -w /w registry.k8
 
 - [ ] **CA-5** — En prod ninguna imagen usa `latest` ni va sin tag o digest.
   ```bash
-  $K build deploy/flux/prod | grep -E '^\s*image:' | grep -v -E ':[A-Za-z0-9._-]+$|@sha256:[0-9a-f]{64}$' | wc -l
+  $K build deploy/flux/prod | grep -E '^\s*(-\s+)?image:' | grep -v -E ':[A-Za-z0-9._-]+$|@sha256:[0-9a-f]{64}$' | wc -l
   $K build deploy/flux/prod | grep -c -E 'image:.*:latest'
   ```
   Esperado: `0` y `0`.
@@ -86,10 +86,12 @@ K='docker run --rm --security-opt label=disable -v '"$PWD"':/w -w /w registry.k8
 
 - [ ] **CA-7** — Todos los contenedores del warm y del control plane declaran `resources.limits`, y el warm declara probes.
   ```bash
-  $K build deploy/flux/prod | grep -c -E '^\s+image:'; $K build deploy/flux/prod | grep -c -E '^\s+limits:'
+  $K build deploy/flux/prod | grep -c -E '^\s*(-\s+)?image:'; $K build deploy/flux/prod | grep -c -E '^\s+limits:'
   $K build deploy/flux/prod | grep -c -E '^\s+(readinessProbe|livenessProbe):'
   ```
   Esperado: los dos primeros números son iguales; el tercero es `≥ 6` (readiness y liveness en `warm-app`, `warm-db` y `warm-redis`).
+
+  > Enmienda aprobada por el humano (hallazgo F-03, `revisiones/U5-T04/ronda-1.md`): el patrón `image:` de CA-5 y CA-7 ahora acepta `- image:`, que es como kustomize emite `image` cuando es la primera clave del contenedor. Con el patrón anterior hacía falta un `env` artificial (`TZ=UTC`) para que el grep contara los contenedores. Quitar ese `env` es una tarea de seguimiento.
 
 - [ ] **CA-8** — Árbol limpio tras el commit y sin `.gitkeep` sobrante en `deploy/flux/`.
   ```bash
