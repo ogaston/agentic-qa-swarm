@@ -17,3 +17,8 @@ Trabajo que apareció durante las rondas y que **nadie pidió todavía**. No for
 | C-11 | U5-T02 ronda 1, F-04 | Alinear el contrato REST con el de eventos cuando U1 implemente el control plane | `Notification.artifact` ya está alineado |
 | C-12 | Ola 3, redacción de U5-T06 | NetworkPolicy deny-by-default para `aqs-system` y `aqs-observability` | U5-T06 cubre solo `aqs-test` (test-ns-only, US-M8) |
 | C-13 | U5-T06 ronda 1, bloqueo | **Aprobada por el humano (opción A):** mover los CronJobs `housekeeping` y `rebuild` de `aqs-test` a `aqs-system` (SA `go-reset`, que actúa sobre `aqs-test` vía el Role `aqs-test-operator`), para que `aqs-test` siga sin egress | Se redacta como tarea en la ola 4 |
+| C-14 | U5-T05 ronda 1, F-01 | Derivar del manifiesto (con `yq`) el digest de MinIO y la imagen de `aws-cli` que usa `scripts/test/minio-local.sh`, para que CA-4 pruebe siempre la imagen real | |
+| C-15 | U5-T05 ronda 1, F-04 | `securityContext` endurecido para MinIO y el Job `minio-init` (`allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `readOnlyRootFilesystem`) y etiquetas de Pod Security en los namespaces | |
+| C-16 | U5-T05 ronda 1, F-03 | Estrategia para recrear `minio-init` cuando cambie el script o el spec (Job con hash en el nombre, `ttlSecondsAfterFinished`, o `force`/`wait` en la Kustomization de Flux) | |
+| C-17 | U5-T05 ronda 1, F-02 y F-05 | Service headless para MinIO si escala a más de una réplica; decidir `storageClassName` y tamaño del PVC (hoy 10Gi) | |
+| C-18 | U5-T05 ronda 1 | Documentar cómo se crean los Secrets de MinIO: SAN del certificado `minio-tls` (`minio.aqs-system.svc`) y formato de `MINIO_KMS_SECRET_KEY` (`nombre:base64` de 32 bytes) | Relacionada con C-08 |
