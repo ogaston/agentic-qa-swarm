@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-qa-swarm.example/contracts/events/v1/warm.ready.schema.json",
+  "title": "Evento warm.ready",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "enum": [
+        "warm.ready"
+      ]
+    },
+    "version": {
+      "const": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "warm_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "const": "ready"
+        },
+        "baseline_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "warm_id",
+        "state",
+        "baseline_version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "event_id",
+    "type",
+    "version",
+    "occurred_at",
+    "trace_id",
+    "data"
+  ],
+  "additionalProperties": false
+}

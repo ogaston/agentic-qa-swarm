@@ -1,0 +1,12 @@
+{
+  "event_id": "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34",
+  "type": "teardown.verified",
+  "version": 1,
+  "occurred_at": "2026-01-15T10:00:00Z",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "data": {
+    "warm_id": "warm-1",
+    "mode": "reboot",
+    "verified": true
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-qa-swarm.example/contracts/events/v1/surface.ready.schema.json",
+  "title": "Evento surface.ready",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "enum": [
+        "surface.ready"
+      ]
+    },
+    "version": {
+      "const": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "surface_uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "endpoint_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "run_id",
+        "surface_uri",
+        "endpoint_count"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "event_id",
+    "type",
+    "version",
+    "occurred_at",
+    "trace_id",
+    "data"
+  ],
+  "additionalProperties": false
+}
