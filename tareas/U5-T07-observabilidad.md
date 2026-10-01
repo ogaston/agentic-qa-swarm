@@ -86,7 +86,7 @@ Y='docker run --rm -i --security-opt label=disable mikefarah/yq:4.44.3 -N'
 
 - [ ] **CA-4** — Las reglas pasan `promtool` y cada alerta tiene severidad y resumen.
   ```bash
-  t=$(mktemp -d); $K build deploy/flux/prod | $Y 'select(.kind == "PrometheusRule" and .metadata.name == "aqs-rules") | .spec' > "$t/rules.yaml"
+  t=$(mktemp -d); chmod 755 "$t"; $K build deploy/flux/prod | $Y 'select(.kind == "PrometheusRule" and .metadata.name == "aqs-rules") | .spec' > "$t/rules.yaml"
   docker run --rm --security-opt label=disable -v "$t":/r -w /r --entrypoint promtool prom/prometheus:v2.55.1 check rules rules.yaml
   $Y '[.groups[].rules[] | select(has("alert"))] | length' < "$t/rules.yaml"
   $Y '.groups[].rules[] | select(has("alert")) | select((.labels.severity // "") == "" or (.annotations.summary // "") == "") | .alert' < "$t/rules.yaml" | wc -l
@@ -94,6 +94,8 @@ Y='docker run --rm -i --security-opt label=disable mikefarah/yq:4.44.3 -N'
   rm -rf "$t"
   ```
   Esperado: `SUCCESS: N rules found` con N ≥ 3, luego un número ≥ 3, `0` y `3`.
+
+  > Enmienda aprobada por el humano tras la ronda 1: se añadió `chmod 755 "$t"`. `mktemp -d` crea el directorio con permisos 0700, y `promtool` corre en el contenedor como `nobody`, así que no podía leer `rules.yaml`.
 
 - [ ] **CA-5** — El ServiceMonitor apunta a los 7 servicios de `aqs-system`.
   ```bash

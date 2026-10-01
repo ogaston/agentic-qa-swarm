@@ -11,8 +11,9 @@ Trabajo que apareció durante las rondas y que **nadie pidió todavía**. No for
 | C-05 | U5-T03 ronda 2 | Que `detect-lang.sh` soporte servicios Go bajo `go.work` sin `go.mod` propio | |
 | C-06 | U5-T03 ronda 2, F-07 | `npm test --if-present` pasa en verde si un `package.json` no tiene script `test`; usar `npm test` a secas | Anotada por decisión del humano |
 | C-07 | U5-T04 ronda 1, F-02 | Definir el `GitRepository` `agentic-qa-swarm` y el namespace `flux-system` del bootstrap de Flux | Sin ellos, los `Kustomization` de Flux no sincronizan |
-| C-08 | U5-T04 ronda 1, F-02 | Dueño del Secret `warm-db-credentials` y confirmación de `idleScaleDownAfter`, `minReplicasIdle` y los schedules de los CronJobs | |
+| C-08 | U5-T04 ronda 1, F-02; U5-T05; U5-T07 | Dueño de los Secrets referenciados y no creados (`warm-db-credentials`, `minio-root`, `minio-kms`, `minio-tls`, `grafana-admin`) y confirmación de los valores elegidos por los codificadores: `idleScaleDownAfter`, `minReplicasIdle`, schedules de los CronJobs, nombres de métricas `aqs_*` y umbrales de alertas | |
 | C-09 | U5-T04, enmienda F-03 | Quitar los `env: TZ=UTC` que solo existían para el grep de CA-7 | El grep ya está enmendado en main |
 | C-10 | U5-T02 ronda 1, F-03 | Acelerar `contracts/validate.sh` con una sola invocación de ajv (hoy tarda alrededor de 1 minuto) | |
 | C-11 | U5-T02 ronda 1, F-04 | Alinear el contrato REST con el de eventos cuando U1 implemente el control plane | `Notification.artifact` ya está alineado |
 | C-12 | Ola 3, redacción de U5-T06 | NetworkPolicy deny-by-default para `aqs-system` y `aqs-observability` | U5-T06 cubre solo `aqs-test` (test-ns-only, US-M8) |
+| C-13 | U5-T06 ronda 1, bloqueo | **Aprobada por el humano (opción A):** mover los CronJobs `housekeeping` y `rebuild` de `aqs-test` a `aqs-system` (SA `go-reset`, que actúa sobre `aqs-test` vía el Role `aqs-test-operator`), para que `aqs-test` siga sin egress | Se redacta como tarea en la ola 4 |
