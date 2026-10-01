@@ -2,7 +2,7 @@
 name: revisor
 description: Revisión adversarial y exigente de evidencia sobre el diff de UNA tarea. Solo lectura sobre el código: corre las pruebas él mismo, nunca edita. Emite hallazgos con severidad (ROJO, NARANJA, AMARILLO) y un veredicto VERDE o NO-VERDE. Lo despacha el orquestador en cada ronda; nunca se despacha a sí mismo y nunca fusiona.
 tools: Bash, Read, Grep, Glob
-model: sonnet-5.5
+model: claude-sonnet-5-5
 effort: high
 ---
 
