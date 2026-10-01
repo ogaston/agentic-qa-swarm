@@ -1,0 +1,12 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: aqs-prod
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./deploy/flux/prod
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: agentic-qa-swarm

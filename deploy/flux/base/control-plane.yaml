@@ -1,0 +1,363 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui-api
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: ui-api
+    aqs.io/tier: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ui-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ui-api
+        aqs.io/tier: control-plane
+    spec:
+      containers:
+        - name: ui-api
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
+          env:
+            - name: TZ
+              value: UTC
+          image: ghcr.io/ogaston/agentic-qa-swarm/ui-api:0.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui-api
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: ui-api
+spec:
+  selector:
+    app.kubernetes.io/name: ui-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-intake
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-intake
+    aqs.io/tier: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-intake
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-intake
+        aqs.io/tier: control-plane
+    spec:
+      containers:
+        - name: go-intake
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
+          env:
+            - name: TZ
+              value: UTC
+          image: ghcr.io/ogaston/agentic-qa-swarm/go-intake:0.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-intake
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-intake
+spec:
+  selector:
+    app.kubernetes.io/name: go-intake
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-run-controller
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-run-controller
+    aqs.io/tier: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-run-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-run-controller
+        aqs.io/tier: control-plane
+    spec:
+      containers:
+        - name: go-run-controller
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
+          env:
+            - name: TZ
+              value: UTC
+          image: ghcr.io/ogaston/agentic-qa-swarm/go-run-controller:0.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-run-controller
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-run-controller
+spec:
+  selector:
+    app.kubernetes.io/name: go-run-controller
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-warm-manager
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-warm-manager
+    aqs.io/tier: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-warm-manager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-warm-manager
+        aqs.io/tier: control-plane
+    spec:
+      containers:
+        - name: go-warm-manager
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
+          env:
+            - name: TZ
+              value: UTC
+          image: ghcr.io/ogaston/agentic-qa-swarm/go-warm-manager:0.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-warm-manager
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-warm-manager
+spec:
+  selector:
+    app.kubernetes.io/name: go-warm-manager
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-reset
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-reset
+    aqs.io/tier: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-reset
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-reset
+        aqs.io/tier: control-plane
+    spec:
+      containers:
+        - name: go-reset
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
+          env:
+            - name: TZ
+              value: UTC
+          image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-reset
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-reset
+spec:
+  selector:
+    app.kubernetes.io/name: go-reset
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-governance
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-governance
+    aqs.io/tier: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-governance
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-governance
+        aqs.io/tier: control-plane
+    spec:
+      containers:
+        - name: go-governance
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
+          env:
+            - name: TZ
+              value: UTC
+          image: ghcr.io/ogaston/agentic-qa-swarm/go-governance:0.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-governance
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-governance
+spec:
+  selector:
+    app.kubernetes.io/name: go-governance
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-identity
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-identity
+    aqs.io/tier: control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-identity
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-identity
+        aqs.io/tier: control-plane
+    spec:
+      containers:
+        - name: go-identity
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
+          env:
+            - name: TZ
+              value: UTC
+          image: ghcr.io/ogaston/agentic-qa-swarm/go-identity:0.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-identity
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-identity
+spec:
+  selector:
+    app.kubernetes.io/name: go-identity
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
