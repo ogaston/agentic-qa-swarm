@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: aqs-control-plane
+  namespace: aqs-observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - aqs-system
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - go-intake
+          - go-run-controller
+          - go-warm-manager
+          - go-reset
+          - go-governance
+          - go-identity
+          - ui-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

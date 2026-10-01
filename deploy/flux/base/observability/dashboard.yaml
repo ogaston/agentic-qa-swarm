@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aqs-dashboard
+  namespace: aqs-observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  aqs-control-plane.json: |
+    {
+      "title": "AQS control plane",
+      "schemaVersion": 39,
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Servicios arriba",
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(up{namespace=\"aqs-system\"})",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Resets no verificados (24h)",
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "increase(aqs_reset_not_verified_total[24h])",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Warm en cuarentena",
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "max(aqs_warm_quarantined)",
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    }

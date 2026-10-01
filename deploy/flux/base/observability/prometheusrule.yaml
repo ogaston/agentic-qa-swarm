@@ -1,0 +1,29 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: aqs-rules
+  namespace: aqs-observability
+spec:
+  groups:
+    - name: aqs.control-plane
+      rules:
+        - alert: AqsControlPlaneDown
+          expr: up{namespace="aqs-system"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Servicio del control plane caido: {{ $labels.service }}"
+        - alert: AqsResetNotVerified
+          expr: increase(aqs_reset_not_verified_total[15m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "Un reset del warm termino sin verificarse"
+        - alert: AqsWarmQuarantined
+          expr: aqs_warm_quarantined > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "El entorno warm esta en cuarentena"
