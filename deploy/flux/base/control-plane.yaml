@@ -19,6 +19,7 @@ spec:
     spec:
       containers:
         - name: ui-api
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
@@ -70,6 +71,7 @@ spec:
     spec:
       containers:
         - name: go-intake
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
@@ -121,6 +123,7 @@ spec:
     spec:
       containers:
         - name: go-run-controller
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
@@ -172,6 +175,7 @@ spec:
     spec:
       containers:
         - name: go-warm-manager
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
@@ -223,6 +227,7 @@ spec:
     spec:
       containers:
         - name: go-reset
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
@@ -274,6 +279,7 @@ spec:
     spec:
       containers:
         - name: go-governance
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
@@ -325,6 +331,7 @@ spec:
     spec:
       containers:
         - name: go-identity
+          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
