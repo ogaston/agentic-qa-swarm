@@ -15,7 +15,7 @@
 - **Rol**: Head of Platform / Director of Platform Engineering; administra la plataforma para su equipo.
 - **Contexto**: habilita el producto por primera vez; define guardrails; audita.
 - **Motivación**: operar dentro de límites de autonomía auditables; justificar el gasto con métricas agregadas.
-- **Mide**: guardrails configurados antes de la primera corrida; teardown 100%; incidentes de autonomía = 0.
+- **Mide**: guardrails configurados antes de la primera corrida; **reset verificado 100% + higiene de rebuild**; incidentes de autonomía = 0.
 - **Permisos exclusivos**: escritura en M7-gobernanza (panel de políticas, eventos, cuotas, confirm-required); lectura del resto.
 - **Historias**: US-M7.1, US-M7.2, US-M8.1, US-M8.2, US-M8.3, US-M10.
 

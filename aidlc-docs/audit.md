@@ -283,3 +283,53 @@ B. B"
 **Context**: Post-cierre INCEPTION — cambio de requisitos (sin código; artefactos finos de inception/ pendientes de realineación si se retoma el flujo).
 
 ---
+
+## Post-INCEPTION — Chequeo de estado y decisión de realineación warm
+**Timestamp**: 2026-10-01T21:34:05Z
+**User Input**: "Please check the current state of the project and tell me what's missing and what's next?
+
+continue"
+**AI Response**: "Chequeo de estado: greenfield, solo documentación, INCEPTION completo, CONSTRUCTION SKIP, sin código. Hallazgos: (1) el pivote warm NO se propagó a los artefactos de INCEPTION ni a unidades-y-tareas.md/aidlc-state.md (el commit 42b790e solo tocó specs/prd.md, entradas/prd.md, DECISIONES.md y audit.md pese a lo que afirma este audit); (2) aidlc-state.md contradictorio (líneas 35-39 duplican etapas pendientes) y workspace root erróneo; (3) AGENTS.md con placeholders WHAT/WHY/HOW; (4) S1-S5 sin historiar. Se presentó decisión de siguiente paso."
+**Context**: Post-cierre INCEPTION — verificación de estado y arranque de realineación documental.
+
+---
+
+## Post-INCEPTION — Decisión: realinear inception al modelo warm
+**Timestamp**: 2026-10-01T21:34:30Z
+**User Input**: "Realign inception to warm model (Recommended) — Fix scope-consistent drift: update requirements.md, components/methods/services/dependency, unit-of-work*, execution plan and stories to the warm environment (warm manager, reset_verified gate, quarantine/rebuild); fix aidlc-state.md corruption/path; fill AGENTS.md context. No code, no new scope."
+**AI Response**: "Aprobado. Se crea aidlc-docs/inception/plans/warm-realignment-plan.md y se propaga el PRD autoritativo (entorno warm, reset verificado, scale-down en idle, rebuild/teardown periódico, workflows de negocio) a todos los artefactos de INCEPTION, al consolidado unidades-y-tareas.md y a aidlc-state.md. Sin código; CONSTRUCTION sigue en SKIP."
+**Context**: Post-cierre INCEPTION — realineación warm (pasos 1-15 del plan).
+
+---
+
+## Post-INCEPTION — Realineación warm completada (pasos 1-15)
+**Timestamp**: 2026-10-01T21:52:00Z
+**User Input**: "(ejecución del plan aprobado: realinear inception al modelo warm)"
+**AI Response**: "Completados los 15 pasos de `inception/plans/warm-realignment-plan.md`. Realineados: requirements.md (principios #3/#6, V7, M1-M10, S3-S5, KPIs reset verificado + higiene, UC3, arquitectura, entrega, resumen; NF-RES-01/09), components.md (C3 → Warm Environment Manager, C5 → Verified Reset & Housekeeping, C9 con gate reset_verified), component-methods.md (ensureWarmReady/deployToWarm/resetVerified/quarantine/scaleDownIdle/rebuildOrTeardown; gates con reset_verified), services.md (go-warm-manager, go-reset, entorno warm + rollouts/Jobs, eventos warm.ready/deploy/reset.verified), component-dependency.md, application-design.md, stories.md + personas.md, unit-of-work*.md, planes (execution/application-design/unit-of-work/story-generation/user-stories-assessment), unit-task-plans/U2-U5.md, unidades-y-tareas.md (raíz), aidlc-state.md (duplicados eliminados, workspace root corregido, nota warm) y AGENTS.md (WHAT/WHY/HOW). Notas históricas en ficheros de preguntas pre-pivote. Validación por grep: sin 'efímero/teardown 100%/go-provisioner/go-teardown/boot.done' salvo referencias de contraste o históricas anotadas. Sin código; CONSTRUCTION sigue en SKIP."
+**Context**: Post-cierre INCEPTION — cierre de la realineación warm; workItem/plan marcado [x]. Punto de parada vigente.
+
+---
+
+## Post-INCEPTION — Alcance de Should (S1-S5): backlog post-MVP
+**Timestamp**: 2026-10-01T22:05:00Z
+**User Input**: "what really means s1-s5? what do I need to do?"
+**AI Response**: "Explicado: S1-S5 son los Should Have (Slack, segunda familia de flujos, traspaso estructurado a humano, panel de políticas, dashboard inbox + estado del warm); están diferidos (Pregunta 5 = B) y sin historias/tareas. Se presentó decisión de alcance."
+**Context**: Post-cierre INCEPTION — aclaración de Should.
+
+---
+
+## Post-INCEPTION — Decisión: S1-S5 como backlog post-MVP (sin trabajo)
+**Timestamp**: 2026-10-01T22:06:00Z
+**User Input**: "Keep as backlog, no work now (Recommended) — Confirm MVP = Must-only. Update wording so S1-S5 are explicitly 'post-MVP backlog (out of current scope)'. No new stories or tasks."
+**AI Response**: "Confirmado: MVP = Must-only (M1-M10). Actualizados `unit-of-work-story-map.md` (Should = backlog post-MVP, no se historian) y `unidades-y-tareas.md` (totales + nueva sección 'Backlog post-MVP (Should — fuera de alcance)' con S1-S5 y unidad candidata). Sin historias ni tareas nuevas; plan vigente 37 tareas sin cambios."
+**Context**: Post-cierre INCEPTION — cierre del tema Should; alcance MVP fijado a Must.
+
+---
+
+## Post-INCEPTION — Commit de realineación + siguiente paso (Módulo 6)
+**Timestamp**: 2026-10-01T22:15:00Z
+**User Input**: "yes commit and tell me what are the next step (according to ../modulo6/README.md)"
+**AI Response**: "Commit `eb74237` 'docs(inception): realign artifacts to warm reusable environment' (26 archivos: realineación warm + Should S1-S5 como backlog post-MVP + correcciones de estado/AGENTS). Siguiente paso según `../modulo6/README.md`: montar el **loop de tres agentes** (orquestador/codificador/revisor con modelos escalonados; humano fusiona) para despachar las 37 tareas de `unidades-y-tareas.md` dentro de la etapa de generación de código (el loop NO es una fase de AI-DLC). Detalle en `proyecto-final-loop-de-agentes.md` y contratos en `modulo6/agentes/`."
+**Context**: Post-cierre INCEPTION — commit y handoff a Módulo 6 (loop de agentes).
+
+---

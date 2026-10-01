@@ -15,18 +15,18 @@
 ## US-M2 — Pull del artefacto y boot aislado
 
 - **Épica**: M1/M3 aprovisionamiento inicial. **Personas**: Marta (P1).
-- **Narrativa**: Como Marta, quiero que tras mi confirmación el sistema traiga el artefacto (build-from-repo para commit/PR, imagen publicada para tag/release) y arranque la app en Docker dentro del namespace de prueba, para tener un SUT desechable sin tocar staging.
+- **Narrativa**: Como Marta, quiero que tras mi confirmación el sistema traiga el artefacto (build-from-repo para commit/PR, imagen publicada para tag/release) y **despliegue la app sobre el entorno warm reutilizable** del namespace de prueba, para tener un SUT aislado sin tocar staging y sin reconstruir infraestructura por corrida.
 - **Trazabilidad**: [M2] [UC1] [Journey 7.1 paso 3] [V5].
 - **Criterios de aceptación**:
   - [ ] Tras confirmar, el artefacto correcto se obtiene según el tipo de evento (repo para PR/commit, imagen para tag).
-  - [ ] La app alcanza estado `Running` en el test ns (`kubectl get pods -n <test-ns>`), con 1 DB (Postgres o Mongo) + 1 Redis de esa corrida.
-  - [ ] Si el boot falla 2 veces, el sistema se detiene fail-closed y genera handoff (ver US-M5-límite en M2/UC5): sin corrida completa y sin reintento infinito.
-  - [ ] Ningún secret de staging/prod del cliente está montado en el sandbox (solo config/secrets sintéticos o declarados para el test ns).
+  - [ ] La app alcanza estado `Running` en el test ns sobre el **entorno warm** (`kubectl get pods -n <test-ns>`), con la DB (Postgres o Mongo) + Redis **pre-desplegados y reutilizados** (no aprovisionados desde cero).
+  - [ ] Si el deploy falla 2 veces, el sistema se detiene fail-closed y genera handoff (ver US-M5-límite en M2/UC5): sin corrida completa y sin reintento infinito.
+  - [ ] Ningún secret de staging/prod del cliente está montado en el entorno warm (solo config/secrets sintéticos o declarados para el test ns).
 
 ## US-M3 — Inferencia de superficie externa
 
 - **Épica**: M1 planificación. **Personas**: Marta (P1).
-- **Narrativa**: Como Marta, quiero que el agente observe solo la superficie externa del sandbox (OpenAPI si está expuesta; si no, sondeo HTTP/UI de puertos publicados) y recomiende flujos de QA, sin leer el código fuente de mi app.
+- **Narrativa**: Como Marta, quiero que el agente observe solo la superficie externa del entorno warm (OpenAPI si está expuesta; si no, sondeo HTTP/UI de puertos publicados) y recomiende flujos de QA, sin leer el código fuente de mi app.
 - **Trazabilidad**: [M3] [UC1, UC2] [Journey 7.1 paso 4].
 - **Criterios de aceptación**:
   - [ ] La superficie inferida contiene únicamente endpoints/puertos observados desde fuera del contenedor (OpenAPI expuesta o sondeo de puertos publicados).
@@ -46,42 +46,42 @@
 ## US-M5 — Ensayo bloqueante
 
 - **Épica**: M2 ensayo. **Personas**: Marta (P1, automático tras su selección).
-- **Narrativa**: Como Marta, quiero que ningún plan escale a corrida completa sin un ensayo unitario exitoso dentro del sandbox, para no quemar compute en planes rotos.
+- **Narrativa**: Como Marta, quiero que ningún plan escale a corrida completa sin un ensayo unitario exitoso contra el entorno warm, para no quemar compute en planes rotos.
 - **Trazabilidad**: [M5] [UC1, UC2] [Journey 7.1 paso 5] [Principio #2].
 - **Criterios de aceptación**:
-  - [ ] El gate de pipeline exige `ensayo_passed=true` (ensayo = un flujo unitario con 2xx/invariante mínima dentro del sandbox) antes de autorizar la corrida completa.
+  - [ ] El gate de pipeline exige `ensayo_passed=true` (ensayo = un flujo unitario con 2xx/invariante mínima contra el entorno warm) antes de autorizar la corrida completa.
   - [ ] Tras 2 ensayos fallidos, el sistema escala a humano con contexto (fail-closed, ver US de traspaso en S3 — fuera de este alcance Must; el handoff mínimo queda cubierto por el reporte de motivo).
   - [ ] El ensayo no puede omitirse por configuración ni a petición (gate condicionado técnicamente).
 
 ## US-M6 — Corrida aislada y recolección de evidencia
 
 - **Épica**: M4 ejecución. **Personas**: Marta (P1).
-- **Narrativa**: Como Marta, quiero que la corrida completa ejecute los flujos contra el sandbox y recoja logs/evidencia, persistidos en MinIO in-cluster para el post-mortem.
+- **Narrativa**: Como Marta, quiero que la corrida completa ejecute los flujos contra el entorno warm y recoja logs/evidencia, persistidos en MinIO in-cluster para el post-mortem.
 - **Trazabilidad**: [M6] [UC1, UC2] [Journey 7.1 paso 6] [V6].
 - **Criterios de aceptación**:
   - [ ] Los Jobs de runners completan en el mismo test ns (`kubectl get jobs -n <test-ns>` en `Complete`/`Failed` registrado).
   - [ ] Logs y evidencia de la corrida quedan persistidos en MinIO in-cluster y referenciados desde el reporte.
   - [ ] La corrida solo existe tras confirm + ensayo (nunca directa desde el webhook).
 
-## US-M7.1 — Teardown garantizado tras cada corrida
+## US-M7.1 — Reset verificado garantizado tras cada corrida
 
-- **Épica**: M5 teardown. **Personas**: Julián (P2, automático).
-- **Narrativa**: Como Julián, quiero que al terminar cada corrida (éxito, fallo o cancelación) el sistema destruya app + deps + runners de esa corrida y lo verifique, para que el clúster nunca quede sucio.
+- **Épica**: M5 reset verificado. **Personas**: Julián (P2, automático).
+- **Narrativa**: Como Julián, quiero que al terminar cada corrida (éxito, fallo o cancelación) el sistema aplique un **reset de estado verificado** del entorno warm (restart de servicios + limpieza de DB + flush de cache + verificación) antes de reutilizarlo, para que no haya contaminación entre corridas ni workloads huérfanos.
 - **Trazabilidad**: [M7] [UC3] [Journey 7.3 pasos 2-4] [Principio #3].
 - **Criterios de aceptación**:
-  - [ ] Tras cada finalización, `kubectl get all -n <test-ns>` no lista workloads de esa corrida (app, DB, Redis, runners).
-  - [ ] La verificación de "namespace limpio" queda registrada antes de notificar el fin.
-  - [ ] Completitud de teardown = 100% (KPI; cualquier resto = incidente).
+  - [ ] Tras cada finalización, el reset verificado deja el entorno warm en estado `ready` (`reset_verified=true` + probes); sin él no arranca la siguiente corrida.
+  - [ ] Si el reset falla, el entorno entra en **cuarentena** y escala a humano (no se reutiliza).
+  - [ ] Completitud de reset verificado = 100% (KPI); higiene de rebuild/teardown periódico ejecutada en su cadencia.
 
 ## US-M7.2 — Housekeeping de sesiones abandonadas
 
 - **Épica**: M5 housekeeping. **Personas**: Julián (P2, automático).
-- **Narrativa**: Como Julián, quiero que las sesiones interrumpidas o abandonadas apliquen el mismo teardown tras el grace period (24 h configurables) mientras el plan/sesión persiste para reanudar, para conciliar "indefinido" con teardown 100%.
+- **Narrativa**: Como Julián, quiero que las sesiones interrumpidas o abandonadas apliquen el mismo reset/limpieza tras el grace period (24 h configurables) mientras el plan/sesión persiste para reanudar, para conciliar "indefinido" con reset verificado 100%.
 - **Trazabilidad**: [M7] [UC3] [Journey 7.3 pasos 5-7] [V7].
 - **Criterios de aceptación**:
-  - [ ] Una sesión sin actividad más allá del grace period dispara teardown del sandbox sin acción del usuario.
+  - [ ] Una sesión sin actividad más allá del grace period dispara reset/limpieza del entorno warm sin acción del usuario.
   - [ ] El plan generado persiste como sesión "incompleta" reutilizable sin repetir inferencia válida.
-  - [ ] Un proceso de housekeeping cierra sesiones colgadas y garantiza teardown aunque el usuario nunca vuelva.
+  - [ ] Un proceso de housekeeping cierra sesiones colgadas y garantiza reset/limpieza aunque el usuario nunca vuelva.
 
 ## US-M8.1 — RBAC confinado al test namespace
 
@@ -89,7 +89,7 @@
 - **Narrativa**: Como Julián, quiero que ningún workload del producto pueda agendar o leer fuera del namespace de prueba, para que el aislamiento sea verificable y no una promesa.
 - **Trazabilidad**: [M8] [UC4] [Principio #4] [NF-SEG-06].
 - **Criterios de aceptación**:
-  - [ ] `kubectl auth can-i --list` desde las ServiceAccounts de runners/ensayo/teardown niega todo fuera del test ns.
+  - [ ] `kubectl auth can-i --list` desde las ServiceAccounts de runners/ensayo/reset niega todo fuera del test ns.
   - [ ] Ningún rol del producto incluye wildcards de acciones/recursos sin excepción documentada.
   - [ ] Un intento de salir del test ns queda bloqueado y auditado (demo Sesión 16).
 
@@ -111,7 +111,7 @@
 - **Criterios de aceptación**:
   - [ ] Con auto-run apagado, un evento GitHub nunca crea Jobs (solo notificación).
   - [ ] Cada corrida referencia un registro de confirmación persistido y auditable.
-  - [ ] Cero credenciales/allowlist de staging/prod del cliente en el clúster del producto (verificable en Secrets y políticas); el único allowlist es el Service del sandbox en el test ns.
+  - [ ] Cero credenciales/allowlist de staging/prod del cliente en el clúster del producto (verificable en Secrets y políticas); el único allowlist es el Service del SUT en el entorno warm del test ns.
 
 ## US-M9 — Post-mortem de lógica de negocio
 
@@ -126,9 +126,9 @@
 ## US-M10 — Producto desplegado vía GitOps
 
 - **Épica**: M10 plataforma estable. **Personas**: Julián (P2).
-- **Narrativa**: Como Julián, quiero que el entorno estable del producto (UI/API, identidad, planificación, gobernanza, post-mortem) viva desplegado y reconciliado por Flux, con CI en GitHub Actions y rollback por redeploy de versión anterior.
+- **Narrativa**: Como Julián, quiero que el entorno estable del producto (UI/API, identidad, planificación, gobernanza, post-mortem) **y el entorno warm** vivan desplegados y reconciliados por Flux, con CI en GitHub Actions y rollback por redeploy de versión anterior.
 - **Trazabilidad**: [M10] [Journey 7.2 paso 7] [AR3, AR4, AR5, AR9] [Módulo 8].
 - **Criterios de aceptación**:
-  - [ ] `flux get kustomizations` muestra los componentes del control plane en estado `Ready` y reconciliados desde el repo Git.
+  - [ ] `flux get kustomizations` muestra los componentes del control plane **y el entorno warm** en estado `Ready` y reconciliados desde el repo Git.
   - [ ] El pipeline de GitHub Actions construye, escanea y publica artefactos versionados (sin tags `latest` en producción).
   - [ ] Un despliegue fallido se revierte redesplegando la versión anterior fijada (rollback version-pinned documentado).

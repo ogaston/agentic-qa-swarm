@@ -3,16 +3,16 @@
 ## Detailed Analysis Summary
 
 ### Change Impact Assessment
-- **User-facing changes**: Yes — plataforma y UI completamente nuevas (inbox, sandbox, reportes, paneles de política M7/M8).
-- **Structural changes**: Yes — sistema nuevo system-wide (control plane estable + namespace de prueba efímero por corrida).
+- **User-facing changes**: Yes — plataforma y UI completamente nuevas (inbox, estado del entorno warm, reportes, paneles de política M7/M8).
+- **Structural changes**: Yes — sistema nuevo system-wide (control plane estable + **entorno warm reutilizable en namespace de prueba de vida larga**).
 - **Data model changes**: Yes — modelos nuevos (notificaciones, sesiones/planes, reportes/evidencia, políticas, auditoría).
 - **API changes**: Yes — API del control plane nueva (UI/API Gateway, GitHub webhooks, Slack).
-- **NFR impact**: Yes — SECURITY-01..15 bloqueantes, RESILIENCY-01..15 direccionales, PBT parcial, KPIs (teardown 100%, ensayo >70%).
+- **NFR impact**: Yes — SECURITY-01..15 bloqueantes, RESILIENCY-01..15 direccionales, PBT parcial, KPIs (reset verificado 100% + higiene de rebuild, ensayo >70%).
 
 ### Risk Assessment
-- **Risk Level**: High — plataforma system-wide nueva con componentes de IA (inferencia de superficie, post-mortem) e infraestructura efímera con requisitos de aislamiento verificable; incertidumbre principal en comportamiento del LLM y escape de namespace (riesgo #1 del PRD).
+- **Risk Level**: High — plataforma system-wide nueva con componentes de IA (inferencia de superficie, post-mortem) y un entorno warm reutilizable con requisitos de aislamiento y reset verificables; incertidumbre principal en comportamiento del LLM y **contaminación de estado entre corridas** (riesgo #1 del PRD).
 - **Rollback Complexity**: N/A (greenfield — nada desplegado que revertir; el trabajo actual no toca infraestructura por AUTONOMIA-01).
-- **Testing Complexity**: Complex — sandbox efímero, gates (confirm/ensayo), dataset de evaluación con bugs sembrados, red-teaming (7 escenarios PRD §11).
+- **Testing Complexity**: Complex — entorno warm, gates (confirm/reset verificado/ensayo), dataset de evaluación con bugs sembrados, red-teaming (7 escenarios PRD §11).
 
 ## Workflow Visualization
 
@@ -26,8 +26,8 @@ flowchart TD
         RA["Requirements Analysis<br/><b>COMPLETED</b>"]
         US["User Stories<br/><b>COMPLETED</b>"]
         WP["Workflow Planning<br/><b>COMPLETED</b>"]
-        AD["Application Design<br/><b>EXECUTE</b>"]
-        UG["Units Generation<br/>Planning plus Generation<br/><b>EXECUTE</b>"]
+        AD["Application Design<br/><b>COMPLETED</b>"]
+        UG["Units Generation<br/>Planning plus Generation<br/><b>COMPLETED</b>"]
     end
 
     subgraph CONSTRUCTION["CONSTRUCTION PHASE"]
@@ -71,7 +71,7 @@ flowchart TD
 ```
 
 ### Text Alternative
-- INCEPTION: Workspace Detection COMPLETED → Reverse Engineering SKIPPED (greenfield) → Requirements Analysis COMPLETED → User Stories COMPLETED → Workflow Planning COMPLETED → Application Design EXECUTE → Units Generation EXECUTE → Stop (plan de tareas por unidad).
+- INCEPTION: Workspace Detection COMPLETED → Reverse Engineering SKIPPED (greenfield) → Requirements Analysis COMPLETED → User Stories COMPLETED → Workflow Planning COMPLETED → Application Design COMPLETED → Units Generation COMPLETED → Stop (plan de tareas por unidad).
 - CONSTRUCTION: Functional Design, NFR Requirements, NFR Design, Infrastructure Design, Code Generation, Build and Test — SKIP (fuera del alcance declarado: sin código).
 - OPERATIONS: PLACEHOLDER.
 
@@ -83,9 +83,9 @@ flowchart TD
 - [x] Requirements Analysis (COMPLETED — requirements.md aprobado por directiva)
 - [x] User Stories (COMPLETED — 13 historias + 3 personas aprobadas)
 - [x] Workflow Planning (COMPLETED — este documento)
-- [ ] Application Design - EXECUTE
+- [x] Application Design - COMPLETED
   - **Rationale**: 8 módulos nuevos (M1-M8) requieren identificación de componentes, métodos, servicios y dependencias antes de descomponer en unidades.
-- [ ] Units Generation - EXECUTE
+- [x] Units Generation - COMPLETED
   - **Rationale**: el sistema requiere descomposición en unidades de trabajo; el punto de parada declarado del trabajo es el plan de tareas de cada unidad (unit-of-work.md + dependencias + story-map + planes de tareas con criterios verificables por comando según AUTONOMIA-02).
 
 ### 🟢 CONSTRUCTION PHASE

@@ -5,10 +5,10 @@
 ## Propuesta base de unidades (a confirmar en Preguntas 1-6)
 
 - **U1 Ingesta & Inbox** — C1 (ui-api + go-intake): webhooks, notificaciones, confirm. Historias: US-M1, US-M2 (confirm).
-- **U2 Orquestación & Sandbox Lifecycle** — C9 + C3 + C2 + C4 + C5 (plano de ejecución Go): controller, provision, ensayo, runners, teardown/housekeeping. Historias: US-M2 (boot), US-M5, US-M6, US-M7.1, US-M7.2.
+- **U2 Orquestación & Warm Sandbox Lifecycle** — C9 + C3 + C2 + C4 + C5 (plano de ejecución Go): controller, gestión del entorno warm (deploy sobre warm), ensayo, runners, reset verificado/higiene. Historias: US-M2 (deploy sobre warm), US-M5, US-M6, US-M7.1, US-M7.2.
 - **U3 Agentes LLM** — agent-planner + agent-reporter (C3-infer/gen + C6): superficie→flujos, post-mortem. Historias: US-M3, US-M4 (generación), US-M9.
 - **U4 Gobernanza & Identidad** — C7 + C8 (go-governance + go-identity): políticas, gates, auditoría, auth. Historias: US-M8.1, US-M8.2, US-M8.3.
-- **U5 Plataforma & GitOps** — M10 transversal: Flux, CI GitHub Actions, MinIO, observabilidad base,esmaltado de red/RBAC base. Historias: US-M10 (+ habilita a todas).
+- **U5 Plataforma & GitOps** — M10 transversal: Flux, CI GitHub Actions, MinIO, observabilidad base, RBAC/NetworkPolicy base, manifiestos del entorno warm. Historias: US-M10 (+ habilita a todas).
 
 ## Plan de ejecución (checklist)
 
@@ -52,7 +52,7 @@ X) Otra (describe tras el tag [Answer])
 
 ¿Se confirma el esquema de integración entre unidades (REST para UI/admin + eventos para el pipeline + Jobs K8s, con contratos OpenAPI del control plane y esquemas de eventos versionados)?
 
-A) **Sí, como está diseñado** (contratos: OpenAPI + esquemas de los 8 eventos versionados; U2 depende de U4/U1, U3 de U2/U5, todas de U5-plataforma)
+A) **Sí, como está diseñado** (contratos: OpenAPI + esquemas de los eventos del pipeline versionados (10); U2 depende de U4/U1, U3 de U2/U5, todas de U5-plataforma)
 
 B) Sí, pero con **contratos mockeados primero** (cada unidad define sus stubs antes de integrarse)
 

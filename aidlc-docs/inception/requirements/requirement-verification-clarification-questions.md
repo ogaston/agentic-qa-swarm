@@ -1,5 +1,7 @@
 # Preguntas de Clarificación — Requirements Analysis
 
+> **Nota (2026-10-01, realineación warm)**: documento **histórico** de la fase de Requirements Analysis (pre-pivote). La contradicción #1 se resolvió entonces con "sandbox + grace period / teardown 100%"; el **pivote a entorno warm (2026-09-17)** sustituyó ese modelo por **entorno warm reutilizable + reset verificado + scale-down en idle + rebuild/teardown periódico** (KPI "reset verificado 100% + higiene de rebuild"). La respuesta vigente es **V7 en `requirements.md`**. Las respuestas de resiliencia (2-8) siguen vigentes. Se conserva el texto original como registro del proceso.
+
 Tras analizar tus respuestas detecté **1 contradicción** en la Pregunta 7 y, al activar la
 extensión **Resiliency Baseline**, esta extensión **obliga a preguntarte** (no me permite
 decidir por ti) varias decisiones de arquitectura. Responde tras cada `[Answer]:`.

@@ -1,6 +1,6 @@
 # Components — Agentic QA Swarm
 
-> Decisiones aplicadas: 1:1 con M1-M8 + Run Controller central (Q1=A, Q2=A); estilo hexagonal con puertos (Q5=A). Plano estable = C1, C6-C9 (+ C8); plano efímero = C2-C5 como Jobs en el test ns. Trazabilidad a requisitos y historias.
+> Decisiones aplicadas: 1:1 con M1-M8 + Run Controller central (Q1=A, Q2=A); estilo hexagonal con puertos (Q5=A). Plano estable = C1, C6-C9 (+ C8); **entorno warm reutilizable** = C3 (gestión del warm + deploy por corrida) + C5 (reset verificado/higiene) + C2/C4 como Jobs por corrida dentro del namespace warm. Trazabilidad a requisitos y historias.
 
 ## C1 — GitHub Intake + Inbox (M1)
 
@@ -10,27 +10,27 @@
 
 ## C2 — Rehearsal / Ensayo (M2)
 
-- **Responsabilidades**: ejecutar un flujo unitario dentro del sandbox; verificar 2xx/invariante mínima; publicar `rehearsal.passed|failed`; reintentar máx. 2 veces y escalar a handoff.
-- **Interfaces**: Job efímero `rehearsal-{run}` (1 pod) en el test ns; lee plan + superficie; escribe resultado al Run Controller. Gate técnico no omitible.
-- **Trazabilidad**: [M5→M2 funcional] [US-M5] [V8] [Principio #2].
+- **Responsabilidades**: ejecutar un flujo unitario **contra el entorno warm**; verificar 2xx/invariante mínima; publicar `rehearsal.passed|failed`; reintentar máx. 2 veces y escalar a handoff.
+- **Interfaces**: Job `rehearsal-{run}` (1 pod) en el test ns warm; lee plan + superficie; escribe resultado al Run Controller. Gate técnico no omitible.
+- **Trazabilidad**: [M5-req] [US-M5] [V8] [Principio #2].
 
-## C3 — Sandbox Provisioner (M3)
+## C3 — Warm Environment Manager (M3)
 
-- **Responsabilidades**: tras confirm, resolver artefacto (build-from-repo commit/PR; imagen tag/release), boot Docker de la app + 1 DB (Postgres o Mongo) + 1 Redis en el test ns; exponer Service interno; publicar `boot.done|failed` (fail-closed tras 2 intentos).
-- **Interfaces**: Job/operator `provision-{run}`; puerto `ContainerRuntime` (Docker/build); puerto `K8s`; sin secrets de staging/prod (solo sintéticos/declarados).
-- **Trazabilidad**: [M2-req/M3] [US-M2] [V5] [Principio #3].
+- **Responsabilidades**: gestionar el **entorno warm reutilizable** del namespace de prueba (app + 1 DB (Postgres o Mongo) + 1 Redis **pre-desplegados y reutilizados entre corridas**): health/probes, estados `ready`/`dirty`/`cuarentena`/`idle-escalado`, deploy de la versión del artefacto **por corrida sobre el warm**, inferir la superficie externa y recomendar flujos; publicar `warm.ready` y `deploy.done|failed` (fail-closed tras 2 intentos).
+- **Interfaces**: servicio `go-warm-manager`; rollout/Job `deploy-{run}` sobre el warm; puerto `ContainerRuntime` (build/pull); puerto `K8s`; puerto `PolicyStore` (cuotas, cadencia); sin secrets de staging/prod (solo sintéticos/declarados).
+- **Trazabilidad**: [M2/M3] [US-M2, US-M3, US-M4] [V5] [Principio #3].
 
 ## C4 — QA Runner (M4)
 
-- **Responsabilidades**: ejecutar flujos (artefacto estándar, p. ej. k6) como Jobs contra el Service del sandbox; recoger logs/evidencia hacia el Evidence Store; sin llamadas al LLM y sin credenciales de modelo.
-- **Interfaces**: Jobs `runner-{run}-{flow}` en el test ns; puerto `Executor` (motor enchufable; k6 un ejecutor posible); puerto `Evidence` (escritura MinIO).
-- **Trazabilidad**: [M6-req/M4] [US-M4, US-M6] [Principio #1].
+- **Responsabilidades**: ejecutar flujos (artefacto estándar, p. ej. k6) como Jobs contra el Service del SUT **en el entorno warm**; recoger logs/evidencia hacia el Evidence Store; sin llamadas al LLM y sin credenciales de modelo.
+- **Interfaces**: Jobs `runner-{run}-{flow}` en el test ns; puerto `Executor` (motor enchufable; k6 un ejecutor posible); puerto `Evidence` (escritura MinIO); enforcement de workflow (cuota/timeout).
+- **Trazabilidad**: [M6] [US-M4, US-M6] [Principio #1].
 
-## C5 — Teardown & Housekeeping (M5)
+## C5 — Verified Reset & Housekeeping (M5)
 
-- **Responsabilidades**: destruir app+deps+runners de la corrida al terminar/cancelar/abandonar (grace period 24 h configurable); verificar namespace limpio; housekeeping de sesiones colgadas; persistir sesión/plan "incompleta" para reanudar.
-- **Interfaces**: Job `teardown-{run}` + CronJob `housekeeping`; publica `teardown.verified`; escribe estado de sesión.
-- **Trazabilidad**: [M7-req/M5] [US-M7.1, US-M7.2] [V7] [Principio #3].
+- **Responsabilidades**: **reset verificado entre corridas** (restart de servicios + limpieza de DB + flush de cache + job de verificación con probes/checks → `reset_verified=true`); **cuarentena** del warm si el reset falla (escala a humano); **scale-down en idle** (replicas mínimas / pausa de runners); **rebuild periódico o teardown total + reprovisionamiento** como higiene; housekeeping de sesiones abandonadas (grace period 24 h configurable) y persistencia de sesión/plan "incompleta" para reanudar.
+- **Interfaces**: Job `reset-{run}` + CronJob `housekeeping`/`rebuild`; publica `reset.verified` (entre corridas) y `teardown.verified` (rebuild/teardown periódico); escribe estado del warm y de sesión.
+- **Trazabilidad**: [M7] [US-M7.1, US-M7.2] [V7] [Principio #3].
 
 ## C6 — Post-mortem & Reporter (M6)
 
@@ -52,12 +52,13 @@
 
 ## C9 — Run Controller (orquestador central)
 
-- **Responsabilidades**: máquina de estados persistida por corrida (notify→confirm→boot→infer→rehearse→run→teardown→report); crear Jobs por fase; aplicar gates (confirm registrado, `ensayo_passed=true`, test-ns-only); publicar eventos del pipeline; exponer estado (`GET /runs/{id}`).
-- **Interfaces**: servicio `go-run-controller`; consume eventos; invoca puertos K8s/Jobs; consulta C7 (política) y C8 (auth) en cada transición (fail-closed ante error).
+- **Responsabilidades**: máquina de estados persistida por corrida (notify→confirm→**warm ready**→deploy sobre warm→infer→rehearse→run→**reset verificado**→report); crear Jobs por fase; aplicar gates (confirm registrado, `reset_verified=true` previo, `ensayo_passed=true`, test-ns-only, workflow permitido); publicar eventos del pipeline; exponer estado (`GET /runs/{id}`).
+- **Interfaces**: servicio `go-run-controller`; consume eventos; invoca puertos K8s/Jobs; consulta C7 (política/workflow) y C8 (auth) en cada transición, y a C3/C5 para el estado del warm (fail-closed ante error).
 - **Trazabilidad**: [Transversal M1-M7] [UC1-UC4] [Q2=A].
 
 ## Infraestructura compartida (no componentes de dominio)
 
 - **Evidence Store**: MinIO in-cluster (persistencia de logs/reportes/evidencia) — accedido vía puerto `Evidence` por C4 (escritura) y C6 (lectura). [V6].
+- **Entorno warm (SUT)**: app del cliente desplegada por corrida sobre 1 DB + 1 Redis pre-desplegados y reutilizados en el test namespace — gestionado por C3, reseteado por C5.
 - **Externos**: GitHub App, Slack API (S1), LLM API (solo C-planificador de C1/C3/C4-generación y C6), registry opcional.
 - **Cross-cutting**: logging estructurado centralizado (timestamp/request-id/nivel/mensaje, sin secrets/PII); rate limiting en endpoints públicos; timeouts explícitos + circuit breakers + degradación documentada; health shallow+deep; métricas y dashboard.

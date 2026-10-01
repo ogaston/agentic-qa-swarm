@@ -2,7 +2,7 @@
 
 > **Fuente**: `entradas/prd.md`, `entradas/pvd.md`, `docs/*` (overview, mercado, icp, critica, validacion) y `mockups/swarm-mock.html`.
 > **Generado por**: Requirements Analysis (INCEPTION) con profundidad **Comprehensive**.
-> **Estado**: Esperando aprobación. Todas las decisiones abiertas del PRD fueron resueltas por el usuario (6 preguntas de verificación + 8 de aclaración + 2 de seguimiento).
+> **Estado**: Aprobado. Todas las decisiones abiertas del PRD fueron resueltas por el usuario (6 preguntas de verificación + 8 de aclaración + 2 de seguimiento). **Realineado al modelo warm el 2026-10-01** (plan: `../plans/warm-realignment-plan.md`).
 
 ---
 
@@ -13,7 +13,7 @@
 | **Request** | "Lee entradas/prd.md y entradas/pvd.md y especifica el producto que describen. No escribas código: este trabajo se detiene al terminar el plan de tareas de cada unidad." |
 | **Tipo de request** | New Project (greenfield) — especificación de producto completo (MVP) |
 | **Claridad** | Alta (PRD+PVB excepcionalmente detallados); vacíos resueltos vía preguntas |
-| **Estimación de alcance** | System-wide: 8 módulos (M1-M8), plataforma completa + sandbox efímero |
+| **Estimación de alcance** | System-wide: 8 módulos (M1-M8), plataforma completa + **entorno warm reutilizable** (namespace de prueba de vida larga) |
 | **Estimación de complejidad** | Complejo — múltiples subsistemas, integración con GitHub/K8s/LLM, requisitos de seguridad y gobernanza críticos |
 | **Estado de iteración** | Workflow se detiene al terminar el plan de tareas de cada unidad (no se genera código) |
 
@@ -23,7 +23,7 @@
 
 ### 2.1 One-liner
 
-> **Agentic QA Swarm** convierte un evento de GitHub (commit, PR o tag/release) en una corrida de QA de caja negra contra una copia aislada de la app: el humano **confirma**, el sistema trae el artefacto, lo arranca en Docker **dentro de un namespace de prueba**, infiere los flujos a partir de la superficie externa, los **ensaya**, los ejecuta y entrega un **post-mortem de lógica de negocio**. Staging y producción del cliente **nunca son el blanco**.
+> **Agentic QA Swarm** convierte un evento de GitHub (commit, PR o tag/release) en una corrida de QA de caja negra contra un **entorno warm propio de la plataforma**: el humano **confirma**, el sistema **despliega el artefacto sobre el entorno warm reutilizable** dentro de un namespace de prueba aislado, infiere los flujos a partir de la superficie externa, los **ensaya**, los ejecuta, aplica **reset de estado verificado entre corridas** y entrega un **post-mortem de lógica de negocio**. Staging y producción del cliente **nunca son el blanco**.
 
 ### 2.2 JTBD
 
@@ -34,9 +34,10 @@
 
 1. **Cerebro fuera del bucle de ejecución**: el LLM solo planea y hace post-mortem; los runners ejecutan sin llamadas al modelo y sin credenciales de LLM.
 2. **Ensayo obligatorio** antes de la corrida completa (gate condicionado a `ensayo_passed=true`), no relajable.
-3. **Sandbox en namespace dedicado + teardown forzado**: SUT = app Docker + 1 DB (Postgres o Mongo) + 1 Redis por corrida, destruidos al terminar o abandonar; completitud de teardown 100%.
-4. **Límite de autonomía verificable**: auto-**notify** sí, auto-**run** no; nunca staging/prod del cliente; mecanismos (GitHub App permisos mínimos, gate de confirm persistido/auditable, RBAC sin agenda fuera del test ns, NetworkPolicy namespace-only que bloquea LLM a runners, cero secrets de staging/prod montados) **en el MVP**, no opcionales.
+3. **Entorno warm aislado + reset verificado + rebuild periódico**: SUT = **entorno warm propio de la plataforma** en un namespace de prueba dedicado (app Docker + 1 DB (Postgres o Mongo) + 1 Redis **pre-desplegados y reutilizados entre corridas**); entre corridas se aplica un **reset de estado obligatorio y verificado** (`reset_verified=true`; cuarentena si falla), con **scale-down en idle** y **rebuild/teardown periódico** como higiene.
+4. **Límite de autonomía verificable**: auto-**notify** sí, auto-**run** no; nunca staging/prod del cliente; mecanismos (GitHub App permisos mínimos, gate de confirm persistido/auditable, gate de `reset_verified=true` entre corridas, RBAC sin agenda fuera del test ns, NetworkPolicy namespace-only que bloquea LLM a runners, cero secrets de staging/prod montados) **en el MVP**, no opcionales.
 5. **Flujos generados inspectables**: artefacto estándar ejecutable (k6 u otro motor), nunca formato propietario ilegible; el cliente puede auditor/versionar/ejecutar fuera de la plataforma.
+6. **Complejidad configurable por workflows de negocio**: la complejidad de prueba son workflows definidos por el negocio (p. ej. `smoke`/`standard`/`deep`) con familias de flujo, cuotas, timeouts y políticas de aprobación, enforzados técnicamente.
 
 ---
 
@@ -50,7 +51,7 @@
 | V4 | Alcance de la especificación | **Solo MVP** (MoSCoW Must + Should); el resto como fuera de alcance | El plan de tareas cubre M1-M10 + S1-S5 |
 | V5 | Fuente del artefacto | **Build-from-repo para commit/PR; imagen publicada para tags/releases** | Alcance del módulo M1/M2 |
 | V6 | Almacenamiento de evidencia | **MinIO in-cluster** | El control plane persiste reportes/evidencia en MinIO dentro del clúster |
-| V7 | Expiración de sesiones | **Sesión/plan persistido indefinidamente; sandbox con grace period** (24 h configurable) | Reconciliado: teardown 100% + reanudar sin repetir inferencia |
+| V7 | Expiración de sesiones | **Sesión/plan persistido indefinidamente; entorno warm con reset verificado entre corridas y grace period** (24 h configurable) | Reconciliado: reset verificado 100% + reanudar sin repetir inferencia |
 | V8 | Reintentos antes de fail-closed | **Boot: 2; Ensayo: 2** (después→handoff) | Límites duros a configurar en el Módulo M2 |
 | V9 | Stack del control plane | **Híbrido: Go para control plane de ejecución (jobs/runners/teardown) + capa de agentes LLM** (Python o TypeScript) | Decision en la que se apoya NFR/Infra Design |
 | AR1 | RTO/RPO y DR | **Horas — Backup & Restore** (coste mínimo) | DR del control plane (datos de plataforma y evidencias) |
@@ -72,15 +73,15 @@
 | ID | Requisito | Criterio de aceptación (KPI / comando) |
 |---|---|---|
 | **M1** | Integración GitHub: commit, PR y tag/release crean **notificación, no corrida** (GitHub App de permisos mínimos; inbox de notificaciones) | Antonimar verificado con `GET /notifications` devuelve las notificaciones creadas; NO se auto-ejecuta ninguna corrida en el webhook (`test: no auto-run en webhook`) |
-| **M2** | Pull del artefacto **build-from-repo** (commit/PR) o **imagen publicada** (tag/release) + boot en **Docker dentro del namespace de prueba** dedicado | `kubectl get pods -n <test-ns>` → app `Running`; boot exitoso gated; boot fallido → fail-closed tras 2 reintentos |
-| **M3** | Descubrir **solo la superficie externa** (OpenAPI si está expuesta; si no, sondeo HTTP/UI de puertos publicados) | Artefacto de superficie generado a partir de puertos/Service del test ns; sin lectura de código fuente |
-| **M4** | Generar flujos de QA de caja negra (trabajo de un QA): familia funcional de negocio + concurrencia feliz camino | Flujos generados como artefacto estándar ejecutable (formato k6 u otro) y **inspectable** |
-| **M5** | **Ensayo bloqueante** dentro del sandbox antes de la corrida completa | Gate de pipeline condicionado a `ensayo_passed=true`; ensayo = un flujo unitario exitoso (2xx/invariante mínima) en el sandbox |
-| **M6** | Ejecutar los flujos contra ese sandbox (runners/Jobs en el mismo namespace) | `kubectl get jobs -n <test-ns>` completados; runners sin credenciales de LLM |
-| **M7** | **Teardown forzado** de app + deps + runners (completitud 100%), incl. housekeeping de sesiones abandonadas (grace period) | Verificación de namespace limpio tras cada corrida; **Completitud de teardown = 100%** (KPI) |
-| **M8** | **RBAC + NetworkPolicy**: solo el test namespace; **nunca staging/producción del cliente**; runners **sin acceso a LLM** | `kubectl auth can-i` desde runner → denegado fuera del test ns; NetworkPolicy test ns-only; escape de namespace → incidente bloqueante |
+| **M2** | **Deploy del artefacto** `build-from-repo` (commit/PR) o **imagen publicada** (tag/release) **sobre el entorno warm** del namespace de prueba dedicado (reutilizable, ya caliente; sin aprovisionar DB/Redis desde cero) | `kubectl get pods -n <test-ns>` → app `Running` sobre el warm; deploy exitoso gated; deploy fallido → fail-closed tras 2 reintentos |
+| **M3** | Descubrir **solo la superficie externa** (OpenAPI si está expuesta; si no, sondeo HTTP/UI de puertos publicados) | Artefacto de superficie generado a partir de puertos/Service del entorno warm; sin lectura de código fuente |
+| **M4** | Generar flujos de QA de caja negra (trabajo de un QA) **dentro del workflow de negocio seleccionado** (complejidad, cuotas, timeouts, aprobaciones) | Flujos generados como artefacto estándar ejecutable (formato k6 u otro) y **inspectable**; run fuera de workflow declarado → rechazado |
+| **M5** | **Ensayo bloqueante** contra el entorno warm antes de la corrida completa | Gate de pipeline condicionado a `ensayo_passed=true`; ensayo = un flujo unitario exitoso (2xx/invariante mínima) contra el warm |
+| **M6** | Ejecutar los flujos contra ese entorno warm (runners/Jobs en el mismo namespace o adyacente autorizado) | `kubectl get jobs -n <test-ns>` completados; runners sin credenciales de LLM |
+| **M7** | **Reset de estado verificado entre corridas** (restart + clean DB + flush cache + verificación, `reset_verified=true`), **scale-down en idle** y **rebuild/teardown periódico** del entorno warm; housekeeping de sesiones abandonadas | Sin `reset_verified=true` no arranca la siguiente corrida; **Completitud de reset verificado = 100% + higiene de rebuild** (KPI); warm en cuarentena ante reset fallido |
+| **M8** | **RBAC + NetworkPolicy**: solo el test namespace (+ acceso autorizado de runners al Service del SUT); **nunca staging/producción del cliente**; runners **sin acceso a LLM**; resource limits y quotas por workflow | `kubectl auth can-i` desde runner → denegado fuera del test ns; NetworkPolicy test ns-only; escape de namespace → incidente bloqueante |
 | **M9** | **Post-mortem de lógica de negocio** entregado al usuario (correlación de logs con causa de negocio) | Precisión del post-mortem >80% vs diagnóstico humano; evidencia cruda junto al resumen |
-| **M10** | **Despliegue GitOps del producto** (entorno estable para operadores) para el módulo 8 | Control plane desplegado y reconciliado por **Flux**; `flux get kustomization` → Ready |
+| **M10** | **Despliegue GitOps del producto** (entorno estable para operadores) para el módulo 8, **incluido el entorno warm como workload gestionado por GitOps** | Control plane + entorno warm desplegados y reconciliados por **Flux**; `flux get kustomization` → Ready |
 
 ### 4.2 Should Have (MVP)
 
@@ -88,9 +89,9 @@
 |---|---|
 | S1 | Entrega por Slack (resumen post-corrida) |
 | S2 | Segunda familia de flujos (p. ej. concurrencia además del feliz camino) |
-| S3 | Traspaso a humano con contexto estructurado (boot fallido o ensayo fallido: logs, payloads intentados, hipótesis, acción sugerida) |
-| S4 | Panel de políticas (eventos GitHub, cuotas de namespace, confirm-required), exclusivo Admin |
-| S5 | Dashboard inbox de notificaciones pendientes |
+| S3 | Traspaso a humano con contexto estructurado (boot/deploy fallido, reset fallido o ensayo fallido: logs, payloads intentados, hipótesis, acción sugerida) |
+| S4 | Panel de políticas (eventos GitHub, cuotas del entorno warm, workflows con timeouts y aprobaciones, confirm-required), exclusivo Admin |
+| S5 | Dashboard inbox de notificaciones pendientes + estado del warm (`ready`/`dirty`/`cuarentena`/`idle-escalado`) |
 
 ### 4.3 Could Have (futuro)
 
@@ -130,7 +131,7 @@ Ejecutar contra staging/prod del cliente (W1); motor de ejecución propietario i
 
 | ID | Requisito | Regla |
 |---|---|---|
-| NF-RES-01 | Clasificación de criticalidad por workload (control plane vs sandbox) + impacto de indisponibilidad + mapa de dependencias | RESILIENCY-01 |
+| NF-RES-01 | Clasificación de criticalidad por workload (control plane vs entorno warm) + impacto de indisponibilidad + mapa de dependencias | RESILIENCY-01 |
 | NF-RES-02 | **RTO/RPO en horas; estrategia Backup & Restore** para la persistencia del control plane (evidencias, reportes, MinIO, DB de plataforma) | RESILIENCY-02/11/12 |
 | NF-RES-03 | Proceso ligero de **gestión de cambios** propuesto por el flujo (registro + aprobación + nota de rollback) | RESILIENCY-03 |
 | NF-RES-04 | **CI/CD = GitHub Actions**; **rollback = redeploy de versión anterior (version-pinned)**; **estilo de despliegue = directo/in-place** | RESILIENCY-04 |
@@ -138,7 +139,7 @@ Ejecutar contra staging/prod del cliente (W1); motor de ejecución propietario i
 | NF-RES-06 | Health checks shallow + deep (conectividad a deps) + integración con routing + synthetic canary | RESILIENCY-06 |
 | NF-RES-07 | Alarmas de resiliencia (réplica única, lag, fallos de backup) y monitoreo de capacidad | RESILIENCY-07 |
 | NF-RES-08 | **Topología: single-region multi-zona** (meta de producción). El laboratorio del módulo 8 es single-node → limitación documentada como deuda; minimizar superficie de fallo | RESILIENCY-08 |
-| NF-RES-09 | Auto-scaling del control plane con límites mín/máx; cuotas y límites documentados (alarma al 80%) | RESILIENCY-09 |
+| NF-RES-09 | Auto-scaling del control plane con límites mín/máx; cuotas y límites documentados (alarma al 80%); **scale-down del entorno warm en idle** (replicas mínimas / pausa de runners) | RESILIENCY-09 |
 | NF-RES-10 | Timeouts explícitos en todo call externo; circuit breakers; bulkheads; degradación graceful documentada | RESILIENCY-10 |
 | NF-RES-11 | Estrategia DR **Backup & Restore** documentada con procedimientos de failover/failback (aplica a datos del control plane) | RESILIENCY-11 |
 | NF-RES-12 | **Backups automatizados** de DB/evidencias + retención definida + cifrado + validación de restore | RESILIENCY-12 |
@@ -167,11 +168,12 @@ Ejecutar contra staging/prod del cliente (W1); motor de ejecución propietario i
 
 | KPI | Meta |
 |---|---|
-| Time-to-first-isolated-run | **< 5 minutos** (desde confirm de evento hasta primera corrida en sandbox que pasa ensayo) |
+| Time-to-first-isolated-run | **< 5 minutos** (desde confirm de evento hasta primera corrida sobre el warm que pasa ensayo; recortado por warm start) |
 | Tasa de hallazgos lógicos confirmados (North Star) | >30% de las APIs del beachhead en 90 días |
 | Ensayo a la primera | >70% al mes 6; <40% = "generador de 400s" |
 | Boot del artefacto | Fallos de boot = handoff (2 reintentos), no reintento infinito |
-| Completitud de teardown | **100%** |
+| Completitud de reset verificado | **100%** (`reset_verified=true`; sin él no arranca la siguiente corrida) |
+| Higiene de rebuild | Rebuild/teardown periódico ejecutado en su cadencia (sin deriva de config ni leftovers) |
 | Precisión de post-mortem | >80% vs diagnóstico humano |
 | Incidentes de límite de autonomía violado | **0** (circuit-breaker, no gradual) |
 | Tasa de ruido de hallazgos | <20% saludable; >50% = "modo ruido" |
@@ -180,34 +182,34 @@ Ejecutar contra staging/prod del cliente (W1); motor de ejecución propietario i
 
 ## 6. Casos de uso (top 5, del PRD §5)
 
-UC1 Primera corrida aislada desde notificación · UC2 Flujo de lógica de negocio (carrera/estado) · UC3 Teardown y purga tras corrida interrumpida/abandonada · UC4 Configuración de límites de autonomía por el Head of Platform · UC5 Artefacto que no arranca / ensayo fallido → escalado a humano (fail-closed). Journeys detallados en PRD §7 (7.1 happy path usuario, 7.2 operador/admin, 7.3 edge case interrupción, 7.4 edge case escalado a humano).
+UC1 Primera corrida aislada desde notificación (desplegando sobre el entorno warm) · UC2 Flujo de lógica de negocio (carrera/estado) dentro de un workflow · UC3 **Reset verificado, scale-down en idle y rebuild/teardown periódico del entorno warm** · UC4 Configuración de límites de autonomía y workflows por el Head of Platform · UC5 Artefacto que no arranca / ensayo fallido → escalado a humano (fail-closed). Journeys detallados en PRD §7 (7.1 happy path usuario, 7.2 operador/admin, 7.3 edge case interrupción, 7.4 edge case escalado a humano).
 
 ---
 
 ## 7. Arquitectura de referencia (resumen del PRD §9)
 
 - **Entorno estable del producto** (control plane, lo usan Marta y Julián): UI/API Gateway (Deployment), Identidad y Acceso (M8), GitHub+planificación (M1), Gobernanza (M7), Post-mortem (M6). Desplegado por **Flux** (Módulo 8).
-- **Namespace de prueba (SUT, vive y muere con la corrida):** app Docker del cliente + DB efímera (Postgres o Mongo) + Redis + ensayo (Job) + runners (Jobs) + teardown (Job). Aislado por RBAC/NetworkPolicy.
+- **Namespace de prueba (SUT = entorno warm reutilizable):** app del cliente desplegada **por corrida sobre el warm** + DB warm (Postgres o Mongo) + Redis warm + ensayo (Job) + runners (Jobs) + reset verificado (Job) + rebuild/teardown periódico. Aislado por RBAC/NetworkPolicy; escala en idle.
 - **Externos:** LLM API (solo planeación y post-mortem), Slack API, GitHub App, registry opcional.
 - **Persistencia de evidencia/reportes:** MinIO **in-cluster** (V6).
-- **Decisiones de stack:** control plane ejecución en **Go** + capa de agentes LLM en **Python o TypeScript** (V9); CI GitHub Actions; GitOps Flux; despliegue directo/in-place; rollback version-pinned; sandbox provisionado por el producto en el namespace de prueba (app + deps propias).
+- **Decisiones de stack:** control plane ejecución en **Go** + capa de agentes LLM en **Python o TypeScript** (V9); CI GitHub Actions; GitOps Flux; despliegue directo/in-place; rollback version-pinned; entorno warm gestionado por el producto en el namespace de prueba (app desplegada por corrida sobre DB + Redis pre-desplegados y reutilizados).
 
 ---
 
 ## 8. Restricciones del plan de entrega (PRD §13)
 
-- Kubernetes es el orquestador (namespaces, Jobs, NetworkPolicy, RBAC); el **blanco** es el test namespace, no staging.
-- Módulos 4-5 (CKA): test ns + Jobs de ensayo + SUT Docker + StatefulSet/PVC de DB/Redis + primeros Deployments del control plane.
-- Módulo 6 (CKAD): Deployments M1/M6/M7/M8 estables; ConfigMaps/Secrets sintéticos; Jobs de runners/teardown con resource limits; probes del SUT.
+- Kubernetes es el orquestador (namespaces, Jobs, NetworkPolicy, RBAC); el **blanco** es el **entorno warm** en el test namespace, no staging.
+- Módulos 4-5 (CKA): test ns + entorno warm (Deployments/StatefulSet de app + DB/Redis) + Jobs de ensayo + primeros Deployments del control plane.
+- Módulo 6 (CKAD): Deployments M1/M6/M7/M8 estables; ConfigMaps/Secrets sintéticos; Jobs de runners/reset/rebuild con resource limits; probes del entorno warm; scale-down en idle.
 - Módulo 7 (CKS): RBAC mínimo, NetworkPolicy no sale del test ns y bloquea LLM a runners, admisión de políticas (Kyverno/OPA) reforzando test ns-only, escaneo de imágenes.
-- Módulo 8 (producción): producto desplegado vía **GitOps Flux**; se miden KPIs del segmento 5.5; incidentes de autonomía = 0.
-- Sesión 16: demo en vivo (camino feliz, bloqueo de escape del test ns, fail-closed, métricas reales) + reconocimiento de alcance.
+- Módulo 8 (producción): producto **y entorno warm** desplegados vía **GitOps Flux**; se miden KPIs del segmento 5.5; incidentes de autonomía = 0.
+- Sesión 16: demo en vivo (camino feliz sobre el warm, bloqueo de escape del test ns, reset verificado, fail-closed, métricas reales) + reconocimiento de alcance.
 
 ---
 
 ## 9. Resumen de requisitos clave
 
-- **Qué:** plataforma **Agent (no Autonomous)** que notifica desde GitHub, y tras confirmación humana levanta la app en un namespace de prueba desechable, infiere la superficie externa, genera/ensaya/ejecuta flujos de QA de caja negra, destruye el sandbox (teardown 100%) y entrega un post-mortem de lógica de negocio. Nunca toca staging/prod del cliente.
+- **Qué:** plataforma **Agent (no Autonomous)** que notifica desde GitHub, y tras confirmación humana **despliega el artefacto sobre el entorno warm reutilizable** en un namespace de prueba aislado, infiere la superficie externa, genera/ensaya/ejecuta flujos de QA de caja negra, aplica **reset verificado entre corridas** (+ scale-down en idle y rebuild/teardown periódico) y entrega un post-mortem de lógica de negocio. Nunca toca staging/prod del cliente.
 - **MVP:** M1-M10 Must + S1-S5 Should; W1-W11 explícitamente fuera de alcance.
-- **Decisiones cerradas:** build-from-repo (commit/PR) + imagen (tag); MinIO in-cluster; sesión indefinida + sandbox con grace period 24 h; reintentos boot/ensayo = 2; control plane Go + capa agentes (Python/TS); DR Backup&Restore (horas); change mgmt light + IR/COE light propuestos; GitHub Actions; rollback version-pinned; despliegue directo; single-region multi-zona; GitOps **Flux**.
+- **Decisiones cerradas:** build-from-repo (commit/PR) + imagen (tag); MinIO in-cluster; sesión indefinida + entorno warm con reset verificado entre corridas y grace period 24 h; reintentos boot/deploy y ensayo = 2; control plane Go + capa agentes (Python/TS); DR Backup&Restore (horas); change mgmt light + IR/COE light propuestos; GitHub Actions; rollback version-pinned; despliegue directo; single-region multi-zona; GitOps **Flux**; workflows de negocio como unidad de complejidad de prueba.
 - **NFR habilitadores de confianza:** límite de autonomía verificable, ensayo bloqueante, seguridad por defecto (SECURITY-01..15 bloqueantes), resiliencia direccional (RESILIENCY-01..15), PBT parcial (02/03/07/08/09).

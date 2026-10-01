@@ -10,7 +10,7 @@
 - [x] High Priority: New User Features (plataforma e UI completamente nuevas: inbox, sandbox, reportes, paneles M7/M8)
 - [x] High Priority: Multi-Persona Systems (Marta Backend Lead, Julián Head of Platform, buyer VP Eng; roles user/admin/buyer con permisos distintos)
 - [x] High Priority: Customer-Facing APIs (UI/API Gateway del control plane consumida por los equipos del cliente)
-- [x] High Priority: Complex Business Logic (límites de autonomía, ensayo bloqueante, teardown forzado, fail-closed, post-mortem)
+- [x] High Priority: Complex Business Logic (límites de autonomía, ensayo bloqueante, reset verificado del entorno warm, fail-closed, post-mortem)
 - [x] High Priority: Cross-Team Projects (equipos de 3-15 ingenieros; buyer ≠ user; requiere entendimiento compartido)
 - [ ] Medium Priority: no aplica como criterio principal (el caso ya es de alta prioridad)
 - [x] Benefits: claridad (historias testeables por rol antes del diseño), testing (criterios de aceptación que alimentan INVEST + AUTONOMIA-02), alineamiento (buyer/user/admin comparten qué hace y qué nunca hace el sistema)
