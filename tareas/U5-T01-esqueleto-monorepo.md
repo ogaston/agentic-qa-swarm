@@ -47,9 +47,9 @@ Cada uno con **su comando**. El revisor los va a correr él mismo, uno por uno.
 
 - [ ] **CA-2** — Los directorios que quedarían vacíos son versionables (trackeados por git).
   ```bash
-  git ls-files | grep -c -E '(^|/)\.gitkeep$'
+  git ls-files -- services agents contracts deploy .github | grep -c -E '(^|/)\.gitkeep$'
   ```
-  Esperado: `8` (un `.gitkeep` por cada directorio del árbol que no tiene otro contenido).
+  Esperado: `8` (un `.gitkeep` por cada directorio del árbol que no tiene otro contenido). Acotado a las rutas del monorepo para no contar el andamiaje del loop (`bitacoras/`, `revisiones/`); enmienda aprobada por el humano tras `revisiones/U5-T01/ronda-1.md` (F-01).
 
 - [ ] **CA-3** — El `README.md` de layout nombra cada directorio raíz.
   ```bash
