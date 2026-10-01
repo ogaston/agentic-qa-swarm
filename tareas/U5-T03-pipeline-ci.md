@@ -67,9 +67,10 @@ Cada uno con **su comando**. El revisor los va a correr él mismo, uno por uno, 
 - [ ] **CA-5** — `publish` solo corre en tags `v*` y nunca etiqueta `latest`.
   ```bash
   grep -n -E "startsWith\(github\.ref, 'refs/tags/v'\)|refs/tags/v\*" .github/workflows/ci.yml | wc -l
-  grep -n -i 'latest' .github/workflows/ci.yml | grep -v -E '^\s*[0-9]+:\s*#' | wc -l
+  grep -n -i 'latest' .github/workflows/ci.yml | grep -v -E '^[0-9]+:\s*#' | grep -v -E 'no-latest|latest=false' | wc -l
+  grep -q 'docker/metadata-action' .github/workflows/ci.yml && grep -c 'latest=false' .github/workflows/ci.yml || echo N/A
   ```
-  Esperado: `≥1` y `0` (no se menciona `latest` salvo en comentarios).
+  Esperado: `≥1`, luego `0` (`latest` solo aparece en comentarios, en el identificador `no-latest` del job y del guard, o en `latest=false`), y por último `≥1` si se usa `docker/metadata-action` (que por defecto añade `latest` con `flavor: latest=auto`) o `N/A` si no se usa. Enmienda aprobada por el humano tras la ronda 1: la versión anterior contaba `no-latest` y `check-no-latest.sh`, que exigen CA-1 y CA-3.
 
 - [ ] **CA-6** — El guard pasa sobre el árbol actual y falla con `:latest` o sin tag (fixtures temporales).
   ```bash
