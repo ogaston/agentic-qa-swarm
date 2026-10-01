@@ -202,6 +202,7 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          serviceAccountName: aqs-reset
           containers:
             - name: housekeeping
               # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
@@ -231,6 +232,7 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          serviceAccountName: aqs-reset
           containers:
             - name: rebuild
               # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.

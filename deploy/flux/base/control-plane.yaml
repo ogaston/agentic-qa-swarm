@@ -121,6 +121,7 @@ spec:
         app.kubernetes.io/name: go-run-controller
         aqs.io/tier: control-plane
     spec:
+      serviceAccountName: go-run-controller
       containers:
         - name: go-run-controller
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
@@ -173,6 +174,7 @@ spec:
         app.kubernetes.io/name: go-warm-manager
         aqs.io/tier: control-plane
     spec:
+      serviceAccountName: go-warm-manager
       containers:
         - name: go-warm-manager
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
@@ -225,6 +227,7 @@ spec:
         app.kubernetes.io/name: go-reset
         aqs.io/tier: control-plane
     spec:
+      serviceAccountName: go-reset
       containers:
         - name: go-reset
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
