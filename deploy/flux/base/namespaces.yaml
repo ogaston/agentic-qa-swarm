@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aqs-system
+  labels:
+    aqs.io/plane: control
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aqs-test
+  labels:
+    aqs.io/plane: warm

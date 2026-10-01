@@ -1,0 +1,230 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: warm-policy
+  namespace: aqs-test
+data:
+  idleScaleDownAfter: 30m
+  minReplicasIdle: "0"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: warm-app
+  namespace: aqs-test
+  labels:
+    app.kubernetes.io/name: warm-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: warm-app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: warm-app
+    spec:
+      containers:
+        - name: warm-app
+          image: nginx:1.27.2
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: warm-app
+  namespace: aqs-test
+spec:
+  selector:
+    app.kubernetes.io/name: warm-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: warm-db
+  namespace: aqs-test
+  labels:
+    app.kubernetes.io/name: warm-db
+spec:
+  serviceName: warm-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: warm-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: warm-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16.4
+          ports:
+            - name: pg
+              containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: warm-db-credentials
+                  key: password
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: warm-db
+  namespace: aqs-test
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: warm-db
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: pg
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: warm-redis
+  namespace: aqs-test
+  labels:
+    app.kubernetes.io/name: warm-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: warm-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: warm-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4.1
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            tcpSocket:
+              port: redis
+          livenessProbe:
+            tcpSocket:
+              port: redis
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: warm-redis
+  namespace: aqs-test
+spec:
+  selector:
+    app.kubernetes.io/name: warm-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: housekeeping
+  namespace: aqs-test
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: housekeeping
+              image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
+              args: ["housekeeping"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 250m
+                  memory: 128Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rebuild
+  namespace: aqs-test
+spec:
+  schedule: "0 3 * * 0"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: rebuild
+              image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
+              args: ["rebuild"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 250m
+                  memory: 128Mi
