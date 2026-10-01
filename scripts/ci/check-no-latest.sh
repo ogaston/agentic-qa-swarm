@@ -4,7 +4,7 @@ set -euo pipefail
 
 dir=${1:?uso: check-no-latest.sh <dir>}
 if [ ! -d "$dir" ]; then
-  echo "aviso: $dir no existe, nada que verificar" >&2
+  echo "::warning:: $dir no existe, nada que verificar" >&2
   exit 0
 fi
 
