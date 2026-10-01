@@ -38,4 +38,11 @@ Se abandona el modelo "reconstruir todo por corrida" por un **entorno warm propi
 
 - Preferi que se creara todo en un monorepo, ya que considero que es la forma mas facil de manejar un ecosistema de paquetes de software.
 - Utilice go para el manejo de los componentes de kubernetes porque es muy robusto, ligero y ademas es un lenguaje que personalmente estoy aprendiendo, entonces quiero explorarlo un poco mas. 
--
+
+### 6. Configuración de modelos para el Loop de Agentes (Módulo 6) — 2026-10-01
+
+Para despachar las 37 tareas de `unidades-y-tareas.md` mediante el loop de tres agentes, se adopta el escalonamiento de modelos con ajuste de esfuerzo de razonamiento:
+- **Orquestador**: `Opus 5.5` (reemplaza `fable`) — máxima visión arquitectónica para arbitraje, control de dependencias entre olas y apertura de PRs limpios.
+- **Codificador**: `Sonnet 5.5 (effort: low)` — generación de código ágil, enfocada y costo-eficiente por tarea en su propio worktree.
+- **Revisor**: `Sonnet 5.5 (effort: high)` — análisis exhaustivo con razonamiento profundo para ejecutar comandos de verificación, auditar contratos y detectar fallos sutiles.
+- **Humano**: Revisa y fusiona (el techo del loop).

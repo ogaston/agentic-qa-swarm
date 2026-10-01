@@ -1,6 +1,8 @@
 # Application Design Plan — Agentic QA Swarm
 
-> Contexto analizado (Step 1): `requirements.md` (8 módulos M1-M8, principios #1-#5, decisiones V1-V9/AR1-AR9) + `stories.md` (13 historias Must) + `personas.md`. Dos planos: **control plane estable** (UI/API, identidad, planificación, gobernanza, post-mortem) y **test namespace efímero** (app+DB+Redis+Jobs). Stack híbrido (Go ejecución + capa agentes), Flux, MinIO, GitHub Actions.
+> **Nota (2026-10-01, realineación warm)**: las preguntas y opciones de abajo son el **registro histórico** de la fase (pre-pivote); su redacción "boot/sandbox/teardown" se refiere al modelo efímero entonces vigente. El diseño vigente usa **entorno warm reutilizable** (ver `components.md`/`services.md` realineados y `warm-realignment-plan.md`).
+>
+> Contexto analizado (Step 1): `requirements.md` (8 módulos M1-M8, principios #1-#6, decisiones V1-V9/AR1-AR9) + `stories.md` (13 historias Must) + `personas.md`. Dos planos: **control plane estable** (UI/API, identidad, planificación, gobernanza, post-mortem) y **entorno warm reutilizable** en el test namespace (app desplegada por corrida + DB + Redis pre-desplegados + Jobs/rollouts). Stack híbrido (Go ejecución + capa agentes), Flux, MinIO, GitHub Actions.
 
 ## Plan de diseño (checklist)
 
@@ -24,10 +26,10 @@
 
 ## Propuesta base (sobre la que preguntan las Preguntas 1-5)
 
-- Componentes candidatos 1:1 con módulos: Ingesta GitHub + Inbox (M1), Ensayo (M2), Aprovisionador Sandbox (M3), Runner QA (M4), Teardown/Housekeeping (M5), Post-mortem/Reporter (M6), Gobernanza/Policy (M7), Identidad (M8), Evidencia/MinIO (M6-infra).
-- Orquestación candidata: Run Controller central con máquina de estados notify→confirm→boot→infer→rehearse→run→teardown→report + Jobs K8s por fase en el test ns.
-- Comunicación candidata: REST sincrónico entre servicios del control plane; Jobs/eventos K8s para el lifecycle de corridas.
-- Despliegue candidato: un Deployment por servicio del control plane + Jobs efímeros + Flux.
+- Componentes candidatos 1:1 con módulos: Ingesta GitHub + Inbox (M1), Ensayo (M2), Warm Environment Manager (M3), Runner QA (M4), Verified Reset & Housekeeping (M5), Post-mortem/Reporter (M6), Gobernanza/Policy (M7), Identidad (M8), Evidencia/MinIO (M6-infra).
+- Orquestación candidata: Run Controller central con máquina de estados notify→confirm→warm ready→deploy sobre warm→infer→rehearse→run→reset verificado→report + rollouts/Jobs K8s por fase en el test ns.
+- Comunicación candidata: REST sincrónico entre servicios del control plane; rollouts/Jobs/eventos K8s para el lifecycle de corridas.
+- Despliegue candidato: un Deployment por servicio del control plane + entorno warm gestionado (rollouts/Jobs) + Flux.
 
 ---
 
@@ -39,7 +41,7 @@ A) **1:1 con M1-M8** (9 componentes candidatos de la propuesta base; máxima tra
 
 B) **Consolidado** — control plane en 4 componentes (Ingesta/Inbox, Planificación+Ensayo, Gobernanza+Identidad, Post-mortem/Reporter) + 1 lifecycle de sandbox (provision+run+teardown) (menos piezas, límites más gruesos)
 
-C) **Híbrido** — control plane consolidado (B) pero sandbox lifecycle separado por fase (provision, ensayo, runners, teardown como Jobs independientes) (Recomendado: equilibra operabilidad y granularidad de Jobs)
+C) **Híbrido** — control plane consolidado (B) pero warm lifecycle separado por fase (deploy sobre warm, ensayo, runners, reset como Jobs independientes) (Recomendado: equilibra operabilidad y granularidad de Jobs)
 
 X) Otra (describe tras el tag [Answer])
 
@@ -51,7 +53,7 @@ X) Otra (describe tras el tag [Answer])
 
 ¿Quién orquesta la máquina de estados notify→confirm→boot→infer→rehearse→run→teardown→report?
 
-A) **Run Controller central** con máquina de estados persistida (sesión/plan) que crea Jobs por fase y aplica gates (confirm, ensayo_passed) (Recomendado: un solo lugar para gates y auditoría)
+A) **Run Controller central** con máquina de estados persistida (sesión/plan) que crea Jobs/rollouts por fase y aplica gates (confirm, `reset_verified`, `ensayo_passed`) (Recomendado: un solo lugar para gates y auditoría)
 
 B) **Coreografía por eventos** — cada fase reacciona a eventos de la anterior sin orquestador central
 
@@ -83,9 +85,9 @@ X) Otra (describe tras el tag [Answer])
 
 ¿Cómo se empaquetan los componentes del control plane para Flux (Módulo 8)?
 
-A) **Un Deployment por servicio** (UI/API, planner, governance, reporter, identity) + Jobs efímeros (máximo aislamiento y escalado independiente)
+A) **Un Deployment por servicio** (UI/API, planner, governance, reporter, identity) + entorno warm gestionado (rollouts/Jobs) (máximo aislamiento y escalado independiente)
 
-B) **Monolito modular** — un solo Deployment del control plane con módulos internos + Jobs efímeros (menor sobrecarga operativa en el clúster del curso)
+B) **Monolito modular** — un solo Deployment del control plane con módulos internos + entorno warm gestionado (menor sobrecarga operativa en el clúster del curso)
 
 C) **Por lenguaje del híbrido** — servicio(s) Go para ejecución (controller, runners-operator, teardown) + servicio(s) de capa de agentes (planificación, post-mortem) (Recomendado: alinea despliegue con V9 y con el límite cerebro/músculo)
 

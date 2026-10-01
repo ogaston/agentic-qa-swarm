@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agentic QA Swarm — Project & Loop Overview</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111726;
+      --card-border: #1e293b;
+      --card-hover: #1a233a;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --primary: #38bdf8;
+      --primary-dim: rgba(56, 189, 248, 0.15);
+      --accent: #818cf8;
+      --accent-dim: rgba(129, 140, 248, 0.15);
+      --success: #34d399;
+      --success-dim: rgba(52, 211, 153, 0.15);
+      --warning: #fbbf24;
+      --warning-dim: rgba(251, 191, 36, 0.15);
+      --danger: #f87171;
+      --danger-dim: rgba(248, 113, 113, 0.15);
+      --purple: #c084fc;
+      --purple-dim: rgba(192, 132, 252, 0.15);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --code-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.45;
+      font-size: 13.5px;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* HEADER */
+    header {
+      background: linear-gradient(135deg, #111827 0%, #1e1b4b 100%);
+      border: 1px solid #312e81;
+      border-radius: 12px;
+      padding: 18px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .brand h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand p {
+      color: var(--text-muted);
+      font-size: 12.5px;
+      margin-top: 2px;
+    }
+    .badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .badge-blue { background: var(--primary-dim); color: var(--primary); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge-green { background: var(--success-dim); color: var(--success); border: 1px solid rgba(52, 211, 153, 0.3); }
+    .badge-purple { background: var(--purple-dim); color: var(--purple); border: 1px solid rgba(192, 132, 252, 0.3); }
+    .badge-amber { background: var(--warning-dim); color: var(--warning); border: 1px solid rgba(251, 191, 36, 0.3); }
+
+    /* GRID & CARDS */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+
+    @media (max-width: 980px) {
+      .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 8px;
+    }
+    .card-title .icon-text {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* FLOW VISUALIZER */
+    .flow-strip {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      overflow-x: auto;
+    }
+    .flow-step {
+      flex: 1;
+      min-width: 120px;
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 10px 8px;
+      text-align: center;
+      border: 1px solid #334155;
+    }
+    .flow-step.active {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.08);
+    }
+    .flow-step.gate {
+      border-color: var(--warning);
+      background: rgba(251, 191, 36, 0.08);
+    }
+    .flow-step.critical {
+      border-color: var(--success);
+      background: rgba(52, 211, 153, 0.08);
+    }
+    .flow-num {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+    }
+    .flow-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-top: 2px;
+    }
+    .flow-sub {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .flow-arrow {
+      color: var(--text-dim);
+      font-weight: bold;
+      font-size: 14px;
+      user-select: none;
+    }
+
+    /* PHASE PROGRESS BAR */
+    .phase-timeline {
+      display: grid;
+      grid-template-columns: 1fr 1.3fr 0.9fr;
+      gap: 12px;
+    }
+    .phase-box {
+      border-radius: 8px;
+      padding: 12px 14px;
+      border: 1px solid;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .phase-done {
+      background: rgba(52, 211, 153, 0.05);
+      border-color: rgba(52, 211, 153, 0.3);
+    }
+    .phase-now {
+      background: rgba(56, 189, 248, 0.08);
+      border-color: rgba(56, 189, 248, 0.4);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.08);
+    }
+    .phase-later {
+      background: rgba(148, 163, 184, 0.04);
+      border-color: rgba(148, 163, 184, 0.2);
+    }
+    .phase-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    .pill-green { background: #064e3b; color: #6ee7b7; }
+    .pill-blue { background: #0c4a6e; color: #7dd3fc; }
+    .pill-gray { background: #1e293b; color: #94a3b8; }
+
+    /* LIST & ITEMS */
+    ul.compact-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    ul.compact-list li {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    ul.compact-list li strong {
+      color: #e2e8f0;
+    }
+    .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--primary);
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+    .dot-green { background: var(--success); }
+    .dot-amber { background: var(--warning); }
+    .dot-red { background: var(--danger); }
+    .dot-purple { background: var(--purple); }
+
+    /* UNITS GRID */
+    .unit-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      position: relative;
+    }
+    .unit-card:hover {
+      border-color: #334155;
+    }
+    .unit-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-bottom: 2px;
+    }
+    .unit-tasks {
+      font-size: 11px;
+      font-family: var(--code-font);
+      color: var(--accent);
+      background: rgba(129, 140, 248, 0.1);
+      padding: 3px 6px;
+      border-radius: 4px;
+      align-self: flex-start;
+    }
+
+    /* THE LOOP / COMMITMENT ROLES */
+    .role-card {
+      background: #0b1120;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .role-card.human {
+      border: 1.5px solid #f43f5e;
+      background: rgba(244, 63, 94, 0.05);
+    }
+    .role-title {
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .role-model {
+      font-size: 10.5px;
+      font-family: var(--code-font);
+      color: var(--text-dim);
+    }
+    .dos { color: #86efac; font-size: 11.5px; }
+    .donts { color: #fca5a5; font-size: 11.5px; }
+
+    /* VERIFICATION BOX */
+    .highlight-box {
+      background: #172033;
+      border-left: 3px solid var(--primary);
+      padding: 10px 14px;
+      border-radius: 0 8px 8px 0;
+      font-size: 12px;
+    }
+    .highlight-box.alert {
+      border-left-color: var(--danger);
+      background: rgba(239, 68, 68, 0.08);
+    }
+    .highlight-box.warn {
+      border-left-color: var(--warning);
+      background: rgba(245, 158, 11, 0.08);
+    }
+
+    /* CODE SNIPPET */
+    code {
+      font-family: var(--code-font);
+      background: #1e293b;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      color: #38bdf8;
+    }
+
+    /* COMPACT STATS */
+    .stat-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .stat-pill {
+      background: #131c31;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 6px 12px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 140px;
+    }
+    .stat-val {
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .stat-lbl {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+    }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid #1e293b;
+      padding-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-dim);
+      font-size: 11.5px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <h1>🐝 Agentic QA Swarm <span style="font-weight:400; font-size:14px; color:var(--primary);">· Project & Loop Blueprint</span></h1>
+      <p>Autonomous Black-Box QA on Platform Warm Sandbox · Pre-Construction Briefing</p>
+    </div>
+    <div class="badges">
+      <span class="badge badge-green">✓ INCEPTION COMPLETE</span>
+      <span class="badge badge-amber">⚡ CONSTRUCTION (READY TO UNLOCK)</span>
+      <span class="badge badge-purple">🛡️ HUMAN-IN-THE-LOOP</span>
+    </div>
+  </header>
+
+  <!-- QUICK METRICS -->
+  <div class="stat-row">
+    <div class="stat-pill">
+      <span class="stat-lbl">Scope (Must)</span>
+      <span class="stat-val" style="color:var(--primary);">13 Stories</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-lbl">Total Tasks</span>
+      <span class="stat-val" style="color:var(--accent);">37 Unit Tasks</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-lbl">Dispatch Waves</span>
+      <span class="stat-val" style="color:var(--purple);">4 Sequential Waves</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-lbl">Zero-Pollution Target</span>
+      <span class="stat-val" style="color:var(--success);">100% Verified Reset</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-lbl">Client Sandbox Staging</span>
+      <span class="stat-val" style="color:var(--danger);">0 (Isolated Platform Warm)</span>
+    </div>
+  </div>
+
+  <!-- SECTION 1: WHAT IS THE PROJECT ABOUT -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon-text">🎯 <strong>1. What Is This Project About? (The 30-Second Essence)</strong></span>
+      <span style="font-size:11px; color:var(--text-dim);">Black-box transactional logic QA</span>
+    </div>
+
+    <div style="font-size:12.5px; color:var(--text-muted); line-height:1.5;">
+      A platform that intercepts GitHub events (commit, PR, tag), seeks human confirmation, deploys the software into an 
+      <strong style="color:#fff;">isolated Warm Sandbox</strong> (reusable app + DB + Redis inside platform cluster), infers external endpoints, generates & rehearses deterministic tests, runs them, and executes a 
+      <strong style="color:#fff;">100% verified reset</strong> before delivering a business-logic post-mortem.
+    </div>
+
+    <!-- PIPELINE STEPS -->
+    <div class="flow-strip">
+      <div class="flow-step">
+        <div class="flow-num">Step 1</div>
+        <div class="flow-name">GitHub Event</div>
+        <div class="flow-sub">Commit / PR / Tag</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step gate">
+        <div class="flow-num">Gate 1</div>
+        <div class="flow-name">👤 Human Confirm</div>
+        <div class="flow-sub">Inbox notification</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">Step 2</div>
+        <div class="flow-name">Deploy on Warm</div>
+        <div class="flow-sub">Reusable SUT pods</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">Step 3</div>
+        <div class="flow-name">Infer & Plan</div>
+        <div class="flow-sub">External surface only</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step gate">
+        <div class="flow-num">Gate 2</div>
+        <div class="flow-name">Ensayo (Rehearse)</div>
+        <div class="flow-sub">Zero-LLM smoke run</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">Step 4</div>
+        <div class="flow-name">Runner Execution</div>
+        <div class="flow-sub">Collect evidence to MinIO</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step critical">
+        <div class="flow-num">Gate 3</div>
+        <div class="flow-name">Verified Reset</div>
+        <div class="flow-sub"><code>reset_verified=true</code></div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">Step 5</div>
+        <div class="flow-name">Post-Mortem</div>
+        <div class="flow-sub">Root cause + redacting</div>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top: 4px;">
+      <div class="highlight-box">
+        <strong style="color:var(--primary);">No Autonomous Execution:</strong> Every run requires explicit human approval via the inbox. Zero autonomous cluster creation.
+      </div>
+      <div class="highlight-box warn">
+        <strong style="color:var(--warning);">Warm Namespace Pivot:</strong> Long-lived test namespace (app + DB + Redis) eliminates slow spinup; resets DB/cache cleanly between runs.
+      </div>
+      <div class="highlight-box alert">
+        <strong style="color:var(--danger);">Zero Production Touch:</strong> Runners are blocked from external egress and have NO access to client staging or production credentials.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2: AI-DLC PHASES & CURRENT LOCATION -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon-text">🗺️ <strong>2. Project Lifecycle: The 3 AI-DLC Phases</strong></span>
+      <span style="font-size:11px; color:var(--text-dim);">Strict phase gates · No skip confusion</span>
+    </div>
+
+    <div class="phase-timeline">
+      <!-- PHASE 1 -->
+      <div class="phase-box phase-done">
+        <div class="phase-header">
+          <span style="color:var(--success);">🔵 PHASE 1: INCEPTION</span>
+          <span class="pill pill-green">DONE (100%)</span>
+        </div>
+        <ul class="compact-list">
+          <li><span class="dot dot-green"></span> <strong>Requirements:</strong> 13 Must stories + 4 baselines aligned.</li>
+          <li><span class="dot dot-green"></span> <strong>Design:</strong> 5 architecture docs, event schemas, C1-C9 components.</li>
+          <li><span class="dot dot-green"></span> <strong>Breakdown:</strong> 5 Units of Work & 37 verifiable tasks mapped.</li>
+          <li><span class="dot dot-green"></span> <strong>Warm Pivot:</strong> Integrated verified reset, scale-down & hygiene.</li>
+        </ul>
+        <div style="font-size:11px; color:var(--text-dim); margin-top:auto;">Status: Stopped intentionally at task plan gate.</div>
+      </div>
+
+      <!-- PHASE 2 -->
+      <div class="phase-box phase-now">
+        <div class="phase-header">
+          <span style="color:var(--primary);">🟢 PHASE 2: CONSTRUCTION</span>
+          <span class="pill pill-blue">YOU ARE HERE (PRE-CODE)</span>
+        </div>
+        <ul class="compact-list">
+          <li><span class="dot"></span> <strong>The Mission:</strong> Write code and tests for all 37 tasks.</li>
+          <li><span class="dot"></span> <strong>The Tactic:</strong> Module 6 Agent Loop (Orchestrator + Coder + Reviewer).</li>
+          <li><span class="dot"></span> <strong>Execution Style:</strong> Worktree isolation, contracts-first, PR per task.</li>
+          <li><span class="dot"></span> <strong>Scope:</strong> Must-only (U5 → U1/U4 → U2 → U3). Should (S1-S5) is deferred.</li>
+        </ul>
+        <div style="font-size:11px; color:var(--primary); margin-top:auto; font-weight:600;">Status: Pending user command to start the loop.</div>
+      </div>
+
+      <!-- PHASE 3 -->
+      <div class="phase-box phase-later">
+        <div class="phase-header">
+          <span style="color:var(--text-muted);">🟡 PHASE 3: OPERATIONS</span>
+          <span class="pill pill-gray">FUTURE (MODULE 8)</span>
+        </div>
+        <ul class="compact-list">
+          <li><span class="dot dot-amber"></span> <strong>GitOps Engine:</strong> Flux v2 reconciles cluster states.</li>
+          <li><span class="dot dot-amber"></span> <strong>Housekeeping:</strong> CronJobs for 24h grace timeout & rebuilds.</li>
+          <li><span class="dot dot-amber"></span> <strong>Observability:</strong> Structured logging & 90d audit retention.</li>
+          <li><span class="dot dot-amber"></span> <strong>Production Reconcile:</strong> Cluster automated synchronization.</li>
+        </ul>
+        <div style="font-size:11px; color:var(--text-dim); margin-top:auto;">Status: Placeholder until code is built and tested.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: THE 5 UNITS TO BUILD -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon-text">📦 <strong>3. What Needs To Be Built: 5 Units of Work (37 Tasks)</strong></span>
+      <span style="font-size:11px; color:var(--text-dim);">Sequence: U5 → (U1 || U4) → U2 → U3</span>
+    </div>
+
+    <div class="grid-5">
+      <!-- U5 -->
+      <div class="unit-card" style="border-top: 3px solid var(--purple);">
+        <div>
+          <span class="unit-badge" style="background:var(--purple-dim); color:var(--purple);">Wave 1 · Foundation</span>
+          <h4 style="color:#fff; font-size:13px; margin: 4px 0;">U5: Platform & GitOps</h4>
+          <p style="font-size:11.5px; color:var(--text-muted);">Flux manifests, CI/CD with SBOM/Cosign, in-cluster MinIO, Warm namespace manifests, base RBAC/NetPol.</p>
+        </div>
+        <div class="unit-tasks">8 Tasks · Enables All</div>
+      </div>
+
+      <!-- U1 -->
+      <div class="unit-card" style="border-top: 3px solid var(--primary);">
+        <div>
+          <span class="unit-badge" style="background:var(--primary-dim); color:var(--primary);">Wave 2 · Parallel A</span>
+          <h4 style="color:#fff; font-size:13px; margin: 4px 0;">U1: Intake & Inbox</h4>
+          <p style="font-size:11.5px; color:var(--text-muted);">GitHub webhook verification, inbox notification API, human confirmation handling, artifact resolution.</p>
+        </div>
+        <div class="unit-tasks">7 Tasks · Enables U2</div>
+      </div>
+
+      <!-- U4 -->
+      <div class="unit-card" style="border-top: 3px solid var(--warning);">
+        <div>
+          <span class="unit-badge" style="background:var(--warning-dim); color:var(--warning);">Wave 2 · Parallel B</span>
+          <h4 style="color:#fff; font-size:13px; margin: 4px 0;">U4: Governance & Auth</h4>
+          <p style="font-size:11.5px; color:var(--text-muted);">Admin policies, business workflows, gates (fail-closed, confirm-required), append-only audit, identity.</p>
+        </div>
+        <div class="unit-tasks">7 Tasks · Enables U2</div>
+      </div>
+
+      <!-- U2 -->
+      <div class="unit-card" style="border-top: 3px solid var(--success);">
+        <div>
+          <span class="unit-badge" style="background:var(--success-dim); color:var(--success);">Wave 3 · Engine</span>
+          <h4 style="color:#fff; font-size:13px; margin: 4px 0;">U2: Warm Orchestrator</h4>
+          <p style="font-size:11.5px; color:var(--text-muted);">Run state machine, warm manager (deploy to warm), rehearsal gate, runner Jobs, verified reset + quarantine.</p>
+        </div>
+        <div class="unit-tasks">8 Tasks · Enables U3</div>
+      </div>
+
+      <!-- U3 -->
+      <div class="unit-card" style="border-top: 3px solid #f43f5e;">
+        <div>
+          <span class="unit-badge" style="background:rgba(244, 63, 94, 0.15); color:#f43f5e;">Wave 4 · AI Agents</span>
+          <h4 style="color:#fff; font-size:13px; margin: 4px 0;">U3: LLM Intelligence</h4>
+          <p style="font-size:11.5px; color:var(--text-muted);">Surface inference, deterministic flow generation (k6), post-mortem cause generator, secret redaction.</p>
+        </div>
+        <div class="unit-tasks">7 Tasks · MVP Functional</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4: WHAT YOU ARE COMMITTING TO (THE LOOP) -->
+  <div class="card" style="border: 1px solid #4338ca;">
+    <div class="card-title">
+      <span class="icon-text">🤝 <strong>4. What You Are Committing To Before Starting The Loop</strong></span>
+      <span style="font-size:11px; color:#a5b4fc;">Rules of engagement from Module 6</span>
+    </div>
+
+    <div class="grid-4">
+      <!-- ORCHESTRATOR -->
+      <div class="role-card">
+        <div class="role-title">🧠 Orchestrator</div>
+        <div class="role-model">Model: <code>opus 5.5</code> (Top Arbitration)</div>
+        <div class="dos">✓ Dispatches tasks by wave<br>✓ Assigns clean worktrees<br>✓ Arbitrates diffs & opens PRs</div>
+        <div class="donts">✗ DOES NOT write code<br>✗ DOES NOT test locally</div>
+      </div>
+
+      <!-- CODER -->
+      <div class="role-card">
+        <div class="role-title">⌨️ Coder</div>
+        <div class="role-model">Model: <code>sonnet 5.5</code> · effort: <code>low</code></div>
+        <div class="dos">✓ Implements ONE task per branch<br>✓ Writes unit/property tests<br>✓ Submits diff & log</div>
+        <div class="donts">✗ DOES NOT merge<br>✗ DOES NOT validate others</div>
+      </div>
+
+      <!-- REVIEWER -->
+      <div class="role-card">
+        <div class="role-title">🔍 Reviewer</div>
+        <div class="role-model">Model: <code>sonnet 5.5</code> · effort: <code>high</code></div>
+        <div class="dos">✓ Runs verification commands<br>✓ Deep reasoning & evidence audit<br>✓ Issues Green/Findings verdict</div>
+        <div class="donts">✗ DOES NOT edit code<br>✗ DOES NOT rubber-stamp</div>
+      </div>
+
+      <!-- HUMAN -->
+      <div class="role-card human">
+        <div class="role-title" style="color:#f43f5e;">👤 Human (YOU)</div>
+        <div class="role-model" style="color:#f43f5e;">The Ceiling of the Loop</div>
+        <div class="dos" style="color:#fda4af;">✓ <strong>Reviews and MERGES PRs</strong><br>✓ Approves any cloud/cluster diff<br>✓ Decides edge-case trade-offs</div>
+        <div class="donts" style="color:#fecdd3;">✗ Agents CANNOT merge<br>✗ Agents CANNOT self-approve</div>
+      </div>
+    </div>
+
+    <!-- CORE COMMITMENT CHECKLIST -->
+    <div class="grid-2" style="margin-top: 6px;">
+      <div style="background:#090e1a; padding:12px; border-radius:8px; border:1px solid #1e293b;">
+        <h4 style="color:#fff; font-size:12px; margin-bottom:6px;">📋 Your Practical Responsibilities</h4>
+        <ul class="compact-list">
+          <li><span class="dot dot-green"></span> <strong>PR Review Cadence:</strong> 37 PRs will be produced across 4 waves. You will inspect the reviewer's terminal output before clicking merge.</li>
+          <li><span class="dot dot-green"></span> <strong>Token & Cost Awareness:</strong> Reviewer runs heavy context; Coder generates code. Staggered model hierarchy avoids runaway costs.</li>
+          <li><span class="dot dot-green"></span> <strong>Worktree Discipline:</strong> Parallel coders run in separate git worktrees (e.g. <code>.worktrees/U5-T1</code>) without git lock conflicts.</li>
+        </ul>
+      </div>
+
+      <div style="background:#090e1a; padding:12px; border-radius:8px; border:1px solid #1e293b;">
+        <h4 style="color:#fff; font-size:12px; margin-bottom:6px;">🛡️ Guaranteed Guardrails (Why You Are Safe)</h4>
+        <ul class="compact-list">
+          <li><span class="dot dot-red"></span> <strong>No Blind Auto-Apply:</strong> Zero changes are applied autonomously to Kubernetes or cloud. All manifests land in PRs as diffs.</li>
+          <li><span class="dot dot-red"></span> <strong>Deterministic Verification:</strong> Every single one of the 37 tasks has an exact terminal command in <code>unidades-y-tareas.md</code>.</li>
+          <li><span class="dot dot-red"></span> <strong>Strict Fail-Closed:</strong> If a task or gate fails (no confirm, failed rehearsal, dirty reset), execution halts immediately.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div>Authoritative sources: <code>specs/prd.md</code> · <code>unidades-y-tareas.md</code> · <code>../modulo6/proyecto-final-loop-de-agentes.md</code></div>
+    <div>Ready to proceed? Command: <em>"Start Construction with Agent Loop"</em></div>
+  </footer>
+
+</div>
+</body>
+</html>

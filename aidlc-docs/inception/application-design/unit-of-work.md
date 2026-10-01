@@ -9,13 +9,13 @@
 - **Desplegables**: `ui-api`, `go-intake` (+ resto de UI/API Gateway como fachada de lectura C6/C7/C9).
 - **Límites**: no crea Jobs; no toca el test ns; no llama al LLM.
 
-## U2 — Orquestación & Sandbox Lifecycle
+## U2 — Orquestación & Warm Sandbox Lifecycle
 
-- **Responsabilidad**: máquina de estados + gates; provision (app+DB+Redis); ensayo bloqueante; runners; teardown/housekeeping. Componentes: C9 + C3 + C2 + C4 + C5 (plano Go).
-- **Bounded context**: Ejecución aislada. **Historias**: US-M2 (boot), US-M5, US-M6, US-M7.1, US-M7.2.
-- **Desplegables**: `go-run-controller`, `go-provisioner`, `go-teardown` + Jobs efímeros (`rehearsal-{run}`, `runner-{run}-{flow}`, `teardown-{run}`, SUT).
-- **Límites**: runners/ensayo sin credenciales LLM y sin egress; fail-closed global; teardown 100%.
-- **Dimensionado especial (4A)**: burst de Jobs por corrida; quotas del namespace + resource limits por Job; HPA en controller/provisioner.
+- **Responsabilidad**: máquina de estados + gates; gestión del **entorno warm** (deploy del artefacto por corrida sobre app+DB+Redis reutilizados, health/estados); ensayo bloqueante; runners; **reset verificado, cuarentena, scale-down en idle y rebuild/teardown periódico** + housekeeping. Componentes: C9 + C3 + C2 + C4 + C5 (plano Go).
+- **Bounded context**: Ejecución aislada. **Historias**: US-M2 (deploy sobre warm), US-M5, US-M6, US-M7.1, US-M7.2.
+- **Desplegables**: `go-run-controller`, `go-warm-manager`, `go-reset` + entorno warm (rollout/Jobs `deploy-{run}`, `rehearsal-{run}`, `runner-{run}-{flow}`, `reset-{run}`; CronJobs `housekeeping`/`rebuild`).
+- **Límites**: runners/ensayo sin credenciales LLM y sin egress; fail-closed global; reuso del warm solo con `reset_verified=true`; reset verificado 100%.
+- **Dimensionado especial (4A)**: burst de Jobs por corrida; quotas del namespace + resource limits por Job; HPA en controller/warm-manager; scale-down del warm en idle.
 
 ## U3 — Agentes LLM
 
@@ -35,21 +35,21 @@
 
 ## U5 — Plataforma & GitOps
 
-- **Responsabilidad transversal habilitadora**: Flux (reconciliación), CI GitHub Actions (build/scan/publish pineado + SBOM), MinIO in-cluster, RBAC/NetworkPolicy base, observabilidad base (logging centralizado, métricas, dashboard), backups (Backup&Restore, AR1), secretos del producto.
+- **Responsabilidad transversal habilitadora**: Flux (reconciliación), CI GitHub Actions (build/scan/publish pineado + SBOM), MinIO in-cluster, **manifiestos del entorno warm (app + DB + Redis + CronJobs de reset/rebuild) como workload GitOps**, RBAC/NetworkPolicy base, observabilidad base (logging centralizado, métricas, dashboard), backups (Backup&Restore, AR1), secretos del producto.
 - **Bounded context**: Plataforma. **Historias**: US-M10 (habilita a todas).
-- **Desplegables**: manifiestos Flux por entorno, pipeline CI, MinIO (StatefulSet), stack de observabilidad.
+- **Desplegables**: manifiestos Flux por entorno (control plane + entorno warm), pipeline CI, MinIO (StatefulSet), stack de observabilidad.
 - **Límites**: primera en la secuencia (3A); ningún secret de staging/prod del cliente existe en ningún entorno.
 
 ## Estrategia de organización de código (greenfield, 6A monorepo)
 
 ```
 /
-  services/<ui-api|go-intake|go-run-controller|go-provisioner|go-teardown|go-governance|go-identity>/
+  services/<ui-api|go-intake|go-run-controller|go-warm-manager|go-reset|go-governance|go-identity>/
     cmd/ internal/ api/openapi.yaml Dockerfile
   agents/<planner|reporter>/
     src/ tests/ requirements.txt|package.json Dockerfile
   contracts/
-    events/*.schema.json        # esquemas versionados de los 8 eventos (stubs primero, 2B)
+    events/*.schema.json        # esquemas versionados de los 10 eventos del pipeline (incl. warm/reset; stubs primero, 2B)
     openapi/control-plane.yaml
   deploy/flux/<base|dev|prod>/
     <svc>/ helmrelease|kustomization.yaml + NetworkPolicy + RBAC (revisables, sin apply autónomo)

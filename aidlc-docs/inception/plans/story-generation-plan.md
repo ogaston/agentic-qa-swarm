@@ -68,7 +68,7 @@ X) Otra (describe tras el tag [Answer])
 
 ¿Qué formato deben usar los criterios de aceptación? (Deben ser testeables; AUTONOMIA-02 exigirá comando verificable a nivel de tarea en Units Generation.)
 
-A) **Checklist verificable** — cada criterio es comprobable por observación o comando (Recomendado: compatible con gates `ensayo_passed=true`, teardown 100%)
+A) **Checklist verificable** — cada criterio es comprobable por observación o comando (Recomendado: compatible con gates `reset_verified=true`, `ensayo_passed=true`, reset verificado 100%)
 
 B) **Gherkin (Given/When/Then)** — formato BDD clásico por historia
 

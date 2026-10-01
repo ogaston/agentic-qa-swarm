@@ -11,26 +11,30 @@
 
 ## C2 — Rehearsal
 
-- `runRehearsal(plan: FlowPlan, sandbox: SandboxRef) -> RehearsalResult{passed: bool, evidence: URI}` — un flujo unitario en el sandbox; publica `rehearsal.passed|failed`.
+- `runRehearsal(plan: FlowPlan, warm: WarmEnvRef) -> RehearsalResult{passed: bool, evidence: URI}` — un flujo unitario contra el entorno warm; publica `rehearsal.passed|failed`.
 - `retryOrEscalate(attempt: int, max=2) -> RehearsalResult | Handoff` — fail-closed tras 2 intentos con reporte de motivo. [V8]
 
-## C3 — Sandbox Provisioner
+## C3 — Warm Environment Manager
 
-- `provisionSandbox(artifact: ArtifactRef, policy: NamespaceQuota) -> SandboxRef | BootFailed` — app Docker + 1 DB + 1 Redis en el test ns; publica `boot.done|failed`.
-- `retryOrEscalate(attempt: int, max=2) -> SandboxRef | Handoff` — fail-closed; handoff estructurado (logs de boot). [V8]
-- `inferSurface(sandbox: SandboxRef) -> SurfaceArtifact` — solo superficie externa (OpenAPI expuesta o sondeo de puertos); sin leer fuente. [M3]
-- `recommendFlows(surface: SurfaceArtifact) -> FlowPlan` — flujos QA deterministas (capa de agentes, off-cluster).
+- `ensureWarmReady(warm: WarmEnvRef) -> WarmState` — verifica `reset_verified=true` + probes; si `dirty`/`cuarentena`, delega el reset/rebuild en C5.
+- `deployToWarm(artifact: ArtifactRef, warm: WarmEnvRef, workflow: WorkflowId) -> DeployResult | BootFailed` — despliega la versión del artefacto **sobre el warm** (sin aprovisionar DB/Redis desde cero); publica `deploy.done|failed`.
+- `retryOrEscalate(attempt: int, max=2) -> DeployResult | Handoff` — fail-closed; handoff estructurado (logs de boot/deploy). [V8]
+- `inferSurface(warm: WarmEnvRef) -> SurfaceArtifact` — solo superficie externa (OpenAPI expuesta o sondeo de puertos); sin leer fuente. [M3]
+- `recommendFlows(surface: SurfaceArtifact, workflow: WorkflowId) -> FlowPlan` — flujos QA deterministas (capa de agentes, off-cluster) dentro del workflow.
+- `setWarmState(warm: WarmEnvRef, state: WarmState) -> void` — publica transiciones `ready`/`dirty`/`cuarentena`/`idle-escalado`.
 
 ## C4 — QA Runner
 
-- `executeFlows(plan: FlowPlan, sandbox: SandboxRef, gate: RehearsalPassed) -> RunResult` — requiere `ensayo_passed=true`; crea Jobs `runner-{run}-{flow}`.
+- `executeFlows(plan: FlowPlan, warm: WarmEnvRef, gate: RehearsalPassed) -> RunResult` — requiere `ensayo_passed=true`; crea Jobs `runner-{run}-{flow}`; enforce de cuota/timeout del workflow.
 - `collectEvidence(run: RunID) -> EvidenceURIs` — logs hacia MinIO vía puerto `Evidence`; publica `run.done`.
 
-## C5 — Teardown & Housekeeping
+## C5 — Verified Reset & Housekeeping
 
-- `teardownRun(run: RunID) -> TeardownVerified` — destruye app+deps+runners; verifica `kubectl get all -n <test-ns>` vacío para la corrida.
-- `sweepAbandoned(gracePeriod: Duration = 24h) -> SweepReport` — teardown de sesiones inactivas; persiste plan como "incompleta". [V7]
-- `verifyNamespaceClean(testNs: Namespace) -> bool` — verificación registrada antes de notificar el fin.
+- `resetVerified(run: RunID) -> ResetVerified` — restart de servicios + limpieza de DB + flush de cache + verificación (probes/checks); publica `reset.verified`; sin él no arranca la siguiente corrida. [M7]
+- `quarantine(warm: WarmEnvRef, cause: Failure) -> WarmState` — si el reset falla, marca `cuarentena` y escala a humano.
+- `scaleDownIdle(warm: WarmEnvRef) -> WarmState` — replicas mínimas / pausa de runners en idle (recorte de costo).
+- `rebuildOrTeardown(warm: WarmEnvRef) -> TeardownVerified` — rebuild desde imagen base o teardown total + reprovisionamiento + verificación; publica `teardown.verified`.
+- `sweepAbandoned(gracePeriod: Duration = 24h) -> SweepReport` — reset/limpieza de sesiones inactivas; persiste plan como "incompleta". [V7]
 
 ## C6 — Post-mortem & Reporter
 
@@ -40,8 +44,8 @@
 
 ## C7 — Governance & Policy
 
-- `setPolicy(scope: PolicyScope, value: Policy, admin: Principal) -> PolicyVersion` — exclusiva admin (eventos, confirm-required, cuotas, familias de flujo).
-- `authorizeTransition(run: RunID, gate: Gate) -> Allow | Deny(audit)` — gates: confirm registrado + `ensayo_passed` + test-ns-only; fail-closed.
+- `setPolicy(scope: PolicyScope, value: Policy, admin: Principal) -> PolicyVersion` — exclusiva admin (eventos, confirm-required, cuotas del entorno warm, cadencia de higiene, **workflows de negocio**: complejidad, cuotas, timeouts, aprobaciones).
+- `authorizeTransition(run: RunID, gate: Gate) -> Allow | Deny(audit)` — gates: confirm registrado + `reset_verified` previo + `ensayo_passed` + test-ns-only + workflow permitido (cuota/timeout/aprobación); fail-closed.
 - `appendAudit(entry: AuditEntry) -> void` — log append-only (el producto no borra sus audit logs).
 
 ## C8 — Identity & Access
@@ -53,6 +57,6 @@
 ## C9 — Run Controller
 
 - `startRun(confirmation: ConfirmationReceipt) -> RunID` — crea máquina de estados persistida; publica `run.started`.
-- `advance(run: RunID, event: PipelineEvent) -> State` — transiciones notify→confirm→boot→infer→rehearse→run→teardown→report; consulta C7/C8 en cada transición.
+- `advance(run: RunID, event: PipelineEvent) -> State` — transiciones notify→confirm→warm ready→deploy sobre warm→infer→rehearse→run→reset verificado→report; consulta C7/C8 y el estado del warm (C3/C5) en cada transición.
 - `getRunState(run: RunID, user: Principal) -> RunState` — estado para UI (`GET /runs/{id}`).
-- `handleFailure(run: RunID, cause: Failure) -> Handoff | TeardownVerified` — fail-closed global: sin reintento infinito, siempre con teardown o handoff.
+- `handleFailure(run: RunID, cause: Failure) -> Handoff | ResetVerified` — fail-closed global: sin reintento infinito; siempre deja el warm en `ready` (reset verificado) o en cuarentena + handoff.

@@ -10,9 +10,9 @@ Do not inline phase detail here; add it to the relevant rule-details file instea
 <!-- RELLENA ESTAS TRES LINEAS CON TU PROYECTO ANTES DE ARRANCAR. -->
 <!-- Tres lineas, no tres parrafos: este archivo se carga en cada turno.       -->
 <!-- Saca el contenido de tu PRD; no lo copies entero, resumelo y apunta a el. -->
-- **WHAT**: **<nombre de tu producto>** - <una frase de que es>. Requisitos completos en `entradas/prd.md`; vision en `entradas/pvb.md`.
-- **WHY**: <el dolor concreto que resuelve, y tu metrica North Star>.
-- **HOW**: Greenfield: todavia no hay codigo. Los comandos de build y prueba se definen por unidad durante CONSTRUCTION. Hasta entonces, `entradas/prd.md` es la fuente autoritativa de requisitos.
+- **WHAT**: **Agentic QA Swarm** - plataforma "Agent (no Autonomous)" que convierte un evento de GitHub (commit/PR/tag) en una corrida de QA de caja negra contra un **entorno warm propio de la plataforma** (aislado de staging/prod): notify -> confirm humano -> deploy sobre el entorno warm -> inferir superficie externa -> generar/ensayar/ejecutar flujos -> **reset verificado** -> post-mortem de logica de negocio. PRD autoritativo en `specs/prd.md` (sincronizado con `entradas/prd.md`); vision en `entradas/pvd.md`; plan por unidad en `unidades-y-tareas.md`.
+- **WHY**: Elimina el trabajo manual de disenar/mantener QA de caja negra para apps transaccionales y evita usar staging/prod del cliente como blanco. North Star: tasa de hallazgos logicos confirmados >30% de las APIs del beachhead en 90 dias; KPIs de confianza: **reset verificado 100% + higiene de rebuild**, ensayo a la primera >70%, incidentes de limite de autonomia = 0.
+- **HOW**: Greenfield: todavia no hay codigo. Alcance declarado: INCEPTION completo y **CONSTRUCTION en SKIP** (se activa solo con instruccion explicita); los comandos de build/prueba se definen por unidad durante CONSTRUCTION. Stack decidido a nivel de requisitos: Go (control plane de ejecucion) + capa de agentes LLM (Python o TS), Kubernetes, Flux (GitOps), MinIO in-cluster, GitHub Actions.
 
 ## Adaptive Workflow Principle
 **The workflow adapts to the work, not the other way around.**
