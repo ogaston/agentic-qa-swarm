@@ -36,6 +36,3 @@ subjects:
   - kind: ServiceAccount
     name: go-reset
     namespace: aqs-system
-  - kind: ServiceAccount
-    name: aqs-reset
-    namespace: aqs-test
