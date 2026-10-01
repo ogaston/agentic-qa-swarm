@@ -333,3 +333,18 @@ continue"
 **Context**: Post-cierre INCEPTION — commit y handoff a Módulo 6 (loop de agentes).
 
 ---
+
+## Post-INCEPTION — Resumen visual HTML pre-loop
+**Timestamp**: 2026-10-01T22:02:13Z
+**User Input**: "I want you to create a HTML file to understand each phase of this project and that really illustrate what the project is about and what I'm commiting to before starting the loop.
+Make sure to make the info very compact so I can read quickly"
+**AI Response**: "Creando archivo HTML visual y ultra-compacto (`project-overview.html`) que sintetiza: qué es el proyecto (Agentic QA Swarm), fases AI-DLC (Inception terminada, Construction en puerta, Operations), las 5 unidades de trabajo (37 tareas) y a qué se compromete exactamente el usuario antes de arrancar el loop de agentes (rol de orquestador/codificador/revisor/humano, no autonomía a ciegas, verificación determinista, modelo warm)."
+**Context**: Pre-Construction / Preparación de loop de agentes — visualización ejecutiva del proyecto y compromisos.
+
+---
+
+## Post-INCEPTION — Selección de modelos para el Loop de Agentes
+**Timestamp**: 2026-10-01T22:13:45Z
+**User Input**: "okay let's change fable and use opus 5.5, and for coder sonnet 5.5 (effort low) and for review (sonnte 5.5 effort high)"
+**AI Response**: "Configuración de modelos actualizada: Orquestador = Opus 5.5, Codificador = Sonnet 5.5 (effort: low), Revisor = Sonnet 5.5 (effort: high). Actualizados `project-overview.html`, `DECISIONES.md` (§6) y preparados contratos en `.claude/agents/`."
+**Context**: Preparación de Construction — calibración de modelos y esfuerzo del loop de agentes (Módulo 6).
