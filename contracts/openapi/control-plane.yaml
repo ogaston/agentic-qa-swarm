@@ -209,7 +209,13 @@ components:
         github_event: {type: string, enum: [commit, pull_request, tag]}
         repo: {type: string}
         sha: {type: string}
-        artifact: {type: string}
+        artifact:
+          type: object
+          required: [kind, ref]
+          properties:
+            kind: {type: string, enum: [build-from-repo, published-image]}
+            ref: {type: string, minLength: 1}
+          additionalProperties: false
         state: {type: string, enum: [pending, confirmed, rejected]}
     ConfirmationReceipt:
       type: object

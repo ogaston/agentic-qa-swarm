@@ -16,16 +16,32 @@ schema_for() { # <ejemplo.json> -> esquema cuyo nombre es el prefijo mas largo d
   [ -n "$best" ] && echo "$best.schema.json"
 }
 
-run() { "${AJV[@]}" validate --spec=draft2020 -c ajv-formats -s "$1" -d "$2" >/dev/null 2>&1; }
+# run: 0 = ajv acepta; 1 = ajv rechaza por el esquema (su salida dice "invalid");
+# 2 = fallo de herramienta/JSON roto (ni valido ni invalido: siempre es error).
+run() {
+  local out rc
+  out=$("${AJV[@]}" validate --spec=draft2020 -c ajv-formats -s "$1" -d "$2" 2>&1); rc=$?
+  [ $rc -eq 0 ] && return 0
+  printf '%s\n' "$out" | grep -q -E "^$2 invalid\$" && return 1
+  return 2
+}
 
 for f in examples/valid/*.json; do
   s=$(schema_for "$f") || true
   [ -n "${s:-}" ] || { echo "SIN ESQUEMA $f"; fail=1; continue; }
-  run "$s" "$f" && echo "ok   valido   $f" || { echo "FALLA valido deberia pasar: $f ($s)"; fail=1; }
+  t=$(jq -r .type "$f" 2>/dev/null) || t=""
+  [ "$t" = "$(basename "$f" .json)" ] || { echo "FALLA type '$t' no coincide con el nombre del archivo: $f"; fail=1; continue; }
+  run "$s" "$f"; r=$?
+  [ $r -eq 0 ] && echo "ok   valido   $f" || { echo "FALLA valido deberia pasar: $f ($s, rc=$r)"; fail=1; }
 done
 for f in examples/invalid/*.json; do
   s=$(schema_for "$f") || true
   [ -n "${s:-}" ] || { echo "SIN ESQUEMA $f"; fail=1; continue; }
-  if run "$s" "$f"; then echo "FALLA invalido fue aceptado: $f ($s)"; fail=1; else echo "ok   invalido  $f"; fi
+  run "$s" "$f"; r=$?
+  case $r in
+    0) echo "FALLA invalido fue aceptado: $f ($s)"; fail=1 ;;
+    1) echo "ok   invalido  $f" ;;
+    *) echo "FALLA invalido no rechazado por el esquema (JSON roto o herramienta): $f"; fail=1 ;;
+  esac
 done
 exit $fail
