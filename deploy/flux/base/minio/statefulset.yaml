@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: minio
+spec:
+  serviceName: minio
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+      containers:
+        - name: minio
+          image: cgr.dev/chainguard/minio@sha256:9dcc028b309030afa86fc1fc8d93907ae373ea3fb75277cca3fc77e4645932b7
+          args:
+            - server
+            - /data
+            - --certs-dir
+            - /etc/minio/certs
+            - --address
+            - :9000
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root
+                  key: root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root
+                  key: root-password
+            - name: MINIO_KMS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-kms
+                  key: kms-secret-key
+          ports:
+            - name: s3
+              containerPort: 9000
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tls
+              mountPath: /etc/minio/certs
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: tls
+          secret:
+            secretName: minio-tls
+            items:
+              - key: tls.crt
+                path: public.crt
+              - key: tls.key
+                path: private.key
+              - key: ca.crt
+                path: CAs/ca.crt
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
