@@ -22,3 +22,7 @@ Trabajo que apareció durante las rondas y que **nadie pidió todavía**. No for
 | C-16 | U5-T05 ronda 1, F-03 | Estrategia para recrear `minio-init` cuando cambie el script o el spec (Job con hash en el nombre, `ttlSecondsAfterFinished`, o `force`/`wait` en la Kustomization de Flux) | |
 | C-17 | U5-T05 ronda 1, F-02 y F-05 | Service headless para MinIO si escala a más de una réplica; decidir `storageClassName` y tamaño del PVC (hoy 10Gi) | |
 | C-18 | U5-T05 ronda 1 | Documentar cómo se crean los Secrets de MinIO: SAN del certificado `minio-tls` (`minio.aqs-system.svc`) y formato de `MINIO_KMS_SECRET_KEY` (`nombre:base64` de 32 bytes) | Relacionada con C-08 |
+| C-19 | U5-T06 ronda 1 | **Seguridad:** regla Rego que deniegue egress abierto sin `ipBlock` en `aqs-test` (`egress: [{}]` o `to: [{namespaceSelector: {}}]` hoy pasan las políticas) | Prioritaria: es el guardia del "sin egress a LLM" |
+| C-20 | U5-T06 ronda 1, F-02 | Correr `conftest verify` y `conftest test --combine` (regla de conjunto `default-deny`) en CI | |
+| C-21 | U5-T06 ronda 1, F-01 | Que la regla de `serviceAccountName` rechace también la cadena vacía | |
+| C-22 | U5-T06 ronda 1 | Regla que impida que un Pod de `aqs-test` reactive `automountServiceAccountToken: true` a nivel de pod | Capa de políticas de U4 |
