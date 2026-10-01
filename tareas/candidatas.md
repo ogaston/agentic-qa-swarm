@@ -26,3 +26,5 @@ Trabajo que apareció durante las rondas y que **nadie pidió todavía**. No for
 | C-20 | U5-T06 ronda 1, F-02 | Correr `conftest verify` y `conftest test --combine` (regla de conjunto `default-deny`) en CI | |
 | C-21 | U5-T06 ronda 1, F-01 | Que la regla de `serviceAccountName` rechace también la cadena vacía | |
 | C-22 | U5-T06 ronda 1 | Regla que impida que un Pod de `aqs-test` reactive `automountServiceAccountToken: true` a nivel de pod | Capa de políticas de U4 |
+| C-23 | U5-T07 ronda 1, F-05 | Separar la observabilidad en dos Kustomizations de Flux con `dependsOn` (primero los charts, que instalan los CRDs; luego `ServiceMonitor` y `PrometheusRule`) | Riesgo no verificado sin clúster |
+| C-24 | U5-T07 ronda 1, F-03 | Estándar para toda tarea con `HelmRelease`: un criterio que renderice el chart fijado con `helm template` y los `values` del manifiesto | Aplicar al redactar las próximas tareas |
