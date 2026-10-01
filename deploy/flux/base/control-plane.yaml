@@ -19,6 +19,9 @@ spec:
     spec:
       containers:
         - name: ui-api
+          env:
+            - name: TZ
+              value: UTC
           image: ghcr.io/ogaston/agentic-qa-swarm/ui-api:0.0.0
           ports:
             - name: http
@@ -67,6 +70,9 @@ spec:
     spec:
       containers:
         - name: go-intake
+          env:
+            - name: TZ
+              value: UTC
           image: ghcr.io/ogaston/agentic-qa-swarm/go-intake:0.0.0
           ports:
             - name: http
@@ -115,6 +121,9 @@ spec:
     spec:
       containers:
         - name: go-run-controller
+          env:
+            - name: TZ
+              value: UTC
           image: ghcr.io/ogaston/agentic-qa-swarm/go-run-controller:0.0.0
           ports:
             - name: http
@@ -163,6 +172,9 @@ spec:
     spec:
       containers:
         - name: go-warm-manager
+          env:
+            - name: TZ
+              value: UTC
           image: ghcr.io/ogaston/agentic-qa-swarm/go-warm-manager:0.0.0
           ports:
             - name: http
@@ -211,6 +223,9 @@ spec:
     spec:
       containers:
         - name: go-reset
+          env:
+            - name: TZ
+              value: UTC
           image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
           ports:
             - name: http
@@ -259,6 +274,9 @@ spec:
     spec:
       containers:
         - name: go-governance
+          env:
+            - name: TZ
+              value: UTC
           image: ghcr.io/ogaston/agentic-qa-swarm/go-governance:0.0.0
           ports:
             - name: http
@@ -307,6 +325,9 @@ spec:
     spec:
       containers:
         - name: go-identity
+          env:
+            - name: TZ
+              value: UTC
           image: ghcr.io/ogaston/agentic-qa-swarm/go-identity:0.0.0
           ports:
             - name: http

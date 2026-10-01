@@ -26,6 +26,9 @@ spec:
     spec:
       containers:
         - name: warm-app
+          env:
+            - name: TZ
+              value: UTC
           image: nginx:1.27.2
           ports:
             - name: http
@@ -148,6 +151,9 @@ spec:
     spec:
       containers:
         - name: redis
+          env:
+            - name: TZ
+              value: UTC
           image: redis:7.4.1
           ports:
             - name: redis
@@ -194,6 +200,9 @@ spec:
           restartPolicy: Never
           containers:
             - name: housekeeping
+              env:
+                - name: TZ
+                  value: UTC
               image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
               args: ["housekeeping"]
               resources:
@@ -219,6 +228,9 @@ spec:
           restartPolicy: Never
           containers:
             - name: rebuild
+              env:
+                - name: TZ
+                  value: UTC
               image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
               args: ["rebuild"]
               resources:
