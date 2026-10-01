@@ -87,7 +87,6 @@ spec:
           ports:
             - name: pg
               containerPort: 5432
-          # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
