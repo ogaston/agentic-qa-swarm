@@ -4,5 +4,6 @@ resources:
   - minio
   - namespaces.yaml
   - control-plane.yaml
+  - observability
   - warm.yaml
   - security
