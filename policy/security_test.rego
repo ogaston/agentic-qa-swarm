@@ -93,3 +93,38 @@ test_default_deny_only_egress_denied if {
 test_default_deny_present_allowed if {
 	count(deny) == 0 with input as [{"path": "x", "contents": dd}]
 }
+
+# U5-T12: ipBlock no se desactiva con null ni con valores raros
+netpol_t12(ns, spec) := {"kind": "NetworkPolicy", "metadata": {"name": "x", "namespace": ns}, "spec": spec}
+
+test_ipblock_ingress_egress_null_denied if {
+	count(deny) > 0 with input as netpol_t12("aqs-test", {"podSelector": {}, "ingress": [{"from": [{"ipBlock": {"cidr": "0.0.0.0/0"}}]}], "egress": null})
+}
+
+test_ipblock_egress_no_lista_denied if {
+	count(deny) > 0 with input as netpol_t12("aqs-test", {"podSelector": {}, "ingress": [{"from": [{"ipBlock": {"cidr": "10.0.0.0/8"}}]}], "egress": "x"})
+}
+
+test_ipblock_vacio_denied if {
+	count(deny) > 0 with input as netpol_t12("aqs-test", {"podSelector": {}, "ingress": [{"from": [{"ipBlock": {}}]}]})
+}
+
+test_ipblock_null_denied if {
+	count(deny) > 0 with input as netpol_t12("aqs-test", {"podSelector": {}, "ingress": [{"from": [{"ipBlock": null}]}]})
+}
+
+test_from_null_mas_ipblock_denied if {
+	count(deny) > 0 with input as netpol_t12("aqs-test", {"podSelector": {}, "ingress": [{"from": null}, {"from": [{"ipBlock": {"cidr": "10.0.0.0/8"}}]}], "egress": null})
+}
+
+test_ipblock_from_no_lista_mas_ipblock_denied if {
+	count(deny) > 0 with input as netpol_t12("aqs-test", {"podSelector": {}, "ingress": [{"from": "x"}, {"from": [{"ipBlock": {"cidr": "10.0.0.0/8"}}]}]})
+}
+
+test_ingress_intra_egress_null_allowed if {
+	count(deny) == 0 with input as netpol_t12("aqs-test", {"podSelector": {}, "ingress": [{"from": [{"podSelector": {}}]}], "egress": null})
+}
+
+test_ipblock_otro_namespace_allowed if {
+	count(deny) == 0 with input as netpol_t12("aqs-system", {"podSelector": {}, "ingress": [{"from": [{"ipBlock": {"cidr": "10.0.0.0/8"}}]}], "egress": null})
+}
