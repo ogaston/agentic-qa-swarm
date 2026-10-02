@@ -30,11 +30,16 @@ deny contains msg if {
 deny contains msg if {
 	input.kind == "NetworkPolicy"
 	input.metadata.namespace == ns_test
-	some rule in array.concat(object.get(input.spec, "egress", []), object.get(input.spec, "ingress", []))
-	some peer in array.concat(object.get(rule, "to", []), object.get(rule, "from", []))
-	peer.ipBlock
+	some rule in array.concat(lista(object.get(input.spec, "egress", [])), lista(object.get(input.spec, "ingress", [])))
+	some peer in array.concat(lista(object.get(rule, "to", [])), lista(object.get(rule, "from", [])))
+	object.keys(peer)["ipBlock"]
 	msg := sprintf("NetworkPolicy/%s: ipBlock prohibido en aqs-test", [input.metadata.name])
 }
+
+# null o no-arreglo cuenta como lista vacia
+lista(x) := x if is_array(x)
+
+lista(x) := [] if not is_array(x)
 
 deny contains msg if {
 	input.kind in {"Job", "CronJob"}
