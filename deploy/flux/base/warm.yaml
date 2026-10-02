@@ -193,7 +193,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: housekeeping
-  namespace: aqs-test
+  namespace: aqs-system
 spec:
   schedule: "0 * * * *"
   concurrencyPolicy: Forbid
@@ -202,7 +202,7 @@ spec:
       template:
         spec:
           restartPolicy: Never
-          serviceAccountName: aqs-reset
+          serviceAccountName: go-reset
           containers:
             - name: housekeeping
               # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
@@ -223,7 +223,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: rebuild
-  namespace: aqs-test
+  namespace: aqs-system
 spec:
   schedule: "0 3 * * 0"
   concurrencyPolicy: Forbid
@@ -232,7 +232,7 @@ spec:
       template:
         spec:
           restartPolicy: Never
-          serviceAccountName: aqs-reset
+          serviceAccountName: go-reset
           containers:
             - name: rebuild
               # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.

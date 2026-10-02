@@ -25,7 +25,7 @@ test_rolebinding_runner_denied if {
 }
 
 test_rolebinding_reset_allowed if {
-	count(deny) == 0 with input as {"kind": "RoleBinding", "metadata": {"name": "b", "namespace": "aqs-test"}, "subjects": [{"kind": "ServiceAccount", "name": "aqs-reset", "namespace": "aqs-test"}]}
+	count(deny) == 0 with input as {"kind": "RoleBinding", "metadata": {"name": "b", "namespace": "aqs-test"}, "subjects": [{"kind": "ServiceAccount", "name": "go-reset", "namespace": "aqs-system"}]}
 }
 
 # automount
