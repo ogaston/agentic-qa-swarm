@@ -45,11 +45,12 @@ dst s3 sync "$STAGING" "s3://$DST_BUCKET/$PREFIX/" --sse AES256 --only-show-erro
 echo "backup $PREFIX listo"
 
 CUTOFF="$(date -u -d "$RETENTION_DAYS days ago" +%Y-%m-%dT%H)"
+CUTOFF_N="$(printf %s "$CUTOFF" | tr -d "T-")"
 dst s3 ls "s3://$DST_BUCKET/" | while read -r _ name; do
   p="${name%/}"
   case "$p" in
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9])
-      if [ "$p" \< "$CUTOFF" ]; then
+      if [ "$(printf %s "$p" | tr -d "T-")" -lt "$CUTOFF_N" ]; then
         dst s3 rm "s3://$DST_BUCKET/$p/" --recursive --only-show-errors
         echo "podado $p"
       fi

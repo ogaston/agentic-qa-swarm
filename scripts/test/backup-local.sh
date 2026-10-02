@@ -85,7 +85,7 @@ N_NEW="$(count "$NEW")"
 N_MAN="$(count manual)"
 if [ "$N_NEW" -gt 0 ]; then N_NEW=1; fi
 echo "poda viejo=$N_OLD nuevo=$N_NEW"
-[ "$N_OLD" = 0 ] && [ "$N_NEW" = 1 ] || fail "poda inesperada"
+if [ "$N_OLD" != 0 ] || [ "$N_NEW" != 1 ]; then fail "poda inesperada"; fi
 [ "$N_MAN" = 1 ] || fail "la poda toco el prefijo manual/"
 
 # 6. Vacia evidence y restaura.
