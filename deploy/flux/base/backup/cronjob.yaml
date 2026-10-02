@@ -1,0 +1,93 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: evidence-backup
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: evidence-backup
+spec:
+  schedule: "0 */6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3000
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: evidence-backup
+        spec:
+          serviceAccountName: aqs-backup
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: amazon/aws-cli:2.18.0
+              command: ["/bin/sh", "/scripts/backup.sh"]
+              env:
+                - name: STAGING_DIR
+                  value: /staging
+                - name: SRC_ENDPOINT
+                  value: https://minio.aqs-system.svc:9000
+                - name: SRC_CA_BUNDLE
+                  value: /etc/minio-ca/ca.crt
+                - name: SRC_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-root
+                      key: root-user
+                - name: SRC_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-root
+                      key: root-password
+                - name: DST_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-target
+                      key: endpoint
+                - name: DST_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-target
+                      key: bucket
+                - name: DST_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-target
+                      key: access-key-id
+                - name: DST_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-target
+                      key: secret-access-key
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: ca
+                  mountPath: /etc/minio-ca
+                  readOnly: true
+                - name: staging
+                  mountPath: /staging
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+          volumes:
+            - name: scripts
+              configMap:
+                name: evidence-backup
+            - name: ca
+              secret:
+                secretName: minio-tls
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+            - name: staging
+              emptyDir:
+                sizeLimit: 10Gi
