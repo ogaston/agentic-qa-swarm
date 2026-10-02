@@ -22,14 +22,20 @@
 
 | # | Hecho | Tarea | Historias | Comando de verificación |
 |---|---|---|---|---|
-| U5-T1 | [ ] | Esqueleto monorepo (`services/`, `agents/`, `contracts/`, `deploy/flux/<base\|dev\|prod>`, `.github/workflows/`) + README de layout | US-M10 | `ls` muestra el árbol; `git status` limpio tras commit inicial |
-| U5-T2 | [ ] | Contratos: OpenAPI del control plane (`contracts/openapi/control-plane.yaml`) + esquemas versionados de los 10 eventos del pipeline (`contracts/events/*.schema.json`, incl. `warm.ready`/`deploy.done`/`reset.verified`) + validador en CI | US-M10 | `ajv validate` (o equivalente) pasa los 10 esquemas; CI en rojo si un ejemplo los viola |
-| U5-T3 | [ ] | Pipeline GitHub Actions: build + test + `govulncheck`/scan + SBOM + publish con tags pineados (prohibido `latest` en prod) | US-M10 | `gh run list` en verde; `cosign`/SBOM adjunto al artefacto; `grep -r latest deploy/` vacío en prod |
-| U5-T4 | [ ] | Manifiestos Flux por entorno (Kustomize/HelmRelease por servicio + listos para reconciliar), **incluido el entorno warm** (app+DB+Redis + CronJobs `housekeeping`/`rebuild` + scale-down en idle) | US-M10 | `flux diff kustomization` sin errores; `kubeconform`/`kubeval` pasa todos los manifiestos (solo diff, sin apply) |
-| U5-T5 | [ ] | MinIO in-cluster (StatefulSet + bucket `evidence` + cifrado/TLS) como manifiestos revisables | US-M10 | `kubeconform` pasa; `mc alias list` + `mc ls` contra MinIO local de dev muestra el bucket (aprobación humana antes de cualquier apply) |
-| U5-T6 | [ ] | RBAC base + NetworkPolicy base (deny-by-default, test-ns-only) como manifiestos revisables + test de política | US-M10 | `conftest test` (o Kyverno CLI) pasa las políticas; `kubectl auth can-i --list` esperado documentado en el PR |
-| U5-T7 | [ ] | Observabilidad base: logging estructurado (timestamp/request-id/nivel/mensaje), métricas, dashboard y retención ≥90d (manifiestos + docs) | US-M10 | `promtool check rules` (o equivalente) pasa; retención configurada visible en el manifiesto (sin apply autónomo) |
-| U5-T8 | [ ] | Backups Backup&Restore (cron + retención + cifrado) + runbook de restore + propuesta de change mgmt ligero e IR/COE (AR2/AR7) | US-M10 | `kubeconform` pasa el CronJob; runbook + procesos documentados y enlazados en el repo |
+| U5-T1 | [x] | Esqueleto monorepo (`services/`, `agents/`, `contracts/`, `deploy/flux/<base\|dev\|prod>`, `.github/workflows/`) + README de layout | US-M10 | `ls` muestra el árbol; `git status` limpio tras commit inicial |
+| U5-T2 | [x] | Contratos: OpenAPI del control plane (`contracts/openapi/control-plane.yaml`) + esquemas versionados de los 10 eventos del pipeline (`contracts/events/*.schema.json`, incl. `warm.ready`/`deploy.done`/`reset.verified`) + validador en CI | US-M10 | `ajv validate` (o equivalente) pasa los 10 esquemas; CI en rojo si un ejemplo los viola |
+| U5-T3 | [x] | Pipeline GitHub Actions: build + test + `govulncheck`/scan + SBOM + publish con tags pineados (prohibido `latest` en prod) | US-M10 | `gh run list` en verde; `cosign`/SBOM adjunto al artefacto; `grep -r latest deploy/` vacío en prod |
+| U5-T4 | [x] | Manifiestos Flux por entorno (Kustomize/HelmRelease por servicio + listos para reconciliar), **incluido el entorno warm** (app+DB+Redis + CronJobs `housekeeping`/`rebuild` + scale-down en idle) | US-M10 | `flux diff kustomization` sin errores; `kubeconform`/`kubeval` pasa todos los manifiestos (solo diff, sin apply) |
+| U5-T5 | [x] | MinIO in-cluster (StatefulSet + bucket `evidence` + cifrado/TLS) como manifiestos revisables | US-M10 | `kubeconform` pasa; `mc alias list` + `mc ls` contra MinIO local de dev muestra el bucket (aprobación humana antes de cualquier apply) |
+| U5-T6 | [x] | RBAC base + NetworkPolicy base (deny-by-default, test-ns-only) como manifiestos revisables + test de política | US-M10 | `conftest test` (o Kyverno CLI) pasa las políticas; `kubectl auth can-i --list` esperado documentado en el PR |
+| U5-T7 | [x] | Observabilidad base: logging estructurado (timestamp/request-id/nivel/mensaje), métricas, dashboard y retención ≥90d (manifiestos + docs) | US-M10 | `promtool check rules` (o equivalente) pasa; retención configurada visible en el manifiesto (sin apply autónomo) |
+| U5-T8 | [x] | Backups Backup&Restore (cron + retención + cifrado) + runbook de restore + propuesta de change mgmt ligero e IR/COE (AR2/AR7) | US-M10 | `kubeconform` pasa el CronJob; runbook + procesos documentados y enlazados en el repo |
+| U5-T9 | [x] | CronJobs `housekeeping`/`rebuild` a `aqs-system` (SA `go-reset`) + política de aislamiento de `aqs-test` *(surgida en el loop: C-13)* | US-M10 | `tareas/U5-T09-cronjobs-al-control-plane.md` |
+| U5-T10 | [x] | Política contra egress abierto en `aqs-test` *(surgida en el loop: C-19)* | US-M10 | `tareas/U5-T10-politica-egress.md` |
+| U5-T11 | [x] | Namespace explícito en `minio-init` + política contra objetos sin namespace *(surgida en el loop: C-31, C-32)* | US-M10 | `tareas/U5-T11-namespace-explicito.md` |
+| U5-T12 | [x] | La regla de `ipBlock` no se desactiva con `null` *(surgida en el loop: C-34)* | US-M10 | `tareas/U5-T12-ipblock-null.md` |
+
+> **U5 terminada (2026-10-01)**, marcada por instrucción del humano tras fusionar los PRs #1-#12. Las tareas U5-T9..T12 surgieron de defectos encontrados durante las rondas de revisión. Los criterios de verificación finales de cada tarea están en `tareas/U5-T*.md`, la evidencia en `revisiones/U5-T*/` y las tareas candidatas pendientes en `tareas/candidatas.md`.
 
 ## U1 — Ingesta & Inbox
 
