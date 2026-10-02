@@ -10,12 +10,27 @@ spec:
     - name: aqs-backup
       rules:
         - alert: AqsBackupFailed
-          expr: kube_job_status_failed{namespace="aqs-system", job_name=~"evidence-backup-.*"} > 0
+          expr: |
+            (
+              kube_job_status_failed{namespace="aqs-system", job_name=~"evidence-backup-.*"} > 0
+              and on(namespace, job_name)
+              (
+                kube_job_status_start_time{namespace="aqs-system", job_name=~"evidence-backup-.*"}
+                > on(namespace) group_left()
+                kube_cronjob_status_last_successful_time{namespace="aqs-system", cronjob="evidence-backup"}
+              )
+            )
+            or
+            (
+              kube_job_status_failed{namespace="aqs-system", job_name=~"evidence-backup-.*"} > 0
+              unless on(namespace)
+              kube_cronjob_status_last_successful_time{namespace="aqs-system", cronjob="evidence-backup"}
+            )
           for: 5m
           labels:
             severity: critical
           annotations:
-            summary: "Un Job del CronJob evidence-backup fallo"
+            summary: "Un Job de evidence-backup fallo despues del ultimo backup exitoso"
             description: "El Job {{ $labels.job_name }} fallo. Ver docs/operaciones/respuesta-a-incidentes.md y runbook-restore.md."
         - alert: AqsBackupStale
           expr: |

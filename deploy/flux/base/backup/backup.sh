@@ -46,7 +46,8 @@ echo "backup $PREFIX listo"
 
 CUTOFF="$(date -u -d "$RETENTION_DAYS days ago" +%Y-%m-%dT%H)"
 CUTOFF_N="$(printf %s "$CUTOFF" | tr -d "T-")"
-dst s3 ls "s3://$DST_BUCKET/" | while read -r _ name; do
+LISTING="$(dst s3 ls "s3://$DST_BUCKET/")"
+printf '%s\n' "$LISTING" | while read -r _ name; do
   p="${name%/}"
   case "$p" in
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9])

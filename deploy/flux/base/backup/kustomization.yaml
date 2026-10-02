@@ -5,7 +5,8 @@ resources:
   - cronjob.yaml
   - prometheusrule.yaml
 configMapGenerator:
-  - name: evidence-backup
+  - name: evidence-backup-scripts
+    namespace: aqs-system
     files:
       - backup.sh
       - restore.sh

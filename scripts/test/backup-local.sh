@@ -69,7 +69,7 @@ echo manual | aws_run aws --endpoint-url "$EP" s3 cp - "s3://backup/manual/nota.
 aws_run /bin/sh /scripts/backup.sh </dev/null >/dev/null
 
 # 4. Cifrado leido de vuelta con head-object.
-NEW="$(s3 s3 ls s3://backup/ | awk '{print $2}' | tr -d / | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}$' | grep -v "^$OLD$" | sort | tail -1)"
+NEW="$(s3 s3 ls s3://backup/ | awk '{print $2}' | tr -d / | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}$' | grep -v "^$OLD$" | sort | tail -1 || true)"
 [ -n "$NEW" ] || fail "no hay prefijo nuevo en el destino"
 COUNT="$(s3 s3 ls "s3://backup/$NEW/" --recursive | wc -l)"
 echo "backup objetos=$COUNT"

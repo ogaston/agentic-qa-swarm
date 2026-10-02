@@ -81,7 +81,7 @@ spec:
           volumes:
             - name: scripts
               configMap:
-                name: evidence-backup
+                name: evidence-backup-scripts
             - name: ca
               secret:
                 secretName: minio-tls

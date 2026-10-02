@@ -1,0 +1,46 @@
+# Prueba de las reglas de backup. NO forma parte del kustomization.yaml.
+# Uso (rules.yaml = .spec de PrometheusRule/aqs-backup-rules extraido del build):
+#   cp rules_test.yaml rules.yaml <dir>; promtool test rules rules_test.yaml   (dentro de <dir>)
+rule_files:
+  - rules.yaml
+evaluation_interval: 1m
+tests:
+  # Job 100 falla a los 1 min y nunca hay exito: dispara. A las 2 h hay un exito (7300 s): se apaga.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_status_failed{namespace="aqs-system", job_name="evidence-backup-100"}'
+        values: '1x400'
+      - series: 'kube_job_status_start_time{namespace="aqs-system", job_name="evidence-backup-100"}'
+        values: '60x400'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="aqs-system", cronjob="evidence-backup"}'
+        values: '_x120 7300x280'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AqsBackupFailed
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: AqsBackupFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: aqs-system
+              job_name: evidence-backup-100
+            exp_annotations:
+              summary: "Un Job de evidence-backup fallo despues del ultimo backup exitoso"
+              description: "El Job evidence-backup-100 fallo. Ver docs/operaciones/respuesta-a-incidentes.md y runbook-restore.md."
+      - eval_time: 119m
+        alertname: AqsBackupFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: aqs-system
+              job_name: evidence-backup-100
+            exp_annotations:
+              summary: "Un Job de evidence-backup fallo despues del ultimo backup exitoso"
+              description: "El Job evidence-backup-100 fallo. Ver docs/operaciones/respuesta-a-incidentes.md y runbook-restore.md."
+      - eval_time: 125m
+        alertname: AqsBackupFailed
+        exp_alerts: []
+      - eval_time: 300m
+        alertname: AqsBackupFailed
+        exp_alerts: []
