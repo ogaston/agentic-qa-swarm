@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - serviceaccount.yaml
+  - cronjob.yaml
+  - prometheusrule.yaml
+configMapGenerator:
+  - name: evidence-backup-scripts
+    namespace: aqs-system
+    files:
+      - backup.sh
+      - restore.sh
+generatorOptions:
+  disableNameSuffixHash: true

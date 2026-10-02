@@ -1,0 +1,44 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: aqs-backup-rules
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: aqs-backup-rules
+spec:
+  groups:
+    - name: aqs-backup
+      rules:
+        - alert: AqsBackupFailed
+          expr: |
+            (
+              kube_job_status_failed{namespace="aqs-system", job_name=~"evidence-backup-.*"} > 0
+              and on(namespace, job_name)
+              (
+                kube_job_status_start_time{namespace="aqs-system", job_name=~"evidence-backup-.*"}
+                > on(namespace) group_left()
+                kube_cronjob_status_last_successful_time{namespace="aqs-system", cronjob="evidence-backup"}
+              )
+            )
+            or
+            (
+              kube_job_status_failed{namespace="aqs-system", job_name=~"evidence-backup-.*"} > 0
+              unless on(namespace)
+              kube_cronjob_status_last_successful_time{namespace="aqs-system", cronjob="evidence-backup"}
+            )
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Un Job de evidence-backup fallo despues del ultimo backup exitoso"
+            description: "El Job {{ $labels.job_name }} fallo. Ver docs/operaciones/respuesta-a-incidentes.md y runbook-restore.md."
+        - alert: AqsBackupStale
+          expr: |
+            (time() - kube_cronjob_status_last_successful_time{namespace="aqs-system", cronjob="evidence-backup"} > 8 * 3600)
+            or absent(kube_cronjob_status_last_successful_time{namespace="aqs-system", cronjob="evidence-backup"})
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Mas de 8 h sin backup exitoso de evidence (RPO en riesgo)"
+            description: "evidence-backup no tiene una ejecucion exitosa en mas de 8 h o su metrica no existe."

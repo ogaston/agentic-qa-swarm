@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - minio
   - namespaces.yaml
+  - backup
   - control-plane.yaml
   - observability
   - warm.yaml
