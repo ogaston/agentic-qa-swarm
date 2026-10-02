@@ -5,7 +5,8 @@ resources:
   - service.yaml
   - job-init.yaml
 configMapGenerator:
-  - name: minio-init
+  - name: minio-init-script
+    namespace: aqs-system
     files:
       - init-bucket.sh
 generatorOptions:
