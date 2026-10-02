@@ -16,13 +16,24 @@ cluster_kinds := {
 	"APIService",
 }
 
+meta := m if {
+	is_object(input)
+	m := object.get(input, "metadata", {})
+	is_object(m)
+} else := {}
+
 ns_valido if {
-	is_string(input.metadata.namespace)
-	input.metadata.namespace != ""
+	ns := object.get(meta, "namespace", null)
+	is_string(ns)
+	trim_space(ns) != ""
 }
 
+ns_msg(kind, name) := sprintf("%s/%s: metadata.namespace es obligatorio (string no vacio)", [kind, name])
+
 deny contains msg if {
-	not input.kind in cluster_kinds
+	is_object(input)
+	kind := object.get(input, "kind", "?")
+	not kind in cluster_kinds
 	not ns_valido
-	msg := sprintf("%s/%s: metadata.namespace es obligatorio (string no vacio)", [input.kind, object.get(input.metadata, "name", "?")])
+	msg := ns_msg(kind, object.get(meta, "name", "?"))
 }
