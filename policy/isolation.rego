@@ -18,8 +18,13 @@ grupos_prohibidos := {
 # ServiceAccount de aqs-test; sin namespace el authorizer usa el del RoleBinding.
 sujeto_aqs_test(s) if {
 	s.kind == "ServiceAccount"
-	object.get(s, "namespace", "") in {"", "aqs-test"}
+	ns_ausente_o_local(object.get(s, "namespace", ""))
 }
+
+# Ausente, vacio, null o no-string cuentan como ausente.
+ns_ausente_o_local(ns) if not is_string(ns)
+
+ns_ausente_o_local(ns) if ns in {"", "aqs-test"}
 
 # User con el nombre sintetico de un SA de aqs-test.
 sujeto_aqs_test(s) if {

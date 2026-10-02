@@ -43,3 +43,7 @@ test_isolation_group_unauthenticated_denied if {
 test_isolation_user_other_allowed if {
 	count(deny) == 0 with input as rb({"kind": "User", "name": "system:serviceaccount:aqs-system:go-reset"})
 }
+
+test_isolation_sa_null_namespace_denied if {
+	count(deny) > 0 with input as rb({"kind": "ServiceAccount", "name": "x", "namespace": null})
+}
