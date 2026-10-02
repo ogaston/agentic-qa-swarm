@@ -20,7 +20,8 @@
 **Fuera** (lo que el codificador debe rechazar aunque lo vea roto):
 
 - Quitar los `env: TZ=UTC` (candidata C-09), cambiar imagen, argumentos o schedules de los CronJobs, o cualquier otra línea de `warm.yaml` distinta de `namespace` y `serviceAccountName` de esos dos CronJobs.
-- Modificar `policy/security.rego`, `policy/security_test.rego` o `policy/default_deny.rego`. La regla nueva va en archivos nuevos. U5-T10 también añade archivos nuevos en `policy/`.
+- Modificar `policy/security.rego` o `policy/default_deny.rego`. La regla nueva va en archivos nuevos; U5-T10 también añade archivos nuevos en `policy/`.
+- En `policy/security_test.rego`, cualquier cambio distinto del único permitido: que la prueba `test_rolebinding_reset_allowed` use como sujeto `{kind: ServiceAccount, name: go-reset, namespace: aqs-system}` en lugar de `aqs-reset` en `aqs-test`. Esa prueba afirmaba justo lo que la regla nueva prohíbe; así se conserva el caso positivo de un SA del control plane. *(Enmienda aprobada por el humano tras la ronda 1.)*
 - Modificar `networkpolicies.yaml`, el Role `aqs-test-operator` o los bindings de los SA del control plane.
 - `deploy/flux/base/backup/` y `base/kustomization.yaml` (U5-T08), y `observability/` (U5-T07).
 - Cualquier `kubectl` (incluido `auth can-i`), `flux` o `apply` contra un clúster.
@@ -85,10 +86,11 @@ C='docker run --rm -i --security-opt label=disable -v '"$PWD"':/project -w /proj
 
 - [ ] **CA-6** — Solo cambiaron los archivos y las líneas permitidas.
   ```bash
-  b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(deploy/flux/base/warm\.yaml|deploy/flux/base/security/(serviceaccounts|rbac)\.yaml|policy/isolation(_test)?\.rego|bitacoras/U5-T09\.md)$' | wc -l
+  b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(deploy/flux/base/warm\.yaml|deploy/flux/base/security/(serviceaccounts|rbac)\.yaml|policy/isolation(_test)?\.rego|policy/security_test\.rego|bitacoras/U5-T09\.md)$' | wc -l
   git diff -U0 $b -- deploy/flux/base/warm.yaml | grep -E '^[+-][^+-]' | grep -v -E '^[+-]\s+(namespace: (aqs-test|aqs-system)|serviceAccountName: (aqs-reset|go-reset))$' | wc -l
+  git diff -U0 $b -- policy/security_test.rego | grep -E '^[+-][^+-]' | grep -v -E 'aqs-reset|go-reset' | wc -l
   ```
-  Esperado: `0` y `0`.
+  Esperado: `0`, `0` y `0`. La tercera línea comprueba que en `security_test.rego` solo cambiaron líneas del sujeto `aqs-reset`/`go-reset`.
 
 - [ ] **CA-7** — Árbol limpio tras el commit.
   ```bash
