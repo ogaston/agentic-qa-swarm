@@ -56,6 +56,8 @@
 | U1-T6 | [ ] | Logging estructurado + trazas + health shallow/deep + métricas (latencia/errores/throughput) | US-M1 | `curl /healthz` y `/readyz` 200; logs con timestamp/request-id/nivel; dashboard con el panel de U1 |
 | U1-T7 | [ ] | Integración contra U4 real (auth) y publicación de `run.confirmed` consumible por U2 (contrato verificado en CI) | US-M2 | CI verde con tests de contrato U1↔U4 y evento `run.confirmed` válido contra esquema |
 
+> **Tareas redactadas (2026-10-03)**: el detalle de cada tarea de U1 (alcance, fuera de alcance, criterios con comando, plan de pruebas) está en `tareas/U1-T01-stubs.md` … `tareas/U1-T07-integracion-u4-run-confirmed.md`. Orden: T01 → T02 → T03 → T04 → (T05, T06) → T07; T07 exige U4-T02 y U4-T03 fusionadas. Decisiones abiertas que surgieron al redactar: C-45…C-48, C-53 en `tareas/candidatas.md`.
+
 ## U4 — Gobernanza & Identidad
 
 - **Responsabilidad**: políticas admin (**workflows de negocio**: complejidad, cuotas, timeouts, aprobaciones), gates, auditoría append-only, authN/Z por rol. Componentes: C7 + C8 (`go-governance` + `go-identity`).
@@ -75,6 +77,8 @@
 | U4-T5 | [ ] | Manifiestos RBAC (test-ns-only, sin wildcards) + NetworkPolicy (namespace-only, bloqueo LLM a runners) como artefactos revisables + tests de política | US-M8.1, US-M8.2 | `conftest test` en verde; matriz `kubectl auth can-i` esperada documentada en el PR (sin apply autónomo) |
 | U4-T6 | [ ] | PBT parcial: round-trip de parseo de políticas/config/workflows (PBT-02) + invariantes de gates (p. ej. "sin confirm nunca Allow", "sin `reset_verified` nunca Allow", PBT-03) + generadores + seed (PBT-07/08) | US-M8.3 | `go test -run PBT` en verde con seed logueado |
 | U4-T7 | [ ] | Alertas de seguridad (auth failures, denegaciones, escaladas) + retención audit ≥90d + dashboard | US-M8.3 | reglas de alerta verificadas (`promtool check rules`); retención visible en manifiesto |
+
+> **Tareas redactadas (2026-10-03)**: el detalle de cada tarea de U4 está en `tareas/U4-T01-stubs.md`, `U4-T02-go-identity-autenticacion.md`, `U4-T03-autorizacion.md`, `U4-T04-go-governance.md`, `U4-T05-rbac-networkpolicy-politicas.md`, `U4-T06-pbt-parcial.md` y `U4-T07-alertas-retencion-dashboard.md`. Orden: T01 → T02 → T03 → T04 → (T06, T07); T05 solo depende de U5 y puede ir desde la primera ola. Candidatas nuevas: C-47, C-49…C-53.
 
 ## U2 — Orquestación & Warm Sandbox Lifecycle
 

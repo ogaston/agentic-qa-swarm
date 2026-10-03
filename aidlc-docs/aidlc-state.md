@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Greenfield
 - **Start Date**: 2026-09-12T02:35:55Z
-- **Current Stage**: INCEPTION COMPLETO — plan de tareas por unidad entregado (punto de parada declarado); CONSTRUCTION en SKIP (sin código). Artefactos de INCEPTION **realineados al modelo warm** el 2026-10-01.
+- **Current Stage**: CONSTRUCTION (Code Generation, por unidad) — activada por instrucción explícita el 2026-10-03. U5 terminada; U1 y U4 con tareas redactadas (`tareas/`); en curso U4. Artefactos de INCEPTION **realineados al modelo warm** el 2026-10-01.
 
 ## Workspace State
 - **Existing Code**: No (solo documentación: docs/, entradas/, specs/, mockups/)
@@ -37,7 +37,7 @@
 - [x] Units Generation (`unit-of-work` + dependencias + story-map + planes U1-U5; **realineados a warm** — PUNTO DE PARADA)
 
 ### 🟢 CONSTRUCTION PHASE
-- Estado: **SKIP** (fuera del alcance declarado: "No escribas código"). Se activa solo con instrucción explícita del usuario.
+- Estado: **ACTIVA** desde 2026-10-03 por instrucción explícita del usuario. Etapas de diseño por unidad (Functional/NFR/Infrastructure Design) **omitidas**: el diseño de cada tarea vive en `tareas/U0X-T0N-*.md` (mismo criterio que en U5). Code Generation en curso por unidad; U5 terminada.
 
 ### 🟡 OPERATIONS PHASE
 - Estado: **PLACEHOLDER** (no iniciado).

@@ -372,3 +372,21 @@ Make sure to make the info very compact so I can read quickly"
 **User Input**: "so this is only the based repo, some contracts and CI pipeline for this repo? didnt understood well point 4, is this what we're going to be using when we enable kubernetes?"
 **AI Response**: "Confirmado: sí, Ola 1 es la base (esqueleto, contratos, CI, storage y seguridad). Respecto al punto 4: sí, son exactamente los archivos YAML (manifiestos) que definen el namespace y pods del Warm Sandbox (app bajo prueba + Postgres + Redis + CronJobs de reset). En la Ola 1 se crean y validan con kubeconform en Git; cuando Kubernetes/Flux se encienda, el clúster leerá esos mismos archivos para desplegar el entorno."
 **Context**: Pre-Construction — clarificación del rol de los manifiestos de Kubernetes en la Ola 1.
+
+---
+
+## Post-INCEPTION — Redacción de las tareas de U1 y U4
+**Timestamp**: 2026-10-03T00:00:00Z
+**User Input**: "write all the tasks from U1 and U4"
+**AI Response**: "Redactados 14 archivos de tarea con la plantilla de `.claude/agents/plantilla-tarea.md`: `tareas/U1-T01…T07` y `tareas/U4-T01…T07` (alcance dentro/fuera, archivos de contexto, criterios con comando, plan de pruebas, notas). Registradas las candidatas C-45…C-53 en `tareas/candidatas.md` y enlazadas las tareas desde `unidades-y-tareas.md`. No se escribió código ni se tocó CONSTRUCTION; no se commiteó."
+**Context**: Construction (loop de agentes) — preparación de la siguiente ola tras terminar U5. Los archivos son especificación; ninguna tarea está despachada.
+
+---
+
+## Construction — Activación de CONSTRUCTION y loop de U4
+**Timestamp**: 2026-10-03T17:30:00Z
+**User Input**: "Cambia Agent MD, ya en estamos en  construcción y haz el loop para hacer todo lo de U4"
+**AI Response**: "Actualizados `AGENTS.md` (HOW: CONSTRUCTION activa) y `aidlc-docs/aidlc-state.md` (fase ACTIVA, diseño por unidad omitido como en U5). Arranca el loop de U4 como orquestador: Ola 1 = U4-T01 + U4-T05 (independientes). Limitaciones detectadas: sin remoto git ni `gh` autenticado (no se pueden abrir PRs; el loop termina en rama local con evidencia); dockerd levantado localmente para los criterios."
+**Context**: Construction — Code Generation, unidad U4.
+
+---
