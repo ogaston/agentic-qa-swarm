@@ -5,6 +5,7 @@ go 1.26.8
 require (
 	github.com/prometheus/client_golang v1.24.1
 	golang.org/x/crypto v0.57.0
+	pgregory.net/rapid v1.3.0
 )
 
 require (
