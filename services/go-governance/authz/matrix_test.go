@@ -69,9 +69,9 @@ func TestMatrixShapeNegative(t *testing.T) {
 	}
 }
 
-// TestMatrixReplay programa el fake con la verdad de cada fila: solo valida el
+// TestFakeWiringReplay programa el fake con la verdad de cada fila: solo valida el
 // cableado del fake (es circular). La fuerza real está en TestMatrixReal.
-func TestMatrixReplay(t *testing.T) {
+func TestFakeWiringReplay(t *testing.T) {
 	for _, r := range loadMatrix(t, "../testdata/authorize_matrix.json") {
 		t.Run(r.Name, func(t *testing.T) {
 			f := NewFakeEvaluator()
