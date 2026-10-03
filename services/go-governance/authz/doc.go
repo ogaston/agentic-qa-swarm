@@ -15,6 +15,8 @@
 //		EnsayoPassed    Fact
 //		TargetNamespace string
 //		WorkflowAllowed Fact
+//		Workflow         string // opcional
+//		ApprovalRecorded Fact
 //	}
 //
 //	type Fact int // Unknown (valor cero) | True | False; IsTrue() solo para True
@@ -34,8 +36,10 @@
 // un contexto cancelado también deniegan. Registra cada llamada (Calls) y es
 // seguro ante concurrencia.
 //
-// Nota: la matriz testdata/authorize_matrix.json es el contrato de U4-T04. Su
-// reproducción con el fake es circular (se programa con la verdad de cada
-// fila) y solo valida el cableado; la fuerza real llega cuando U4-T04 la
-// ejecute contra el evaluador real, que sí evaluará los hechos.
+// RuleEvaluator (rules.go) es el evaluador real (U4-T04): evalúa los hechos
+// (Unknown cuenta como False), el namespace de prueba exacto, la legalidad de la
+// transición y, si GateInput.Workflow no está vacío, la política de workflows
+// (WorkflowSource). La matriz testdata/authorize_matrix.json se reproduce contra
+// él en TestMatrixReal, sin programarlo con la verdad de cada fila; la
+// reproducción con el fake (TestMatrixReplay) solo valida su cableado.
 package authz
