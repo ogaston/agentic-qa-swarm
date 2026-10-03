@@ -4,8 +4,9 @@ El repo es **publico**: ningun secret entra en claro. Los Secrets de la app se c
 (`decryption: {provider: sops, secretRef: {name: sops-age}}` en `deploy/flux/clusters/<env>/aqs.yaml`).
 La clave privada age nunca entra al repo. Quien ejecuta estos pasos es un humano, no el agente.
 
-Secrets cubiertos (6): `minio-root`, `minio-kms`, `minio-tls`, `backup-target` (ns `aqs-system`),
-`warm-db-credentials` (`aqs-test`) y `grafana-admin` (`aqs-observability`).
+Secrets cubiertos (8): `minio-root`, `minio-kms`, `minio-tls`, `backup-target` (ns `aqs-system`),
+`warm-db-credentials` (`aqs-test`) y `grafana-admin` (`aqs-observability`) los genera `generate.sh` (seccion 3);
+`go-governance-service-token` y `go-identity-users` (ns `aqs-system`) se crean con el procedimiento de la seccion 6.
 
 ## 1. Generar la clave age
 
@@ -53,3 +54,82 @@ Nota: regenerar cambia las credenciales de MinIO y de Grafana; planifica el camb
 2. Rota segun la seccion 4 de inmediato: clave nueva y valores nuevos (no basta recifrar los viejos).
 3. Cambia tambien las credenciales externas de `backup-target` en el proveedor del bucket.
 4. Registra el incidente (respuesta-a-incidentes.md).
+
+## 6. Secrets de go-governance y go-identity (a mano, no los genera `generate.sh`)
+
+Los Deployments `go-governance` y `go-identity` referencian estos dos Secrets por nombre. **Los pods de `go-governance` y
+`go-identity` no pasan `/readyz` hasta que existan los dos Secrets en el clúster**: es el comportamiento fail-closed
+esperado, no un defecto. Los pasos los ejecuta un humano con la clave age; nunca pegues valores reales en el repo, en
+issues ni en el historial del shell compartido.
+
+### 6.1 `go-governance-service-token` (clave `token`)
+
+Token de servicio de al menos 32 caracteres:
+
+```bash
+umask 077; d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
+openssl rand -hex 32 > "$d/token"      # 64 caracteres hex
+{
+  printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: go-governance-service-token\n  namespace: aqs-system\n'
+  printf 'type: Opaque\nstringData:\n  token: "%s"\n' "$(cat "$d/token")"
+} > "$d/go-governance-service-token.yaml"
+```
+
+### 6.2 `go-identity-users` (clave `users.json`)
+
+Formato: `[{"username": "<usuario>", "password_hash": "<hash PHC>", "role": "user|admin", "mfa_secret": "<base32>"}]`.
+Roles `user` o `admin`; `mfa_secret` es obligatorio para cada `admin` (base32, al menos 160 bits, es decir 32 caracteres
+base32) y opcional para `user`.
+
+- `password_hash`: una vez por usuario, con la contraseña por stdin (8 a 128 caracteres), sin dejarla en argumentos:
+  `printf '%s' "<contraseña>" | go-identity hash-password`.
+- `mfa_secret` de un admin: `head -c 20 /dev/urandom | base32` (20 bytes = 160 bits). Entrégalo al admin por un canal seguro
+  para su app TOTP.
+
+```bash
+umask 077; d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
+cat > "$d/users.json" <<'JSON'
+[
+  {"username": "<usuario>", "password_hash": "<hash PHC>", "role": "user"},
+  {"username": "<admin>", "password_hash": "<hash PHC>", "role": "admin", "mfa_secret": "<base32 de 160 bits o mas>"}
+]
+JSON
+{
+  printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: go-identity-users\n  namespace: aqs-system\n'
+  printf 'type: Opaque\nstringData:\n  users.json: |\n'
+  sed 's/^/    /' "$d/users.json"
+} > "$d/go-identity-users.yaml"
+```
+
+### 6.3 Cifrar y registrar (ambos Secrets)
+
+Mismo patrón que `generate.sh` (SOPS cifra solo `data`/`stringData`; el destinatario age se pasa como argumento):
+
+```bash
+for n in go-governance-service-token go-identity-users; do
+  docker run --rm --security-opt label=disable -v "$d":/in:ro ghcr.io/getsops/sops:v3.9.1-alpine \
+    sops --encrypt --age <age1-publica> --encrypted-regex '^(data|stringData)$' "/in/$n.yaml" \
+    > deploy/flux/<env>/secrets/$n.sops.yaml
+  grep -q 'ENC\[' deploy/flux/<env>/secrets/$n.sops.yaml || { echo "cifrado fallido: $n" >&2; exit 1; }
+done
+```
+
+La ruta de destino es `deploy/flux/<env>/secrets/<nombre>.sops.yaml` (`<env>` es `dev` o `prod`). Añade a
+`deploy/flux/<env>/secrets/kustomization.yaml`, bajo `resources:`, una línea por Secret:
+
+```yaml
+  - go-governance-service-token.sops.yaml
+  - go-identity-users.sops.yaml
+```
+
+Commitea solo los `*.sops.yaml` cifrados, con una clave real y bajo revisión humana. Para rotar estos dos Secrets repite
+esta sección con valores nuevos (y la clave age nueva si procede, sección 4) y reinicia los pods.
+
+### 6.4 Comprobación en dev (la hace el humano; no la ejecuta el loop)
+
+1. Tras la reconciliación de Flux: `kubectl -n aqs-system get pods -l aqs.io/tier=control-plane` muestra `go-governance` y
+   `go-identity` en `Ready` (`/readyz` responde 200). Si siguen sin `Ready`, revisa que los dos Secrets existan.
+2. El volumen de auditoría es escribible por el usuario 65532 (`fsGroup: 65532`): `kubectl -n aqs-system logs deploy/go-governance`
+   no muestra `permission denied` sobre `/data/audit.jsonl`.
+3. El archivo de usuarios es legible por el usuario no root: `kubectl -n aqs-system logs deploy/go-identity` no muestra errores
+   de `IDENTITY_USERS_FILE`.
