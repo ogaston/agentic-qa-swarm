@@ -29,7 +29,7 @@ Detalle:
 
   | destino | hechos exigidos |
   |---|---|
-  | `warm_ready` | `confirmed`, `reset_verified`, namespace de prueba |
+  | `warm_ready` | `confirmed`, `reset_verified`, namespace de prueba, `workflow_allowed` (la matriz de U4-T01 lo exige; manda sobre esta tabla) |
   | `deploying` | `confirmed`, `reset_verified`, namespace de prueba, `workflow_allowed` |
   | `inferring` | `confirmed`, namespace de prueba |
   | `rehearsing` | `confirmed`, namespace de prueba, `workflow_allowed` |
@@ -38,7 +38,7 @@ Detalle:
   | `done`, `failed` | (ninguno adicional; la transición debe ser legal) |
 
   «Namespace de prueba» = `target_namespace == GOVERNANCE_TEST_NAMESPACE` (por defecto `aqs-test`, comparación exacta; vacío, `staging`, `prod`, `default` o con espacios → `Deny`).
-- **Workflow permitido por política.** Si `workflow` no está vacío: debe existir en la política `workflows` (si no existe la política o el nombre → `Deny`); para `running`, el número de decisiones `allow` hacia `running` de ese workflow en el día UTC actual (leído del log de auditoría) no puede alcanzar `max_runs_per_day`; si `requires_approval`, `approval_recorded` debe ser `true`. Si `workflow` está vacío, solo cuenta `workflow_allowed` reportado (compatibilidad con la matriz de U4-T01).
+- **Workflow permitido por política.** Si `workflow` no está vacío: debe existir en la política `workflows` en todo destino salvo `resetting`, `reporting`, `done` y `failed` (para que el reset siempre se intente); si no existe la política o el nombre → `Deny`; para `running`, el número de decisiones `allow` hacia `running` de ese workflow en el día UTC actual (leído del log de auditoría) no puede alcanzar `max_runs_per_day`; si `requires_approval`, `approval_recorded` debe ser `true`. Si `workflow` está vacío, solo cuenta `workflow_allowed` reportado (compatibilidad con la matriz de U4-T01).
 - **Fail-closed.** Cualquier error interno (política ilegible, almacén caído, JSON roto, **fallo al escribir la auditoría**) → `Deny` con `reason` explícito y `503`/`200 allow=false` según el caso (el codificador documenta: la regla es que **nunca** devuelve `allow=true` si no pudo auditar la decisión).
 - **Auditoría append-only.** `AuditLog` JSONL abierto con `O_APPEND`, `fsync` por entrada; cada entrada: `at`, `actor` (principal o servicio), `action` (`gate.allow`, `gate.deny`, `gate.error`, `policy.set:<nombre>@v<N>`), `run_id`, `detail` (hechos, razón, política y versión usadas), `prev_hash` y `hash = sha256(prev_hash || entrada canónica)`. Se audita **cada** decisión (allow y deny) y cada `PUT` aceptado o rechazado (`policy.rejected`). No existe ninguna ruta, función ni subcomando que borre o reescriba entradas. `DELETE`/`PUT`/`POST /audit` → `405`. `GET /audit?run=&limit=` (autenticado, `user` y `admin` leen; `limit` 1..500, por defecto 100) devuelve `[]AuditEntry` con los campos del contrato (`at`, `actor`, `action`, `run_id`).
 - **`go-governance verify-audit <archivo>`**: recorre la cadena y sale con `0` si es íntegra, `1` indicando la línea si una entrada fue alterada, borrada o reordenada.
@@ -85,7 +85,7 @@ gate() { curl -s -X POST $B/gates/authorize -H "Authorization: Bearer $svc" -H '
   ```bash
   cd services/go-governance && go test -race -v ./... | grep -c -E '^\s*--- PASS'; go test -race ./... 2>&1 | grep -c FAIL; go test -race -run 'Matrix' -v ./... | grep -c -E '^\s*--- PASS'
   ```
-  Esperado: ≥ `30`, `0` y un número igual al `jq length` de la matriz (cada fila de U4-T01 corre contra el evaluador **real**). Antes de la tarea: no hay `cmd/` ni evaluador real (rojo inicial).
+  Esperado: ≥ `30`, `0` y un número ≥ al `jq length` de la matriz (el conteo incluye las pruebas de nivel superior, p. ej. 20 frente a 17; lo que se exige es que cada fila de U4-T01 corra como subprueba contra el evaluador **real**, no contra el fake). Antes de la tarea: no hay `cmd/` ni evaluador real (rojo inicial).
 
 - [ ] **CA-2** — Tabla de gates: sin confirmar, sin `reset_verified` y sin ensayo se deniega; con todo, se permite. Medido contra el binario real.
   ```bash
@@ -147,13 +147,13 @@ gate() { curl -s -X POST $B/gates/authorize -H "Authorization: Bearer $svc" -H '
   ```bash
   upg 18235
   gate '{"run_id":"ra","from":"confirmed","to":"warm_ready","target_namespace":"aqs-test","confirmed":"false","reset_verified":"true"}' >/dev/null
-  gate '{"run_id":"ra","from":"confirmed","to":"warm_ready","target_namespace":"aqs-test","confirmed":"true","reset_verified":"true"}' >/dev/null
+  gate '{"run_id":"ra","from":"confirmed","to":"warm_ready","target_namespace":"aqs-test","confirmed":"true","reset_verified":"true","workflow_allowed":"true"}' >/dev/null
   curl -s -o /dev/null -X PUT $B/policies/events -H 'Authorization: Bearer tok-admin' -H 'Content-Type: application/json' -d '{"value":{"enabled_events":["tag"]}}'
   curl -s -H 'Authorization: Bearer tok-user' "$B/audit?run=ra" | jq -c 'map(.action)'
   curl -s -H 'Authorization: Bearer tok-user' "$B/audit" | jq -c '[length >= 3, (.[0] | keys | join(","))]'
   echo "delete=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE -H 'Authorization: Bearer tok-admin' $B/audit) put=$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H 'Authorization: Bearer tok-admin' $B/audit) sin_token=$(curl -s -o /dev/null -w '%{http_code}' $B/audit)"
   f=$(find "$t/data" -name '*audit*' -type f | head -n1); "$t/gg" verify-audit "$f"; echo "integra rc=$?"
-  sed -i '2s/gate\.deny/gate.allow/;2s/"allow":false/"allow":true/' "$f"; "$t/gg" verify-audit "$f"; echo "alterada rc=$?"
+  sed -i '2s/gate\.allow/gate.deny/;2s/"allow":true/"allow":false/' "$f"; "$t/gg" verify-audit "$f"; echo "alterada rc=$?"
   kill $pid; rm -rf "$t"
   ```
   Esperado: `["gate.deny","gate.allow"]`; `[true,"action,actor,at,run_id"]` (el `run_id` puede faltar en la entrada de política: el codificador ajusta el `keys` esperado y lo documenta); `delete=405 put=405 sin_token=401`; `integra rc=0`; y `alterada rc=1` con el número de línea 2 en la salida. Si el `sed` no cambia nada por el formato elegido, el codificador adapta la mutación y la registra.
