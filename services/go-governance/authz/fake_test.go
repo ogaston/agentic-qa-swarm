@@ -42,13 +42,35 @@ func TestFakeEvaluatorErrorIsNotAllow(t *testing.T) {
 	}
 }
 
+// UnknownFactIsFalse cubre lo que existe hoy: Fact trata Unknown como no
+// verdadero (IsTrue), el valor cero de GateInput es todo Unknown y el JSON
+// "unknown" se lee como Unknown. El fake NO evalúa hechos; aplicar esta regla
+// a las decisiones llega con el evaluador real (U4-T04).
 func TestFakeEvaluatorUnknownFactIsFalse(t *testing.T) {
 	if Unknown.IsTrue() || False.IsTrue() || !True.IsTrue() {
 		t.Fatal("solo True es verdadero")
 	}
 	var in GateInput
-	if in.Confirmed != Unknown {
-		t.Fatal("el valor cero debe ser Unknown")
+	for _, f := range []Fact{in.Confirmed, in.ResetVerified, in.EnsayoPassed, in.WorkflowAllowed} {
+		if f != Unknown || f.IsTrue() {
+			t.Fatal("el valor cero debe ser Unknown y no verdadero")
+		}
+	}
+	var f Fact = True
+	if err := f.UnmarshalJSON([]byte(`"unknown"`)); err != nil || f.IsTrue() {
+		t.Fatalf("unknown JSON: %v %v", f, err)
+	}
+	if err := f.UnmarshalJSON([]byte(`"quizas"`)); err == nil {
+		t.Fatal("valor inválido debe fallar")
+	}
+}
+
+// El fake solo resuelve por (From, To); no lee hechos. Se fija explícitamente.
+func TestFakeEvaluatorDoesNotEvaluateFacts(t *testing.T) {
+	in := GateInput{RunID: "r", From: StateDone, To: StateFailed}
+	d, _ := NewFakeEvaluator().Allow("", "").AuthorizeTransition(context.Background(), in)
+	if !d.Allow {
+		t.Fatal("el fake permite según la regla, sin mirar hechos")
 	}
 }
 
