@@ -1,0 +1,12 @@
+{
+  "valid": [
+    {"id": "u1", "role": "user"},
+    {"id": "u2", "role": "user"},
+    {"id": "a1", "role": "admin"}
+  ],
+  "invalid": [
+    {"id": "x1", "role": ""},
+    {"id": "x2", "role": "root"},
+    {"id": "", "role": "user"}
+  ]
+}
