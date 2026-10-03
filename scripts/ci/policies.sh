@@ -8,7 +8,7 @@
 set -uo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-cd "$root"
+cd "$root" || exit 1
 
 KUSTOMIZE=registry.k8s.io/kustomize/kustomize:v5.4.3
 KUBECONFORM=ghcr.io/yannh/kubeconform:v0.6.7
