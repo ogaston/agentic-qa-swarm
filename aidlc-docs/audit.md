@@ -348,3 +348,27 @@ Make sure to make the info very compact so I can read quickly"
 **User Input**: "okay let's change fable and use opus 5.5, and for coder sonnet 5.5 (effort low) and for review (sonnte 5.5 effort high)"
 **AI Response**: "Configuración de modelos actualizada: Orquestador = Opus 5.5, Codificador = Sonnet 5.5 (effort: low), Revisor = Sonnet 5.5 (effort: high). Actualizados `project-overview.html`, `DECISIONES.md` (§6) y preparados contratos en `.claude/agents/`."
 **Context**: Preparación de Construction — calibración de modelos y esfuerzo del loop de agentes (Módulo 6).
+
+---
+
+## Post-INCEPTION — Explicación concisa de Ola 1 (U5)
+**Timestamp**: 2026-10-01T22:17:38Z
+**User Input**: "explain me what will be done in wave 1. be brief"
+**AI Response**: "Explicación breve de la Ola 1 (Unidad U5: Plataforma & GitOps): 8 tareas habilitadoras para crear el monorepo, contratos OpenAPI/JSON Schema, CI con SBOM/Cosign, manifiestos Flux del entorno warm, MinIO para evidencias, RBAC/NetworkPolicy y observabilidad/backups. Desbloquea U1 y U4."
+**Context**: Pre-Construction — clarificación del alcance inmediato de la primera ola de ejecución.
+
+---
+
+## Post-INCEPTION — Clarificación tangible del resultado (outcome) de Ola 1
+**Timestamp**: 2026-10-01T22:20:14Z
+**User Input**: "explain me better. whats the outcome?"
+**AI Response**: "Explicación del resultado tangible de la Ola 1: contraste 'antes vs. después'. Pasa de un repo solo con documentación a un repositorio con estructura física de monorepo, contratos de datos versionados e inviolables (OpenAPI + JSON Schemas), pipeline de CI automático, manifiestos declarativos del Warm Sandbox y barreras de seguridad (NetworkPolicy/RBAC). Habilita que dos codificadores trabajen en paralelo en la Ola 2 sin pisarse."
+**Context**: Pre-Construction — comprensión del valor e impacto tangible de la Ola 1.
+
+---
+
+## Post-INCEPTION — Aclaración de Manifiestos K8s (Punto 4 de Ola 1)
+**Timestamp**: 2026-10-01T22:22:52Z
+**User Input**: "so this is only the based repo, some contracts and CI pipeline for this repo? didnt understood well point 4, is this what we're going to be using when we enable kubernetes?"
+**AI Response**: "Confirmado: sí, Ola 1 es la base (esqueleto, contratos, CI, storage y seguridad). Respecto al punto 4: sí, son exactamente los archivos YAML (manifiestos) que definen el namespace y pods del Warm Sandbox (app bajo prueba + Postgres + Redis + CronJobs de reset). En la Ola 1 se crean y validan con kubeconform en Git; cuando Kubernetes/Flux se encienda, el clúster leerá esos mismos archivos para desplegar el entorno."
+**Context**: Pre-Construction — clarificación del rol de los manifiestos de Kubernetes en la Ola 1.
