@@ -4,7 +4,7 @@ Servicio de autenticación (U4-T02): `POST /auth/login` y `POST /auth/logout`. L
 
 ## Versión de Go
 
-`go.mod` exige `go 1.24.13` (parche con la biblioteca estándar corregida frente a govulncheck) y el `Dockerfile` usa `golang:1.24.13-alpine3.22`. Al subir el parche en uno, subirlo en el otro: si la imagen es anterior a `go.mod`, Go intentaría descargar el toolchain.
+`go.mod` exige `go 1.26.8` (línea soportada con la biblioteca estándar corregida frente a govulncheck; 1.24 ya no recibe parches) y el `Dockerfile` usa `golang:1.26.8-alpine3.24`. Al subir el parche en uno, subirlo en el otro: si la imagen es anterior a `go.mod`, Go intentaría descargar el toolchain.
 
 ## Configuración (variables de entorno)
 
