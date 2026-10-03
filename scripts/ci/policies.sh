@@ -100,4 +100,10 @@ if [ ! -e "$work/prod.broken" ] \
 fi
 report "$rc" promtool-rules
 
+# check-secrets (U5-T14): ningun Secret en claro bajo deploy/
+bash scripts/ci/check-secrets.sh > "$work/out" 2>&1
+rc=$?
+cat "$work/out" >&2
+report "$rc" check-secrets
+
 exit "$fail"
