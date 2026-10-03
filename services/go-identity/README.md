@@ -44,7 +44,8 @@ Hash argon2id con parámetros mínimos `m=19 MiB, t=2, p=1` (se aceptan más alt
 - **`authz.Authorize(principal, action, resource)`.** `session:read` (user solo si es propietario; un recurso sin propietario no es de nadie; admin sí) y `users:list` (solo admin). Todo lo demás, `Deny`.
 - **IDOR.** `GET /auth/sessions/{id}`: `user` recibe `403` para una sesión ajena y también para un `id` inexistente (sin oráculo de existencia); `admin` recibe `404` si no existe. `session_id` (128 bits, derivado del token con separación de dominio) es público y no sirve como token.
 - **CORS.** Solo orígenes de la lista blanca: `Access-Control-Allow-Origin` con ese origen y `Vary: Origin`; preflight con `Allow-Methods: GET, POST` y `Allow-Headers: Authorization, Content-Type`. Nunca `*` ni `Allow-Credentials` (tokens `Bearer`, no cookies).
-- **Cabeceras de seguridad** en todas las respuestas de la API (`/auth/*`), con una excepción documentada: `/healthz`, `/readyz` y `/metrics` se sirven antes de `secure()` y solo llevan `Cache-Control: no-store` en los JSON de salud; no exponen datos de negocio ni se llaman desde navegadores: `nosniff`, `Cache-Control: no-store`, CSP `default-src 'none'; frame-ancestors 'none'`, HSTS.
+- **Cabeceras de seguridad** de la API (`/auth/*`), en todas sus respuestas: `nosniff`, `Cache-Control: no-store`, CSP `default-src 'none'; frame-ancestors 'none'`, HSTS.
+- **Excepción documentada:** `/healthz`, `/readyz` y `/metrics` se sirven antes de `secure()`; no llevan esas cabeceras (los JSON de salud solo `Cache-Control: no-store`, `/metrics` ninguna). No exponen datos de negocio ni se llaman desde navegadores.
 - **Límite conocido.** El servidor HTTP de Go recorta los espacios finales de los valores de cabecera antes de llegar al middleware, así que `Bearer <token> ` (espacio final) por red equivale a la forma válida; el middleware lo rechaza si lo recibiera tal cual (prueba unitaria).
 
 ## Observabilidad (U4-T07)

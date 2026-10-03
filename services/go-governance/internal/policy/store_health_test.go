@@ -47,6 +47,20 @@ func TestFileStoreUnhealthyWhenFileCorruptedMissingOrAltered(t *testing.T) {
 		"alterado": func(p string) error {
 			return os.WriteFile(p, []byte(`{"name":"events","version":1,"value":{"enabled_events":[]},"at":"2026-01-01T00:00:00Z","actor":"x"}`+"\n"), 0o600)
 		},
+		"política extra válida": func(p string) error {
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(p, append(b, []byte(`{"name":"confirm_required","version":1,"value":{"required":true},"at":"2026-01-01T00:00:00Z","actor":"x"}`+"\n")...), 0o600)
+		},
+		"versión adelantada, mismo valor": func(p string) error {
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(p, append(b, []byte(`{"name":"events","version":2,"value":{"enabled_events":["tag"]},"at":"2026-01-01T00:00:00Z","actor":"x"}`+"\n")...), 0o600)
+		},
 		"sin lectura": func(p string) error { return os.Chmod(p, 0) },
 	} {
 		t.Run(name, func(t *testing.T) {
