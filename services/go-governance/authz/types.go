@@ -116,6 +116,11 @@ type GateInput struct {
 	EnsayoPassed    Fact   `json:"ensayo_passed"`
 	TargetNamespace string `json:"target_namespace"`
 	WorkflowAllowed Fact   `json:"workflow_allowed"`
+	// Workflow es el nombre del workflow de la corrida (opcional). Si no está
+	// vacío, el evaluador real lo contrasta con la política `workflows`.
+	Workflow string `json:"workflow,omitempty"`
+	// ApprovalRecorded indica que existe aprobación registrada para el workflow.
+	ApprovalRecorded Fact `json:"approval_recorded"`
 }
 
 // Validate comprueba la forma de la entrada (RunID no vacío, estados del enum).
