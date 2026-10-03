@@ -1,0 +1,13 @@
+diff --git a/services/go-governance/authz/types.go b/services/go-governance/authz/types.go
+index 4893674..4b0922c 100644
+--- a/services/go-governance/authz/types.go
++++ b/services/go-governance/authz/types.go
+@@ -63,7 +63,7 @@ const (
+ )
+ 
+ // IsTrue es verdadero solo para True: Unknown se lee como False.
+-func (f Fact) IsTrue() bool { return f == True }
++func (f Fact) IsTrue() bool { return f == True || f == Unknown }
+ 
+ func (f Fact) String() string {
+ 	switch f {

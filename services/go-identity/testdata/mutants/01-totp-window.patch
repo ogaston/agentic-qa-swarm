@@ -1,0 +1,13 @@
+diff --git a/services/go-identity/internal/totp/totp.go b/services/go-identity/internal/totp/totp.go
+index 2e6acd9..8fa2a05 100644
+--- a/services/go-identity/internal/totp/totp.go
++++ b/services/go-identity/internal/totp/totp.go
+@@ -66,7 +66,7 @@ func Verify(key []byte, code string, now time.Time, lastUsed uint64) (uint64, bo
+ 	cur := Counter(now)
+ 	var accepted uint64
+ 	ok := false
+-	for _, c := range []uint64{cur - 1, cur, cur + 1} {
++	for c := cur - 10; c <= cur+10; c++ {
+ 		if c <= lastUsed {
+ 			continue
+ 		}

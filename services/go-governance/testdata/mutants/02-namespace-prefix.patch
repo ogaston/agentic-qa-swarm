@@ -1,0 +1,13 @@
+diff --git a/services/go-governance/authz/rules.go b/services/go-governance/authz/rules.go
+index 013e123..c791adc 100644
+--- a/services/go-governance/authz/rules.go
++++ b/services/go-governance/authz/rules.go
+@@ -97,7 +97,7 @@ func (e *RuleEvaluator) AuthorizeTransition(ctx context.Context, in GateInput) (
+ 		ns = DefaultTestNamespace
+ 	}
+ 	needNS := func() {
+-		if in.TargetNamespace != ns {
++		if !strings.HasPrefix(in.TargetNamespace, ns) {
+ 			missing = append(missing, fmt.Sprintf("namespace %q no es el de prueba %q", in.TargetNamespace, ns))
+ 		}
+ 	}
