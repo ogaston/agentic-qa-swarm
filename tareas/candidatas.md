@@ -43,3 +43,5 @@ Trabajo que apareció durante las rondas y que **nadie pidió todavía**. No for
 | C-37 | U5-T13 ronda 1, F-01 | Añadir en `bootstrap-flux.md` un `kubectl -n flux-system wait --for=condition=available deploy --all` entre los dos `apply`, y `wait`/`dependsOn` en `aqs-<env>` | |
 | C-38 | U5-T15 ronda 1, F-02 | Inventario mínimo de políticas en `policies.sh`: fallar si desaparece un `.rego` (o baja el número de tests) sin un cambio explícito del inventario | Hoy borrar `security.rego` y su test deja la CI en verde |
 | C-39 | U5-T15 ronda 1 | Validar `deploy/flux/clusters/{dev,prod}` en `policies.sh` (kubeconform con `-skip CustomResourceDefinition`; sin conftest de la app, porque Flux trae ClusterRoles legítimos) | Hoy solo se emite un AVISO |
+| C-40 | U5-T14 ronda 1, C-B | Que `check-secrets.sh` cubra también `secretGenerator` (`literals:`/`files:`) y credenciales en `HelmRelease.values` | |
+| C-41 | U5-T14 ronda 1, C-C | `generate.sh` atómico: escribir en un directorio temporal y renombrar, para no dejar `secrets/` a medias si `cp` falla tras el `rm` | Riesgo menor |
