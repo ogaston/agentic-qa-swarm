@@ -42,7 +42,7 @@ El **contrato** de Secrets que debe cubrir el script se obtuvo del build de prod
 - **Commitear cualquier Secret cifrado con una clave real o con valores reales.** El repo es público. En esta tarea solo se commitean el mecanismo y `secrets/kustomization.yaml` con `resources: []`. Las pruebas usan una clave age **desechable**, en `mktemp -d`, que se borra al terminar. Ninguna clave privada, de ningún tipo, puede entrar al repo.
 - Un `.sops.yaml` con un destinatario inventado. El destinatario se pasa como argumento; si se crea un `.sops.yaml`, va sin `age:` y se documenta.
 - Cambiar los nombres o las claves de los Secrets que referencian los manifiestos, o cualquier archivo de `deploy/flux/base/`.
-- Cambiar `gotk-*.yaml`, `policy/` o las comprobaciones existentes de `policies.sh`. En ese archivo solo se **añade** `check-secrets`.
+- Cambiar `gotk-*.yaml`, `policy/` o las comprobaciones existentes de `policies.sh`. En ese archivo solo se **añade** `check-secrets`, con **una única excepción** aprobada por el humano tras la ronda 1 (C-A): la invocación de kubeconform puede añadir `-skip Secret`. Los Secrets cifrados por SOPS llevan una clave `sops:` de nivel superior que el esquema estricto rechaza, y su estructura la valida `check-secrets.sh`. Ningún otro kind se puede omitir.
 - Ejecutar `kubectl`, `flux` o cualquier comando contra un clúster.
 
 ---
@@ -121,11 +121,24 @@ Y='docker run --rm -i --security-opt label=disable mikefarah/yq:4.44.3 -N'
   ```bash
   git grep -n -E 'AGE-SECRET-KEY-|BEGIN (RSA |EC )?PRIVATE KEY' -- . ':!tareas/*' ':!revisiones/*' | wc -l
   git ls-files deploy | grep -c '\.sops\.yaml$'
-  git diff --name-only $(git merge-base HEAD origin/main) | grep -v -E '^(deploy/flux/clusters/(dev|prod)/aqs\.yaml|deploy/flux/(dev|prod)/kustomization\.yaml|deploy/flux/(dev|prod)/secrets/kustomization\.yaml|scripts/secrets/generate\.sh|scripts/ci/check-secrets\.sh|scripts/ci/policies\.sh|scripts/test/secrets-e2e\.sh|docs/operaciones/(secrets|bootstrap-flux|README)\.md|bitacoras/U5-T14\.md|\.sops\.yaml)$' | wc -l
+  git diff --name-only $(git merge-base HEAD origin/main) | grep -v -E '^(deploy/flux/clusters/(dev|prod)/aqs\.yaml|deploy/flux/(dev|prod)/kustomization\.yaml|deploy/flux/(dev|prod)/secrets/kustomization\.yaml|scripts/secrets/generate\.sh|scripts/ci/check-secrets\.sh|scripts/ci/policies\.sh|scripts/test/secrets-e2e\.sh|scripts/test/check-secrets-test\.sh|docs/operaciones/(secrets|bootstrap-flux|README)\.md|bitacoras/U5-T14\.md|\.sops\.yaml)$' | wc -l
   docker run --rm --security-opt label=disable -v "$PWD":/mnt koalaman/shellcheck:v0.10.0 scripts/secrets/generate.sh scripts/ci/check-secrets.sh scripts/test/secrets-e2e.sh; echo "shellcheck rc=$?"
   git status --short | wc -l
   ```
   Esperado: `0`, `0`, `0`, `shellcheck rc=0` y `0`.
+
+- [ ] **CA-7** — *(Enmienda C-A, aprobada por el humano tras la ronda 1.)* La CI completa pasa sobre un árbol con los Secrets cifrados generados, y kubeconform sigue validando todo lo demás.
+  ```bash
+  bash scripts/test/secrets-e2e.sh 2>&1 | grep -E '^(policies-generado rc=|kubeconform-valid-generado )'
+  grep -c -- '-skip Secret' scripts/ci/policies.sh
+  grep -o -E -- '-skip [A-Za-z,]+' scripts/ci/policies.sh | sort -u
+  ```
+  Esperado:
+  - `secrets-e2e.sh` corre `scripts/ci/policies.sh` completo sobre la copia con los Secrets cifrados de dev **y** prod, e imprime `policies-generado rc=0`.
+  - Imprime también `kubeconform-valid-generado <N>`, con el número de recursos válidos de prod, que debe ser > 0.
+  - La guarda de "cero trabajo" de U5-T15 sigue activa.
+  - `1`, y `-skip Secret` como único `-skip` del script.
+  - La prueba negativa de CA-4 (un Secret en claro) sigue dando `rc=1` también a través de `policies.sh`.
 
 ---
 
