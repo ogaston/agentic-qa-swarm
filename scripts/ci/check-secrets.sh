@@ -21,6 +21,7 @@ bads() { # <campo>: cuenta de valores que no son ENC[...] completos (un valor no
   echo "([(.$1 // {}) | to_entries | .[] | .value] | map(select((tag != \"!!str\") or ((test(\"$RE\")) | not))) | length)"
 }
 # Un objeto por violacion. Documentos no-mapa se ignoran; los items de un kind: List se expanden.
+# shellcheck disable=SC2016 # las expresiones de yq y el script interno llevan $ literales
 VIOL='select(tag == "!!map") | [., (select(.kind == "List") | .items[])] | .[] | select(.kind == "Secret") | . as $s |
  [{"secret": ($s.metadata.name | tostring), "campo": "sops.mac", "n": ([$s.sops.mac] | map(select((tag != "!!str") or ((test("'"$RE"'")) | not))) | length)},
   {"secret": ($s.metadata.name | tostring), "campo": "data", "n": '"$(bads data)"'},
@@ -55,6 +56,7 @@ for o in deploy/flux/dev deploy/flux/prod deploy/flux/clusters/dev deploy/flux/c
 done
 
 # (b) todos los archivos bajo deploy/, de cualquier extension
+# shellcheck disable=SC2016
 inner='for f; do
   if out=$(yq -N -p yaml -o=json -I=0 "$VIOL" "$f" 2>&1); then
     [ -z "$out" ] || printf "%s: Secret sin cifrar por SOPS: %s\n" "$f" "$out"
