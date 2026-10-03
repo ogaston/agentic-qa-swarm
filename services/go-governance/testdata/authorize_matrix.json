@@ -1,0 +1,257 @@
+[
+  {
+    "name": "valid_confirmed_to_warm_ready",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "allow",
+    "reason_contains": ""
+  },
+  {
+    "name": "valid_warm_ready_to_deploying",
+    "input": {
+      "run_id": "r1",
+      "from": "warm_ready",
+      "to": "deploying",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "allow",
+    "reason_contains": ""
+  },
+  {
+    "name": "valid_rehearsing_to_running",
+    "input": {
+      "run_id": "r1",
+      "from": "rehearsing",
+      "to": "running",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "allow",
+    "reason_contains": ""
+  },
+  {
+    "name": "deny_sin_confirmed",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "false",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "confirm"
+  },
+  {
+    "name": "deny_sin_reset_verified_warm_ready",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "false",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "reset"
+  },
+  {
+    "name": "deny_sin_ensayo_passed_running",
+    "input": {
+      "run_id": "r1",
+      "from": "rehearsing",
+      "to": "running",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "false",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "ensayo"
+  },
+  {
+    "name": "deny_namespace_distinto",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "prod",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "namespace"
+  },
+  {
+    "name": "deny_namespace_vacio",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "namespace"
+  },
+  {
+    "name": "deny_workflow_not_allowed",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "false"
+    },
+    "expect": "deny",
+    "reason_contains": "workflow"
+  },
+  {
+    "name": "deny_confirmed_unknown",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "unknown",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "confirm"
+  },
+  {
+    "name": "deny_reset_verified_unknown",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "unknown",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "reset"
+  },
+  {
+    "name": "deny_ensayo_unknown_running",
+    "input": {
+      "run_id": "r1",
+      "from": "rehearsing",
+      "to": "running",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "unknown",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "ensayo"
+  },
+  {
+    "name": "deny_workflow_unknown",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "unknown"
+    },
+    "expect": "deny",
+    "reason_contains": "workflow"
+  },
+  {
+    "name": "deny_transicion_inexistente_done_running",
+    "input": {
+      "run_id": "r1",
+      "from": "done",
+      "to": "running",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "transici"
+  },
+  {
+    "name": "deny_estado_origen_desconocido",
+    "input": {
+      "run_id": "r1",
+      "from": "limbo",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "estado"
+  },
+  {
+    "name": "deny_estado_destino_desconocido",
+    "input": {
+      "run_id": "r1",
+      "from": "confirmed",
+      "to": "limbo",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "estado"
+  },
+  {
+    "name": "deny_run_id_vacio",
+    "input": {
+      "run_id": "",
+      "from": "confirmed",
+      "to": "warm_ready",
+      "confirmed": "true",
+      "reset_verified": "true",
+      "ensayo_passed": "true",
+      "target_namespace": "aqs-test",
+      "workflow_allowed": "true"
+    },
+    "expect": "deny",
+    "reason_contains": "run_id"
+  }
+]
