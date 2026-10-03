@@ -53,7 +53,7 @@ Desde la raíz del worktree.
   ```bash
   bash scripts/ci/policies.sh 2>&1 | grep -c -E '^(OK|FALLA) (kubeconform|conftest-verify|conftest-test|conftest-combine|promtool-rules)( (dev|prod))?$'
   ```
-  Esperado: `9` (`kubeconform`, `conftest-test` y `conftest-combine` por cada overlay, más `conftest-verify` y `promtool-rules` una vez), todas `OK`.
+  Esperado: `8` (`kubeconform`, `conftest-test` y `conftest-combine` por cada overlay, más `conftest-verify` y `promtool-rules` una vez), todas `OK`. *(Enmienda aprobada por el humano tras la ronda 1: antes decía `9` por un error de suma; 3 × 2 + 1 + 1 = 8.)*
 
 - [ ] **CA-3** — El script falla cuando debe. Pruebas negativas sobre copias del repo, sin tocar el worktree.
   ```bash
