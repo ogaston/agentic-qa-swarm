@@ -19,7 +19,8 @@ R=$(grep -o 'age1[0-9a-z]*' "$t/clave.txt")
 
 echo "== CA-2"
 (cd "$t" && BACKUP_ENDPOINT=https://s3.example.invalid BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s bash scripts/secrets/generate.sh prod "$R"); echo "gen rc=$?"
-ls "$t"/deploy/flux/prod/secrets/*.sops.yaml | wc -l
+find "$t"/deploy/flux/prod/secrets -name "*.sops.yaml" | wc -l
+# shellcheck disable=SC2016 # el for se expande dentro del contenedor
 dk -v "$t":/w -w /w -e SOPS_AGE_KEY_FILE=/w/clave.txt --entrypoint sh "$SOPS" -c 'for f in deploy/flux/prod/secrets/*.sops.yaml; do sops decrypt "$f"; echo ---; done' \
   | $YQ 'select(.kind == "Secret") | .metadata.namespace + "/" + .metadata.name + ":" + (((.data // {}) + (.stringData // {})) | keys | sort | join(","))' | sort
 
@@ -41,7 +42,7 @@ cp -r "$t/." "$t2/"
 rm -f "$t2"/deploy/flux/prod/secrets/*.sops.yaml
 git -C "$t2" status >/dev/null 2>&1
 (cd "$t2" && env -u BACKUP_ENDPOINT BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s bash scripts/secrets/generate.sh prod "$R" 2>/dev/null); echo "sin BACKUP_ENDPOINT rc=$?"
-echo "archivos tras fallo: $(ls "$t2"/deploy/flux/prod/secrets/ | tr '\n' ' ')"
+echo "archivos tras fallo: $(find "$t2"/deploy/flux/prod/secrets -type f -printf "%f ")"
 (cd "$t2" && BACKUP_ENDPOINT=e BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s bash scripts/secrets/generate.sh prod 2>/dev/null); echo "sin destinatario rc=$?"
 # Secret con sops: pero un valor sin ENC[
 f=$t/deploy/flux/prod/secrets/grafana-admin.sops.yaml
