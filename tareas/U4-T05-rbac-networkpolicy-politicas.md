@@ -71,13 +71,13 @@ C='docker run --rm -i --security-opt label=disable -v '"$PWD"':/project -w /proj
 
 - [ ] **CA-1** — Los cuatro ServiceAccounts existen sin token montado; los tres del control plane con API siguen como estaban.
   ```bash
-  $K build deploy/flux/prod | $Y 'select(.kind=="ServiceAccount" and .metadata.namespace=="aqs-system") | .metadata.name + "=" + (if has("automountServiceAccountToken") then .automountServiceAccountToken else "sin-definir" end | tostring)' | sort
+  $K build deploy/flux/prod | $Y 'select(.kind=="ServiceAccount" and .metadata.namespace=="aqs-system") | .metadata.name + "=" + ((select(has("automountServiceAccountToken")) | .automountServiceAccountToken | tostring) // "sin-definir")' | sort
   ```
   Esperado: `go-governance=false`, `go-identity=false`, `go-intake=false`, `go-reset=sin-definir`, `go-run-controller=sin-definir`, `go-warm-manager=sin-definir`, `ui-api=false` (y las demás que ya existieran, p. ej. del backup, sin cambios). Antes de la tarea: faltan las cuatro primeras y `ui-api` (rojo inicial).
 
 - [ ] **CA-2** — Cada Deployment usa su ServiceAccount y los cuatro nuevos no montan token a nivel de pod.
   ```bash
-  $K build deploy/flux/prod | $Y 'select(.kind=="Deployment" and .metadata.namespace=="aqs-system") | .metadata.name + "=" + (.spec.template.spec.serviceAccountName // "-") + "/" + (if (.spec.template.spec | has("automountServiceAccountToken")) then .spec.template.spec.automountServiceAccountToken else "sin-definir" end | tostring)' | sort
+  $K build deploy/flux/prod | $Y 'select(.kind=="Deployment" and .metadata.namespace=="aqs-system") | .metadata.name + "=" + (.spec.template.spec.serviceAccountName // "-") + "/" + ((select(.spec.template.spec | has("automountServiceAccountToken")) | .spec.template.spec.automountServiceAccountToken | tostring) // "sin-definir")' | sort
   b=$(git merge-base HEAD origin/main); git diff -U0 $b -- deploy/flux/base/control-plane.yaml | grep -E '^[+-][^+-]' | grep -v -E '^\+\s+(serviceAccountName: (ui-api|go-intake|go-governance|go-identity)|automountServiceAccountToken: false)$' | wc -l
   ```
   Esperado: siete líneas `go-governance=go-governance/false`, `go-identity=go-identity/false`, `go-intake=go-intake/false`, `go-reset=go-reset/sin-definir`, `go-run-controller=go-run-controller/sin-definir`, `go-warm-manager=go-warm-manager/sin-definir`, `ui-api=ui-api/false`; y `0`.
