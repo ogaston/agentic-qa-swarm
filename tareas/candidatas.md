@@ -45,3 +45,6 @@ Trabajo que apareció durante las rondas y que **nadie pidió todavía**. No for
 | C-39 | U5-T15 ronda 1 | Validar `deploy/flux/clusters/{dev,prod}` en `policies.sh` (kubeconform con `-skip CustomResourceDefinition`; sin conftest de la app, porque Flux trae ClusterRoles legítimos) | Hoy solo se emite un AVISO |
 | C-40 | U5-T14 ronda 1, C-B | Que `check-secrets.sh` cubra también `secretGenerator` (`literals:`/`files:`) y credenciales en `HelmRelease.values` | |
 | C-41 | U5-T14 ronda 1, C-C | `generate.sh` atómico: escribir en un directorio temporal y renombrar, para no dejar `secrets/` a medias si `cp` falla tras el `rm` | Riesgo menor |
+| C-42 | U5-T14 ronda 3, F-09 | Que `check-secrets.sh` construya TODOS los destinos de Flux (cada `spec.path` de los `Kustomization` de `clusters/`), no solo los 4 fijos; hoy un `secretGenerator` en un overlay nuevo referenciado desde Flux pasa | Amplía C-40 |
+| C-43 | U5-T14 ronda 3 | Escáner genérico de credenciales en CI (p. ej. gitleaks) para credenciales fuera de un `kind: Secret` (`--from-literal=...` en scripts, ConfigMaps con contraseñas) | |
+| C-44 | U5-T14 ronda 3, F-11 | Matizar `docs/operaciones/secrets.md`: la guardia comprueba el FORMATO SOPS, no la integridad (sin la clave privada no se puede) | Documentación |
