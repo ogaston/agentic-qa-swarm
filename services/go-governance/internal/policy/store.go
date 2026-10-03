@@ -36,9 +36,39 @@ type Store interface {
 type FileStore struct {
 	mu     sync.Mutex
 	f      *os.File
+	path   string
 	now    func() time.Time
 	latest map[string]Version
 	poison error
+}
+
+// parseFile lee y valida el archivo de versiones. Una línea corrupta es un error.
+func parseFile(path string) (map[string]Version, error) {
+	latest := map[string]Version{}
+	rf, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer rf.Close()
+	br := bufio.NewReaderSize(rf, 64<<10)
+	for n := 1; ; n++ {
+		line, err := br.ReadBytes('\n')
+		if err == io.EOF && len(line) == 0 {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("políticas %s línea %d: %w", path, n, errors.New("línea truncada o ilegible"))
+		}
+		var v Version
+		if jerr := json.Unmarshal(bytes.TrimSpace(line), &v); jerr != nil || !Known(v.Name) || v.Version < 1 {
+			return nil, fmt.Errorf("políticas %s línea %d: entrada inválida", path, n)
+		}
+		if prev, ok := latest[v.Name]; ok && v.Version != prev.Version+1 || !ok && v.Version != 1 {
+			return nil, fmt.Errorf("políticas %s línea %d: versión no consecutiva", path, n)
+		}
+		latest[v.Name] = v
+	}
+	return latest, nil
 }
 
 // OpenFileStore abre (o crea) el almacén. Una línea corrupta impide abrirlo.
@@ -46,27 +76,9 @@ func OpenFileStore(path string, now func() time.Time) (*FileStore, error) {
 	if now == nil {
 		now = time.Now
 	}
-	s := &FileStore{now: now, latest: map[string]Version{}}
-	if rf, err := os.Open(path); err == nil {
-		defer rf.Close()
-		br := bufio.NewReaderSize(rf, 64<<10)
-		for n := 1; ; n++ {
-			line, err := br.ReadBytes('\n')
-			if err == io.EOF && len(line) == 0 {
-				break
-			}
-			if err != nil {
-				return nil, fmt.Errorf("políticas %s línea %d: %w", path, n, errors.New("línea truncada o ilegible"))
-			}
-			var v Version
-			if jerr := json.Unmarshal(bytes.TrimSpace(line), &v); jerr != nil || !Known(v.Name) || v.Version < 1 {
-				return nil, fmt.Errorf("políticas %s línea %d: entrada inválida", path, n)
-			}
-			if prev, ok := s.latest[v.Name]; ok && v.Version != prev.Version+1 || !ok && v.Version != 1 {
-				return nil, fmt.Errorf("políticas %s línea %d: versión no consecutiva", path, n)
-			}
-			s.latest[v.Name] = v
-		}
+	s := &FileStore{now: now, path: path, latest: map[string]Version{}}
+	if latest, err := parseFile(path); err == nil {
+		s.latest = latest
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -76,6 +88,31 @@ func OpenFileStore(path string, now func() time.Time) (*FileStore, error) {
 	}
 	s.f = f
 	return s, nil
+}
+
+// Healthy informa si el almacén es utilizable: no está envenenado por un fallo de escritura y
+// policies.jsonl sigue abriéndose, parseándose y coincidiendo con el estado en memoria. Relee el
+// archivo (pequeño: una línea por versión de 4 políticas) con el cerrojo tomado, de modo que no
+// ve una escritura a medias. Solo lee.
+func (s *FileStore) Healthy() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.poison != nil {
+		return s.poison
+	}
+	disk, err := parseFile(s.path)
+	if err != nil {
+		return err
+	}
+	if len(disk) != len(s.latest) {
+		return errors.New("policies.jsonl no coincide con el estado en memoria")
+	}
+	for n, v := range s.latest {
+		if d, ok := disk[n]; !ok || d.Version != v.Version || !bytes.Equal(d.Value, v.Value) {
+			return errors.New("policies.jsonl no coincide con el estado en memoria")
+		}
+	}
+	return nil
 }
 
 // Get implementa Store.

@@ -96,6 +96,21 @@ tests:
       - eval_time: 4m
         alertname: AqsAuthFailuresHigh
         exp_alerts: []
+      # for: 5m. La condicion se cumple desde el minuto 5 (la ventana de rate(...[5m]) se llena);
+      # a los 8 y 9 min sigue pendiente y dispara a los 10. Con for: 2m ya dispararia a los 8 min.
+      - eval_time: 8m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Tasa alta de logins fallidos o bloqueados"
       - eval_time: 12m
         alertname: AqsAuthFailuresHigh
         exp_alerts:

@@ -107,3 +107,19 @@ func TestAuditChainOKGaugeFollowsMonitor(t *testing.T) {
 		t.Error("al recuperarse el gauge vuelve a 1")
 	}
 }
+
+func TestPolicyChangesStartAtZero(t *testing.T) {
+	reg := NewRegistry()
+	g := NewGov(reg, 90, nil)
+	// 4 políticas conocidas + "unknown", cada una con accepted y rejected.
+	if n, err := testutil.GatherAndCount(reg, "aqs_policy_changes_total"); err != nil || n != 10 {
+		t.Fatalf("series de aqs_policy_changes_total: %d %v (esperadas 10 inicializadas)", n, err)
+	}
+	for _, name := range []string{"events", "confirm_required", "warm_quotas", "workflows", "unknown"} {
+		for _, res := range []string{"accepted", "rejected"} {
+			if v := testutil.ToFloat64(g.policies.WithLabelValues(name, res)); v != 0 {
+				t.Errorf("%s/%s arranca en %v", name, res, v)
+			}
+		}
+	}
+}

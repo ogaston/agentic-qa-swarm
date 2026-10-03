@@ -153,6 +153,12 @@ func TestReadyChecks(t *testing.T) {
 	if err := policyCheck(ps)(ctx); err != nil {
 		t.Errorf("políticas legibles: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "policies.jsonl"), []byte("basura{\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := policyCheck(ps)(ctx); err == nil {
+		t.Error("policies.jsonl corrupto tras el arranque debía fallar el chequeo")
+	}
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/healthz" {
 			w.WriteHeader(404)

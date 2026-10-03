@@ -176,13 +176,15 @@ func dataDirCheck(dir string) func(context.Context) error {
 	}
 }
 
-// policyCheck comprueba que cada política conocida se puede leer del almacén.
-func policyCheck(ps policy.Store) func(context.Context) error {
+// policyCheck comprueba que el almacén de políticas es utilizable: sin envenenar y con
+// policies.jsonl legible y coherente (policy.FileStore.Healthy).
+func policyCheck(ps interface{ Healthy() error }) func(context.Context) error {
 	return func(ctx context.Context) error {
-		for _, n := range []string{policy.Events, policy.ConfirmRequired, policy.WarmQuotas, policy.Workflows} {
-			if _, _, err := ps.Get(ctx, n); err != nil {
-				return fmt.Errorf("política %s ilegible: %w", n, err)
-			}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := ps.Healthy(); err != nil {
+			return fmt.Errorf("políticas no disponibles: %w", err)
 		}
 		return nil
 	}

@@ -68,3 +68,15 @@ func TestReadyChecksUsersAndSessions(t *testing.T) {
 		t.Errorf("almacén operativo: %v", err)
 	}
 }
+
+func TestUsersCheckRejectsFileWithoutUsers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "users.json")
+	for _, body := range []string{`[]`, `{}`, ``} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := usersCheck(path)(context.Background()); err == nil {
+			t.Errorf("un archivo sin usuarios (%q) no está listo", body)
+		}
+	}
+}
