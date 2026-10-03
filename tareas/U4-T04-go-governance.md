@@ -247,6 +247,7 @@ PY
 - Archivos que se **modifican en su sitio**: `contracts/openapi/control-plane.yaml` (aditivo) y los paquetes de U4-T01 (`GateInput` gana `Workflow` y `ApprovalRecorded`; la matriz de U4-T01 **no cambia de resultado**). Nada de duplicados con sufijo.
 - U2-T02 (`go-run-controller`) se escribirá contra `POST /gates/authorize` tal como queda aquí; si el codificador cambia un nombre de campo, lo avisa en la bitácora.
 - Los máximos y rangos de las políticas son valores por defecto razonables, no requisitos del PRD; el humano los confirma (como en C-08).
+- **Versión de Go (aprendida en U4-T02).** `go.mod` de `go-governance` debe pasar a `go 1.26.8` (hoy `go 1.24`, sin soporte: el job `vuln` de la CI falla por avisos de la biblioteca estándar) y el Dockerfile usar `golang:1.26.8-alpine3.24` con runtime `alpine:3.24`, como `go-identity`. Verifica con `GOTOOLCHAIN=go1.26.8`. `govulncheck` no corre en el entorno del loop (403 de `vuln.go.dev`): la confirmación es el CI de GitHub tras el push. El `docker build` literal falla en el entorno del loop por la CA del proxy; se verifica con un contexto temporal que añade la CA.
 - Ningún comando contra un clúster ni la nube. Los servidores se levantan en `127.0.0.1`.
 
 ---
