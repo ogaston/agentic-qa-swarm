@@ -47,6 +47,11 @@ for e in "${overlays[@]}"; do
     echo "FALLA kustomize-build $e"
     fail=1
     : > "$work/$e.broken"
+  elif ! grep -qE '^kind:' "$work/$e.yaml"; then
+    # Guarda: un build vacio no puede dar OK; las demas comprobaciones corren y fallan por su guarda.
+    echo "FALLA kustomize-build $e (salida vacia o sin documentos con kind)"
+    fail=1
+    : > "$work/$e.empty"
   fi
 done
 
@@ -55,12 +60,26 @@ for e in "${overlays[@]}"; do
     for c in kubeconform conftest-test conftest-combine; do echo "FALLA $c $e"; done
     continue
   fi
-  dk -i "$KUBECONFORM" -strict -summary -schema-location default -schema-location "$CRDS" - < "$work/$e.yaml" >&2
-  report $? kubeconform "$e"
-  conftest test --no-color --policy policy --all-namespaces - < "$work/$e.yaml" >&2
-  report $? conftest-test "$e"
-  conftest test --no-color --policy policy --combine - < "$work/$e.yaml" >&2
-  report $? conftest-combine "$e"
+  dk -i "$KUBECONFORM" -strict -summary -schema-location default -schema-location "$CRDS" - < "$work/$e.yaml" > "$work/out" 2>&1
+  rc=$?
+  cat "$work/out" >&2
+  # Guarda: el resumen debe tener Valid: N con N > 0
+  n=$(sed -n 's/.*Valid: \([0-9][0-9]*\).*/\1/p' "$work/out" | tail -1)
+  [ "${n:-0}" -gt 0 ] || rc=1
+  [ ! -e "$work/$e.empty" ] || rc=1
+  report "$rc" kubeconform "$e"
+  for mode in test:--all-namespaces:conftest-test combine:--combine:conftest-combine; do
+    IFS=: read -r _ flag name <<< "$mode"
+    conftest test --no-color --policy policy "$flag" - < "$work/$e.yaml" > "$work/out" 2>&1
+    rc=$?
+    cat "$work/out" >&2
+    # Guarda: debe haber evaluado al menos un test
+    n=$(sed -n 's/^\([0-9][0-9]*\) tests\?,.*/\1/p' "$work/out" | tail -1)
+    [ "${n:-0}" -gt 0 ] || rc=1
+    # Guarda: conftest evalua tambien una entrada vacia; sin documentos no cuenta como OK
+    [ ! -e "$work/$e.empty" ] || rc=1
+    report "$rc" "$name" "$e"
+  done
 done
 
 conftest verify --no-color --policy policy >&2
@@ -73,6 +92,7 @@ rc=1
 if [ ! -e "$work/prod.broken" ] \
   && dk -i "$YQ" -N 'select(.kind == "PrometheusRule" and .metadata.name == "aqs-backup-rules") | .spec' < "$work/prod.yaml" > "$work/p/rules.yaml" \
   && [ -s "$work/p/rules.yaml" ] \
+  && [ "$(dk -i "$YQ" -N '.tests | length' < deploy/flux/base/backup/rules_test.yaml)" -gt 0 ] \
   && cp deploy/flux/base/backup/rules_test.yaml "$work/p/rules_test.yaml" \
   && chmod 644 "$work/p"/*.yaml; then
   dk -v "$work/p":/r -w /r --entrypoint promtool "$PROMETHEUS" test rules rules_test.yaml >&2
