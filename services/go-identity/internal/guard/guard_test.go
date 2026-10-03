@@ -60,8 +60,8 @@ func TestSuccessResetsCounter(t *testing.T) {
 	}
 	g.Success(tk)
 	for i := 0; i < 4; i++ {
-		if _, _, ok := g.Allow("u", "ip"); !ok {
-			t.Fatal("tras un acierto el contador reinicia")
+		if _, _, ok := g.Allow("u", "otra-ip"); !ok {
+			t.Fatal("tras un acierto el contador del usuario reinicia")
 		}
 	}
 }
@@ -135,5 +135,52 @@ func TestConcurrentAttemptsNeverExceedLimit(t *testing.T) {
 	wg.Wait()
 	if admitted != 5 {
 		t.Fatalf("se admitieron %d intentos concurrentes, el límite es 5", admitted)
+	}
+}
+
+func TestSuccessDoesNotResetIPCounter(t *testing.T) {
+	c := newClk()
+	g := New(5, c.now)
+	// Password spraying: un fallo contra cada víctima, intercalado con un acierto propio.
+	for i := 0; i < 4; i++ {
+		g.Allow(fmt.Sprintf("victima-%d", i), "6.6.6.6")
+		tk, _, ok := g.Allow("atacante", "6.6.6.6")
+		if !ok {
+			t.Fatalf("iteración %d: el acierto propio aún debía admitirse", i)
+		}
+		g.Success(tk)
+	}
+	g.Allow("victima-4", "6.6.6.6") // quinto fallo acumulado
+	if _, _, ok := g.Allow("victima-9", "6.6.6.6"); ok {
+		t.Fatal("5 fallos acumulados por IP debían bloquear pese a los aciertos intercalados")
+	}
+}
+
+func TestSuccessStillResetsUserCounter(t *testing.T) {
+	c := newClk()
+	g := New(5, c.now)
+	var tk Ticket
+	for i := 0; i < 4; i++ {
+		tk, _, _ = g.Allow("marta", "ip-a")
+	}
+	g.Success(tk)
+	for i := 0; i < 4; i++ {
+		if _, _, ok := g.Allow("marta", "ip-b"); !ok {
+			t.Fatal("el acierto reinicia el contador del usuario")
+		}
+	}
+}
+
+func TestIPFailuresDecayAfterWindow(t *testing.T) {
+	c := newClk()
+	g := New(5, c.now)
+	for i := 0; i < 4; i++ {
+		g.Allow(fmt.Sprintf("u%d", i), "7.7.7.7")
+	}
+	c.add(IPWindow + time.Second)
+	for i := 0; i < 4; i++ {
+		if _, _, ok := g.Allow(fmt.Sprintf("v%d", i), "7.7.7.7"); !ok {
+			t.Fatal("tras la ventana los fallos por IP debían haber expirado")
+		}
 	}
 }

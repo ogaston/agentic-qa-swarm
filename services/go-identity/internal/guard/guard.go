@@ -14,6 +14,8 @@ const (
 	MaxLock = 15 * time.Minute
 	// MaxEntries acota cada tabla (usuarios e IPs).
 	MaxEntries = 10000
+	// IPWindow es la ventana de decaimiento de los fallos por IP (igual al bloqueo máximo).
+	IPWindow = MaxLock
 )
 
 type entry struct {
@@ -21,10 +23,12 @@ type entry struct {
 	level int // bloqueos ya impuestos
 	until time.Time
 	last  time.Time
+	first time.Time // inicio de la serie de fallos vigente (para la ventana por IP)
 }
 
 type table struct {
-	m map[string]*entry
+	m      map[string]*entry
+	window time.Duration // si > 0, los fallos sin actividad durante la ventana expiran
 }
 
 // Guard cuenta intentos. Allow reserva el intento de forma atómica (cuenta el fallo por
@@ -51,7 +55,7 @@ func New(max int, clock func() time.Time) *Guard {
 	if clock == nil {
 		clock = time.Now
 	}
-	return &Guard{max: max, clock: clock, users: table{m: map[string]*entry{}}, ips: table{m: map[string]*entry{}}}
+	return &Guard{max: max, clock: clock, users: table{m: map[string]*entry{}}, ips: table{m: map[string]*entry{}, window: IPWindow}}
 }
 
 func lockFor(level int) time.Duration {
@@ -99,6 +103,12 @@ func (g *Guard) count(t *table, key string, now time.Time) bool {
 		e = &entry{}
 		t.m[key] = e
 	}
+	if t.window > 0 && e.fails > 0 && now.Sub(e.first) > t.window && !now.Before(e.until) {
+		e.fails, e.level = 0, 0 // decaimiento: la serie de fallos tiene más de IPWindow
+	}
+	if e.fails == 0 {
+		e.first = now
+	}
 	e.fails++
 	e.last = now
 	if e.fails >= g.max {
@@ -129,12 +139,14 @@ func evict(t *table, now time.Time) {
 	}
 }
 
-// Success reinicia los contadores del usuario y de la IP.
+// Success reinicia solo el contador del usuario que acertó. El contador de la IP cuenta
+// únicamente fallos: se devuelve el intento reservado y decae por ventana (IPWindow), de modo
+// que un acierto propio no borra los fallos acumulados contra otras cuentas (password spraying).
 func (g *Guard) Success(tk Ticket) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	delete(g.users.m, tk.user)
-	delete(g.ips.m, tk.ip)
+	release(g.ips.m[tk.ip], tk.ipLock)
 }
 
 // Release devuelve el intento sin contarlo como fallo (contraseña correcta pendiente de OTP).

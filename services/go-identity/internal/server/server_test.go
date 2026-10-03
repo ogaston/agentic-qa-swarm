@@ -66,7 +66,7 @@ func setup(t *testing.T, trust bool) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoy, err := NewDecoy()
+	decoy, err := NewDecoy(us)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,15 +230,30 @@ func TestLockoutAlsoForUnknownUsers(t *testing.T) {
 	}
 }
 
-func TestSuccessfulLoginResetsFailures(t *testing.T) {
+func TestSuccessfulLoginResetsUserFailuresNotIPFailures(t *testing.T) {
 	e := setup(t, false)
+	try := func(pw, remote string) int {
+		return e.post("/auth/login", "application/json", mustJSON(t, map[string]string{"username": "marta", "password": pw}), nil, remote).Code
+	}
+	// El contador del usuario se reinicia con cada acierto aunque cambie la IP.
 	for round := 0; round < 3; round++ {
+		remote := "192.0.2." + string(rune('1'+round)) + ":1000"
 		for i := 0; i < 4; i++ {
-			e.login(map[string]string{"username": "marta", "password": randHex(t, 8)})
+			try(randHex(t, 8), remote)
 		}
-		if w := e.login(map[string]string{"username": "marta", "password": e.pw}); w.Code != 200 {
-			t.Fatalf("ronda %d: %d", round, w.Code)
+		if c := try(e.pw, remote); c != 200 {
+			t.Fatalf("ronda %d: %d", round, c)
 		}
+	}
+	// El de la IP no: 4 fallos + acierto + 4 fallos desde la misma IP acaban en 429.
+	remote := "198.51.100.7:1000"
+	for i := 0; i < 4; i++ {
+		e.post("/auth/login", "application/json", mustJSON(t, map[string]string{"username": "otro" + randHex(t, 3), "password": randHex(t, 8)}), nil, remote)
+	}
+	try(e.pw, remote)
+	e.post("/auth/login", "application/json", mustJSON(t, map[string]string{"username": "otro" + randHex(t, 3), "password": randHex(t, 8)}), nil, remote)
+	if c := try(e.pw, remote); c != 429 {
+		t.Fatalf("5 fallos acumulados por IP debían bloquear aunque haya un acierto intercalado: %d", c)
 	}
 }
 

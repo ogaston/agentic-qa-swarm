@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -109,4 +110,33 @@ func parse(phc string) (parsed, error) {
 // HashWithParams es para pruebas: genera un hash con parámetros arbitrarios (posiblemente bajos).
 func HashWithParams(password string, mem, t uint32, p uint8, salt []byte) string {
 	return encode(mem, t, p, salt, password)
+}
+
+// Decoy genera un hash señuelo con una contraseña aleatoria de un solo uso y, por campo, los
+// parámetros más altos de los hashes dados (mínimos si no hay), para que verificar contra el
+// señuelo cueste lo mismo que verificar a un usuario real.
+func Decoy(hashes []string) (string, error) {
+	mem, t, p := uint32(MinMemoryKiB), uint32(MinTime), uint8(MinThreads)
+	for _, h := range hashes {
+		x, err := parse(h)
+		if err != nil {
+			return "", err
+		}
+		mem, t, p = max(mem, x.mem), max(t, x.time), max(p, x.threads)
+	}
+	salt := make([]byte, saltLen)
+	pw := make([]byte, 24)
+	if _, err := rand.Read(salt); err != nil {
+		return "", err
+	}
+	if _, err := rand.Read(pw); err != nil {
+		return "", err
+	}
+	return encode(mem, t, p, salt, hex.EncodeToString(pw)), nil
+}
+
+// Params devuelve m, t y p de un hash PHC válido.
+func Params(phc string) (mem, t uint32, p uint8, err error) {
+	x, err := parse(phc)
+	return x.mem, x.time, x.threads, err
 }

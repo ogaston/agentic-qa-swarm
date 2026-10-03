@@ -97,3 +97,24 @@ func TestInvalidPHC(t *testing.T) {
 		})
 	}
 }
+
+func TestDecoyCopiesHighestParams(t *testing.T) {
+	salt := bytes.Repeat([]byte{1}, 16)
+	a := HashWithParams("x", MinMemoryKiB*2, MinTime, 1, salt)
+	b := HashWithParams("x", MinMemoryKiB, MinTime+2, 3, salt)
+	d, err := Decoy([]string{a, b})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, tt, p, err := Params(d)
+	if err != nil || m != MinMemoryKiB*2 || tt != MinTime+2 || p != 3 {
+		t.Fatalf("parámetros del señuelo: m=%d t=%d p=%d %v", m, tt, p, err)
+	}
+	min, _ := Decoy(nil)
+	if m, tt, p, _ := Params(min); m != MinMemoryKiB || tt != MinTime || p != MinThreads {
+		t.Fatalf("sin usuarios, mínimos: %d %d %d", m, tt, p)
+	}
+	if _, err := Decoy([]string{"plano"}); err == nil {
+		t.Fatal("hash inválido debía fallar")
+	}
+}

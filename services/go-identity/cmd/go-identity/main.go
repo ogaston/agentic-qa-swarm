@@ -125,7 +125,7 @@ func run(log *slog.Logger) error {
 			return errors.New("IDENTITY_TRUST_PROXY inválido")
 		}
 	}
-	decoy, err := server.NewDecoy()
+	decoy, err := server.NewDecoy(us)
 	if err != nil {
 		return err
 	}

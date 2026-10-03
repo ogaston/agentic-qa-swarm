@@ -2,8 +2,6 @@
 package server
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -63,13 +61,13 @@ func New(cfg Config) *Server {
 	return &Server{cfg: cfg, lastOTP: map[string]uint64{}}
 }
 
-// NewDecoy genera un hash señuelo a partir de una contraseña aleatoria de un solo uso.
-func NewDecoy() (string, error) {
-	var b [24]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
+// NewDecoy genera el hash señuelo con los parámetros más altos de los usuarios cargados.
+func NewDecoy(us map[string]*users.User) (string, error) {
+	hs := make([]string, 0, len(us))
+	for _, u := range us {
+		hs = append(hs, u.PasswordHash)
 	}
-	return passhash.Hash(hex.EncodeToString(b[:]), nil)
+	return passhash.Decoy(hs)
 }
 
 // Handler devuelve el http.Handler con las dos rutas.
