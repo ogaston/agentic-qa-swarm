@@ -10,8 +10,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/authz"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/auth"
+	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/obs"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/policy"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/service"
 )
@@ -52,7 +55,13 @@ type Server struct {
 	verifier auth.TokenVerifier
 	svcToken auth.ServiceToken
 	log      *slog.Logger
+	registry *prometheus.Registry
+	httpm    *obs.HTTPMetrics
+	ready    []obs.Check
 }
+
+// ServiceName es el valor de la etiqueta service de las métricas HTTP.
+const ServiceName = "go-governance"
 
 // Config son las dependencias del servidor.
 type Config struct {
@@ -60,6 +69,10 @@ type Config struct {
 	Verifier auth.TokenVerifier
 	Token    auth.ServiceToken
 	Logger   *slog.Logger
+	// Registry recibe las métricas HTTP y se sirve en /metrics; nil crea uno propio.
+	Registry *prometheus.Registry
+	// Ready son los chequeos de /readyz.
+	Ready []obs.Check
 }
 
 // New construye el servidor.
@@ -67,7 +80,24 @@ func New(c Config) *Server {
 	if c.Logger == nil {
 		c.Logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
-	return &Server{svc: c.Service, verifier: c.Verifier, svcToken: c.Token, log: c.Logger}
+	if c.Registry == nil {
+		c.Registry = obs.NewRegistry()
+	}
+	return &Server{svc: c.Service, verifier: c.Verifier, svcToken: c.Token, log: c.Logger,
+		registry: c.Registry, httpm: obs.NewHTTPMetrics(c.Registry, ServiceName), ready: c.Ready}
+}
+
+// routeOf devuelve el patrón de la ruta (nunca la ruta cruda) para la etiqueta route.
+func routeOf(r *http.Request) string {
+	switch {
+	case r.URL.Path == "/gates/authorize":
+		return "/gates/authorize"
+	case r.URL.Path == "/audit":
+		return "/audit"
+	case strings.HasPrefix(r.URL.Path, "/policies/"):
+		return "/policies/{name}"
+	}
+	return "unmatched"
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -87,8 +117,14 @@ func methodNotAllowed(w http.ResponseWriter, allow ...string) {
 	writeErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "método no permitido")
 }
 
-// Handler devuelve el enrutador.
+// Handler devuelve el enrutador envuelto con el contrato de observabilidad
+// (/healthz, /readyz y /metrics sin token, identificadores, log de acceso y métricas HTTP).
 func (s *Server) Handler() http.Handler {
+	return obs.Wrap(obs.Config{Service: ServiceName, Log: s.log, Registry: s.registry, Metrics: s.httpm,
+		Ready: s.ready, Route: routeOf}, s.routes())
+}
+
+func (s *Server) routes() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/gates/authorize":
@@ -132,7 +168,7 @@ func (s *Server) person(w http.ResponseWriter, r *http.Request, a Access) (authz
 		writeErr(w, http.StatusUnauthorized, "unauthorized", "token inválido")
 		return authz.Principal{}, false
 	case err != nil:
-		s.log.Error("verificación de identidad fallida", "error", err.Error())
+		s.log.ErrorContext(r.Context(), "verificación de identidad fallida", "error", err.Error())
 		writeErr(w, http.StatusServiceUnavailable, "identity_unavailable", "identidad no disponible")
 		return authz.Principal{}, false
 	}
@@ -186,7 +222,7 @@ func (s *Server) gate(w http.ResponseWriter, r *http.Request) {
 	d, err := s.svc.Authorize(r.Context(), "service:gate-client", in)
 	if err != nil {
 		// Fail-closed: error interno o auditoría imposible. Nunca allow=true.
-		s.log.Error("gate fail-closed", "error", err.Error(), "run_id", in.RunID)
+		s.log.ErrorContext(r.Context(), "gate fail-closed", "error", err.Error(), "run_id", in.RunID)
 		d.Allow = false
 		if d.Reason == "" {
 			d.Reason = "error interno, se deniega"
@@ -206,7 +242,7 @@ func (s *Server) getPolicy(w http.ResponseWriter, r *http.Request, name string) 
 	case errors.Is(err, service.ErrUnknownPolicy), err == nil && !found:
 		writeErr(w, http.StatusNotFound, "not_found", "política sin valor o desconocida")
 	case err != nil:
-		s.log.Error("lectura de política", "error", err.Error())
+		s.log.ErrorContext(r.Context(), "lectura de política", "error", err.Error())
 		writeErr(w, http.StatusServiceUnavailable, "unavailable", "almacén no disponible")
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"name": v.Name, "version": v.Version, "value": v.Value})
@@ -224,7 +260,7 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request, name string) 
 	p, ok := s.person(w, r, AccessAdmin)
 	if !ok {
 		if p.ID != "" { // autenticado pero sin permiso: queda en el log
-			_ = s.svc.Rejected(p.ID, clip(name), "rol insuficiente (403)")
+			_ = s.svc.Forbidden(p.ID, clip(name), "rol insuficiente (403)")
 		}
 		return
 	}
@@ -258,7 +294,7 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request, name string) 
 	case errors.Is(err, policy.ErrInvalid):
 		writeErr(w, http.StatusUnprocessableEntity, "invalid_policy", err.Error())
 	case err != nil:
-		s.log.Error("PUT de política fallido", "policy", name, "error", err.Error())
+		s.log.ErrorContext(r.Context(), "PUT de política fallido", "policy", name, "error", err.Error())
 		writeErr(w, http.StatusServiceUnavailable, "unavailable", "no se pudo guardar y auditar la política")
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"name": name, "version": ver})

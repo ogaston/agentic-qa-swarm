@@ -2,13 +2,17 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/audit"
+	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/policy"
 )
 
 const tok32 = "0123456789abcdef0123456789abcdef"
@@ -95,5 +99,81 @@ func TestVerifyAuditExitCodes(t *testing.T) {
 	}
 	if rc := verifyAudit(filepath.Join(dir, "nada"), &out, &errw); rc != 2 {
 		t.Fatalf("archivo inexistente rc=%d", rc)
+	}
+}
+
+func TestRetentionMinimumIs90Days(t *testing.T) {
+	for _, d := range []string{"0", "1", "30", "89", "-5", "abc", "90.5", " "} {
+		if _, err := loadConfig(envOf(fakeEnv(map[string]string{"GOVERNANCE_AUDIT_RETENTION_DAYS": d}))); err == nil {
+			t.Errorf("retención %q: el servicio no debe arrancar", d)
+		}
+	}
+	for d, want := range map[string]int{"": 90, "90": 90, "365": 365} {
+		c, err := loadConfig(envOf(fakeEnv(map[string]string{"GOVERNANCE_AUDIT_RETENTION_DAYS": d})))
+		if err != nil || c.retentionDays != want {
+			t.Errorf("retención %q: %d %v", d, c.retentionDays, err)
+		}
+	}
+}
+
+func TestVerifyIntervalConfig(t *testing.T) {
+	c, err := loadConfig(envOf(fakeEnv(nil)))
+	if err != nil || c.verifyInterval != DefaultVerifyInterval {
+		t.Fatalf("por defecto 15 m: %v %v", c.verifyInterval, err)
+	}
+	for _, bad := range []string{"0", "-1m", "mucho"} {
+		if _, err := loadConfig(envOf(fakeEnv(map[string]string{"GOVERNANCE_VERIFY_INTERVAL": bad}))); err == nil {
+			t.Errorf("intervalo %q debía rechazarse", bad)
+		}
+	}
+}
+
+func TestReadyChecks(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	if err := dataDirCheck(dir)(ctx); err == nil {
+		t.Error("sin audit.jsonl el directorio no cuenta como listo")
+	}
+	al, err := audit.Open(filepath.Join(dir, "audit.jsonl"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer al.Close()
+	if err := dataDirCheck(dir)(ctx); err != nil {
+		t.Errorf("directorio escribible: %v", err)
+	}
+	if err := dataDirCheck(filepath.Join(dir, "no-existe"))(ctx); err == nil {
+		t.Error("directorio inexistente")
+	}
+	ps, err := policy.OpenFileStore(filepath.Join(dir, "policies.jsonl"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ps.Close()
+	if err := policyCheck(ps)(ctx); err != nil {
+		t.Errorf("políticas legibles: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "policies.jsonl"), []byte("basura{\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := policyCheck(ps)(ctx); err == nil {
+		t.Error("policies.jsonl corrupto tras el arranque debía fallar el chequeo")
+	}
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			w.WriteHeader(404)
+		}
+	}))
+	if err := identityCheck(up.URL)(ctx); err != nil {
+		t.Errorf("identidad viva: %v", err)
+	}
+	up.Close()
+	if err := identityCheck(up.URL)(ctx); err == nil || strings.Contains(err.Error(), "127.0.0.1") {
+		t.Errorf("identidad caída debía fallar sin filtrar la dirección: %v", err)
+	}
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(500) }))
+	defer bad.Close()
+	if err := identityCheck(bad.URL)(ctx); err == nil {
+		t.Error("identidad con 500 no está lista")
 	}
 }

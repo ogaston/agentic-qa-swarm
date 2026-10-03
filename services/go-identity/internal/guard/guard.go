@@ -47,6 +47,10 @@ type Ticket struct {
 	userLock, ipLock bool
 }
 
+// Locked indica si este intento, de resultar fallido, acaba de imponer un bloqueo
+// (por usuario o por IP).
+func (t Ticket) Locked() bool { return t.userLock || t.ipLock }
+
 // New crea un Guard. max <= 0 toma 5; clock nil usa time.Now.
 func New(max int, clock func() time.Time) *Guard {
 	if max <= 0 {

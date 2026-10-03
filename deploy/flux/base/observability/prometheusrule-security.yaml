@@ -1,0 +1,53 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: aqs-security-rules
+  namespace: aqs-observability
+spec:
+  groups:
+    - name: aqs.security
+      rules:
+        - alert: AqsAutonomyBoundaryViolation
+          expr: increase(aqs_gate_denied_total{reason="namespace_not_test"}[15m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "Intento de operar fuera del test namespace (limite de autonomia)"
+        - alert: AqsAuditAppendFailing
+          expr: increase(aqs_audit_append_failures_total[5m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "go-governance no puede escribir en la auditoria (los gates se deniegan)"
+        - alert: AqsAuditChainBroken
+          expr: aqs_audit_chain_ok == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "La cadena de auditoria de go-governance esta rota"
+        - alert: AqsAuthFailuresHigh
+          expr: sum(rate(aqs_auth_login_total{result=~"invalid_credentials|locked"}[5m])) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Tasa alta de logins fallidos o bloqueados"
+        - alert: AqsAuthLockout
+          expr: increase(aqs_auth_lockouts_total[15m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "go-identity impuso un bloqueo por intentos fallidos"
+        - alert: AqsPrivilegeEscalationAttempt
+          expr: increase(aqs_privilege_escalation_attempts_total[15m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Un usuario autenticado intento usar una ruta de admin o una sesion ajena"
+        - alert: AqsGateDeniedSpike
+          expr: sum(increase(aqs_gate_denied_total[15m])) > 10
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mas de 10 gates denegados en 15 minutos"

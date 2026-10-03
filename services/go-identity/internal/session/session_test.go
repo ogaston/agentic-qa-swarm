@@ -216,3 +216,24 @@ func TestSessionLookupDroppedByLimit(t *testing.T) {
 		t.Fatalf("índices desalineados: %d vs %d", len(s.byID), len(s.byHash))
 	}
 }
+
+func TestActiveCountsOnlyLiveSessions(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	s := New(Config{AbsoluteTTL: time.Hour, IdleTTL: time.Minute, Clock: func() time.Time { return now }})
+	if s.Active() != 0 {
+		t.Fatal("almacén vacío")
+	}
+	tok, _, _ := s.Create(principal.Principal{ID: "a", Role: principal.RoleUser})
+	_, _, _ = s.Create(principal.Principal{ID: "b", Role: principal.RoleUser})
+	if s.Active() != 2 {
+		t.Fatalf("activas: %d", s.Active())
+	}
+	s.Revoke(tok)
+	if s.Active() != 1 {
+		t.Fatalf("tras revocar: %d", s.Active())
+	}
+	now = now.Add(2 * time.Minute) // inactividad vencida
+	if s.Active() != 0 {
+		t.Fatalf("expiradas no cuentan: %d", s.Active())
+	}
+}

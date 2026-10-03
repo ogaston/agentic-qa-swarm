@@ -142,7 +142,25 @@ type Decision struct {
 	Allow    bool   `json:"allow"`
 	Reason   string `json:"reason"`
 	AuditRef string `json:"audit_ref"`
+	// Code es el motivo de denegación acotado (Deny*) para métricas; no se serializa.
+	Code string `json:"-"`
 }
+
+// Motivos de denegación acotados (etiqueta reason de aqs_gate_denied_total).
+const (
+	DenyNotConfirmed       = "not_confirmed"
+	DenyResetNotVerified   = "reset_not_verified"
+	DenyEnsayoNotPassed    = "ensayo_not_passed"
+	DenyNamespaceNotTest   = "namespace_not_test"
+	DenyWorkflowNotAllowed = "workflow_not_allowed"
+	DenyIllegalTransition  = "illegal_transition"
+	DenyInternalError      = "internal_error"
+)
+
+// denyPriority fija qué motivo representa una denegación con varios hechos incumplidos:
+// el límite de autonomía (namespace) va primero porque es el KPI «incidentes = 0».
+var denyPriority = []string{DenyNamespaceNotTest, DenyNotConfirmed, DenyResetNotVerified,
+	DenyEnsayoNotPassed, DenyWorkflowNotAllowed}
 
 // Evaluator decide si una transición está autorizada. Un error nunca es permitir.
 type Evaluator interface {

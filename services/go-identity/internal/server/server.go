@@ -16,7 +16,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/guard"
+	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/obs"
 	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/passhash"
 	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/session"
 	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/totp"
@@ -43,7 +46,18 @@ type Config struct {
 	// AllowedOrigins es la lista blanca CORS (ver ParseOrigins); vacía = ningún origen.
 	AllowedOrigins []string
 	Logger         *slog.Logger // nil descarta los registros
+	// Registry recibe las métricas y se sirve en /metrics; nil crea uno propio.
+	Registry *prometheus.Registry
+	// Ready son los chequeos de /readyz (ver obs.Check).
+	Ready []obs.Check
 }
+
+// ServiceName es el valor de la etiqueta service de las métricas HTTP.
+const ServiceName = "go-identity"
+
+// EscalationEndpoints son los patrones de ruta que pueden contar como intento de escalada
+// (rutas de admin y consulta de sesiones por id).
+var EscalationEndpoints = []string{"/auth/users", "/auth/sessions/{id}"}
 
 // Server implementa el flujo de autenticación.
 type Server struct {
@@ -51,6 +65,9 @@ type Server struct {
 	mu      sync.Mutex
 	lastOTP map[string]uint64 // por usuario: último contador TOTP aceptado
 	origins map[string]bool
+	reg     *prometheus.Registry
+	httpm   *obs.HTTPMetrics
+	m       *obs.Auth
 }
 
 // New crea el servidor.
@@ -65,7 +82,37 @@ func New(cfg Config) *Server {
 	for _, o := range cfg.AllowedOrigins {
 		origins[o] = true
 	}
-	return &Server{cfg: cfg, lastOTP: map[string]uint64{}, origins: origins}
+	if cfg.Registry == nil {
+		cfg.Registry = obs.NewRegistry()
+	}
+	sessions := cfg.Sessions
+	m := obs.NewAuth(cfg.Registry, func() float64 {
+		if sessions == nil {
+			return 0
+		}
+		return float64(sessions.Active())
+	}, EscalationEndpoints)
+	return &Server{cfg: cfg, lastOTP: map[string]uint64{}, origins: origins,
+		reg: cfg.Registry, httpm: obs.NewHTTPMetrics(cfg.Registry, ServiceName), m: m}
+}
+
+// routePattern devuelve el patrón de la ruta atendida sin el método ("unmatched" si no hubo).
+func routePattern(r *http.Request) string {
+	if r.Pattern == "" {
+		return "unmatched"
+	}
+	if _, p, ok := strings.Cut(r.Pattern, " "); ok {
+		return p
+	}
+	return r.Pattern
+}
+
+// forbidden responde 403 y cuenta la denegación y el intento de escalada (el caller ya está autenticado).
+func (s *Server) forbidden(w http.ResponseWriter, r *http.Request) {
+	s.m.AuthzDenied("forbidden")
+	s.m.Escalation(routePattern(r))
+	s.cfg.Logger.WarnContext(r.Context(), "acceso denegado", "outcome", "forbidden", "route", routePattern(r))
+	writeError(w, http.StatusForbidden, "forbidden", "acceso denegado")
 }
 
 // NewDecoy genera el hash señuelo con los parámetros más altos de los usuarios cargados.
@@ -91,7 +138,11 @@ func (s *Server) newRouter() *router {
 func (s *Server) Routes() []Route { return append([]Route(nil), s.newRouter().routes...) }
 
 // Handler devuelve el http.Handler completo (cabeceras de seguridad, CORS y rutas con política).
-func (s *Server) Handler() http.Handler { return s.secure(s.newRouter()) }
+// Sirve además /healthz, /readyz y /metrics (sin token) y aplica el contrato de observabilidad.
+func (s *Server) Handler() http.Handler {
+	return obs.Wrap(obs.Config{Service: ServiceName, Log: s.cfg.Logger, Registry: s.reg, Metrics: s.httpm,
+		Ready: s.cfg.Ready, Route: routePattern}, s.secure(s.newRouter()))
+}
 
 type errorBody struct {
 	Code    string `json:"code"`
@@ -113,6 +164,7 @@ type loginRequest struct {
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	ip := s.clientIP(r)
 	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+		s.m.Login("bad_request")
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "se espera application/json")
 		return
 	}
@@ -121,6 +173,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	dec.DisallowUnknownFields()
 	var req loginRequest
 	if err := dec.Decode(&req); err != nil {
+		s.m.Login("bad_request")
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			writeError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "cuerpo demasiado grande")
@@ -130,6 +183,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := dec.Token(); err != io.EOF {
+		s.m.Login("bad_request")
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			writeError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "cuerpo demasiado grande")
@@ -139,10 +193,12 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Username == "" || req.Password == "" || len(req.Username) > maxUsernameBytes || len(req.Password) > maxPasswordBytes {
+		s.m.Login("bad_request")
 		writeError(w, http.StatusBadRequest, "bad_request", "username o password ausentes o fuera de rango")
 		return
 	}
 	if req.OTP != nil && !otpRe.MatchString(*req.OTP) {
+		s.m.Login("bad_request")
 		writeError(w, http.StatusBadRequest, "bad_request", "otp debe ser de 6 dígitos")
 		return
 	}
@@ -155,7 +211,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			secs = 1
 		}
 		w.Header().Set("Retry-After", strconv.Itoa(secs))
-		s.cfg.Logger.Warn("login bloqueado", "outcome", "locked", "ip", ip)
+		s.m.Login("locked")
+		s.cfg.Logger.WarnContext(r.Context(), "login bloqueado", "outcome", "locked", "ip", ip)
 		writeError(w, http.StatusTooManyRequests, "too_many_attempts", "demasiados intentos; reintente más tarde")
 		return
 	}
@@ -167,19 +224,20 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	good, err := passhash.Verify(req.Password, hash)
 	if err != nil || !good || u == nil {
-		s.fail(w, ip)
+		s.fail(w, r, ip, ticket)
 		return
 	}
 
 	if u.Role == principal.RoleAdmin {
 		if req.OTP == nil {
 			s.cfg.Guard.Release(ticket)
-			s.cfg.Logger.Info("login requiere mfa", "outcome", "mfa_required", "ip", ip)
+			s.m.Login("mfa_required")
+			s.cfg.Logger.InfoContext(r.Context(), "login requiere mfa", "outcome", "mfa_required", "ip", ip)
 			writeError(w, http.StatusUnauthorized, "mfa_required", "se requiere el código OTP")
 			return
 		}
 		if !s.checkOTP(key, u.MFASecret, *req.OTP) {
-			s.fail(w, ip)
+			s.fail(w, r, ip, ticket)
 			return
 		}
 	}
@@ -187,19 +245,24 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	token, info, err := s.cfg.Sessions.CreateSession(principal.Principal{ID: u.Name, Role: u.Role})
 	if err != nil {
 		s.cfg.Guard.Release(ticket)
-		s.cfg.Logger.Error("no se pudo crear la sesión", "outcome", "error")
+		s.cfg.Logger.ErrorContext(r.Context(), "no se pudo crear la sesión", "outcome", "error")
 		writeError(w, http.StatusInternalServerError, "internal", "error interno")
 		return
 	}
 	s.cfg.Guard.Success(ticket)
-	s.cfg.Logger.Info("login correcto", "outcome", "ok", "ip", ip)
+	s.m.Login("success")
+	s.cfg.Logger.InfoContext(r.Context(), "login correcto", "outcome", "ok", "ip", ip)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]string{"token": token, "expires_at": info.ExpiresAt.UTC().Format(time.RFC3339), "session_id": info.ID})
 }
 
-func (s *Server) fail(w http.ResponseWriter, ip string) {
-	s.cfg.Logger.Info("login fallido", "outcome", "invalid_credentials", "ip", ip)
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, ip string, tk guard.Ticket) {
+	s.m.Login("invalid_credentials")
+	if tk.Locked() {
+		s.m.Lockout()
+	}
+	s.cfg.Logger.InfoContext(r.Context(), "login fallido", "outcome", "invalid_credentials", "ip", ip)
 	writeError(w, http.StatusUnauthorized, "invalid_credentials", "credenciales inválidas")
 }
 
@@ -217,10 +280,11 @@ func (s *Server) checkOTP(userKey string, secret []byte, code string) bool {
 // logout revoca la sesión del token ya validado por el middleware (política Authenticated).
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if !s.cfg.Sessions.Revoke(fromCtx(r).token) {
+		s.m.AuthzDenied("unauthorized")
 		unauthorized(w)
 		return
 	}
-	s.cfg.Logger.Info("logout", "outcome", "ok", "ip", s.clientIP(r))
+	s.cfg.Logger.InfoContext(r.Context(), "logout", "outcome", "ok", "ip", s.clientIP(r))
 	w.WriteHeader(http.StatusNoContent)
 }
 

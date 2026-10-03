@@ -1,0 +1,198 @@
+# Prueba de las reglas de seguridad. NO forma parte del kustomization.yaml.
+# Uso (rules.yaml = .spec de PrometheusRule/aqs-security-rules extraido del build):
+#   cp rules_security_test.yaml rules.yaml <dir>; promtool test rules rules_security_test.yaml   (dentro de <dir>)
+# Las series usan los mismos nombres y etiquetas que publican go-identity y go-governance.
+rule_files:
+  - rules.yaml
+evaluation_interval: 1m
+tests:
+  # AqsAutonomyBoundaryViolation: el contador sube de 0 a 1 en el minuto 5 (series inicializadas en 0).
+  - interval: 1m
+    input_series:
+      - series: 'aqs_gate_denied_total{reason="namespace_not_test"}'
+        values: '0x4 1x30'
+      - series: 'aqs_gate_denied_total{reason="not_confirmed"}'
+        values: '0x4 3x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AqsAutonomyBoundaryViolation
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AqsAutonomyBoundaryViolation
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              reason: namespace_not_test
+            exp_annotations:
+              summary: "Intento de operar fuera del test namespace (limite de autonomia)"
+  # Solo suben otros motivos de denegacion: la alerta de autonomia no dispara.
+  - interval: 1m
+    input_series:
+      - series: 'aqs_gate_denied_total{reason="namespace_not_test"}'
+        values: '0x30'
+      - series: 'aqs_gate_denied_total{reason="not_confirmed"}'
+        values: '0+1x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AqsAutonomyBoundaryViolation
+        exp_alerts: []
+  # AqsAuditAppendFailing: un fallo en el minuto 5 dispara; sin fallos no.
+  - interval: 1m
+    input_series:
+      - series: 'aqs_audit_append_failures_total'
+        values: '0x4 1x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AqsAuditAppendFailing
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AqsAuditAppendFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "go-governance no puede escribir en la auditoria (los gates se deniegan)"
+      - eval_time: 15m
+        alertname: AqsAuditAppendFailing
+        exp_alerts: []
+  # AqsAuditChainBroken: for 1m. Se rompe en el minuto 5; a los 5 min 30 s aun no, a los 7 min si.
+  - interval: 30s
+    input_series:
+      - series: 'aqs_audit_chain_ok'
+        values: '1x9 0x30'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: AqsAuditChainBroken
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: AqsAuditChainBroken
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: AqsAuditChainBroken
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "La cadena de auditoria de go-governance esta rota"
+  # Cadena siempre integra: no dispara.
+  - interval: 1m
+    input_series:
+      - series: 'aqs_audit_chain_ok'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AqsAuditChainBroken
+        exp_alerts: []
+  # AqsAuthFailuresHigh: 0,6 fallos/s (36 por minuto) sostenido 5 min dispara; 0,4 fallos/s no.
+  - interval: 1m
+    input_series:
+      - series: 'aqs_auth_login_total{result="invalid_credentials"}'
+        values: '0+24x30'
+      - series: 'aqs_auth_login_total{result="locked"}'
+        values: '0+12x30'
+      - series: 'aqs_auth_login_total{result="success"}'
+        values: '0+600x30'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts: []
+      # for: 5m. La condicion se cumple desde el minuto 5 (la ventana de rate(...[5m]) se llena);
+      # a los 8 y 9 min sigue pendiente y dispara a los 10. Con for: 2m ya dispararia a los 8 min.
+      - eval_time: 8m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Tasa alta de logins fallidos o bloqueados"
+      - eval_time: 12m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Tasa alta de logins fallidos o bloqueados"
+  - interval: 1m
+    input_series:
+      - series: 'aqs_auth_login_total{result="invalid_credentials"}'
+        values: '0+16x30'
+      - series: 'aqs_auth_login_total{result="locked"}'
+        values: '0+8x30'
+      - series: 'aqs_auth_login_total{result="success"}'
+        values: '0+600x30'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: AqsAuthFailuresHigh
+        exp_alerts: []
+  # AqsAuthLockout: un bloqueo en el minuto 5 dispara; sin bloqueos no.
+  - interval: 1m
+    input_series:
+      - series: 'aqs_auth_lockouts_total'
+        values: '0x4 1x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AqsAuthLockout
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AqsAuthLockout
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "go-identity impuso un bloqueo por intentos fallidos"
+      - eval_time: 30m
+        alertname: AqsAuthLockout
+        exp_alerts: []
+  # AqsPrivilegeEscalationAttempt: un intento en /auth/users dispara con su etiqueta; sin intentos no.
+  - interval: 1m
+    input_series:
+      - series: 'aqs_privilege_escalation_attempts_total{endpoint="/auth/users"}'
+        values: '0x4 1x30'
+      - series: 'aqs_privilege_escalation_attempts_total{endpoint="/auth/sessions/{id}"}'
+        values: '0x34'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AqsPrivilegeEscalationAttempt
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AqsPrivilegeEscalationAttempt
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              endpoint: /auth/users
+            exp_annotations:
+              summary: "Un usuario autenticado intento usar una ruta de admin o una sesion ajena"
+  # AqsGateDeniedSpike: 11 denegaciones en 15 min dispara; 10 no (el umbral es estricto).
+  - interval: 1m
+    input_series:
+      - series: 'aqs_gate_denied_total{reason="not_confirmed"}'
+        values: '0x4 6x30'
+      - series: 'aqs_gate_denied_total{reason="reset_not_verified"}'
+        values: '0x4 5x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AqsGateDeniedSpike
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AqsGateDeniedSpike
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Mas de 10 gates denegados en 15 minutos"
+  - interval: 1m
+    input_series:
+      - series: 'aqs_gate_denied_total{reason="not_confirmed"}'
+        values: '0x4 5x30'
+      - series: 'aqs_gate_denied_total{reason="reset_not_verified"}'
+        values: '0x4 5x30'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: AqsGateDeniedSpike
+        exp_alerts: []

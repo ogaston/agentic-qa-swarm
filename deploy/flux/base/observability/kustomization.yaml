@@ -7,3 +7,5 @@ resources:
   - servicemonitor.yaml
   - prometheusrule.yaml
   - dashboard.yaml
+  - prometheusrule-security.yaml
+  - dashboard-u4.yaml
