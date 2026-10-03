@@ -11,6 +11,12 @@ pod_de(o) := o.spec.template.spec if o.kind in {"Deployment", "StatefulSet", "Jo
 
 pod_de(o) := o.spec.jobTemplate.spec.template.spec if o.kind == "CronJob"
 
+# Todo contenedor del pod: normales, init y efimeros.
+contenedores(pod) := array.concat(
+	array.concat(object.get(pod, "containers", []), object.get(pod, "initContainers", [])),
+	object.get(pod, "ephemeralContainers", []),
+)
+
 es_sensible(nombre) if {
 	some s in sufijos_sensibles
 	endswith(nombre, s)
@@ -18,7 +24,7 @@ es_sensible(nombre) if {
 
 deny contains msg if {
 	input.metadata.namespace == "aqs-system"
-	some c in object.get(pod_de(input), "containers", [])
+	some c in contenedores(pod_de(input))
 	some e in object.get(c, "env", [])
 	es_sensible(e.name)
 	"value" in object.keys(e)

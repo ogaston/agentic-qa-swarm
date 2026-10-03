@@ -67,3 +67,31 @@ test_sr_cronjob_denied if {
 test_sr_fuera_de_aqs_system_no_evalua if {
 	count(deny) == 0 with input as sr_dep("aqs-test", [{"name": "FOO_TOKEN", "value": "abc"}])
 }
+
+test_sr_initcontainer_deployment_denied if {
+	count(deny) > 0 with input as {"kind": "Deployment", "metadata": {"name": "x", "namespace": "aqs-system"}, "spec": {"template": {"spec": {"containers": [{"name": "c", "image": "x:1"}], "initContainers": [{"name": "i", "image": "x:1", "env": [{"name": "A_TOKEN", "value": "abc"}]}]}}}}
+}
+
+test_sr_initcontainer_valuefrom_allowed if {
+	count(deny) == 0 with input as {"kind": "Deployment", "metadata": {"name": "x", "namespace": "aqs-system"}, "spec": {"template": {"spec": {"containers": [{"name": "c", "image": "x:1"}], "initContainers": [{"name": "i", "image": "x:1", "env": [{"name": "A_TOKEN", "valueFrom": {"secretKeyRef": {"name": "s", "key": "k"}}}]}]}}}}
+}
+
+test_sr_initcontainer_cronjob_denied if {
+	count(deny) > 0 with input as {"kind": "CronJob", "metadata": {"name": "x", "namespace": "aqs-system"}, "spec": {"jobTemplate": {"spec": {"template": {"spec": {"containers": [{"name": "c", "image": "x:1"}], "initContainers": [{"name": "i", "image": "x:1", "env": [{"name": "A_SECRET", "value": "abc"}]}]}}}}}}
+}
+
+test_sr_initcontainer_cronjob_valuefrom_allowed if {
+	count(deny) == 0 with input as {"kind": "CronJob", "metadata": {"name": "x", "namespace": "aqs-system"}, "spec": {"jobTemplate": {"spec": {"template": {"spec": {"containers": [{"name": "c", "image": "x:1"}], "initContainers": [{"name": "i", "image": "x:1", "env": [{"name": "A_SECRET", "valueFrom": {"secretKeyRef": {"name": "s", "key": "k"}}}]}]}}}}}}
+}
+
+test_sr_ephemeral_denied if {
+	count(deny) > 0 with input as {"kind": "Deployment", "metadata": {"name": "x", "namespace": "aqs-system"}, "spec": {"template": {"spec": {"containers": [{"name": "c", "image": "x:1"}], "ephemeralContainers": [{"name": "e", "image": "x:1", "env": [{"name": "A_PASSWD", "value": "abc"}]}]}}}}
+}
+
+test_sr_ephemeral_valuefrom_allowed if {
+	count(deny) == 0 with input as {"kind": "Deployment", "metadata": {"name": "x", "namespace": "aqs-system"}, "spec": {"template": {"spec": {"containers": [{"name": "c", "image": "x:1"}], "ephemeralContainers": [{"name": "e", "image": "x:1", "env": [{"name": "A_PASSWD", "valueFrom": {"secretKeyRef": {"name": "s", "key": "k"}}}]}]}}}}
+}
+
+test_sr_initcontainer_fuera_de_aqs_system_no_evalua if {
+	count(deny) == 0 with input as {"kind": "Deployment", "metadata": {"name": "x", "namespace": "aqs-test"}, "spec": {"template": {"spec": {"containers": [{"name": "c", "image": "x:1"}], "initContainers": [{"name": "i", "image": "x:1", "env": [{"name": "A_TOKEN", "value": "abc"}]}]}}}}
+}
