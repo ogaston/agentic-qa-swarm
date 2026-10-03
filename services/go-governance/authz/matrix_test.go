@@ -69,8 +69,9 @@ func TestMatrixShapeNegative(t *testing.T) {
 	}
 }
 
-// TestMatrixReplay programa el fake con la verdad de cada fila y comprueba el veredicto.
-func TestMatrixReplay(t *testing.T) {
+// TestFakeWiringReplay programa el fake con la verdad de cada fila: solo valida el
+// cableado del fake (es circular). La fuerza real está en TestMatrixReal.
+func TestFakeWiringReplay(t *testing.T) {
 	for _, r := range loadMatrix(t, "../testdata/authorize_matrix.json") {
 		t.Run(r.Name, func(t *testing.T) {
 			f := NewFakeEvaluator()
@@ -88,6 +89,31 @@ func TestMatrixReplay(t *testing.T) {
 			}
 			if !d.Allow && !strings.Contains(strings.ToLower(d.Reason), strings.ToLower(r.ReasonContains)) {
 				t.Fatalf("reason %q no contiene %q", d.Reason, r.ReasonContains)
+			}
+		})
+	}
+}
+
+// TestMatrixReal reproduce cada fila contra el evaluador REAL, sin programarlo
+// con el veredicto de la fila (C-54).
+func TestMatrixReal(t *testing.T) {
+	ev := &RuleEvaluator{TestNamespace: "aqs-test"}
+	for _, r := range loadMatrix(t, "../testdata/authorize_matrix.json") {
+		t.Run(r.Name, func(t *testing.T) {
+			d, err := ev.AuthorizeTransition(context.Background(), r.Input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if d.Allow != (r.Expect == "allow") {
+				t.Fatalf("allow=%v esperado %s (%s)", d.Allow, r.Expect, d.Reason)
+			}
+			if !d.Allow {
+				if d.Reason == "" {
+					t.Fatal("deny sin razón")
+				}
+				if !strings.Contains(strings.ToLower(d.Reason), strings.ToLower(r.ReasonContains)) {
+					t.Fatalf("reason %q no contiene %q", d.Reason, r.ReasonContains)
+				}
 			}
 		})
 	}

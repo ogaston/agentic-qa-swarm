@@ -111,6 +111,19 @@ paths:
         '401': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /policies/{name}:
+    get:
+      operationId: getPolicy
+      summary: Lee la ultima version de una politica (cualquier autenticado; 404 si nunca se escribio).
+      parameters:
+        - {name: name, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Politica vigente.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Policy'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
     put:
       operationId: setPolicy
       summary: Define una politica (solo admin).
@@ -130,6 +143,31 @@ paths:
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
+  /gates/authorize:
+    post:
+      operationId: authorizeGate
+      summary: Evalua los gates de una transicion de corrida (fail-closed; solo servicio a servicio).
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GateRequest'}
+      responses:
+        '200':
+          description: Decision (allow=false tambien es 200).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GateDecision'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '503':
+          description: Error interno o auditoria imposible; siempre allow=false.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GateDecision'}
   /audit:
     get:
       operationId: queryAudit
@@ -241,6 +279,10 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+    serviceToken:
+      type: http
+      scheme: bearer
+      description: Token de servicio a servicio (GOVERNANCE_SERVICE_TOKEN), distinto de los tokens de personas.
   responses:
     Error:
       description: Error.
@@ -320,6 +362,27 @@ components:
       properties:
         name: {type: string}
         version: {type: integer}
+    GateDecision:
+      type: object
+      required: [allow, reason, audit_ref]
+      properties:
+        allow: {type: boolean}
+        reason: {type: string}
+        audit_ref: {type: string}
+    GateRequest:
+      type: object
+      required: [run_id, from, to, target_namespace]
+      properties:
+        run_id: {type: string}
+        from: {type: string}
+        to: {type: string}
+        target_namespace: {type: string}
+        workflow: {type: string}
+        confirmed: {type: string, enum: ['true', 'false', unknown]}
+        reset_verified: {type: string, enum: ['true', 'false', unknown]}
+        ensayo_passed: {type: string, enum: ['true', 'false', unknown]}
+        workflow_allowed: {type: string, enum: ['true', 'false', unknown]}
+        approval_recorded: {type: string, enum: ['true', 'false', unknown]}
     AuditEntry:
       type: object
       required: [at, actor, action]
