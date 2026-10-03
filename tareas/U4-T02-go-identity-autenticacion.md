@@ -153,7 +153,7 @@ PY
   ```bash
   npx --yes @redocly/cli@1.25.0 lint contracts/openapi/control-plane.yaml 2>&1 | tail -n 2
   b=$(git merge-base HEAD origin/main); git diff -U0 $b -- contracts | grep -E '^[+-][^+-]' | grep -c -E '^-'
-  docker run --rm -i --security-opt label=disable mikefarah/yq:4.44.3 -N '.paths."/auth/login".post.requestBody.content."application/json".schema | [(.required | join(",")), (.properties | keys | join(","))] | join(" | ")' < contracts/openapi/control-plane.yaml
+  docker run --rm -i --security-opt label=disable mikefarah/yq:4.44.3 -N '.paths."/auth/login".post.requestBody.content."application/json".schema | [(.required | join(",")), (.properties | keys | sort | join(","))] | join(" | ")' < contracts/openapi/control-plane.yaml
   ```
   Esperado: el lint termina sin errores; `0` líneas eliminadas del diff de `contracts/`; y `username,password | otp,password,username`.
 
