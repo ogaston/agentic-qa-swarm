@@ -5,6 +5,7 @@
 # Lo ejecuta un humano. Los temporales viven en mktemp -d y se borran con trap.
 # Solo escribe deploy/flux/<env>/secrets/*.sops.yaml (cifrados) y secrets/kustomization.yaml.
 set -euo pipefail
+umask 077 # nada en claro legible por otros usuarios
 
 ALPINE=alpine:3.20
 SOPS=ghcr.io/getsops/sops:v3.9.1-alpine
@@ -35,7 +36,6 @@ out="$root/deploy/flux/$env_name/secrets"
 }
 
 work=$(mktemp -d)
-chmod 755 "$work"
 trap 'rm -rf "$work"' EXIT
 mkdir "$work/plain" "$work/enc"
 
@@ -94,6 +94,13 @@ emit aqs-observability grafana-admin <<Y
   admin-user: admin
   admin-password: "$(scalar "$work/plain/grafana-admin-password")"
 Y
+
+# Guarda: ningun archivo en claro puede ser accesible por grupo u otros (se comprueba justo antes de cifrar).
+if [ -n "$(find "$work" -perm /077)" ]; then
+  echo "permisos demasiado abiertos en el directorio temporal" >&2
+  exit 1
+fi
+[ -z "${AQS_STAT_DEBUG:-}" ] || find "$work" -printf '%m %p\n' >&2
 
 names=(minio-root minio-kms minio-tls backup-target warm-db-credentials grafana-admin)
 for n in "${names[@]}"; do
