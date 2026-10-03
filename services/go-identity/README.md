@@ -1,6 +1,6 @@
 # go-identity
 
-Servicio de autenticación (U4-T02): `POST /auth/login` y `POST /auth/logout`. La autorización, `GET /auth/session`, CORS y las sondas llegan en U4-T03 y U4-T07.
+Servicio de autenticación y autorización (U4-T02, U4-T03): `POST /auth/login`, `POST /auth/logout`, `GET /auth/session`, `GET /auth/sessions/{id}` y `GET /auth/users`. Las sondas (`/healthz`, `/readyz`, `/metrics`) llegan en U4-T07.
 
 ## Versión de Go
 
@@ -16,6 +16,7 @@ Servicio de autenticación (U4-T02): `POST /auth/login` y `POST /auth/logout`. L
 | `IDENTITY_SESSION_TTL` | `30m` | Expiración absoluta de la sesión (duración Go). |
 | `IDENTITY_IDLE_TTL` | `15m` | Expiración por inactividad. |
 | `IDENTITY_MAX_SESSIONS` | `5` | Sesiones simultáneas por usuario; la más antigua se descarta. |
+| `IDENTITY_ALLOWED_ORIGINS` | (vacía) | Lista blanca CORS, coma-separada, de orígenes exactos `http(s)://host[:puerto]`. Vacía = ningún origen. `*`, `null` o entradas con ruta impiden arrancar. |
 | `IDENTITY_TRUST_PROXY` | `false` | Si es `true`, la IP del cliente sale del último valor de `X-Forwarded-For`. |
 
 Estos valores son defaults razonables, no requisitos del PRD: el humano los confirma.
@@ -33,6 +34,17 @@ Hash argon2id con parámetros mínimos `m=19 MiB, t=2, p=1` (se aceptan más alt
 - Contador de fallos consecutivos por `username` (minúsculas, también inexistentes) y por IP; tablas acotadas a 10 000 entradas.
 - Al llegar a `IDENTITY_MAX_FAILURES`: bloqueo de 30 s que se duplica en cada reincidencia hasta 15 min. Bloqueado responde `429` con `Retry-After`, incluso con la contraseña correcta.
 - Un acierto reinicia **solo el contador del usuario que acertó**. El contador por IP cuenta únicamente fallos (el intento acertado se le devuelve) y decae por tiempo: una serie de fallos con más de 15 minutos (`guard.IPWindow`, fija) expira. Así un acierto propio no borra los fallos acumulados contra otras cuentas (password spraying).
+
+## Autorización (U4-T03)
+
+- **Deny-by-default.** Las rutas se registran con `Handle(patrón, Política, handler)`; `Public()` (solo `POST /auth/login`), `Authenticated()` o `Roles(...)`. Registrar sin política panica al arrancar; lo no registrado da `404` JSON y un método no registrado en una ruta existente da `405` (nunca `2xx`). `Server.Routes()` enumera las rutas y una prueba falla si alguna no declara política.
+- **Token en cada request.** `Authorization: Bearer <43 caracteres base64url>` (esquema sin distinguir mayúsculas, un solo espacio, una sola cabecera). Se valida contra el almacén (SHA-256, expiración absoluta, inactividad, revocación) sin caché: tras `logout` el token falla en la siguiente petición. Todo fallo es `401 {code: unauthorized}` con `WWW-Authenticate: Bearer`, sin distinguir la causa.
+- **Roles solo del servidor.** El rol sale de la sesión; `X-Role`, `X-User`, parámetros y cuerpo se ignoran.
+- **`authz.Authorize(principal, action, resource)`.** `session:read` (user solo si es propietario; un recurso sin propietario no es de nadie; admin sí) y `users:list` (solo admin). Todo lo demás, `Deny`.
+- **IDOR.** `GET /auth/sessions/{id}`: `user` recibe `403` para una sesión ajena y también para un `id` inexistente (sin oráculo de existencia); `admin` recibe `404` si no existe. `session_id` (128 bits, derivado del token con separación de dominio) es público y no sirve como token.
+- **CORS.** Solo orígenes de la lista blanca: `Access-Control-Allow-Origin` con ese origen y `Vary: Origin`; preflight con `Allow-Methods: GET, POST` y `Allow-Headers: Authorization, Content-Type`. Nunca `*` ni `Allow-Credentials` (tokens `Bearer`, no cookies).
+- **Cabeceras de seguridad** en todas las respuestas: `nosniff`, `Cache-Control: no-store`, CSP `default-src 'none'; frame-ancestors 'none'`, HSTS.
+- **Límite conocido.** El servidor HTTP de Go recorta los espacios finales de los valores de cabecera antes de llegar al middleware, así que `Bearer <token> ` (espacio final) por red equivale a la forma válida; el middleware lo rechaza si lo recibiera tal cual (prueba unitaria).
 
 ## Advertencias y límites de diseño
 
