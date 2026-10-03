@@ -108,6 +108,7 @@ func (e *RuleEvaluator) AuthorizeTransition(ctx context.Context, in GateInput) (
 		need("reset_verified", in.ResetVerified)
 		needNS()
 		need("workflow_allowed", in.WorkflowAllowed) // la matriz de U4-T01 lo exige también aquí
+		gatedWorkflow = true
 	case StateDeploying:
 		need("confirmed", in.Confirmed)
 		need("reset_verified", in.ResetVerified)
@@ -117,6 +118,7 @@ func (e *RuleEvaluator) AuthorizeTransition(ctx context.Context, in GateInput) (
 	case StateInferring:
 		need("confirmed", in.Confirmed)
 		needNS()
+		gatedWorkflow = true
 	case StateRehearsing:
 		need("confirmed", in.Confirmed)
 		needNS()

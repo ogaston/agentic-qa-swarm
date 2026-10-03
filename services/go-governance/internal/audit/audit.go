@@ -122,10 +122,18 @@ func VerifyFile(path string) ([]Entry, error) {
 	return Verify(f)
 }
 
+// logFile es el archivo del log (os.File en producción; inyectable en pruebas).
+type logFile interface {
+	Write([]byte) (int, error)
+	Sync() error
+	Close() error
+	Name() string
+}
+
 // Log es el log abierto en modo append. Seguro ante concurrencia.
 type Log struct {
 	mu      sync.Mutex
-	f       *os.File
+	f       logFile
 	now     func() time.Time
 	last    string
 	entries []Entry

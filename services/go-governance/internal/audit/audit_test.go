@@ -186,3 +186,36 @@ func TestNoDeleteAPI(t *testing.T) {
 		t.Fatalf("métodos de Log = %v, esperados %v", got, want)
 	}
 }
+
+type countingFile struct {
+	logFile
+	syncs int
+}
+
+func (c *countingFile) Sync() error { c.syncs++; return c.logFile.Sync() }
+
+// F-06: cada entrada debe hacer fsync (y después de escribirla).
+func TestAppendSyncsEveryEntry(t *testing.T) {
+	_, l := newLog(t, 0)
+	cf := &countingFile{logFile: l.f}
+	l.f = cf
+	writeN(t, l, 5)
+	if cf.syncs != 5 {
+		t.Fatalf("Sync llamado %d veces, esperadas 5 (una por entrada)", cf.syncs)
+	}
+}
+
+type failSyncFile struct{ logFile }
+
+func (failSyncFile) Sync() error { return os.ErrInvalid }
+
+func TestSyncFailureFailsAppendAndPoisons(t *testing.T) {
+	_, l := newLog(t, 1)
+	l.f = failSyncFile{l.f}
+	if _, err := l.Append(Entry{Actor: "a", Action: "x"}); err == nil {
+		t.Fatal("un fsync fallido debe fallar la entrada (no se permite sin persistir)")
+	}
+	if _, err := l.Append(Entry{Actor: "a", Action: "x"}); err == nil {
+		t.Fatal("el log debe quedar envenenado")
+	}
+}

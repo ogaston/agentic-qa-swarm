@@ -302,3 +302,38 @@ func TestFactJSON(t *testing.T) {
 		t.Fatal("booleano JSON debe fallar: los hechos son strings")
 	}
 }
+
+// F-01: la existencia del workflow se exige en todo destino salvo resetting,
+// reporting, done y failed; la cuota y la aprobación solo en running.
+func TestWorkflowExistenceByDestination(t *testing.T) {
+	src := &fakeWF{rules: map[string]WorkflowRule{"checkout": {Name: "checkout", MaxRunsPerDay: 1}}}
+	ev := &RuleEvaluator{Workflows: src}
+	exempt := map[State]bool{StateResetting: true, StateReporting: true, StateDone: true, StateFailed: true}
+	for _, row := range factTable {
+		t.Run(fmt.Sprintf("%s_%s", row.from, row.to), func(t *testing.T) {
+			in := allTrue(row.from, row.to)
+			in.Workflow = "nada"
+			if d := authorize(t, ev, in); d.Allow == !exempt[row.to] {
+				t.Fatalf("workflow inexistente en %s: allow=%v (exento=%v)", row.to, d.Allow, exempt[row.to])
+			}
+			in.Workflow = "checkout"
+			if d := authorize(t, ev, in); !d.Allow {
+				t.Fatalf("workflow existente debe permitir: %s", d.Reason)
+			}
+			// sin fuente de políticas: igual que inexistente
+			in.Workflow = "nada"
+			if d := authorize(t, &RuleEvaluator{}, in); d.Allow == !exempt[row.to] {
+				t.Fatalf("sin política en %s: allow=%v", row.to, d.Allow)
+			}
+		})
+	}
+	// la cuota agotada solo bloquea running
+	src.runs = 1
+	for _, row := range factTable {
+		in := allTrue(row.from, row.to)
+		in.Workflow = "checkout"
+		if d := authorize(t, ev, in); d.Allow == (row.to == StateRunning) {
+			t.Fatalf("cuota agotada en %s: allow=%v", row.to, d.Allow)
+		}
+	}
+}
