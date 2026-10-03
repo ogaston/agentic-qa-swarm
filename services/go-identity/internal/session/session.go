@@ -137,6 +137,20 @@ func (s *Store) Authenticate(token string) (Info, bool) {
 	return s.infoLocked(e), true
 }
 
+// Active cuenta las sesiones vigentes (no expiradas) sin renovar su inactividad.
+func (s *Store) Active() int {
+	now := s.cfg.Clock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, e := range s.byHash {
+		if !s.expired(e, now) {
+			n++
+		}
+	}
+	return n
+}
+
 // Lookup busca una sesión vigente por su ID público. No renueva la inactividad.
 func (s *Store) Lookup(id string) (Info, bool) {
 	now := s.cfg.Clock()

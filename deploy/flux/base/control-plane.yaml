@@ -273,6 +273,8 @@ metadata:
   labels:
     app.kubernetes.io/name: go-governance
     aqs.io/tier: control-plane
+  annotations:
+    aqs.io/audit-retention-days: "90"
 spec:
   replicas: 1
   selector:
@@ -292,10 +294,25 @@ spec:
           env:
             - name: TZ
               value: UTC
+            - name: GOVERNANCE_DATA_DIR
+              value: /data
+            - name: GOVERNANCE_AUDIT_RETENTION_DAYS
+              value: "90"
           image: ghcr.io/ogaston/agentic-qa-swarm/go-governance:0.0.0
           ports:
             - name: http
               containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          volumeMounts:
+            - name: data
+              mountPath: /data
           resources:
             requests:
               cpu: 50m
@@ -303,6 +320,10 @@ spec:
             limits:
               cpu: 250m
               memory: 128Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: go-governance-data
 ---
 apiVersion: v1
 kind: Service
@@ -318,6 +339,24 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+---
+# Auditoria append-only de go-governance. Retencion minima: 90 d (no se borra, rota ni compacta).
+# Sin storageClassName: usa la clase por defecto del cluster (igual que U5-T07; pendiente C-17).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: go-governance-data
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-governance
+  annotations:
+    aqs.io/audit-retention-days: "90"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -350,6 +389,14 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
           resources:
             requests:
               cpu: 50m

@@ -17,6 +17,7 @@ Servicio de autenticación y autorización (U4-T02, U4-T03): `POST /auth/login`,
 | `IDENTITY_IDLE_TTL` | `15m` | Expiración por inactividad. |
 | `IDENTITY_MAX_SESSIONS` | `5` | Sesiones simultáneas por usuario; la más antigua se descarta. |
 | `IDENTITY_ALLOWED_ORIGINS` | (vacía) | Lista blanca CORS, coma-separada, de orígenes exactos `http(s)://host[:puerto]`. Vacía = ningún origen. `*`, `null` o entradas con ruta impiden arrancar. |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` o `error`. |
 | `IDENTITY_TRUST_PROXY` | `false` | Si es `true`, la IP del cliente sale del último valor de `X-Forwarded-For`. |
 
 Estos valores son defaults razonables, no requisitos del PRD: el humano los confirma.
@@ -45,6 +46,12 @@ Hash argon2id con parámetros mínimos `m=19 MiB, t=2, p=1` (se aceptan más alt
 - **CORS.** Solo orígenes de la lista blanca: `Access-Control-Allow-Origin` con ese origen y `Vary: Origin`; preflight con `Allow-Methods: GET, POST` y `Allow-Headers: Authorization, Content-Type`. Nunca `*` ni `Allow-Credentials` (tokens `Bearer`, no cookies).
 - **Cabeceras de seguridad** en todas las respuestas: `nosniff`, `Cache-Control: no-store`, CSP `default-src 'none'; frame-ancestors 'none'`, HSTS.
 - **Límite conocido.** El servidor HTTP de Go recorta los espacios finales de los valores de cabecera antes de llegar al middleware, así que `Bearer <token> ` (espacio final) por red equivale a la forma válida; el middleware lo rechaza si lo recibiera tal cual (prueba unitaria).
+
+## Observabilidad (U4-T07)
+
+- Log JSON (`timestamp`, `level` en minúsculas, `message`, `request_id`, `trace_id`, `service`); nunca contraseñas, hashes, tokens, OTP ni cuerpos de petición.
+- `GET /healthz` (siempre 200), `GET /readyz` (archivo de usuarios legible y almacén de sesiones operativo; 503 si falla) y `GET /metrics` (Prometheus) no requieren token ni pasan por el anti-brute-force.
+- Métricas de seguridad: `aqs_auth_login_total{result}`, `aqs_auth_lockouts_total`, `aqs_auth_active_sessions`, `aqs_authz_denied_total{reason}` y `aqs_privilege_escalation_attempts_total{endpoint}` (patrón de ruta). Los contadores arrancan en 0.
 
 ## Advertencias y límites de diseño
 

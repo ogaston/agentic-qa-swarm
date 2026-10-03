@@ -20,6 +20,7 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/authz"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/audit"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/auth"
+	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/obs"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/policy"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/server"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/service"
@@ -33,7 +34,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "uso: go-governance [verify-audit <archivo>]")
 		os.Exit(2)
 	}
-	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	log := obs.NewLogger(os.Stdout, server.ServiceName, obs.ParseLevel(os.Getenv("LOG_LEVEL")))
 	if err := run(log, os.Getenv); err != nil {
 		log.Error("el servicio no arranca", "error", err.Error())
 		os.Exit(1)
@@ -61,6 +62,40 @@ type config struct {
 	addr, dataDir, testNS string
 	verifier              auth.TokenVerifier
 	token                 auth.ServiceToken
+	identityURL           string
+	retentionDays         int
+	verifyInterval        time.Duration
+}
+
+// MinRetentionDays es la retención mínima de la auditoría; el servicio no arranca con menos.
+const MinRetentionDays = 90
+
+// DefaultVerifyInterval es cada cuánto se verifica la cadena de auditoría.
+const DefaultVerifyInterval = 15 * time.Minute
+
+func parseRetention(v string) (int, error) {
+	if v == "" {
+		return MinRetentionDays, nil
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return 0, errors.New("GOVERNANCE_AUDIT_RETENTION_DAYS inválido (entero)")
+	}
+	if n < MinRetentionDays {
+		return 0, fmt.Errorf("GOVERNANCE_AUDIT_RETENTION_DAYS=%d: la retención mínima de la auditoría es %d días", n, MinRetentionDays)
+	}
+	return n, nil
+}
+
+func parseVerifyInterval(v string) (time.Duration, error) {
+	if v == "" {
+		return DefaultVerifyInterval, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return 0, errors.New("GOVERNANCE_VERIFY_INTERVAL inválido (duración positiva)")
+	}
+	return d, nil
 }
 
 func loadConfig(env func(string) string) (config, error) {
@@ -73,6 +108,14 @@ func loadConfig(env func(string) string) (config, error) {
 	if c.dataDir == "" {
 		return c, errors.New("GOVERNANCE_DATA_DIR es obligatorio")
 	}
+	var err error
+	if c.retentionDays, err = parseRetention(env("GOVERNANCE_AUDIT_RETENTION_DAYS")); err != nil {
+		return c, err
+	}
+	if c.verifyInterval, err = parseVerifyInterval(env("GOVERNANCE_VERIFY_INTERVAL")); err != nil {
+		return c, err
+	}
+	c.identityURL = env("IDENTITY_URL")
 	c.testNS = env("GOVERNANCE_TEST_NAMESPACE")
 	if c.testNS == "" {
 		c.testNS = authz.DefaultTestNamespace
@@ -117,6 +160,55 @@ func loadConfig(env func(string) string) (config, error) {
 	return c, nil
 }
 
+// dataDirCheck comprueba que el directorio de datos es escribible: abre el log de auditoría
+// para añadir (sin crear ni truncar nada) y lo sincroniza.
+func dataDirCheck(dir string) func(context.Context) error {
+	return func(context.Context) error {
+		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+			return errors.New("directorio de datos inaccesible")
+		}
+		f, err := os.OpenFile(filepath.Join(dir, "audit.jsonl"), os.O_WRONLY|os.O_APPEND, 0)
+		if err != nil {
+			return fmt.Errorf("auditoría no escribible: %w", err)
+		}
+		defer f.Close()
+		return f.Sync()
+	}
+}
+
+// policyCheck comprueba que cada política conocida se puede leer del almacén.
+func policyCheck(ps policy.Store) func(context.Context) error {
+	return func(ctx context.Context) error {
+		for _, n := range []string{policy.Events, policy.ConfirmRequired, policy.WarmQuotas, policy.Workflows} {
+			if _, _, err := ps.Get(ctx, n); err != nil {
+				return fmt.Errorf("política %s ilegible: %w", n, err)
+			}
+		}
+		return nil
+	}
+}
+
+// identityCheck comprueba que go-identity responde (GET {base}/healthz) dentro del plazo de la petición.
+func identityCheck(base string) func(context.Context) error {
+	cl := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return func(ctx context.Context) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/healthz", nil)
+		if err != nil {
+			return err
+		}
+		resp, err := cl.Do(req)
+		if err != nil {
+			return errors.New("identidad inalcanzable")
+		}
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("identidad respondió %d", resp.StatusCode)
+		}
+		return nil
+	}
+}
+
 func run(log *slog.Logger, env func(string) string) error {
 	c, err := loadConfig(env)
 	if err != nil {
@@ -125,18 +217,32 @@ func run(log *slog.Logger, env func(string) string) error {
 	if err := os.MkdirAll(c.dataDir, 0o700); err != nil {
 		return err
 	}
+	reg := obs.NewRegistry()
+	gov := obs.NewGov(reg, c.retentionDays, log)
 	al, err := audit.Open(filepath.Join(c.dataDir, "audit.jsonl"), nil)
 	if err != nil {
 		return err // cadena rota o truncada: no se continúa sobre ella
 	}
 	defer al.Close()
+	al.OnAppend = gov.AuditAppended
+	gov.SetLastAppend(al.LastAt())
 	ps, err := policy.OpenFileStore(filepath.Join(c.dataDir, "policies.jsonl"), nil)
 	if err != nil {
 		return err
 	}
 	defer ps.Close()
-	svc := service.New(service.Config{Policies: ps, Audit: al, TestNamespace: c.testNS})
-	srv := server.New(server.Config{Service: svc, Verifier: c.verifier, Token: c.token, Logger: log})
+	mon := obs.NewChainMonitor(al.VerifyNow, gov, 10*time.Second, nil, log)
+	_ = mon.Verify() // estado inicial de aqs_audit_chain_ok (Open ya exigió una cadena íntegra)
+	checks := []obs.Check{
+		{Name: "data_dir", Fn: dataDirCheck(c.dataDir)},
+		{Name: "policies", Fn: policyCheck(ps)},
+		{Name: "audit_chain", Fn: mon.Check},
+	}
+	if c.identityURL != "" {
+		checks = append(checks, obs.Check{Name: "identity", Fn: identityCheck(c.identityURL)})
+	}
+	svc := service.New(service.Config{Policies: ps, Audit: al, TestNamespace: c.testNS, Observer: gov})
+	srv := server.New(server.Config{Service: svc, Verifier: c.verifier, Token: c.token, Logger: log, Registry: reg, Ready: checks})
 	hs := &http.Server{
 		Addr:              c.addr,
 		Handler:           srv.Handler(),
@@ -148,9 +254,11 @@ func run(log *slog.Logger, env func(string) string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go mon.Run(ctx, c.verifyInterval)
 	errc := make(chan error, 1)
 	go func() { errc <- hs.ListenAndServe() }()
-	log.Info("go-governance escuchando", "addr", c.addr, "test_namespace", c.testNS, "env", strconv.Quote(env("GOVERNANCE_ENV")))
+	log.Info("go-governance escuchando", "addr", c.addr, "test_namespace", c.testNS, "env", strconv.Quote(env("GOVERNANCE_ENV")),
+		"audit_retention_days", c.retentionDays)
 	select {
 	case err := <-errc:
 		return err

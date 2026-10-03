@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/guard"
+	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/obs"
 	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/passhash"
 	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/server"
 	"github.com/ogaston/agentic-qa-swarm/services/go-identity/internal/session"
@@ -34,20 +35,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "uso: go-identity [hash-password < contraseña]")
 		os.Exit(2)
 	}
-	log := newLogger(os.Stdout)
+	log := obs.NewLogger(os.Stdout, server.ServiceName, obs.ParseLevel(os.Getenv("LOG_LEVEL")))
 	if err := run(log); err != nil {
 		log.Error("el servicio no arranca", "error", err.Error())
 		os.Exit(1)
 	}
-}
-
-func newLogger(w io.Writer) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-		if a.Key == slog.MessageKey {
-			a.Key = "message"
-		}
-		return a
-	}}))
 }
 
 // hashPassword lee la contraseña de stdin (nunca de argumentos) y escribe el hash PHC.
@@ -98,6 +90,31 @@ func envDur(name string, def time.Duration) (time.Duration, error) {
 	return d, nil
 }
 
+// usersCheck comprueba que el archivo de usuarios sigue siendo legible y válido.
+func usersCheck(path string) func(context.Context) error {
+	return func(context.Context) error {
+		us, err := users.LoadFile(path)
+		if err != nil {
+			return err
+		}
+		if len(us) == 0 {
+			return errors.New("archivo de usuarios sin usuarios")
+		}
+		return nil
+	}
+}
+
+// sessionsCheck comprueba que el almacén de sesiones existe y responde.
+func sessionsCheck(st *session.Store) func(context.Context) error {
+	return func(context.Context) error {
+		if st == nil {
+			return errors.New("almacén de sesiones no inicializado")
+		}
+		_ = st.Active()
+		return nil
+	}
+}
+
 func run(log *slog.Logger) error {
 	us, err := users.LoadFile(os.Getenv("IDENTITY_USERS_FILE"))
 	if err != nil {
@@ -137,10 +154,15 @@ func run(log *slog.Logger) error {
 	if addr == "" {
 		addr = ":8080"
 	}
+	sessions := session.New(session.Config{AbsoluteTTL: ttl, IdleTTL: idle, MaxPerUser: maxSess})
 	srv := server.New(server.Config{
-		Users:      us,
-		Guard:      guard.New(maxFail, nil),
-		Sessions:   session.New(session.Config{AbsoluteTTL: ttl, IdleTTL: idle, MaxPerUser: maxSess}),
+		Users:    us,
+		Guard:    guard.New(maxFail, nil),
+		Sessions: sessions,
+		Ready: []obs.Check{
+			{Name: "users", Fn: usersCheck(os.Getenv("IDENTITY_USERS_FILE"))},
+			{Name: "sessions", Fn: sessionsCheck(sessions)},
+		},
 		Decoy:      decoy,
 		TrustProxy: trust,
 		Logger:     log,

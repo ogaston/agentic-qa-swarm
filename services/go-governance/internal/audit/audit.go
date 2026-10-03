@@ -139,6 +139,9 @@ type Log struct {
 	entries []Entry
 	allowed map[string]int // "día|workflow" -> gate.allow hacia running
 	poison  error
+	// OnAppend, si no es nil, se invoca tras cada Append (con la entrada o el error), ya fuera
+	// del cerrojo. Debe fijarse antes de empezar a servir.
+	OnAppend func(e Entry, err error)
 }
 
 // Open abre (o crea) el archivo, verifica la cadena existente y continúa sobre ella.
@@ -183,6 +186,14 @@ func (l *Log) index(e Entry) {
 // Append añade una entrada (At, PrevHash y Hash los fija el log) y hace fsync.
 // Devuelve la entrada escrita. Si falla, el log queda envenenado.
 func (l *Log) Append(e Entry) (Entry, error) {
+	out, err := l.appendLocked(e)
+	if l.OnAppend != nil {
+		l.OnAppend(out, err)
+	}
+	return out, err
+}
+
+func (l *Log) appendLocked(e Entry) (Entry, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.poison != nil {
@@ -235,6 +246,28 @@ func (l *Log) RunsAllowed(workflow string, day time.Time) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.allowed[dayKey(day, workflow)]
+}
+
+// VerifyNow vuelve a leer el archivo y verifica la cadena completa sin permitir escrituras
+// concurrentes (una línea a medio escribir no es una cadena rota). Un log envenenado falla.
+func (l *Log) VerifyNow() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.poison != nil {
+		return l.poison
+	}
+	_, err := VerifyFile(l.f.Name())
+	return err
+}
+
+// LastAt devuelve la marca de tiempo de la última entrada (cero si el log está vacío).
+func (l *Log) LastAt() time.Time {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if n := len(l.entries); n > 0 {
+		return l.entries[n-1].At
+	}
+	return time.Time{}
 }
 
 // Path devuelve la ruta del archivo del log.

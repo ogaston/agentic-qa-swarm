@@ -189,11 +189,13 @@ func (s *Server) authenticate(pol Policy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, ok := bearerToken(r)
 		if !ok {
+			s.m.AuthzDenied("unauthorized")
 			unauthorized(w)
 			return
 		}
 		info, ok := s.cfg.Sessions.Authenticate(tok)
 		if !ok {
+			s.m.AuthzDenied("unauthorized")
 			unauthorized(w)
 			return
 		}
@@ -205,7 +207,7 @@ func (s *Server) authenticate(pol Policy, next http.Handler) http.Handler {
 				}
 			}
 			if !allowed {
-				writeError(w, http.StatusForbidden, "forbidden", "acceso denegado")
+				s.forbidden(w, r)
 				return
 			}
 		}
@@ -244,7 +246,7 @@ func (s *Server) sessionByID(w http.ResponseWriter, r *http.Request) {
 	// Un recurso inexistente no tiene propietario: solo un admin pasa Authorize y ve 404;
 	// un user recibe 403 igual que con una sesión ajena (sin oráculo de existencia).
 	if authz.Authorize(caller, authz.ActionSessionRead, res) != authz.Allow {
-		writeError(w, http.StatusForbidden, "forbidden", "acceso denegado")
+		s.forbidden(w, r)
 		return
 	}
 	if !found {
@@ -257,7 +259,7 @@ func (s *Server) sessionByID(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	caller := fromCtx(r).info.Principal
 	if authz.Authorize(caller, authz.ActionUsersList, authz.Resource{Type: authz.TypeUsers}) != authz.Allow {
-		writeError(w, http.StatusForbidden, "forbidden", "acceso denegado")
+		s.forbidden(w, r)
 		return
 	}
 	type item struct {

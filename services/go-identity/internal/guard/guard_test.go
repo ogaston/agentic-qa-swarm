@@ -184,3 +184,20 @@ func TestIPFailuresDecayAfterWindow(t *testing.T) {
 		}
 	}
 }
+
+func TestTicketLockedOnlyWhenThisAttemptImposesLock(t *testing.T) {
+	g := New(3, nil)
+	for i := 1; i <= 2; i++ {
+		tk, _, ok := g.Allow("u", "1.1.1.1")
+		if !ok || tk.Locked() {
+			t.Fatalf("intento %d no debía imponer bloqueo", i)
+		}
+	}
+	tk, _, ok := g.Allow("u", "1.1.1.1")
+	if !ok || !tk.Locked() {
+		t.Fatal("el intento que alcanza el máximo impone el bloqueo")
+	}
+	if _, _, ok := g.Allow("u", "1.1.1.1"); ok {
+		t.Fatal("el siguiente intento debe rechazarse")
+	}
+}

@@ -182,7 +182,8 @@ func TestNoDeleteAPI(t *testing.T) {
 	for i := 0; i < typ.NumMethod(); i++ {
 		got = append(got, typ.Method(i).Name)
 	}
-	if want := []string{"Append", "Close", "Path", "Query", "RunsAllowed"}; !reflect.DeepEqual(got, want) {
+	// LastAt y VerifyNow solo leen.
+	if want := []string{"Append", "Close", "LastAt", "Path", "Query", "RunsAllowed", "VerifyNow"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("métodos de Log = %v, esperados %v", got, want)
 	}
 }

@@ -122,7 +122,7 @@ func TestAuthZ_RolesPanicsOnBadRoles(t *testing.T) {
 
 func TestAuthZ_UnregisteredRoute404(t *testing.T) {
 	e := setupAuthZ(t)
-	for _, p := range []string{"/admin", "/", "/auth", "/auth/users/x", "/healthz"} {
+	for _, p := range []string{"/admin", "/", "/auth", "/auth/users/x", "/health"} {
 		w := e.do("GET", p, bearer(e.ta), "")
 		if w.Code != 404 || code(t, w) != "not_found" {
 			t.Errorf("%s: %d %s", p, w.Code, w.Body)

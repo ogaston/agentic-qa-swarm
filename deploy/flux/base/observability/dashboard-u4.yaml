@@ -1,0 +1,231 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aqs-dashboard-u4
+  namespace: aqs-observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  aqs-u4.json: |
+    {
+      "title": "AQS U4 Gobernanza e Identidad",
+      "schemaVersion": 39,
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "Logins por resultado",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum by (result) (increase(aqs_auth_login_total[5m]))",
+              "refId": "A",
+              "legendFormat": "{{result}}"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Bloqueos de login (24 h)",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 12,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(aqs_auth_lockouts_total[24h]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Sesiones activas",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 18,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(aqs_auth_active_sessions)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Gates denegados por motivo",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 8
+          },
+          "targets": [
+            {
+              "expr": "sum by (reason) (increase(aqs_gate_denied_total[15m]))",
+              "refId": "A",
+              "legendFormat": "{{reason}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Decisiones de gate por resultado y destino",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 8
+          },
+          "targets": [
+            {
+              "expr": "sum by (decision, to) (increase(aqs_gate_decisions_total[15m]))",
+              "refId": "A",
+              "legendFormat": "{{decision}} -> {{to}}"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Cadena de auditoria integra (1 = si)",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "min(aqs_audit_chain_ok)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "stat",
+          "title": "Fallos de escritura de auditoria (24 h)",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 6,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(aqs_audit_append_failures_total[24h]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "stat",
+          "title": "Retencion minima de auditoria (dias)",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 12,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "min(aqs_audit_retention_days)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "type": "stat",
+          "title": "Segundos desde la ultima entrada de auditoria",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 18,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "time() - max(aqs_audit_last_append_timestamp_seconds)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "Intentos de escalada de privilegios",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 24
+          },
+          "targets": [
+            {
+              "expr": "sum by (endpoint) (increase(aqs_privilege_escalation_attempts_total[1h]))",
+              "refId": "A",
+              "legendFormat": "{{endpoint}}"
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "Accesos denegados (401/403)",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 24
+          },
+          "targets": [
+            {
+              "expr": "sum by (reason) (increase(aqs_authz_denied_total[15m]))",
+              "refId": "A",
+              "legendFormat": "{{reason}}"
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Cambios de politica",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 32
+          },
+          "targets": [
+            {
+              "expr": "sum by (name, result) (increase(aqs_policy_changes_total[1h]))",
+              "refId": "A",
+              "legendFormat": "{{name}} {{result}}"
+            }
+          ]
+        }
+      ]
+    }

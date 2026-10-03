@@ -71,25 +71,38 @@ type RuleEvaluator struct {
 
 var _ Evaluator = (*RuleEvaluator)(nil)
 
-func deny(format string, a ...any) Decision {
-	return Decision{Reason: fmt.Sprintf(format, a...)}
+func deny(code, format string, a ...any) Decision {
+	return Decision{Reason: fmt.Sprintf(format, a...), Code: code}
+}
+
+// primaryCode elige el motivo principal entre los códigos de los hechos incumplidos.
+func primaryCode(codes []string) string {
+	for _, p := range denyPriority {
+		for _, c := range codes {
+			if c == p {
+				return p
+			}
+		}
+	}
+	return DenyInternalError
 }
 
 // AuthorizeTransition decide. Un error interno devuelve Allow=false con razón y el error.
 func (e *RuleEvaluator) AuthorizeTransition(ctx context.Context, in GateInput) (Decision, error) {
 	if err := ctx.Err(); err != nil {
-		return deny("contexto cancelado"), err
+		return deny(DenyInternalError, "contexto cancelado"), err
 	}
 	if err := in.Validate(); err != nil {
-		return deny("entrada inválida: %s", err), nil
+		return deny(DenyIllegalTransition, "entrada inválida: %s", err), nil
 	}
 	if !LegalTransition(in.From, in.To) {
-		return deny("transición ilegal %s->%s", in.From, in.To), nil
+		return deny(DenyIllegalTransition, "transición ilegal %s->%s", in.From, in.To), nil
 	}
-	var missing []string
-	need := func(name string, f Fact) {
+	var missing, codes []string
+	need := func(name, code string, f Fact) {
 		if !f.IsTrue() {
 			missing = append(missing, fmt.Sprintf("%s=%s", name, f))
+			codes = append(codes, code)
 		}
 	}
 	ns := e.TestNamespace
@@ -99,47 +112,48 @@ func (e *RuleEvaluator) AuthorizeTransition(ctx context.Context, in GateInput) (
 	needNS := func() {
 		if in.TargetNamespace != ns {
 			missing = append(missing, fmt.Sprintf("namespace %q no es el de prueba %q", in.TargetNamespace, ns))
+			codes = append(codes, DenyNamespaceNotTest)
 		}
 	}
 	gatedWorkflow := false
 	switch in.To {
 	case StateWarmReady:
-		need("confirmed", in.Confirmed)
-		need("reset_verified", in.ResetVerified)
+		need("confirmed", DenyNotConfirmed, in.Confirmed)
+		need("reset_verified", DenyResetNotVerified, in.ResetVerified)
 		needNS()
-		need("workflow_allowed", in.WorkflowAllowed) // la matriz de U4-T01 lo exige también aquí
+		need("workflow_allowed", DenyWorkflowNotAllowed, in.WorkflowAllowed) // la matriz de U4-T01 lo exige también aquí
 		gatedWorkflow = true
 	case StateDeploying:
-		need("confirmed", in.Confirmed)
-		need("reset_verified", in.ResetVerified)
+		need("confirmed", DenyNotConfirmed, in.Confirmed)
+		need("reset_verified", DenyResetNotVerified, in.ResetVerified)
 		needNS()
-		need("workflow_allowed", in.WorkflowAllowed)
+		need("workflow_allowed", DenyWorkflowNotAllowed, in.WorkflowAllowed)
 		gatedWorkflow = true
 	case StateInferring:
-		need("confirmed", in.Confirmed)
+		need("confirmed", DenyNotConfirmed, in.Confirmed)
 		needNS()
 		gatedWorkflow = true
 	case StateRehearsing:
-		need("confirmed", in.Confirmed)
+		need("confirmed", DenyNotConfirmed, in.Confirmed)
 		needNS()
-		need("workflow_allowed", in.WorkflowAllowed)
+		need("workflow_allowed", DenyWorkflowNotAllowed, in.WorkflowAllowed)
 		gatedWorkflow = true
 	case StateRunning:
-		need("confirmed", in.Confirmed)
-		need("ensayo_passed", in.EnsayoPassed)
+		need("confirmed", DenyNotConfirmed, in.Confirmed)
+		need("ensayo_passed", DenyEnsayoNotPassed, in.EnsayoPassed)
 		needNS()
-		need("workflow_allowed", in.WorkflowAllowed)
+		need("workflow_allowed", DenyWorkflowNotAllowed, in.WorkflowAllowed)
 		gatedWorkflow = true
 	case StateResetting, StateReporting:
 		needNS()
 	}
 	if len(missing) > 0 {
-		return deny("hechos exigidos no cumplidos: %s", strings.Join(missing, ", ")), nil
+		return deny(primaryCode(codes), "hechos exigidos no cumplidos: %s", strings.Join(missing, ", ")), nil
 	}
 	if gatedWorkflow && in.Workflow != "" {
 		if d, err := e.checkWorkflow(ctx, in); d != nil || err != nil {
 			if d == nil {
-				return deny("error evaluando la política de workflows"), err
+				return deny(DenyInternalError, "error evaluando la política de workflows"), err
 			}
 			return *d, err
 		}
@@ -150,7 +164,7 @@ func (e *RuleEvaluator) AuthorizeTransition(ctx context.Context, in GateInput) (
 // checkWorkflow devuelve nil,nil si el workflow está permitido.
 func (e *RuleEvaluator) checkWorkflow(ctx context.Context, in GateInput) (*Decision, error) {
 	if e.Workflows == nil {
-		d := deny("workflow %q no permitido: sin política de workflows", in.Workflow)
+		d := deny(DenyWorkflowNotAllowed, "workflow %q no permitido: sin política de workflows", in.Workflow)
 		return &d, nil
 	}
 	rule, found, err := e.Workflows.Workflow(ctx, in.Workflow)
@@ -158,14 +172,14 @@ func (e *RuleEvaluator) checkWorkflow(ctx context.Context, in GateInput) (*Decis
 		return nil, fmt.Errorf("política de workflows ilegible: %w", err)
 	}
 	if !found {
-		d := deny("workflow %q no está en la política workflows", in.Workflow)
+		d := deny(DenyWorkflowNotAllowed, "workflow %q no está en la política workflows", in.Workflow)
 		return &d, nil
 	}
 	if in.To != StateRunning {
 		return nil, nil
 	}
 	if rule.RequiresApproval && !in.ApprovalRecorded.IsTrue() {
-		d := deny("workflow %q exige aprobación (approval_recorded=%s)", in.Workflow, in.ApprovalRecorded)
+		d := deny(DenyWorkflowNotAllowed, "workflow %q exige aprobación (approval_recorded=%s)", in.Workflow, in.ApprovalRecorded)
 		return &d, nil
 	}
 	now := time.Now
@@ -177,7 +191,7 @@ func (e *RuleEvaluator) checkWorkflow(ctx context.Context, in GateInput) (*Decis
 		return nil, fmt.Errorf("no se pudo contar el consumo diario: %w", err)
 	}
 	if n >= rule.MaxRunsPerDay {
-		d := deny("workflow %q alcanzó la cuota diaria (%d de %d)", in.Workflow, n, rule.MaxRunsPerDay)
+		d := deny(DenyWorkflowNotAllowed, "workflow %q alcanzó la cuota diaria (%d de %d)", in.Workflow, n, rule.MaxRunsPerDay)
 		return &d, nil
 	}
 	return nil, nil
