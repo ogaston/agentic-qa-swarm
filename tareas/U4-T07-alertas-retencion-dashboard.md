@@ -118,7 +118,7 @@ upg() { t=$(mktemp -d); (cd services/go-governance && go build -o "$t/gg" ./cmd/
   g() { curl -s -o /dev/null -X POST $B/gates/authorize -H "Authorization: Bearer $svc" -H 'Content-Type: application/json' -d "$1"; }
   g '{"run_id":"r1","from":"confirmed","to":"warm_ready","target_namespace":"aqs-test","confirmed":"false","reset_verified":"true"}'
   g '{"run_id":"r2","from":"inferring","to":"rehearsing","target_namespace":"prod","confirmed":"true","workflow_allowed":"true"}'
-  g '{"run_id":"r3","from":"confirmed","to":"warm_ready","target_namespace":"aqs-test","confirmed":"true","reset_verified":"true"}'
+  g '{"run_id":"r3","from":"confirmed","to":"warm_ready","target_namespace":"aqs-test","confirmed":"true","reset_verified":"true","workflow_allowed":"true"}'
   curl -s -o /dev/null -X PUT $B/policies/events -H 'Authorization: Bearer tok-admin' -H 'Content-Type: application/json' -d '{"value":{"enabled_events":["tag"]}}'
   curl -s -o /dev/null -X PUT $B/policies/events -H 'Authorization: Bearer tok-admin' -H 'Content-Type: application/json' -d '{"value":{"enabled_events":["push"]}}'
   curl -s -o /dev/null -X PUT $B/policies/events -H 'Authorization: Bearer tok-user' -H 'Content-Type: application/json' -d '{"value":{}}'
@@ -147,7 +147,7 @@ upg() { t=$(mktemp -d); (cd services/go-governance && go build -o "$t/gg" ./cmd/
   kill $pid; sleep 0.3
   jq -e -s 'length > 0 and all(.[]; has("timestamp") and has("request_id") and has("trace_id") and has("level") and has("message") and (.level|test("^(debug|info|warn|error)$")))' "$t/log"
   grep -c -F -e "$pw" -e 'CLAVE-INCORRECTA-XYZ' -e "$(jq -r '.[0].password_hash' "$t/users.json")" "$t/log"; rm -rf "$t"
-  upg 18246; curl -s -o /dev/null -X POST $B/gates/authorize -H "Authorization: Bearer $svc" -d '{"run_id":"r1","from":"confirmed","to":"warm_ready","target_namespace":"aqs-test","confirmed":"true","reset_verified":"true"}'; kill $pid; sleep 0.3
+  upg 18246; curl -s -o /dev/null -X POST $B/gates/authorize -H "Authorization: Bearer $svc" -d '{"run_id":"r1","from":"confirmed","to":"warm_ready","target_namespace":"aqs-test","confirmed":"true","reset_verified":"true","workflow_allowed":"true"}'; kill $pid; sleep 0.3
   jq -r 'select(.message=="audit") | .action' "$t/log" | sort -u; grep -c -F "$svc" "$t/log"; rm -rf "$t"
   ```
   Esperado: `true`, `0`; y para `go-governance` una línea `gate.allow` (la copia de auditoría en el log) y `0` (el token de servicio no aparece).

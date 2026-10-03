@@ -93,16 +93,16 @@ Desde la raíz del worktree.
 - [ ] **CA-3** — Cada mutante rompe al menos una propiedad (las propiedades **detectan** defectos de verdad).
   ```bash
   o=$(mktemp)
-  for p in services/go-governance/testdata/mutants/*.patch; do git apply "$p" || { echo "NO APLICA $p"; continue; }; (cd services/go-governance && go test -run PBT ./... > "$o" 2>&1; echo "$(basename $p) rc=$? $(grep -c -E 'rapid\.seed=|Falsifying|Failed after' "$o")"); git apply -R "$p"; done
-  p=services/go-identity/testdata/mutants/01-totp-window.patch; git apply "$p" && (cd services/go-identity && go test -run PBT ./... > "$o" 2>&1; echo "$(basename $p) rc=$? $(grep -c -E 'rapid\.seed=|Falsifying|Failed after' "$o")"); git apply -R "$p"
+  for p in services/go-governance/testdata/mutants/*.patch; do git apply "$p" || { echo "NO APLICA $p"; continue; }; (cd services/go-governance && go test -run PBT ./... > "$o" 2>&1; rc=$?; echo "$(basename $p) rc=$rc $(grep -c -E 'rapid\.seed=|Falsifying|Failed after' "$o")"); git apply -R "$p"; done
+  p=services/go-identity/testdata/mutants/01-totp-window.patch; git apply "$p" && (cd services/go-identity && go test -run PBT ./... > "$o" 2>&1; rc=$?; echo "$(basename $p) rc=$rc $(grep -c -E 'rapid\.seed=|Falsifying|Failed after' "$o")"); git apply -R "$p"
   git status --short | wc -l
   ```
   Esperado: cuatro líneas con `rc=1` y un número ≥ `1` (seed o contraejemplo reducido visibles), ninguna `NO APLICA`, y `0` (todo restaurado). Sin los mutantes, CA-1 pasa.
 
 - [ ] **CA-4** — Un fallo muestra el seed y se reproduce con él.
   ```bash
-  cd services/go-governance && l=$(mktemp) && go test -tags pbt_demo -run 'PBT_Demo' -v ./... > "$l" 2>&1; grep -E 'rapid\.seed=|Falsifying|FAIL' "$l" | head -n 5
-  s=$(grep -o -E 'rapid\.seed=[0-9-]+' "$l" | head -n1); go test -tags pbt_demo -run 'PBT_Demo' "-$s" 2>&1 | grep -c -E 'Falsifying|FAIL'
+  cd services/go-governance && l=$(mktemp) && go test -tags pbt_demo -run 'PBT_Demo' -v ./authz > "$l" 2>&1; grep -E 'rapid\.seed=|Falsifying|failed after|FAIL' "$l" | head -n 5
+  s=$(grep -o -E 'rapid\.seed=[0-9-]+' "$l" | head -n1); go test -tags pbt_demo -run 'PBT_Demo' ./authz "-$s" 2>&1 | grep -c -E 'Falsifying|failed after|FAIL'
   ```
   Esperado: líneas con `rapid.seed=`, `Falsifying example` (o `Failed after`) y `FAIL`; y un número ≥ `1` al repetir con el mismo seed. `TestPBT_Demo*` existe **solo** detrás de la etiqueta `pbt_demo`.
 
