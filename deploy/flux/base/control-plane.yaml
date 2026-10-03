@@ -17,6 +17,8 @@ spec:
         app.kubernetes.io/name: ui-api
         aqs.io/tier: control-plane
     spec:
+      serviceAccountName: ui-api
+      automountServiceAccountToken: false
       containers:
         - name: ui-api
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
@@ -69,6 +71,8 @@ spec:
         app.kubernetes.io/name: go-intake
         aqs.io/tier: control-plane
     spec:
+      serviceAccountName: go-intake
+      automountServiceAccountToken: false
       containers:
         - name: go-intake
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
@@ -280,6 +284,8 @@ spec:
         app.kubernetes.io/name: go-governance
         aqs.io/tier: control-plane
     spec:
+      serviceAccountName: go-governance
+      automountServiceAccountToken: false
       containers:
         - name: go-governance
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
@@ -332,6 +338,8 @@ spec:
         app.kubernetes.io/name: go-identity
         aqs.io/tier: control-plane
     spec:
+      serviceAccountName: go-identity
+      automountServiceAccountToken: false
       containers:
         - name: go-identity
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
