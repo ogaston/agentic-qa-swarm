@@ -1,0 +1,61 @@
+# Aislamiento de aqs-system: solo INGRESS (U4-T05). Sin reglas de egress a proposito:
+# el control plane necesita la API de Kubernetes, MinIO, el LLM y GitHub, cuyas
+# direcciones dependen del cluster (candidata C-51; ver docs/seguridad/aislamiento.md).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: aqs-system
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: aqs-system
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-metrics-from-observability
+  namespace: aqs-system
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: aqs-observability
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+# El operador etiqueta el namespace de su ingress controller con
+# aqs.io/ingress-controller: "true". Sin la etiqueta el trafico externo queda bloqueado.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-public-http
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [go-intake, ui-api]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              aqs.io/ingress-controller: "true"
+      ports:
+        - {protocol: TCP, port: 8080}

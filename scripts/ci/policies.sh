@@ -80,6 +80,9 @@ for e in "${overlays[@]}"; do
     [ ! -e "$work/$e.empty" ] || rc=1
     report "$rc" "$name" "$e"
   done
+  # Matriz RBAC sin cluster (U4-T05)
+  bash scripts/ci/rbac-matrix.sh --manifest "$work/$e.yaml" "$e" >&2
+  report $? rbac-matrix "$e"
 done
 
 conftest verify --no-color --policy policy >&2

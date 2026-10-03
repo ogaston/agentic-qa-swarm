@@ -4,3 +4,4 @@ resources:
   - serviceaccounts.yaml
   - rbac.yaml
   - networkpolicies.yaml
+  - networkpolicies-system.yaml

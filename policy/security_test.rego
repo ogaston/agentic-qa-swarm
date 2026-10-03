@@ -76,7 +76,7 @@ test_cp_deployment_with_sa_allowed if {
 }
 
 test_other_deployment_without_sa_allowed if {
-	count(deny) == 0 with input as dep("ui-api", {})
+	count(deny) == 0 with input as dep("otro-deployment", {})
 }
 
 # default-deny (conjunto, --combine)
@@ -91,7 +91,7 @@ test_default_deny_only_egress_denied if {
 }
 
 test_default_deny_present_allowed if {
-	count(deny) == 0 with input as [{"path": "x", "contents": dd}]
+	count(deny) == 0 with input as [{"path": "x", "contents": dd}, {"path": "y", "contents": {"kind": "NetworkPolicy", "metadata": {"name": "default-deny-ingress", "namespace": "aqs-system"}, "spec": {"podSelector": {}, "policyTypes": ["Ingress"]}}}]
 }
 
 # U5-T12: ipBlock no se desactiva con null ni con valores raros
@@ -126,5 +126,5 @@ test_ingress_intra_egress_null_allowed if {
 }
 
 test_ipblock_otro_namespace_allowed if {
-	count(deny) == 0 with input as netpol_t12("aqs-system", {"podSelector": {}, "ingress": [{"from": [{"ipBlock": {"cidr": "10.0.0.0/8"}}]}], "egress": null})
+	count(deny) == 0 with input as netpol_t12("aqs-observability", {"podSelector": {}, "ingress": [{"from": [{"ipBlock": {"cidr": "10.0.0.0/8"}}]}], "egress": null})
 }
