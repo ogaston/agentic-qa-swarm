@@ -7,7 +7,7 @@ Procedimiento único de arranque, ejecutado por un humano. Se asume **un clúste
 - Un clúster Kubernetes vacío por entorno y `kubectl` apuntando a él.
 - `flux` CLI v2.4.0.
 - Acceso de lectura al repo `https://github.com/ogaston/agentic-qa-swarm` (es público: el `GitRepository` no necesita secret).
-- Los Secrets de la app (C-08) se resuelven en U5-T14. Sin ellos, MinIO, el backup y Grafana no arrancan.
+- Los Secrets de la app se gestionan con SOPS + age: ver [secrets.md](secrets.md). Sin ellos, MinIO, el backup y Grafana no arrancan.
 
 ## Estructura
 
@@ -47,4 +47,4 @@ Esperado: `flux-system` y `aqs-<env>` con `READY=True`.
 
 ## Secrets
 
-Pendiente de U5-T14 (C-08): descifrado de los Secrets de la app. Hasta entonces `aqs-<env>` queda reconciliado pero MinIO, el backup y Grafana no arrancan.
+`aqs-<env>` descifra con SOPS usando el Secret `sops-age` de `flux-system`, que se crea a mano y nunca entra al repo. Sin el, MinIO, el backup y Grafana no arrancan. Pasos completos en [secrets.md](secrets.md).

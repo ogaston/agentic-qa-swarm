@@ -7,6 +7,10 @@ spec:
   interval: 10m
   path: ./deploy/flux/prod
   prune: true
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
   sourceRef:
     kind: GitRepository
     name: agentic-qa-swarm

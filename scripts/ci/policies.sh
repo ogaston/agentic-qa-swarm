@@ -60,7 +60,7 @@ for e in "${overlays[@]}"; do
     for c in kubeconform conftest-test conftest-combine; do echo "FALLA $c $e"; done
     continue
   fi
-  dk -i "$KUBECONFORM" -strict -summary -schema-location default -schema-location "$CRDS" - < "$work/$e.yaml" > "$work/out" 2>&1
+  dk -i "$KUBECONFORM" -strict -skip Secret -summary -schema-location default -schema-location "$CRDS" - < "$work/$e.yaml" > "$work/out" 2>&1
   rc=$?
   cat "$work/out" >&2
   # Guarda: el resumen debe tener Valid: N con N > 0
@@ -99,5 +99,11 @@ if [ ! -e "$work/prod.broken" ] \
   rc=$?
 fi
 report "$rc" promtool-rules
+
+# check-secrets (U5-T14): ningun Secret en claro bajo deploy/
+bash scripts/ci/check-secrets.sh > "$work/out" 2>&1
+rc=$?
+cat "$work/out" >&2
+report "$rc" check-secrets
 
 exit "$fail"
