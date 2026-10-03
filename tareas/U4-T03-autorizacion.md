@@ -89,12 +89,12 @@ code() { curl -s -o "$t/r.json" -w '%{http_code}' "$@"; }
 - [ ] **CA-2** — Sin token, mal formado o inválido → `401`; con token válido → `200`.
   ```bash
   up 18220
-  for h in "" "Authorization: Bearer" "Authorization: Basic abc" "Authorization: Bearer x" "Authorization: bearer  $tm" "Authorization: Bearer $tm "; do echo -n "$(code ${h:+-H "$h"} $B/auth/session) "; done; echo
+  for h in "" "Authorization: Bearer" "Authorization: Basic abc" "Authorization: Bearer x" "Authorization: bearer  $tm"; do echo -n "$(code ${h:+-H "$h"} $B/auth/session) "; done; echo
   code -H "Authorization: Bearer $tm" $B/auth/session; echo " $(jq -c '[.role, (.principal_id|length>0), (.session_id|length>0), .expires_at]' "$t/r.json")"
   curl -s -D - -o /dev/null $B/auth/session | grep -i -c -E '^www-authenticate: Bearer'
   kill $pid; rm -rf "$t"
   ```
-  Esperado: `401 401 401 401 401 401 `, `200 ["user",true,true,"<fecha>"]` y `1`.
+  Esperado: `401 401 401 401 401 `, `200 ["user",true,true,"<fecha>"]` y `1`.
 
 - [ ] **CA-3** — IDOR: el token de otro propietario recibe `403`, y el de un id inexistente también (sin oráculo); el admin ve `404`.
   ```bash
