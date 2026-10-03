@@ -77,6 +77,7 @@
 | U4-T5 | [ ] | Manifiestos RBAC (test-ns-only, sin wildcards) + NetworkPolicy (namespace-only, bloqueo LLM a runners) como artefactos revisables + tests de política | US-M8.1, US-M8.2 | `conftest test` en verde; matriz `kubectl auth can-i` esperada documentada en el PR (sin apply autónomo) |
 | U4-T6 | [ ] | PBT parcial: round-trip de parseo de políticas/config/workflows (PBT-02) + invariantes de gates (p. ej. "sin confirm nunca Allow", "sin `reset_verified` nunca Allow", PBT-03) + generadores + seed (PBT-07/08) | US-M8.3 | `go test -run PBT` en verde con seed logueado |
 | U4-T7 | [ ] | Alertas de seguridad (auth failures, denegaciones, escaladas) + retención audit ≥90d + dashboard | US-M8.3 | reglas de alerta verificadas (`promtool check rules`); retención visible en manifiesto |
+| U4-T8 | [ ] | Cableado de despliegue de `go-identity` y `go-governance`: entorno, referencias a Secrets por nombre, `fsGroup`, `Recreate`, política contra valores literales sensibles y procedimiento SOPS documentado *(surgida al cerrar U4: C-53, C-70)* | US-M8.3, US-M10 | `tareas/U4-T08-cableado-despliegue.md` |
 
 > **Tareas redactadas (2026-10-03)**: el detalle de cada tarea de U4 está en `tareas/U4-T01-stubs.md`, `U4-T02-go-identity-autenticacion.md`, `U4-T03-autorizacion.md`, `U4-T04-go-governance.md`, `U4-T05-rbac-networkpolicy-politicas.md`, `U4-T06-pbt-parcial.md` y `U4-T07-alertas-retencion-dashboard.md`. Orden: T01 → T02 → T03 → T04 → (T06, T07); T05 solo depende de U5 y puede ir desde la primera ola. Candidatas nuevas: C-47, C-49…C-53.
 
