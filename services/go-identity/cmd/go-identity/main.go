@@ -125,6 +125,10 @@ func run(log *slog.Logger) error {
 			return errors.New("IDENTITY_TRUST_PROXY inválido")
 		}
 	}
+	origins, err := server.ParseOrigins(os.Getenv("IDENTITY_ALLOWED_ORIGINS"))
+	if err != nil {
+		return err
+	}
 	decoy, err := server.NewDecoy(us)
 	if err != nil {
 		return err
@@ -140,6 +144,8 @@ func run(log *slog.Logger) error {
 		Decoy:      decoy,
 		TrustProxy: trust,
 		Logger:     log,
+
+		AllowedOrigins: origins,
 	})
 	hs := &http.Server{
 		Addr:              addr,

@@ -176,3 +176,43 @@ func TestSessionConcurrentLogoutAndUse(t *testing.T) {
 		t.Fatalf("exactamente una revocación debía tener éxito, hubo %d", n)
 	}
 }
+
+func TestSessionLookupByIDLifecycle(t *testing.T) {
+	s, c := newStore(2)
+	tok, info, err := s.CreateSession(who)
+	if err != nil || len(info.ID) != 32 || info.Principal != who || !info.ExpiresAt.Equal(c.now().Add(30*time.Minute)) {
+		t.Fatalf("%v %+v", err, info)
+	}
+	if got, ok := s.Lookup(info.ID); !ok || got != info {
+		t.Fatalf("lookup: %v %+v", ok, got)
+	}
+	// Lookup no renueva la inactividad.
+	c.add(14 * time.Minute)
+	s.Lookup(info.ID)
+	c.add(2 * time.Minute)
+	if _, ok := s.Lookup(info.ID); ok {
+		t.Fatal("Lookup no debe renovar la inactividad")
+	}
+	// Revocada: el id deja de existir.
+	tok2, info2, _ := s.CreateSession(who)
+	s.Revoke(tok2)
+	if _, ok := s.Lookup(info2.ID); ok {
+		t.Fatal("id de sesión revocada")
+	}
+	_ = tok
+}
+
+func TestSessionLookupDroppedByLimit(t *testing.T) {
+	s, _ := newStore(1)
+	_, first, _ := s.CreateSession(who)
+	_, second, _ := s.CreateSession(who)
+	if _, ok := s.Lookup(first.ID); ok {
+		t.Fatal("la sesión descartada por el límite no debe poder consultarse")
+	}
+	if _, ok := s.Lookup(second.ID); !ok {
+		t.Fatal("la nueva debe existir")
+	}
+	if len(s.byID) != len(s.byHash) {
+		t.Fatalf("índices desalineados: %d vs %d", len(s.byID), len(s.byHash))
+	}
+}

@@ -1,4 +1,4 @@
-// Package server expone POST /auth/login y POST /auth/logout.
+// Package server expone /auth/login, /auth/logout, /auth/session, /auth/sessions/{id} y /auth/users.
 package server
 
 import (
@@ -40,7 +40,9 @@ type Config struct {
 	Clock      func() time.Time // nil usa time.Now
 	Decoy      string           // hash señuelo para usuarios inexistentes (ver NewDecoy)
 	TrustProxy bool             // honrar X-Forwarded-For (IDENTITY_TRUST_PROXY)
-	Logger     *slog.Logger     // nil descarta los registros
+	// AllowedOrigins es la lista blanca CORS (ver ParseOrigins); vacía = ningún origen.
+	AllowedOrigins []string
+	Logger         *slog.Logger // nil descarta los registros
 }
 
 // Server implementa el flujo de autenticación.
@@ -48,6 +50,7 @@ type Server struct {
 	cfg     Config
 	mu      sync.Mutex
 	lastOTP map[string]uint64 // por usuario: último contador TOTP aceptado
+	origins map[string]bool
 }
 
 // New crea el servidor.
@@ -58,7 +61,11 @@ func New(cfg Config) *Server {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
-	return &Server{cfg: cfg, lastOTP: map[string]uint64{}}
+	origins := map[string]bool{}
+	for _, o := range cfg.AllowedOrigins {
+		origins[o] = true
+	}
+	return &Server{cfg: cfg, lastOTP: map[string]uint64{}, origins: origins}
 }
 
 // NewDecoy genera el hash señuelo con los parámetros más altos de los usuarios cargados.
@@ -70,13 +77,21 @@ func NewDecoy(us map[string]*users.User) (string, error) {
 	return passhash.Decoy(hs)
 }
 
-// Handler devuelve el http.Handler con las dos rutas.
-func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/login", s.login)
-	mux.HandleFunc("POST /auth/logout", s.logout)
-	return mux
+func (s *Server) newRouter() *router {
+	rt := newRouter(s)
+	rt.Handle("POST /auth/login", Public(), s.login)
+	rt.Handle("POST /auth/logout", Authenticated(), s.logout)
+	rt.Handle("GET /auth/session", Authenticated(), s.currentSession)
+	rt.Handle("GET /auth/sessions/{id}", Authenticated(), s.sessionByID)
+	rt.Handle("GET /auth/users", Roles(principal.RoleAdmin), s.listUsers)
+	return rt
 }
+
+// Routes enumera las rutas registradas con su política.
+func (s *Server) Routes() []Route { return append([]Route(nil), s.newRouter().routes...) }
+
+// Handler devuelve el http.Handler completo (cabeceras de seguridad, CORS y rutas con política).
+func (s *Server) Handler() http.Handler { return s.secure(s.newRouter()) }
 
 type errorBody struct {
 	Code    string `json:"code"`
@@ -169,7 +184,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	token, exp, err := s.cfg.Sessions.Create(principal.Principal{ID: u.Name, Role: u.Role})
+	token, info, err := s.cfg.Sessions.CreateSession(principal.Principal{ID: u.Name, Role: u.Role})
 	if err != nil {
 		s.cfg.Guard.Release(ticket)
 		s.cfg.Logger.Error("no se pudo crear la sesión", "outcome", "error")
@@ -180,7 +195,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.cfg.Logger.Info("login correcto", "outcome", "ok", "ip", ip)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(map[string]string{"token": token, "expires_at": exp.UTC().Format(time.RFC3339)})
+	_ = json.NewEncoder(w).Encode(map[string]string{"token": token, "expires_at": info.ExpiresAt.UTC().Format(time.RFC3339), "session_id": info.ID})
 }
 
 func (s *Server) fail(w http.ResponseWriter, ip string) {
@@ -199,12 +214,10 @@ func (s *Server) checkOTP(userKey string, secret []byte, code string) bool {
 	return ok
 }
 
+// logout revoca la sesión del token ya validado por el middleware (política Authenticated).
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	const prefix = "bearer "
-	h := r.Header.Get("Authorization")
-	if len(h) <= len(prefix) || !strings.EqualFold(h[:len(prefix)], prefix) || len(h) > 512 || !s.cfg.Sessions.Revoke(strings.TrimSpace(h[len(prefix):])) {
-		w.Header().Set("WWW-Authenticate", "Bearer")
-		writeError(w, http.StatusUnauthorized, "unauthorized", "token inválido o ausente")
+	if !s.cfg.Sessions.Revoke(fromCtx(r).token) {
+		unauthorized(w)
 		return
 	}
 	s.cfg.Logger.Info("logout", "outcome", "ok", "ip", s.clientIP(r))
