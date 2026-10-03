@@ -2,6 +2,10 @@
 
 Servicio de autenticación (U4-T02): `POST /auth/login` y `POST /auth/logout`. La autorización, `GET /auth/session`, CORS y las sondas llegan en U4-T03 y U4-T07.
 
+## Versión de Go
+
+`go.mod` exige `go 1.24.13` (parche con la biblioteca estándar corregida frente a govulncheck) y el `Dockerfile` usa `golang:1.24.13-alpine3.22`. Al subir el parche en uno, subirlo en el otro: si la imagen es anterior a `go.mod`, Go intentaría descargar el toolchain.
+
 ## Configuración (variables de entorno)
 
 | Variable | Defecto | Descripción |

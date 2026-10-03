@@ -1,6 +1,6 @@
 module github.com/ogaston/agentic-qa-swarm/services/go-identity
 
-go 1.24
+go 1.24.13
 
 require golang.org/x/crypto v0.31.0
 
