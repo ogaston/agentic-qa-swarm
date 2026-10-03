@@ -162,6 +162,7 @@ paths:
               properties:
                 username: {type: string}
                 password: {type: string, format: password}
+                otp: {type: string, pattern: '^[0-9]{6}$'}
       responses:
         '200':
           description: Sesion iniciada.
