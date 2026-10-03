@@ -42,6 +42,7 @@ mkdir "$work/plain" "$work/enc"
 # Valores aleatorios, CA y certificado de MinIO (dentro de un contenedor; se devuelven al usuario actual).
 docker run --rm --security-opt label=disable -v "$work/plain":/o "$ALPINE" sh -c '
   set -e
+  umask 077
   apk add -q openssl >/dev/null 2>&1
   cd /o
   for n in minio-root-password warm-db-password grafana-admin-password; do
@@ -115,8 +116,10 @@ done
 # Todo cifrado: recien ahora se toca el arbol.
 rm -f "$out"/*.sops.yaml
 cp "$work"/enc/*.sops.yaml "$out/"
+chmod 644 "$out"/*.sops.yaml # solo texto cifrado; permisos normales de repo
 {
   printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n'
   for n in "${names[@]}"; do printf '  - %s.sops.yaml\n' "$n"; done
 } > "$out/kustomization.yaml"
+chmod 644 "$out/kustomization.yaml"
 echo "OK: ${#names[@]} Secrets cifrados en deploy/flux/$env_name/secrets/"
