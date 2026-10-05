@@ -1,0 +1,1 @@
+{"action":"opened","number":7,"repository":{"full_name":"acme/shop"},"pull_request":{"number":7,"head":{"ref":"feature/x","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"acme/shop"}},"base":{"ref":"main","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","repo":{"full_name":"acme/shop"}}}}
