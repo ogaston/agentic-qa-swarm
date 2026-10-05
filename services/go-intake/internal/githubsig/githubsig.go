@@ -1,6 +1,6 @@
 // Package githubsig implementa el formato de firma X-Hub-Signature-256 de
-// GitHub y un verificador falso programable para pruebas. La verificacion real
-// (HMAC + hmac.Equal) llega en U1-T02.
+// GitHub, el verificador real (HMACVerifier) y un verificador falso
+// programable para pruebas.
 package githubsig
 
 import (
@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"sync"
 )
 
@@ -27,6 +28,31 @@ func Sign(secret []byte, body []byte) string {
 // Verifier valida el encabezado de firma de un cuerpo de webhook.
 type Verifier interface {
 	Verify(secret, body []byte, header string) error
+}
+
+// HMACVerifier es el Verifier real: recalcula el HMAC-SHA256 del cuerpo crudo
+// y lo compara en tiempo constante con hmac.Equal.
+type HMACVerifier struct{}
+
+var _ Verifier = HMACVerifier{}
+
+// Verify devuelve ErrInvalidSignature si el secreto esta vacio, el encabezado
+// no tiene el prefijo "sha256=", el hex es invalido o de longitud incorrecta,
+// o el HMAC no coincide.
+func (HMACVerifier) Verify(secret, body []byte, header string) error {
+	if len(secret) == 0 || !strings.HasPrefix(header, Prefix) {
+		return ErrInvalidSignature
+	}
+	got, err := hex.DecodeString(header[len(Prefix):])
+	if err != nil || len(got) != sha256.Size {
+		return ErrInvalidSignature
+	}
+	m := hmac.New(sha256.New, secret)
+	m.Write(body)
+	if !hmac.Equal(got, m.Sum(nil)) {
+		return ErrInvalidSignature
+	}
+	return nil
 }
 
 // Mode es el comportamiento programado de un FakeVerifier.

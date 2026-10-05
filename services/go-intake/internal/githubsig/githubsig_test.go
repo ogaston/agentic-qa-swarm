@@ -65,3 +65,30 @@ func TestFakeVerifierAcceptOnly(t *testing.T) {
 		t.Fatal("AcceptOnly vacio acepto encabezado vacio")
 	}
 }
+
+func TestHMACVerifier(t *testing.T) {
+	secret, body := []byte("s3cret"), []byte(`{"a":1}`)
+	v := HMACVerifier{}
+	if err := v.Verify(secret, body, signVector); err != nil {
+		t.Fatalf("vector valido rechazado: %v", err)
+	}
+	altered := []byte(`{"a":2}`)
+	cases := map[string]struct {
+		secret, body []byte
+		header       string
+	}{
+		"cuerpo alterado":  {secret, altered, signVector},
+		"secreto distinto": {[]byte("otro"), body, signVector},
+		"sin prefijo":      {secret, body, signVector[len(Prefix):]},
+		"hex impar":        {secret, body, signVector[:len(signVector)-1]},
+		"hex invalido":     {secret, body, Prefix + strings.Repeat("zz", 32)},
+		"cabecera vacia":   {secret, body, ""},
+		"secreto vacio":    {nil, body, signVector},
+		"firma corta":      {secret, body, Prefix + "00"},
+	}
+	for name, c := range cases {
+		if err := v.Verify(c.secret, c.body, c.header); !errors.Is(err, ErrInvalidSignature) {
+			t.Errorf("%s: err=%v, quiero ErrInvalidSignature", name, err)
+		}
+	}
+}
