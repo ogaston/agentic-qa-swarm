@@ -1,0 +1,13 @@
+diff --git a/services/ui-api/inbox/event.go b/services/ui-api/inbox/event.go
+index f403a77..3bbb948 100644
+--- a/services/ui-api/inbox/event.go
++++ b/services/ui-api/inbox/event.go
+@@ -162,8 +162,6 @@ func ParseNotifyCreated(line []byte) (NotifyCreated, error) {
+ 		return ev, invalid("data.github_event")
+ 	case ev.Data.Repo == "":
+ 		return ev, invalid("data.repo")
+-	case !shaRe.MatchString(ev.Data.SHA):
+-		return ev, invalid("data.sha")
+ 	case ev.Data.Artifact == nil:
+ 		return ev, invalid("data.artifact")
+ 	case ev.Data.Artifact.Kind != "build-from-repo" && ev.Data.Artifact.Kind != "published-image":

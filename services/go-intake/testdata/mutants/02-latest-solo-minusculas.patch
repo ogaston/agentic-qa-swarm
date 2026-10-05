@@ -1,0 +1,13 @@
+diff --git a/services/go-intake/internal/artifact/artifact.go b/services/go-intake/internal/artifact/artifact.go
+index 61c128d..406120a 100644
+--- a/services/go-intake/internal/artifact/artifact.go
++++ b/services/go-intake/internal/artifact/artifact.go
+@@ -86,7 +86,7 @@ func (r Resolver) Resolve(ev Event) (Ref, error) {
+ 		}
+ 		return Ref{Kind: KindBuildFromRepo, Ref: ev.Repo + "@" + ev.SHA}, nil
+ 	case EventTag:
+-		if strings.EqualFold(ev.Tag, "latest") || !tagRE.MatchString(ev.Tag) {
++		if ev.Tag == "latest" || !tagRE.MatchString(ev.Tag) {
+ 			return Ref{}, unresolvable("tag vacio, latest o invalido")
+ 		}
+ 		reg := strings.ToLower(r.Registry)
