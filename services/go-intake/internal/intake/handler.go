@@ -99,6 +99,12 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 		reject(http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type debe ser application/json")
 		return
 	}
+	// ping (firma ya valida): responde pong sin notificacion, evento ni almacen.
+	if r.Header.Get("X-GitHub-Event") == "ping" {
+		log.Printf("webhook delivery=%q event=\"ping\" status=200", delivery)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "pong"})
+		return
+	}
 	if delivery == "" {
 		reject(http.StatusBadRequest, "missing_delivery", "falta X-GitHub-Delivery")
 		return

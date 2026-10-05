@@ -121,7 +121,6 @@ func TestWebhook(t *testing.T) {
 	big := append([]byte(`{"x":"`), bytes.Repeat([]byte("a"), MaxBodyBytes)...)
 	big = append(big, []byte(`"}`)...)
 	broken := []byte(`{"action":`)
-	ping := fixture(t, "ping.json")
 
 	cases := []struct {
 		name   string
@@ -148,7 +147,6 @@ func TestWebhook(t *testing.T) {
 			return r
 		}(), status: 401, code: "invalid_signature"},
 		{name: "JSON roto", req: signed("pull_request", "d1", broken), status: 400, code: "invalid_json"},
-		{name: "evento no soportado ping", req: signed("ping", "d1", ping), status: 400, code: "unsupported_event"},
 		{name: "evento desconocido", req: signed("issues", "d1", pr), status: 400, code: "unsupported_event"},
 		{name: "accion no soportada", req: signed("pull_request", "d1", []byte(`{"action":"closed","repository":{"full_name":"a/b"}}`)), status: 400, code: "unsupported_event"},
 		{name: "cuerpo mayor a 1 MiB", req: signed("push", "d1", big), status: 413, code: "payload_too_large"},
@@ -174,6 +172,35 @@ func TestWebhook(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWebhookPing(t *testing.T) {
+	ping := fixture(t, "ping.json")
+	t.Run("firma valida responde pong sin persistir ni publicar", func(t *testing.T) {
+		e := newEnv(t, nil)
+		w := do(e.srv, signed("ping", "d-ping", ping))
+		if w.Code != 200 {
+			t.Fatalf("status=%d, quiero 200 (%s)", w.Code, w.Body.String())
+		}
+		var b map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &b); err != nil || len(b) != 1 || b["status"] != "pong" {
+			t.Fatalf("cuerpo inesperado: %q", w.Body.String())
+		}
+		if _, ok := e.store.GetByDelivery("d-ping"); ok || len(e.pub.events) != 0 {
+			t.Fatal("ping no debe persistir ni publicar")
+		}
+		if _, err := os.Stat(filepath.Join(e.dir, "notifications.jsonl")); !os.IsNotExist(err) {
+			t.Fatalf("ping no debe tocar el almacen: %v", err)
+		}
+	})
+	t.Run("firma invalida sigue en 401", func(t *testing.T) {
+		e := newEnv(t, nil)
+		r := signed("ping", "d-ping", ping)
+		r.sig = "sha256=" + strings.Repeat("0", 64)
+		if w := do(e.srv, r); w.Code != 401 || errCode(t, w) != "invalid_signature" {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+	})
 }
 
 func TestWebhookClassification(t *testing.T) {
