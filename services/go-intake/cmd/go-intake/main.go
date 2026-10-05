@@ -43,7 +43,7 @@ func run() error {
 		Verifier:  githubsig.HMACVerifier{},
 		Store:     store,
 		Publisher: intake.NewOutbox(eventsFile),
-		Resolver:  intake.StubResolver{},
+		Resolver:  intake.NewArtifactResolver(os.Getenv("ARTIFACT_REGISTRY")),
 	})
 	if err != nil {
 		return err

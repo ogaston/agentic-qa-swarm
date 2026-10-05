@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/artifact"
 	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/githubsig"
 )
 
@@ -123,7 +124,11 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	defer h.mu.Unlock()
 	rec, found := h.d.Store.GetByDelivery(delivery)
 	if !found {
-		art, err := h.d.Resolver.Resolve(r.Context(), c.Repo, c.SHA)
+		art, err := h.d.Resolver.Resolve(r.Context(), c)
+		if errors.Is(err, artifact.ErrUnresolvableArtifact) {
+			reject(http.StatusUnprocessableEntity, "unresolvable_artifact", "no se puede fijar un artefacto desplegable para este evento")
+			return
+		}
 		if err != nil {
 			reject(http.StatusServiceUnavailable, "artifact_unavailable", "no se pudo resolver el artefacto")
 			return

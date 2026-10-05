@@ -82,3 +82,6 @@ Trabajo que apareció durante las rondas y que **nadie pidió todavía**. No for
 | C-76 | U1-T02 ronda 1 | Manifiestos de despliegue de `go-intake`: rootfs de solo lectura y volumen montado para los datos en `/var/lib/go-intake` (`INTAKE_DATA_DIR`), `fsGroup` y `Recreate` como en C-70 | Fuera de alcance de T02 (solo código y Dockerfile) |
 | C-77 | U1-T02 ronda 1, F-02 | Duplicado at-least-once de `notify.created` si `Publish` tiene éxito y el `Put` que limpia `PublishPending` falla; consumidores deben deduplicar por `notification_id` (o añadir outbox) | Ventana mínima; documentar en el contrato del evento |
 | C-78 | U1-T02 (redacción) | `ping` de GitHub responde hoy `400 unsupported_event`; si el humano prefiere `2xx`, cambiarlo | Decisión de producto |
+| C-79 | U1-T03 ronda 1, F-03/F-04 | Endurecer `repoRE` (acepta `../..` como `owner/repo`) y `regRE` (segmentos `..` en `ARTIFACT_REGISTRY`) en `internal/artifact` | La regex de `repoRE` la fija la tarea; no es explotable hoy (el repo viene de la firma verificada) |
+| C-80 | U1-T03 ronda 1, F-05 | Decisión de producto: tags con `/` (p. ej. `release/v1`, legales en git) hoy dan `422 unresolvable_artifact`; permitirlos o documentar el rechazo | |
+| C-81 | U1-T03 ronda 1, F-01 | Fixture y prueba de punta a punta para `pull_request` con `action: reopened` (el clasificador la acepta, sin prueba E2E) | |
