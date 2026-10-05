@@ -20,7 +20,8 @@ Comportamiento exacto:
   - `push` a `refs/heads/*` → `commit`; `push` a `refs/tags/*` → `tag`.
   - `pull_request` con `action` en `opened`, `synchronize`, `reopened` → `pull_request` (SHA = `pull_request.head.sha`).
   - `release` con `action: published` → `tag`.
-  - Cualquier otro evento o acción (incluido `ping`) → `400` con `Error{code: "unsupported_event"}`; no se crea notificación. (Decisión de esta tarea; si el humano prefiere `2xx` para `ping`, se abre candidata.)
+  - `ping` (firma válida) → `200` con cuerpo `{"status":"pong"}`; no se crea notificación, no se publica evento y no se toca el almacén. (Decisión del humano, 2026-10-05; sustituye al `400` por defecto. C-78 cerrada.)
+  - Cualquier otro evento o acción no listado → `400` con `Error{code: "unsupported_event"}`; no se crea notificación.
 - **Artefacto.** Hasta U1-T03 se usa un `ArtifactResolver` **stub** (interfaz + implementación fija: `build-from-repo`, ref `<owner/repo>@<sha>`). U1-T03 lo reemplaza; esta tarea solo define la interfaz y la usa en el handler.
 - **Persistencia (`NotificationStore`).** Puerto con una implementación **JSONL en disco** (`INTAKE_DATA_DIR`, solo se agrega, `fsync` por escritura) que sobrevive a un reinicio. Mantiene el índice `delivery_id → notification_id`; la misma entrega recibida dos veces devuelve **la misma** notificación y no publica un segundo evento.
 - **Publicación (`EventPublisher`).** Puerto con una implementación `outbox` que agrega líneas JSON a `INTAKE_EVENTS_FILE`. Es el **marcador de posición** del transporte de eventos mientras no se decida (candidata C-45); no inventa broker. El evento cumple `contracts/events/notify.created.schema.json`: `event_id` uuid v4, `version: 1`, `occurred_at` UTC, `trace_id` (se toma de `traceparent` si viene; si no, se genera de 32 hex) y `data` con `notification_id`, `github_event`, `repo`, `sha`, `artifact`.
