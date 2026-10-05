@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/artifact"
 	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/githubsig"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -66,7 +68,7 @@ func (e *env) handler(t *testing.T, st NotificationStore, v githubsig.Verifier) 
 		v = githubsig.HMACVerifier{}
 	}
 	h, err := NewHandler(Deps{
-		Secret: []byte(secret), Verifier: v, Store: st, Publisher: e.pub, Resolver: StubResolver{},
+		Secret: []byte(secret), Verifier: v, Store: st, Publisher: e.pub, Resolver: NewArtifactResolver(""),
 		Now: func() time.Time { return time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
@@ -155,7 +157,7 @@ func TestWebhook(t *testing.T) {
 		{name: "Content-Type incorrecto", req: func() req { r := signed("pull_request", "d1", pr); r.ctype = "text/plain"; return r }(), status: 415, code: "unsupported_media_type"},
 		{name: "sin X-GitHub-Delivery", req: signed("pull_request", "", pr), status: 400, code: "missing_delivery"},
 		{name: "payload sin sha", req: signed("push", "d1", []byte(`{"ref":"refs/heads/main","repository":{"full_name":"a/b"}}`)), status: 400, code: "invalid_payload"},
-		{name: "release con target_commitish no SHA", req: signed("release", "d1", fixture(t, "release-published.json")), status: 400, code: "invalid_payload"},
+		{name: "release con target_commitish no SHA", req: signed("release", "d1", []byte(`{"action":"published","repository":{"full_name":"acme/shop"},"release":{"tag_name":"v1.2.0","target_commitish":"main"}}`)), status: 400, code: "invalid_payload"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -177,11 +179,13 @@ func TestWebhook(t *testing.T) {
 }
 
 func TestWebhookClassification(t *testing.T) {
-	cases := []struct{ event, file, want, sha string }{
-		{"push", "push-branch.json", EventCommit, strings.Repeat("a", 40)},
-		{"push", "push-tag.json", EventTag, strings.Repeat("a", 40)},
-		{"pull_request", "pull-request-opened.json", EventPullRequest, strings.Repeat("a", 40)},
-		{"pull_request", "pull-request-synchronize.json", EventPullRequest, strings.Repeat("c", 40)},
+	a, c40, b40 := strings.Repeat("a", 40), strings.Repeat("c", 40), strings.Repeat("b", 40)
+	cases := []struct{ event, file, want, sha, kind, ref string }{
+		{"push", "push-branch.json", EventCommit, a, "build-from-repo", "acme/shop@" + a},
+		{"push", "push-tag.json", EventTag, a, "published-image", "ghcr.io/acme/shop:v1.2.0"},
+		{"pull_request", "pull-request-opened.json", EventPullRequest, a, "build-from-repo", "acme/shop@" + a},
+		{"pull_request", "pull-request-synchronize.json", EventPullRequest, c40, "build-from-repo", "acme/shop@" + c40},
+		{"release", "release-published.json", EventTag, b40, "published-image", "ghcr.io/acme/shop:v1.2.0"},
 	}
 	for _, c := range cases {
 		t.Run(c.file, func(t *testing.T) {
@@ -197,7 +201,7 @@ func TestWebhookClassification(t *testing.T) {
 			if n.GithubEvent != c.want || n.SHA != c.sha || n.Repo != "acme/shop" || n.State != StatePending {
 				t.Fatalf("notificacion inesperada: %+v", n)
 			}
-			if n.Artifact == nil || n.Artifact.Kind != "build-from-repo" || n.Artifact.Ref != "acme/shop@"+c.sha {
+			if n.Artifact == nil || n.Artifact.Kind != c.kind || n.Artifact.Ref != c.ref {
 				t.Fatalf("artefacto inesperado: %+v", n.Artifact)
 			}
 			if strings.Contains(n.ID, "/") || !strings.HasPrefix(n.ID, "n-") {
@@ -205,6 +209,16 @@ func TestWebhookClassification(t *testing.T) {
 			}
 		})
 	}
+	t.Run("PR de fork: 422 sin persistir ni publicar", func(t *testing.T) {
+		e := newEnv(t, nil)
+		w := do(e.srv, signed("pull_request", "d1", fixture(t, "pull-request-fork.json")))
+		if w.Code != 422 || errCode(t, w) != "unresolvable_artifact" {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+		if _, ok := e.store.GetByDelivery("d1"); ok || len(e.pub.events) != 0 {
+			t.Fatal("un rechazo no debe persistir ni publicar")
+		}
+	})
 	t.Run("release con SHA", func(t *testing.T) {
 		sha := strings.Repeat("b", 40)
 		body := []byte(`{"action":"published","repository":{"full_name":"a/b"},"release":{"target_commitish":"` + sha + `"}}`)
@@ -260,7 +274,7 @@ func TestWebhookRestartKeepsDeliveryIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		h, err := NewHandler(Deps{Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: st, Publisher: NewOutbox(events), Resolver: StubResolver{}})
+		h, err := NewHandler(Deps{Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: st, Publisher: NewOutbox(events), Resolver: NewArtifactResolver("")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -383,8 +397,39 @@ func TestWebhookEventValidatesAgainstSchema(t *testing.T) {
 }
 
 func TestNewHandlerRequiresSecret(t *testing.T) {
-	_, err := NewHandler(Deps{Verifier: githubsig.HMACVerifier{}, Store: &JSONLStore{}, Publisher: &memPublisher{}, Resolver: StubResolver{}})
+	_, err := NewHandler(Deps{Verifier: githubsig.HMACVerifier{}, Store: &JSONLStore{}, Publisher: &memPublisher{}, Resolver: NewArtifactResolver("")})
 	if err == nil {
 		t.Fatal("un secreto vacio debe fallar")
+	}
+}
+
+func TestWebhookResolverErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{"irresoluble", fmt.Errorf("%w: x", artifact.ErrUnresolvableArtifact), 422, "unresolvable_artifact"},
+		{"otro error", errors.New("boom"), 503, "artifact_unavailable"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := newEnv(t, nil)
+			h, err := NewHandler(Deps{
+				Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: e.store, Publisher: e.pub,
+				Resolver: ArtifactResolverFunc(func(Classified) (Artifact, error) { return Artifact{}, c.err }),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := do(h, signed("push", "d1", fixture(t, "push-branch.json")))
+			if w.Code != c.status || errCode(t, w) != c.code {
+				t.Fatalf("status=%d %s", w.Code, w.Body.String())
+			}
+			if _, ok := e.store.GetByDelivery("d1"); ok || len(e.pub.events) != 0 {
+				t.Fatal("un rechazo no debe persistir ni publicar")
+			}
+		})
 	}
 }

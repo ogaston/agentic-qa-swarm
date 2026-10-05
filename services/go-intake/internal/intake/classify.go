@@ -24,6 +24,10 @@ type Classified struct {
 	GithubEvent string
 	Repo        string
 	SHA         string
+	// Tag es el nombre del tag (github_event == tag).
+	Tag string
+	// HeadRepo es owner/repo de la rama origen del PR (vacio si no hay).
+	HeadRepo string
 }
 
 type payload struct {
@@ -35,10 +39,14 @@ type payload struct {
 	} `json:"repository"`
 	PullRequest struct {
 		Head struct {
-			SHA string `json:"sha"`
+			SHA  string `json:"sha"`
+			Repo struct {
+				FullName string `json:"full_name"`
+			} `json:"repo"`
 		} `json:"head"`
 	} `json:"pull_request"`
 	Release struct {
+		TagName         string `json:"tag_name"`
 		TargetCommitish string `json:"target_commitish"`
 	} `json:"release"`
 }
@@ -58,6 +66,7 @@ func Classify(event string, body []byte) (Classified, error) {
 			c.GithubEvent = EventCommit
 		case strings.HasPrefix(p.Ref, "refs/tags/"):
 			c.GithubEvent = EventTag
+			c.Tag = strings.TrimPrefix(p.Ref, "refs/tags/")
 		default:
 			return Classified{}, ErrUnsupported
 		}
@@ -73,11 +82,13 @@ func Classify(event string, body []byte) (Classified, error) {
 		}
 		c.GithubEvent = EventPullRequest
 		c.SHA = p.PullRequest.Head.SHA
+		c.HeadRepo = p.PullRequest.Head.Repo.FullName
 	case "release":
 		if p.Action != "published" {
 			return Classified{}, ErrUnsupported
 		}
 		c.GithubEvent = EventTag
+		c.Tag = p.Release.TagName
 		// El payload de release solo trae un SHA si target_commitish lo es;
 		// si es un nombre de rama no hay SHA que notificar.
 		c.SHA = p.Release.TargetCommitish

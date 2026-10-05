@@ -4,7 +4,11 @@
 // detras de puertos hasta que C-45 decida transporte y persistencia.
 package intake
 
-import "context"
+import (
+	"context"
+
+	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/artifact"
+)
 
 // Valores de Notification.state y github_event segun contracts/openapi.
 const (
@@ -13,8 +17,6 @@ const (
 	EventCommit      = "commit"
 	EventPullRequest = "pull_request"
 	EventTag         = "tag"
-
-	ArtifactBuildFromRepo = "build-from-repo"
 )
 
 // Artifact es la referencia al artefacto a desplegar.
@@ -71,16 +73,31 @@ type EventPublisher interface {
 	Publish(ctx context.Context, ev Event) error
 }
 
-// ArtifactResolver es el puerto de resolucion de artefacto. U1-T03 lo
-// reemplaza por la resolucion real (V5).
+// ArtifactResolver es el puerto de resolucion de artefacto (V5). Un error que
+// cumple errors.Is(err, artifact.ErrUnresolvableArtifact) hace responder 422.
 type ArtifactResolver interface {
-	Resolve(ctx context.Context, repo, sha string) (Artifact, error)
+	Resolve(ctx context.Context, c Classified) (Artifact, error)
 }
 
-// StubResolver devuelve siempre build-from-repo con ref <repo>@<sha>.
-type StubResolver struct{}
+// ArtifactResolverFunc adapta internal/artifact al puerto del handler.
+type ArtifactResolverFunc func(c Classified) (Artifact, error)
 
 // Resolve implementa ArtifactResolver.
-func (StubResolver) Resolve(_ context.Context, repo, sha string) (Artifact, error) {
-	return Artifact{Kind: ArtifactBuildFromRepo, Ref: repo + "@" + sha}, nil
+func (f ArtifactResolverFunc) Resolve(_ context.Context, c Classified) (Artifact, error) {
+	return f(c)
+}
+
+// NewArtifactResolver devuelve el resolvedor real (V5) con el registro dado
+// (vacio = ghcr.io).
+func NewArtifactResolver(registry string) ArtifactResolver {
+	r := artifact.Resolver{Registry: registry}
+	return ArtifactResolverFunc(func(c Classified) (Artifact, error) {
+		ref, err := r.Resolve(artifact.Event{
+			GithubEvent: c.GithubEvent, Repo: c.Repo, SHA: c.SHA, Tag: c.Tag, HeadRepo: c.HeadRepo,
+		})
+		if err != nil {
+			return Artifact{}, err
+		}
+		return Artifact{Kind: ref.Kind, Ref: ref.Ref}, nil
+	})
 }
