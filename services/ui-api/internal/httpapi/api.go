@@ -149,8 +149,9 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request) {
 
 // authenticate es fail-closed: cualquier error del verificador es 401.
 func (h *Handler) authenticate(w http.ResponseWriter, r *http.Request) (auth.Principal, bool) {
+	// Mas de una cabecera Authorization es ambiguo (un proxy podria validar otra): 401.
 	tok, ok := auth.BearerToken(r.Header.Get("Authorization"))
-	if ok {
+	if len(r.Header.Values("Authorization")) == 1 && ok {
 		if pr, err := h.cfg.Verifier.Verify(r.Context(), tok); err == nil {
 			return pr, true
 		}
@@ -164,7 +165,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request, _ auth.Principal)
 	var state inbox.State
 	if q, present := r.URL.Query()["state"]; present {
 		state = inbox.State(q[0])
-		if !state.Valid() {
+		if len(q) != 1 || !state.Valid() {
 			writeError(w, http.StatusBadRequest, "invalid_request", "state debe ser pending, confirmed o rejected")
 			return
 		}

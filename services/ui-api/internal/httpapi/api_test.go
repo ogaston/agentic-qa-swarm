@@ -254,8 +254,8 @@ func TestRateLimitWithInjectedClock(t *testing.T) {
 		}
 	}
 	w := e.do("GET", "/notifications", secretTok, "")
-	if w.Code != 429 || w.Header().Get("Retry-After") == "" {
-		t.Fatalf("%d retry-after=%q", w.Code, w.Header().Get("Retry-After"))
+	if w.Code != 429 || w.Header().Get("Retry-After") != "1" {
+		t.Fatalf("%d retry-after=%q (esperado 1: ceil(1/2))", w.Code, w.Header().Get("Retry-After"))
 	}
 	*e.clock = e.clock.Add(time.Second) // 2 tokens
 	if w := e.do("GET", "/notifications", secretTok, ""); w.Code != 200 {
@@ -301,5 +301,72 @@ func TestConcurrentHTTPConfirm(t *testing.T) {
 	a, b := <-codes, <-codes
 	if !(a == 201 && b == 409 || a == 409 && b == 201) {
 		t.Fatalf("codigos %d %d", a, b)
+	}
+}
+
+func TestRetryAfterExactAndDecreasing(t *testing.T) {
+	e := newEnv(t, nil, func(c *Config) { c.RateRPS, c.RateBurst = 0.25, 1 }) // 1 token cada 4 s
+	e.do("GET", "/notifications", secretTok, "")
+	var got []string
+	for i := 0; i < 3; i++ {
+		w := e.do("GET", "/notifications", secretTok, "")
+		if w.Code != 429 {
+			t.Fatalf("%d", w.Code)
+		}
+		got = append(got, w.Header().Get("Retry-After"))
+		*e.clock = e.clock.Add(1 * time.Second)
+	}
+	if strings.Join(got, ",") != "4,3,2" {
+		t.Fatalf("Retry-After = %v, esperado 4,3,2", got)
+	}
+}
+
+func TestDuplicateAuthorizationHeaderIs401(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	for _, order := range [][]string{{"Bearer nope", "Bearer " + secretTok}, {"Bearer " + secretTok, "Bearer nope"}, {"Bearer " + secretTok, "Bearer " + secretTok}} {
+		r := httptest.NewRequest("GET", "/notifications", nil)
+		r.RemoteAddr = "192.0.2.1:1"
+		r.Header["Authorization"] = order
+		w := httptest.NewRecorder()
+		e.h.ServeHTTP(w, r)
+		if w.Code != 401 {
+			t.Fatalf("%v -> %d", order, w.Code)
+		}
+	}
+}
+
+func TestRepeatedStateParamIs400(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	for _, q := range []string{"state=pending&state=bogus", "state=bogus&state=pending", "state=pending&state=pending"} {
+		if w := e.do("GET", "/notifications?"+q, secretTok, ""); w.Code != 400 {
+			t.Fatalf("%s -> %d", q, w.Code)
+		}
+	}
+}
+
+func TestBodyLimitLiteral64KiB(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	pad := func(total int) string { // {"flows":["xxx"]} con tamano exacto total
+		const base = len(`{"flows":[""]}`)
+		return `{"flows":["` + strings.Repeat("x", total-base) + `"]}`
+	}
+	if b := pad(65536); len(b) != 65536 {
+		t.Fatalf("len %d", len(b))
+	}
+	if w := e.do("POST", "/notifications/nope/confirm", secretTok, pad(65536)); w.Code != 404 {
+		t.Fatalf("65536 debe pasar a validacion (404 por id): %d", w.Code)
+	}
+	if w := e.do("POST", "/notifications/nope/confirm", secretTok, pad(65537)); w.Code != 413 {
+		t.Fatalf("65537 debe ser 413: %d", w.Code)
+	}
+}
+
+func TestRetryAfterRoundsUp(t *testing.T) {
+	// 0.4 rps, ráfaga 1: faltan 2,5 s -> Ceil=3 (Floor daría 2; con rps=3 el
+	// minimo de 1 s enmascararia la diferencia).
+	e := newEnv(t, nil, func(c *Config) { c.RateRPS, c.RateBurst = 0.4, 1 })
+	e.do("GET", "/notifications", secretTok, "")
+	if got := e.do("GET", "/notifications", secretTok, "").Header().Get("Retry-After"); got != "3" {
+		t.Fatalf("Retry-After=%q, esperado 3", got)
 	}
 }

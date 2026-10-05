@@ -2,8 +2,10 @@ package inbox
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -73,6 +75,11 @@ func TestParseAgreesWithSchema(t *testing.T) {
 	mut("extra-data", `"repo"`, `"x": 1, "repo"`)
 	mut("trace-vacio", `4bf92f3577b34da6a3ce929d0e0e4736`, ``)
 	mut("ref-vacio", `"ref": "acme/shop@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `"ref": ""`)
+	for _, k := range []string{"event_id", "type", "version", "occurred_at", "trace_id", "data",
+		"notification_id", "github_event", "repo", "sha", "artifact", "kind", "ref"} {
+		mut("mayus-"+k, `"`+k+`":`, `"`+strings.ToUpper(k)+`":`)
+		mut("capital-"+k, `"`+k+`":`, `"`+strings.ToUpper(k[:1])+k[1:]+`":`)
+	}
 	cases["no-json"] = []byte(`{`)
 	for name, b := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -96,4 +103,71 @@ func compact(b []byte) (string, error) {
 	}
 	o, err := json.Marshal(v)
 	return string(o), err
+}
+
+// objSpan devuelve el texto `"key":{...}` dentro del JSON compacto c.
+func objSpan(t *testing.T, c, key string) string {
+	t.Helper()
+	i := strings.Index(c, `"`+key+`":{`)
+	if i < 0 {
+		t.Fatalf("sin objeto %s", key)
+	}
+	depth := 0
+	for j := i + len(key) + 3; j < len(c); j++ {
+		switch c[j] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return c[i : j+1]
+			}
+		}
+	}
+	t.Fatal("llaves desbalanceadas")
+	return ""
+}
+
+// TestParseRejectsDuplicateKeys: ningun caso con claves duplicadas se acepta,
+// aunque el esquema (el ultimo valor gana) lo acepte; y nunca se acepta algo
+// que el esquema rechaza.
+func TestParseRejectsDuplicateKeys(t *testing.T) {
+	s := schema(t)
+	c, err := compact(readFile(t, filepath.Join(events, "examples/valid/notify.created.json")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]string{}
+	re := regexp.MustCompile(`"%s":("[^"]*"|\d+)`)
+	for _, k := range []string{"event_id", "type", "version", "occurred_at", "trace_id",
+		"notification_id", "github_event", "repo", "sha", "kind", "ref"} {
+		m := regexp.MustCompile(fmt.Sprintf(re.String(), k)).FindString(c)
+		if m == "" {
+			t.Fatalf("sin clave %s", k)
+		}
+		val := m[strings.Index(m, ":")+1:]
+		cases[k+"-null-final"] = strings.Replace(c, m, m+`,"`+k+`":null`, 1)
+		cases[k+"-valor-final"] = strings.Replace(c, m, m+`,"`+k+`":`+val, 1)
+		cases[k+"-null-inicial"] = strings.Replace(c, m, `"`+k+`":null,`+m, 1)
+	}
+	for _, k := range []string{"data", "artifact"} {
+		sp := objSpan(t, c, k)
+		cases[k+"-objeto-duplicado"] = strings.Replace(c, sp, sp+","+sp, 1)
+		cases[k+"-objeto-null-final"] = strings.Replace(c, sp, sp+`,"`+k+`":null`, 1)
+	}
+	schemaAccepts := 0
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			var v any
+			if json.Unmarshal([]byte(in), &v) == nil && s.Validate(v) == nil {
+				schemaAccepts++
+			}
+			if _, err := ParseNotifyCreated([]byte(in)); err == nil {
+				t.Fatalf("clave duplicada aceptada: %s", in)
+			}
+		})
+	}
+	if schemaAccepts == 0 {
+		t.Fatal("ningun caso es valido para el esquema: la prueba no demuestra que el parser es mas estricto")
+	}
 }
