@@ -66,10 +66,10 @@ Desde la raíz del worktree.
 
 - [ ] **CA-3** — Un fallo muestra el seed y un contraejemplo reducido, y se reproduce con ese seed.
   ```bash
-  cd services/go-intake && l=$(mktemp) && go test -tags pbt_demo -run 'PBT_Demo' -v ./... > "$l" 2>&1; grep -E 'rapid\.seed=|Falsifying|FAIL' "$l" | head -n 5
-  s=$(grep -o -E 'rapid\.seed=[0-9-]+' "$l" | head -n1); go test -tags pbt_demo -run 'PBT_Demo' "-$s" 2>&1 | grep -c -E 'Falsifying|FAIL'
+  cd services/go-intake && l=$(mktemp) && go test -tags pbt_demo -run 'PBT_Demo' -v ./... > "$l" 2>&1; grep -E 'rapid\.seed=|Falsifying|failed after|FAIL' "$l" | head -n 5
+  s=$(grep -o -E 'rapid\.seed=[0-9-]+' "$l" | head -n1); go test -tags pbt_demo -run 'PBT_Demo' ./... "-$s" 2>&1 | grep -c -E 'Falsifying|failed after|FAIL'
   ```
-  Esperado: líneas con `rapid.seed=`, `Falsifying example` (o `Failed after`) y `FAIL`; y el segundo comando imprime un número ≥ `1` (el mismo fallo con el mismo seed). `TestPBT_Demo*` existe **solo** detrás de la etiqueta de compilación `pbt_demo` (una propiedad deliberadamente falsa, p. ej. «todo `Sha40` generado empieza por `a`»), de modo que `go test ./...` normal **no** la ejecuta.
+  Esperado: líneas con `rapid.seed=`, `failed after` (o `Falsifying example`) y `FAIL`; y el segundo comando imprime un número ≥ `1` (el mismo fallo con el mismo seed). `TestPBT_Demo*` existe **solo** detrás de la etiqueta de compilación `pbt_demo` (una propiedad deliberadamente falsa, p. ej. «todo `Sha40` generado empieza por `a`»), de modo que `go test ./...` normal **no** la ejecuta.
 
 - [ ] **CA-4** — El `go test ./...` normal no incluye el demo y sigue en verde (lo que corre en CI).
   ```bash
@@ -116,6 +116,9 @@ Desde la raíz del worktree.
 
 ## Notas
 
+- **Go (aprendido en U4).** El módulo va en `go 1.26.8` (no `go 1.24`: con 1.24 el job `vuln` de la CI de GitHub falla por avisos de la biblioteca estándar), con las dependencias más recientes compatibles con esa versión. Patrón de referencia: `services/go-identity` y `services/go-governance`. `govulncheck` no corre en el entorno del loop (`vuln.go.dev` da 403): la confirmación es el job `vuln` de `ci` en el PR de GitHub (el orquestador lo abre como borrador para que corra).
+- **PBT (aprendido en U4-T06).** Mismo patrón y dependencia que `services/go-governance` y `services/go-identity` (`pgregory.net/rapid` v1.3.0, `internal/gen`, `PBT.md`, demo `pbt_demo`, mutantes `.patch` generados con `git diff` y comprobados con `git apply --check`). rapid imprime `failed after`, no `Falsifying`. Comprueba que las invariantes son verdaderas sobre el código real; si una propiedad halla un defecto de producción, se registra con el contraejemplo reducido y se fija con una prueba `Limit`, sin arreglarlo si el alcance lo prohíbe.
+- **Informes del loop.** El diff de `revisiones/<tarea>/` (informes del revisor) no cuenta como desborde en los criterios de alcance.
 - Archivos que se **modifican en su sitio**: `go.mod`/`go.sum` de ambos servicios (nueva dependencia) y, si hace falta, constructores exportados internos para poder generar el modelo. Nada de duplicados con sufijo.
 - Las propiedades no deben depender de red, reloj real ni disco fuera de `t.TempDir()`.
 - El seed se imprime con `t.Logf`; el CI lo guarda en el log de la ejecución. No se persiste en artefactos.

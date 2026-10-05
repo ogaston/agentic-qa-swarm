@@ -142,6 +142,9 @@ sig() { printf '%s' "$2" | openssl dgst -sha256 -hmac "$1" | sed 's/^.* /sha256=
 
 ## Notas
 
+- **Go (aprendido en U4).** El módulo va en `go 1.26.8` (no `go 1.24`: con 1.24 el job `vuln` de la CI de GitHub falla por avisos de la biblioteca estándar), con las dependencias más recientes compatibles con esa versión. Patrón de referencia: `services/go-identity` y `services/go-governance`. `govulncheck` no corre en el entorno del loop (`vuln.go.dev` da 403): la confirmación es el job `vuln` de `ci` en el PR de GitHub (el orquestador lo abre como borrador para que corra).
+- **Dockerfile (aprendido en U4).** Copia el patrón de `services/go-identity/Dockerfile` (`golang:1.26.8-alpine3.24`, runtime `alpine:3.24`, tags fijados, usuario 65532). El `docker build` literal falla en el entorno del loop por la CA del proxy (x509 en `go mod download`): se verifica con un contexto temporal fuera del repo que añade `/root/.ccr/ca-bundle.crt` (`COPY` + `ENV SSL_CERT_FILE` en la etapa build); es un límite del entorno, no un defecto.
+- **Informes del loop.** El diff de `revisiones/<tarea>/` (informes del revisor) no cuenta como desborde en los criterios de alcance.
 - Archivos que se **modifican en su sitio**: ninguno de U1-T01 salvo para añadir interfaces o constructores en `githubsig`. Nada de duplicados con sufijo.
 - El `outbox` y el JSONL son soluciones de transición: están detrás de puertos precisamente para que C-45 (transporte y persistencia del control plane) las reemplace sin tocar el handler. No las vendas como decisión de arquitectura en la bitácora.
 - `notification_id`: ULID o `n-<uuid>`; lo fija el codificador y lo documenta. Debe pasar `minLength: 1` y no contener `/`.

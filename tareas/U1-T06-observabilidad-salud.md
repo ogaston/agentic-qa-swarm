@@ -152,6 +152,10 @@ run_intake() { t=$(mktemp -d); (cd services/go-intake && go build -o "$t/go-inta
 
 ## Notas
 
+- **Go (aprendido en U4).** El módulo va en `go 1.26.8` (no `go 1.24`: con 1.24 el job `vuln` de la CI de GitHub falla por avisos de la biblioteca estándar), con las dependencias más recientes compatibles con esa versión. Patrón de referencia: `services/go-identity` y `services/go-governance`. `govulncheck` no corre en el entorno del loop (`vuln.go.dev` da 403): la confirmación es el job `vuln` de `ci` en el PR de GitHub (el orquestador lo abre como borrador para que corra).
+- **Observabilidad (aprendido en U4-T07).** Reutiliza el patrón y la dependencia de `services/go-identity/internal/obs` y `services/go-governance/internal/obs` (`prometheus/client_golang` v1.24.1; log JSON, `/healthz`, `/readyz` deep, `/metrics` con `route` como patrón y contadores inicializados en 0). Los endpoints operativos van fuera de `secure()`: documenta la excepción de cabeceras en el README del servicio (C-73).
+- **Comandos con `yq` (aprendido en U4).** `keys` no ordena (usa `keys | sort`); `x // "y"` trata `false` como ausente; `if/then` de jq no parsea en yq; `yq -N` sobre un build imprime líneas en blanco (filtra con `grep -v '^$'`). Si un criterio no puede dar el esperado por esa causa, el codificador lo reporta con comando y salida; no rellena a ciegas.
+- **Informes del loop.** El diff de `revisiones/<tarea>/` (informes del revisor) no cuenta como desborde en los criterios de alcance.
 - Archivos que se **modifican en su sitio**: el cableado de `cmd/*` y los handlers de U1-T02/T04 (middleware), y `deploy/flux/base/observability/kustomization.yaml` (una línea). Nada de duplicados con sufijo.
 - El `request_id` y el `trace_id` son distintos: el primero identifica la petición HTTP; el segundo, la cadena de eventos de una corrida.
 - El uso de `golang.org/x/vuln` en CI (`govulncheck`) revisará las dependencias nuevas; si `client_golang` trae una vulnerabilidad, se reporta como bloqueo, no se ignora.
