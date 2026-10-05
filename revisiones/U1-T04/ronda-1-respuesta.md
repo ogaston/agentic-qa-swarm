@@ -1,0 +1,5 @@
+F-01: Corregido en 0f8f804: ParseNotifyCreated comprueba claves exactas (sensibles a mayusculas) en raiz, data y artifact con exactKeys; TestParseAgreesWithSchema suma 26 mutaciones de capitalizacion (todas coinciden con el esquema real); binario real con EVENT_ID/Type/DATA ahora da [] y log de descarte; divergencias mas estrictas (1.0, t/z minuscula) documentadas en el comentario.
+F-02: Corregido en 0f8f804: mas de una cabecera Authorization -> 401 y state repetido -> 400, con TestDuplicateAuthorizationHeaderIs401 y TestRepeatedStateParamIs400 (rojos antes).
+F-03: Corregido en 0f8f804: TestRetryAfterExactAndDecreasing fija 4,3,2 con reloj inyectable (0.25 rps) y TestRateLimitWithInjectedClock exige "1"; el mutante constante 1 falla.
+F-04: Corregido en 0f8f804: TestBodyLimitLiteral64KiB (65536 pasa a validacion, 65537 -> 413, literales) y TestFileSubscriberResetsOffsetOnTruncate; los mutantes body-6400KiB y offset-no-reset fallan.
+F-05: Corregido en 0f8f804: MaxLineBytes = 1 MiB; readLine consume sin acumular la linea mayor, se descarta con log y el subscriber sigue (TestFileSubscriberSkipsOversizedLine; el mutante sin tope falla).
