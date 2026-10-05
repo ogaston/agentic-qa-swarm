@@ -3,6 +3,7 @@ package inbox
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,5 +50,45 @@ func TestFileSubscriberDiscardsInvalidAndTailsIncrementally(t *testing.T) {
 	}
 	if len(st.List("")) != 1 {
 		t.Fatal("la proyeccion debe ser idempotente")
+	}
+}
+
+func TestFileSubscriberResetsOffsetOnTruncate(t *testing.T) {
+	good := readFile(t, filepath.Join(events, "examples/valid/notify.created.json"))
+	line, _ := compact(good)
+	p := filepath.Join(t.TempDir(), "events.jsonl")
+	fs := &FileSubscriber{Path: p}
+	count := 0
+	h := func(NotifyCreated) { count++ }
+	if err := os.WriteFile(p, []byte(line+"\n"+line+"\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	fs.Drain(h)
+	// El archivo se rota/trunca a algo mas corto: debe releerse desde el inicio.
+	if err := os.WriteFile(p, []byte(line+"\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	fs.Drain(h)
+	if count != 3 {
+		t.Fatalf("entregas = %d, esperado 3 (2 + 1 tras truncar)", count)
+	}
+}
+
+func TestFileSubscriberSkipsOversizedLine(t *testing.T) {
+	good := readFile(t, filepath.Join(events, "examples/valid/notify.created.json"))
+	line, _ := compact(good)
+	p := filepath.Join(t.TempDir(), "events.jsonl")
+	// Evento valido segun el esquema, pero con trace_id gigante: solo el tope lo rechaza.
+	huge := strings.Replace(line, "4bf92f3577b34da6a3ce929d0e0e4736", strings.Repeat("x", MaxLineBytes+10), 1)
+	if _, err := ParseNotifyCreated([]byte(huge)); err != nil {
+		t.Fatalf("la linea grande debe ser valida salvo por el tamano: %v", err)
+	}
+	if err := os.WriteFile(p, []byte(huge+"\n"+line+"\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	fs := &FileSubscriber{Path: p}
+	n, err := fs.Drain(func(NotifyCreated) {})
+	if err != nil || n != 1 || fs.Discarded() != 1 {
+		t.Fatalf("n=%d err=%v discarded=%d", n, err, fs.Discarded())
 	}
 }

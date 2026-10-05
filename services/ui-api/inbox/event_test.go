@@ -73,6 +73,11 @@ func TestParseAgreesWithSchema(t *testing.T) {
 	mut("extra-data", `"repo"`, `"x": 1, "repo"`)
 	mut("trace-vacio", `4bf92f3577b34da6a3ce929d0e0e4736`, ``)
 	mut("ref-vacio", `"ref": "acme/shop@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `"ref": ""`)
+	for _, k := range []string{"event_id", "type", "version", "occurred_at", "trace_id", "data",
+		"notification_id", "github_event", "repo", "sha", "artifact", "kind", "ref"} {
+		mut("mayus-"+k, `"`+k+`":`, `"`+strings.ToUpper(k)+`":`)
+		mut("capital-"+k, `"`+k+`":`, `"`+strings.ToUpper(k[:1])+k[1:]+`":`)
+	}
 	cases["no-json"] = []byte(`{`)
 	for name, b := range cases {
 		t.Run(name, func(t *testing.T) {

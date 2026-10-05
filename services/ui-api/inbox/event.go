@@ -38,12 +38,48 @@ func invalid(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalidEvent, fmt.Sprintf(format, a...))
 }
 
+// exactKeys exige que el objeto tenga EXACTAMENTE las claves de want, con
+// los nombres sensibles a mayusculas (encoding/json las casa sin distinguir
+// mayusculas, a diferencia del esquema). Devuelve los valores crudos.
+func exactKeys(raw []byte, where string, want ...string) (map[string]json.RawMessage, error) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil || m == nil {
+		return nil, invalid("%s: no es un objeto", where)
+	}
+	if len(m) != len(want) {
+		return nil, invalid("%s: claves distintas de las del esquema", where)
+	}
+	for _, k := range want {
+		if _, ok := m[k]; !ok {
+			return nil, invalid("%s: falta la clave %q (nombres exactos)", where, k)
+		}
+	}
+	return m, nil
+}
+
 // ParseNotifyCreated decodifica y valida una linea contra el esquema
 // contracts/events/notify.created.schema.json (propiedades requeridas, enums,
-// patrones y additionalProperties=false). La prueba de contrato compara este
-// validador con el esquema real. Nunca incluye el contenido en el error.
+// patrones y additionalProperties=false), con nombres de campo exactos
+// (sensibles a mayusculas) en la raiz, en data y en artifact. La prueba de
+// contrato compara este validador con el esquema real. Nunca incluye el
+// contenido en el error.
+//
+// Es a proposito MAS estricto que el esquema en dos puntos menores, que se
+// aceptan asi: version debe ser el entero 1 (rechaza 1.0 y 1e0) y occurred_at
+// debe ser RFC 3339 de Go (rechaza "t"/"z" en minuscula).
 func ParseNotifyCreated(line []byte) (NotifyCreated, error) {
 	var ev NotifyCreated
+	root, err := exactKeys(line, "evento", "event_id", "type", "version", "occurred_at", "trace_id", "data")
+	if err != nil {
+		return ev, err
+	}
+	data, err := exactKeys(root["data"], "data", "notification_id", "github_event", "repo", "sha", "artifact")
+	if err != nil {
+		return ev, err
+	}
+	if _, err := exactKeys(data["artifact"], "data.artifact", "kind", "ref"); err != nil {
+		return ev, err
+	}
 	dec := json.NewDecoder(bytes.NewReader(line))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&ev); err != nil {

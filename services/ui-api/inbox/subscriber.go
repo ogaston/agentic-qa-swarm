@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// MaxLineBytes es el tope de tamano de una linea del outbox.
+const MaxLineBytes = 1 << 20
+
 // EventSubscriber entrega eventos notify.created a la proyeccion.
 type EventSubscriber interface {
 	// Run bloquea hasta que ctx termina, llamando a handle por cada evento valido.
@@ -62,11 +65,18 @@ func (f *FileSubscriber) Drain(handle func(NotifyCreated)) (int, error) {
 	n := 0
 	r := bufio.NewReaderSize(file, 64<<10)
 	for {
-		line, err := r.ReadBytes('\n')
+		line, consumed, tooBig, err := readLine(r)
 		if err != nil {
 			break // EOF: una linea parcial se reintenta en la proxima pasada
 		}
-		f.offset += int64(len(line))
+		f.offset += int64(consumed)
+		if tooBig {
+			f.discarded++
+			if f.Logger != nil {
+				f.Logger.Printf("linea del outbox descartada: supera %d bytes", MaxLineBytes)
+			}
+			continue
+		}
 		if len(line) <= 1 {
 			continue
 		}
@@ -100,6 +110,31 @@ func (f *FileSubscriber) Run(ctx context.Context, handle func(NotifyCreated)) er
 			if _, err := f.Drain(handle); err != nil && f.Logger != nil {
 				f.Logger.Printf("leyendo eventos: %v", err)
 			}
+		}
+	}
+}
+
+// readLine lee hasta '\n' y devuelve la linea y los bytes consumidos. Si la
+// linea supera MaxLineBytes, la consume entera sin acumularla y devuelve
+// tooBig. Una linea sin '\n' final devuelve error (se reintenta al completarse).
+func readLine(r *bufio.Reader) (line []byte, consumed int, tooBig bool, err error) {
+	for {
+		chunk, e := r.ReadSlice('\n')
+		consumed += len(chunk)
+		if !tooBig {
+			if consumed > MaxLineBytes {
+				tooBig, line = true, nil
+			} else {
+				line = append(line, chunk...)
+			}
+		}
+		switch {
+		case e == nil:
+			return line, consumed, tooBig, nil
+		case errors.Is(e, bufio.ErrBufferFull):
+			continue
+		default:
+			return nil, 0, false, e
 		}
 	}
 }
