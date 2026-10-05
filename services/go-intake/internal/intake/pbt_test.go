@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -210,7 +211,13 @@ func TestPBT_StoreLastWinsPerID(t *testing.T) {
 			last[i] = r
 		}
 		check := func(st *intake.JSONLStore) {
-			for i, want := range last {
+			keys := make([]int, 0, len(last))
+			for i := range last {
+				keys = append(keys, i)
+			}
+			sort.Ints(keys) // orden fijo: el mensaje de fallo debe ser idéntico con el mismo seed
+			for _, i := range keys {
+				want := last[i]
 				if got, ok := st.GetByDelivery(pool[i].DeliveryID); !ok || !reflect.DeepEqual(got, want) {
 					t.Fatalf("GetByDelivery(%q) = %+v, %v; quiero %+v", pool[i].DeliveryID, got, ok, want)
 				}
@@ -277,5 +284,53 @@ func TestPBT_Fixed_StoreRoundTrip(t *testing.T) {
 	}
 	if got, ok := st2.GetByDelivery("d-1"); !ok || !reflect.DeepEqual(got, rec) {
 		t.Fatalf("%+v %v", got, ok)
+	}
+}
+
+func TestPBT_Fixed_ClassifyRejects(t *testing.T) {
+	for _, ref := range []string{"refs/headsX", "refs/heads", "refs/tagsX/v1", "refs/tags", ""} {
+		body := `{"ref":"` + ref + `","after":"` + strings.Repeat("a", 40) + `","repository":{"full_name":"a/b"}}`
+		if _, err := intake.Classify("push", []byte(body)); !errors.Is(err, intake.ErrUnsupported) {
+			t.Fatalf("ref %q: %v", ref, err)
+		}
+	}
+	if _, err := intake.Classify("push", []byte(`{"ref":"refs/heads/x","after":"abc","repository":{"full_name":"a/b"}}`)); !errors.Is(err, intake.ErrInvalidPayload) {
+		t.Fatalf("sha corto: %v", err)
+	}
+	// El tag con barra final se conserva tal cual (Resolve lo rechaza después).
+	c, err := intake.Classify("push", []byte(`{"ref":"refs/tags/v1/","after":"`+strings.Repeat("a", 40)+`","repository":{"full_name":"a/b"}}`))
+	if err != nil || c.Tag != "v1/" {
+		t.Fatalf("%+v %v", c, err)
+	}
+}
+
+func TestPBT_Fixed_StoreLastWinsPerID(t *testing.T) {
+	dir := t.TempDir()
+	st, err := intake.OpenJSONLStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := intake.Record{Notification: intake.Notification{ID: "n-a", GithubEvent: "commit", Repo: "a/b", SHA: strings.Repeat("a", 40), State: intake.StatePending}, DeliveryID: "d-a", PublishPending: true}
+	b := intake.Record{Notification: intake.Notification{ID: "n-b", GithubEvent: "tag", Repo: "a/b", SHA: strings.Repeat("b", 40), State: intake.StatePending}, DeliveryID: "d-b", PublishPending: true}
+	for _, r := range []intake.Record{a, b} {
+		if err := st.Put(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.PublishPending = false
+	if err := st.Put(a); err != nil {
+		t.Fatal(err)
+	}
+	st2, err := intake.OpenJSONLStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, st := range []*intake.JSONLStore{st, st2} {
+		if got, ok := st.GetByDelivery("d-a"); !ok || got.PublishPending {
+			t.Fatalf("gana la última línea: %+v %v", got, ok)
+		}
+		if got, ok := st.GetByDelivery("d-b"); !ok || !got.PublishPending {
+			t.Fatalf("%+v %v", got, ok)
+		}
 	}
 }

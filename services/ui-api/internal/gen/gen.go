@@ -63,14 +63,20 @@ func InvalidTag() *rapid.Generator[string] {
 	)
 }
 
-// Free es una cadena arbitraria no vacía (Unicode, largos límite).
+// Free es una cadena arbitraria (Unicode, vacía y de largo límite).
 func Free() *rapid.Generator[string] {
 	return rapid.OneOf(
-		rapid.StringN(1, 40, -1),
+		rapid.Just(""),
+		rapid.StringN(0, 40, -1),
 		rapid.StringN(1, 1, -1),
-		rapid.SampledFrom([]string{"ñandú", "日本語", "a\u0000b", "<&>\"", " ", "😀", "x y"}),
+		rapid.SampledFrom([]string{"ñandú", "日本語", "a\u0000b", "<&>\"", "\u2028", "😀", "x y"}),
 		rapid.StringN(500, 500, -1),
 	)
+}
+
+// NonEmpty es como Free sin la cadena vacía (campos con minLength 1).
+func NonEmpty() *rapid.Generator[string] {
+	return Free().Filter(func(s string) bool { return s != "" })
 }
 
 // Events es el conjunto de github_event.
@@ -99,7 +105,7 @@ func UUID() *rapid.Generator[string] {
 // Artifact es {kind, ref} con ref no vacío.
 func Artifact() *rapid.Generator[inbox.Artifact] {
 	return rapid.Custom(func(t *rapid.T) inbox.Artifact {
-		return inbox.Artifact{Kind: rapid.SampledFrom(Kinds).Draw(t, "kind"), Ref: Free().Draw(t, "ref")}
+		return inbox.Artifact{Kind: rapid.SampledFrom(Kinds).Draw(t, "kind"), Ref: NonEmpty().Draw(t, "ref")}
 	})
 }
 
@@ -148,10 +154,10 @@ func NotifyCreatedAt(at *rapid.Generator[time.Time]) *rapid.Generator[inbox.Noti
 		var e inbox.NotifyCreated
 		e.EventID, e.Type, e.Version = UUID().Draw(t, "event_id"), "notify.created", 1
 		e.OccurredAt = at.Draw(t, "occurred_at")
-		e.TraceID = rapid.OneOf(rapid.StringMatching(`[0-9a-f]{32}`), Free()).Draw(t, "trace_id")
+		e.TraceID = rapid.OneOf(rapid.StringMatching(`[0-9a-f]{32}`), NonEmpty()).Draw(t, "trace_id")
 		e.Data.NotificationID = "n-" + UUID().Draw(t, "nid")
 		e.Data.GithubEvent = rapid.SampledFrom(Events).Draw(t, "github_event")
-		e.Data.Repo = rapid.OneOf(Repo(), Free()).Draw(t, "repo")
+		e.Data.Repo = rapid.OneOf(Repo(), NonEmpty()).Draw(t, "repo")
 		e.Data.SHA = Sha40().Draw(t, "sha")
 		a := Artifact().Draw(t, "artifact")
 		e.Data.Artifact = &a
@@ -165,7 +171,7 @@ func ConfirmationReceipt() *rapid.Generator[inbox.Receipt] {
 	return rapid.Custom(func(t *rapid.T) inbox.Receipt {
 		return inbox.Receipt{
 			RunID:          "run-" + rapid.StringMatching(`[0-9a-f]{32}`).Draw(t, "run"),
-			NotificationID: "n-" + UUID().Draw(t, "nid"), ConfirmedBy: Free().Draw(t, "by"),
+			NotificationID: "n-" + UUID().Draw(t, "nid"), ConfirmedBy: NonEmpty().Draw(t, "by"),
 			ConfirmedAt: Instant().Draw(t, "at").UTC().Truncate(time.Second),
 		}
 	})

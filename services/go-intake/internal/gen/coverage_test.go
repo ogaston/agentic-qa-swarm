@@ -78,7 +78,23 @@ func TestPBT_GeneratorCoverage(t *testing.T) {
 		if rc.Registry != "" {
 			res["registro-propio"]++
 		}
-		res["bad:"+gen.UnresolvableEvent().Draw(t, "bad").Event.GithubEvent]++
+		bad := gen.UnresolvableEvent().Draw(t, "bad")
+		res["bad:"+bad.Event.GithubEvent]++
+		switch {
+		case bad.Registry != "":
+			res["bad-registro"]++
+		case len(bad.Event.SHA) > 40:
+			res["bad-sha-largo"]++
+		case len(bad.Event.SHA) < 40:
+			res["bad-sha-corto"]++
+		case len(bad.Event.Tag) == 129:
+			res["bad-tag-129"]++
+		case strings.HasSuffix(bad.Event.Tag, "/"):
+			res["bad-tag-barra"]++
+		}
+		if r := gen.GitHubPushTag().Draw(t, "pt"); strings.HasSuffix(r.Want.Tag, "/") {
+			res["tag-webhook-barra-final"]++
+		}
 	})
 	if n < 500 {
 		t.Fatalf("solo %d sorteos", n)
@@ -92,5 +108,6 @@ func TestPBT_GeneratorCoverage(t *testing.T) {
 	missing(t, "eventos", ev, "event:commit", "event:pull_request", "event:tag", "kind:"+artifact.KindBuildFromRepo,
 		"kind:"+artifact.KindPublishedImage, "fecha-Z", "fecha-fraccion", "fecha-offset")
 	missing(t, "tags", tags, "valido-1", "valido-128", "valido-otro", "vacio", "latest", "largo", "invalido-otro")
-	missing(t, "resolver", res, "ok:commit", "ok:pull_request", "ok:tag", "registro-propio", "bad:commit", "bad:pull_request", "bad:tag")
+	missing(t, "resolver", res, "ok:commit", "ok:pull_request", "ok:tag", "registro-propio", "bad:commit", "bad:pull_request", "bad:tag",
+		"bad-registro", "bad-sha-largo", "bad-sha-corto", "bad-tag-129", "bad-tag-barra", "tag-webhook-barra-final")
 }

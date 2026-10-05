@@ -80,14 +80,31 @@ func InvalidTag() *rapid.Generator[string] {
 	)
 }
 
-// Free es una cadena arbitraria no vacía (Unicode, largos límite).
+// TagAny es un nombre de tag tal como llega en un webhook: válido, inválido,
+// con barra final, anidado ("rel/v1") o arbitrario. Classify no lo valida.
+func TagAny() *rapid.Generator[string] {
+	return rapid.OneOf(
+		Tag(), InvalidTag(), rapid.StringN(0, 30, -1),
+		rapid.Custom(func(t *rapid.T) string { return Tag().Draw(t, "tag") + "/" }),
+		rapid.Custom(func(t *rapid.T) string { return "rel/" + Tag().Draw(t, "tag") }),
+		rapid.SampledFrom([]string{"/", "//", "v1/", " v1 ", "v1\n"}),
+	)
+}
+
+// Free es una cadena arbitraria (Unicode, vacía y de largo límite).
 func Free() *rapid.Generator[string] {
 	return rapid.OneOf(
-		rapid.StringN(1, 40, -1),
+		rapid.Just(""),
+		rapid.StringN(0, 40, -1),
 		rapid.StringN(1, 1, -1),
-		rapid.SampledFrom([]string{"ñandú", "日本語", "a\u0000b", "<&>\"", " ", "😀", "x y"}),
+		rapid.SampledFrom([]string{"ñandú", "日本語", "a\u0000b", "<&>\"", "\u2028", "😀", "x y"}),
 		rapid.StringN(500, 500, -1),
 	)
+}
+
+// NonEmpty es como Free sin la cadena vacía (campos con minLength 1).
+func NonEmpty() *rapid.Generator[string] {
+	return Free().Filter(func(s string) bool { return s != "" })
 }
 
 // GitHubCase es un webhook de GitHub generado y su clasificación esperada.
@@ -109,7 +126,7 @@ func mustJSON(v any) []byte {
 }
 
 func repoField(t *rapid.T) string {
-	return rapid.OneOf(Repo(), Free()).Draw(t, "repo")
+	return rapid.OneOf(Repo(), NonEmpty()).Draw(t, "repo")
 }
 
 // GitHubPushBranch es un push a una rama (github_event commit).
@@ -132,7 +149,7 @@ func GitHubPushBranch() *rapid.Generator[GitHubCase] {
 func GitHubPushTag() *rapid.Generator[GitHubCase] {
 	return rapid.Custom(func(t *rapid.T) GitHubCase {
 		repo, sha := repoField(t), Sha40().Draw(t, "sha")
-		tag := rapid.OneOf(Tag(), InvalidTag(), rapid.StringN(0, 30, -1)).Draw(t, "tag")
+		tag := TagAny().Draw(t, "tag")
 		body := mustJSON(map[string]any{
 			"ref": "refs/tags/" + tag, "after": sha, "repository": map[string]any{"full_name": repo},
 		})
@@ -175,7 +192,7 @@ func GitHubPullRequest() *rapid.Generator[GitHubCase] {
 func GitHubRelease() *rapid.Generator[GitHubCase] {
 	return rapid.Custom(func(t *rapid.T) GitHubCase {
 		repo, sha := repoField(t), Sha40().Draw(t, "sha")
-		tag := rapid.OneOf(Tag(), InvalidTag(), rapid.StringN(0, 30, -1)).Draw(t, "tag")
+		tag := TagAny().Draw(t, "tag")
 		body := mustJSON(map[string]any{
 			"action":     "published",
 			"release":    map[string]any{"tag_name": tag, "target_commitish": sha, "draft": false},
@@ -216,7 +233,8 @@ func GitHubRejected() *rapid.Generator[RejectedCase] {
 		case 1:
 			return RejectedCase{"push-delete-tag", "push", mustJSON(map[string]any{"ref": "refs/tags/v1", "after": ZeroSHA, "repository": repository}), intake.ErrUnsupported}
 		case 2:
-			ref := rapid.SampledFrom([]string{"", "refs/notes/x", "refs/pull/1/head", "heads/main", "refs/HEADS/x"}).Draw(t, "ref")
+			ref := rapid.SampledFrom([]string{"", "refs/notes/x", "refs/pull/1/head", "heads/main", "refs/HEADS/x",
+				"refs/headsX", "refs/headsX/main", "refs/heads", "refs/tags", "refs/tagsX/v1", "refs/tagsv1", "/refs/heads/x", " refs/heads/x", "refs/head/x", "refs/tag/v1"}).Draw(t, "ref")
 			return RejectedCase{"push-other-ref", "push", mustJSON(map[string]any{"ref": ref, "after": sha, "repository": repository}), intake.ErrUnsupported}
 		case 3:
 			act := rapid.SampledFrom([]string{"closed", "edited", "labeled", "assigned", "", "OPENED", "ready_for_review"}).Draw(t, "act")
@@ -249,7 +267,7 @@ func uuid() *rapid.Generator[string] {
 func Artifact() *rapid.Generator[intake.Artifact] {
 	return rapid.Custom(func(t *rapid.T) intake.Artifact {
 		kind := rapid.SampledFrom([]string{artifact.KindBuildFromRepo, artifact.KindPublishedImage}).Draw(t, "kind")
-		return intake.Artifact{Kind: kind, Ref: Free().Draw(t, "ref")}
+		return intake.Artifact{Kind: kind, Ref: NonEmpty().Draw(t, "ref")}
 	})
 }
 
@@ -302,11 +320,11 @@ func Event() *rapid.Generator[intake.Event] {
 		return intake.Event{
 			EventID: uuid().Draw(t, "event_id"), Type: "notify.created", Version: 1,
 			OccurredAt: OccurredAt().Draw(t, "occurred_at"),
-			TraceID:    rapid.OneOf(rapid.StringMatching(`[0-9a-f]{32}`), Free()).Draw(t, "trace_id"),
+			TraceID:    rapid.OneOf(rapid.StringMatching(`[0-9a-f]{32}`), NonEmpty()).Draw(t, "trace_id"),
 			Data: intake.EventData{
 				NotificationID: "n-" + uuid().Draw(t, "nid"),
 				GithubEvent:    rapid.SampledFrom([]string{intake.EventCommit, intake.EventPullRequest, intake.EventTag}).Draw(t, "ge"),
-				Repo:           rapid.OneOf(Repo(), Free()).Draw(t, "repo"), SHA: Sha40().Draw(t, "sha"),
+				Repo:           rapid.OneOf(Repo(), NonEmpty()).Draw(t, "repo"), SHA: Sha40().Draw(t, "sha"),
 				Artifact: Artifact().Draw(t, "artifact"),
 			},
 		}
@@ -349,12 +367,64 @@ func ResolvableEvent() *rapid.Generator[ResolveCase] {
 	})
 }
 
+// BadSHA son SHAs que no son 40 hex en minúsculas: cortos, largos (41 o más),
+// con basura delante o detrás de un SHA válido, mayúsculas, no hex y con salto de línea.
+func BadSHA() *rapid.Generator[string] {
+	return rapid.Custom(func(t *rapid.T) string {
+		valid := Sha40().Draw(t, "valid")
+		switch rapid.SampledFrom([]int{0, 1, 1, 1, 2, 2, 3, 3, 3, 4, 5, 6, 7, 8}).Draw(t, "kind") {
+		case 0:
+			return valid[:rapid.IntRange(0, 39).Draw(t, "len")]
+		case 1:
+			return valid + rapid.StringMatching(`[0-9a-f]{1,5}`).Draw(t, "extra") // 41 a 45
+		case 2:
+			return rapid.SampledFrom([]string{" ", "x", "\n", "-", "0x", "sha:"}).Draw(t, "pre") + valid
+		case 3:
+			return valid + rapid.SampledFrom([]string{" ", "x", "\n", "-", "\r\n", "@main", "g"}).Draw(t, "post")
+		case 4:
+			return strings.ToUpper(valid[:1+rapid.IntRange(0, 39).Draw(t, "n")]) + valid[1+rapid.IntRange(0, 38).Draw(t, "m"):] + "A"
+		case 5:
+			return rapid.StringMatching(`[g-z]{40}`).Draw(t, "nothex")
+		case 6:
+			return valid[:39] + "g"
+		case 7:
+			return valid + valid
+		}
+		return ""
+	}).Filter(func(s string) bool { return len(s) != 40 || strings.Trim(s, hexLower) != "" })
+}
+
+// InvalidRegistry son valores de ARTIFACT_REGISTRY que Resolve debe rechazar.
+func InvalidRegistry() *rapid.Generator[string] {
+	return rapid.OneOf(
+		rapid.SampledFrom([]string{"ghcr.io/", "ghcr.io//x", "ghcr.io:abc", "ghcr.io:", "a_b.io", "reg istry", "ghcr.io/ac me",
+			"é.io", "ghcr.io:5000:1", "ghcr.io/x/", "/ghcr.io", "https://ghcr.io", "ghcr.io\n", ":5000", "ghcr.io@x", "ghcr.io/a:b"}),
+		rapid.Custom(func(t *rapid.T) string {
+			bad := rapid.SampledFrom([]string{" ", "_", "@", "#", "é", "\t", "?", "*"}).Draw(t, "bad")
+			return rapid.StringMatching(`[a-z0-9.-]{1,10}`).Draw(t, "pre") + bad + rapid.StringMatching(`[a-z0-9.-]{0,10}`).Draw(t, "suf")
+		}),
+	)
+}
+
+// InvalidRepo son repositorios que Resolve rechaza: sin barra, con más de una,
+// vacíos a un lado, con caracteres fuera de [A-Za-z0-9_.-], con basura alrededor.
+func InvalidRepo() *rapid.Generator[string] {
+	return rapid.OneOf(
+		rapid.SampledFrom([]string{"", "solo", "a/b/c", "/b", "a/", "/", "a b/c", "a/b c", "ñ/x", "a/ñ", "a/b\n", "\na/b", " a/b", "a/b ", "a@b/c", "a/b:c"}),
+		rapid.Custom(func(t *rapid.T) string {
+			bad := rapid.SampledFrom([]string{" ", "@", ":", "é", "\n", "+", "!"}).Draw(t, "bad")
+			return Owner().Draw(t, "o") + bad + "/" + RepoName().Draw(t, "n")
+		}),
+		rapid.Custom(func(t *rapid.T) string { return Repo().Draw(t, "r") + "/" + RepoName().Draw(t, "extra") }),
+	)
+}
+
 // UnresolvableEvent es un evento que Resolve debe rechazar (fail-closed).
 func UnresolvableEvent() *rapid.Generator[ResolveCase] {
 	return rapid.Custom(func(t *rapid.T) ResolveCase {
 		repo, sha := Repo().Draw(t, "repo"), Sha40().Draw(t, "sha")
 		rc := ResolveCase{}
-		switch rapid.IntRange(0, 5).Draw(t, "kind") {
+		switch rapid.IntRange(0, 11).Draw(t, "kind") {
 		case 0:
 			rc.Event = artifact.Event{GithubEvent: artifact.EventTag, Repo: repo, SHA: sha, Tag: InvalidTag().Draw(t, "tag")}
 		case 1:
@@ -365,12 +435,31 @@ func UnresolvableEvent() *rapid.Generator[ResolveCase] {
 			rc.Event = artifact.Event{GithubEvent: artifact.EventPullRequest, Repo: repo, SHA: sha, HeadRepo: head}
 		case 2:
 			rc.Event = artifact.Event{GithubEvent: artifact.EventPullRequest, Repo: repo, SHA: sha}
-		case 3:
-			rc.Event = artifact.Event{GithubEvent: artifact.EventCommit, Repo: repo, SHA: sha[:rapid.IntRange(0, 39).Draw(t, "len")]}
-		case 4:
-			rc.Event = artifact.Event{GithubEvent: artifact.EventCommit, Repo: rapid.SampledFrom([]string{"", "solo", "a/b/c", "a b/c", "ñ/x", "a/"}).Draw(t, "badrepo"), SHA: sha}
+		case 3, 4:
+			ev := artifact.EventCommit
+			if rapid.Bool().Draw(t, "pr") {
+				ev = artifact.EventPullRequest
+			}
+			rc.Event = artifact.Event{GithubEvent: ev, Repo: repo, SHA: BadSHA().Draw(t, "badsha"), HeadRepo: repo}
+		case 5:
+			rc.Event = artifact.Event{GithubEvent: artifact.EventCommit, Repo: InvalidRepo().Draw(t, "badrepo"), SHA: sha}
+		case 6:
+			rc.Event = artifact.Event{GithubEvent: rapid.SampledFrom([]string{"", "branch", "Commit", "release", "COMMIT", "tag "}).Draw(t, "ev"), Repo: repo, SHA: sha, Tag: "v1"}
+		case 7:
+			rc.Registry = InvalidRegistry().Draw(t, "badreg")
+			rc.Event = artifact.Event{GithubEvent: artifact.EventTag, Repo: repo, SHA: sha, Tag: Tag().Draw(t, "tag")}
+		case 8:
+			rc.Event = artifact.Event{GithubEvent: artifact.EventTag, Repo: InvalidRepo().Draw(t, "badrepo"), SHA: sha, Tag: Tag().Draw(t, "tag")}
+		case 9: // tag de 129 caracteres exactos y con barra final
+			tag := rapid.StringMatching(`[A-Za-z0-9_][A-Za-z0-9._-]{128}`).Draw(t, "tag129")
+			if rapid.Bool().Draw(t, "slash") {
+				tag = rapid.StringMatching(`[A-Za-z0-9_][A-Za-z0-9._-]{0,20}`).Draw(t, "short") + "/"
+			}
+			rc.Event = artifact.Event{GithubEvent: artifact.EventTag, Repo: repo, SHA: sha, Tag: tag}
+		case 10: // un tag no comprueba el SHA, pero sí repo y registro: tag válido con repo mal formado en mayúsculas/minúsculas
+			rc.Event = artifact.Event{GithubEvent: artifact.EventTag, Repo: repo + "/", SHA: sha, Tag: Tag().Draw(t, "tag")}
 		default:
-			rc.Event = artifact.Event{GithubEvent: rapid.SampledFrom([]string{"", "branch", "Commit", "release"}).Draw(t, "ev"), Repo: repo, SHA: sha, Tag: "v1"}
+			rc.Event = artifact.Event{GithubEvent: artifact.EventPullRequest, Repo: repo, SHA: sha, HeadRepo: repo + "x"}
 		}
 		return rc
 	})

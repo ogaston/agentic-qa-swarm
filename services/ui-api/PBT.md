@@ -13,9 +13,9 @@ Reglas PBT cubiertas: PBT-02 (round-trips), PBT-07 (generadores), PBT-08 (seed) 
 
 **Generadores (PBT-07):** `internal/gen` (Owner, RepoName, Sha40, Tag válido e inválido, Notification en los tres estados del enum, NotifyCreated, ConfirmationReceipt, Flows). Copia independiente de la de `go-intake` (sin `go.work` ni `replace`); los generadores de webhooks de GitHub solo existen allí.
 
-**Propiedades:** `inbox/pbt_test.go` (notify.created ida y vuelta y contra el esquema; el parser nunca es más laxo que el esquema ante eventos mutados; recibos de confirmación escribir/cerrar/reabrir; orden de `List` e idempotencia de `Apply`) y `internal/gen/coverage_test.go`. Cada una lleva un ejemplo fijo `TestPBT_Fixed_*`. `ParseNotifyCreated` es más estricto que el esquema en `version` (`1.0`), en `t`/`z` minúsculas, en claves duplicadas o con otra capitalización y en el instante cero; las propiedades lo reflejan.
+**Propiedades:** `inbox/pbt_test.go` (notify.created ida y vuelta y contra el esquema; el parser nunca es más laxo que el esquema ante eventos mutados; recibos de confirmación escribir/cerrar/reabrir; orden de `List` e idempotencia de `Apply`; JSON de `Notification` y de `Receipt`) y `internal/gen/coverage_test.go`. Cada una lleva un ejemplo fijo `TestPBT_Fixed_*`. `ParseNotifyCreated` es más estricto que el esquema en `version` (`1.0`), en `t`/`z` minúsculas, en claves duplicadas o con otra capitalización y en el instante cero; las propiedades lo reflejan.
 
-**Límite conocido hallado por las propiedades** (candidata, sin arreglo aquí): el parser acepta `occurred_at` con desplazamiento `+24:00`/`-24:00`/`+23:60` o coma decimal (`10:00:00,5Z`) que el esquema rechaza. Fijado en `TestPBT_Limit_ParserAcceptsDateTimeSchemaRejects`.
+**Límite conocido hallado por las propiedades** (candidata, sin arreglo aquí): el parser acepta `occurred_at` con desplazamiento `+24:00`/`-24:00`/`+24:01`/`+23:60`/`+00:60` o coma decimal (`10:00:00,5Z`) que el esquema rechaza. Fijado en `TestPBT_Limit_ParserAcceptsDateTimeSchemaRejects`; la propiedad del parser los incluye y exige que hoy se acepten (si se corrige, falla y hay que invertir los `Limit`).
 
 **Demo:** la propiedad falsa «todo Sha40 empieza por a» solo existe con `-tags pbt_demo`: `go test -tags pbt_demo -run PBT_Demo ./internal/gen`.
 

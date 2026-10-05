@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"pgregory.net/rapid"
 
 	"github.com/ogaston/agentic-qa-swarm/services/ui-api/inbox"
@@ -74,9 +76,9 @@ var replacements = []any{nil, true, false, 0.0, 1.0, 2.0, -1.0, 1.5, "", " ", "x
 
 // variants son variantes de texto por campo (algunas siguen siendo válidas).
 var variants = map[string][]string{
-	"event_id":        {"", "no-es-uuid", "3F2B8C1E-6A4D-4E7B-9C10-5D2E8A7F1B34", "3f2b8c1e6a4d4e7b9c105d2e8a7f1b34", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b3", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34\n", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b3g"},
+	"event_id":        {"", "no-es-uuid", "3F2B8C1E-6A4D-4E7B-9C10-5D2E8A7F1B34", "3f2b8c1e6a4d4e7b9c105d2e8a7f1b34", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b3", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34\n", "x3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34", " 3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34x", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b345", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b", "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b3g"},
 	"type":            {"notify.created ", "Notify.Created", "notify.created\n", "run.confirmed"},
-	"occurred_at":     {"", "ayer", "2026-01-15", "2026-01-15T10:00:00", "2026-13-01T00:00:00Z", "2026-02-30T00:00:00Z", "2026-01-15 10:00:00Z", "2026-01-15T24:00:00Z", "2026-01-15T10:00:60Z", "2026-01-15T23:59:60Z", "2026-01-15t10:00:00z", "2026-01-15T10:00:00.123456789012Z", "2026-01-15T10:00:00+0100", "0001-01-01T00:00:00Z", "0000-01-01T00:00:00Z", "2026-01-15T10:00:00Z\n"},
+	"occurred_at":     {"", "ayer", "2026-01-15", "2026-01-15T10:00:00", "2026-13-01T00:00:00Z", "2026-02-30T00:00:00Z", "2026-01-15 10:00:00Z", "2026-01-15T24:00:00Z", "2026-01-15T10:00:60Z", "2026-01-15T23:59:60Z", "2026-01-15t10:00:00z", "2026-01-15T10:00:00.123456789012Z", "2026-01-15T10:00:00+0100", "2026-01-15T10:00:00+24:00", "2026-01-15T10:00:00-24:00", "2026-01-15T10:00:00+23:60", "2026-01-15T10:00:00+24:01", "2026-01-15T10:00:00+00:60", "2026-01-15T10:00:00,5Z", "2026-01-15T10:00:00-23:60", "0001-01-01T00:00:00Z", "0000-01-01T00:00:00Z", "2026-01-15T10:00:00Z\n"},
 	"github_event":    {"", "Commit", "push", "commit ", "TAG"},
 	"sha":             {"", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "aaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n", "gggggggggggggggggggggggggggggggggggggggg"},
 	"kind":            {"", "otro", "Build-From-Repo", "published-image "},
@@ -166,6 +168,16 @@ func TestPBT_ParserNeverLaxerThanSchema(t *testing.T) {
 		}
 		schemaErr := gen.ValidateJSON(schema, mraw)
 		_, parseErr := inbox.ParseNotifyCreated(mraw)
+		if at, _ := m["occurred_at"].(string); schemaErr != nil && knownLax(at) {
+			// H-1 (ver TestPBT_Limit_ParserAcceptsDateTimeSchemaRejects): se fija que hoy el
+			// parser lo acepta; si se corrige, esta rama falla y hay que quitarla.
+			if parseErr != nil && onlyOccurredAtWrong(schema, m) {
+				t.Fatalf("H-1 corregido (%q rechazado): invertir los Limit y quitar knownLax", at)
+			}
+			if parseErr == nil {
+				return
+			}
+		}
 		if schemaErr != nil && parseErr == nil {
 			t.Fatalf("parser más laxo que el esquema tras %q:\n%s\nesquema: %v", what, mraw, schemaErr)
 		}
@@ -174,6 +186,25 @@ func TestPBT_ParserNeverLaxerThanSchema(t *testing.T) {
 		}
 	})
 }
+
+// knownLax reconoce los valores de H-1: desplazamientos fuera de rango y coma decimal.
+var knownLaxRE = regexp.MustCompile(`^2026-01-15T10:00:00(,5Z|[+-](24:0[01]|23:60|00:60))$`)
+
+func knownLax(at string) bool { return knownLaxRE.MatchString(at) }
+
+// onlyOccurredAtWrong indica que, al poner un occurred_at válido, el esquema acepta
+// el documento (es decir, el único defecto del documento es el instante).
+func onlyOccurredAtWrong(schema *jsonschema.Schema, m map[string]any) bool {
+	c := map[string]any{}
+	for k, v := range m {
+		c[k] = v
+	}
+	c["occurred_at"] = "2026-01-15T10:00:00Z"
+	raw, _ := json.Marshal(c)
+	return gen.ValidateJSON(schema, raw) == nil
+}
+
+var runIDRE = regexp.MustCompile(`^run-[0-9a-f]{32}$`)
 
 type fileRecord struct {
 	inbox.Receipt
@@ -242,13 +273,13 @@ func TestPBT_ReceiptStoreRoundTrip(t *testing.T) {
 			st.Apply(e)
 		}
 		var want []fileRecord
-		confirmed := map[string]bool{}
+		confirmed, usedRuns := map[string]bool{}, map[string]bool{}
 		for _, i := range rapid.SliceOfN(rapid.IntRange(0, max(len(events)-1, 0)), 0, 12).Draw(t, "order") {
 			if len(events) == 0 {
 				break
 			}
 			id := events[i].Data.NotificationID
-			flows, by := gen.Flows().Draw(t, "flows"), gen.Free().Draw(t, "by")
+			flows, by := gen.Flows().Draw(t, "flows"), gen.NonEmpty().Draw(t, "by")
 			r, err := st.Confirm(id, by, flows)
 			if confirmed[id] {
 				if !errors.Is(err, inbox.ErrAlreadyConfirmed) {
@@ -259,6 +290,10 @@ func TestPBT_ReceiptStoreRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if r.NotificationID != id || r.ConfirmedBy != by || !runIDRE.MatchString(r.RunID) || usedRuns[r.RunID] || !r.ConfirmedAt.Equal(clock.UTC().Truncate(time.Second)) {
+				t.Fatalf("recibo incoherente con la confirmación (%q por %q): %+v", id, by, r)
+			}
+			usedRuns[r.RunID] = true
 			confirmed[id] = true
 			want = append(want, fileRecord{Receipt: r, Flows: flows})
 			if rapid.IntRange(0, 3).Draw(t, "reopen") == 0 {
@@ -330,8 +365,11 @@ func TestPBT_ListOrderAndIdempotence(t *testing.T) {
 		var order []inbox.NotifyCreated
 		for _, i := range stream {
 			e := pool[i]
-			if rapid.IntRange(0, 4).Draw(t, "clone") == 0 { // mismo notification_id con otro event_id
+			switch rapid.IntRange(0, 5).Draw(t, "clone") {
+			case 0: // mismo notification_id con otro event_id
 				e.EventID = gen.UUID().Draw(t, "other_event_id")
+			case 1: // mismo event_id con otro notification_id
+				e.Data.NotificationID = "n-" + gen.UUID().Draw(t, "other_nid")
 			}
 			created := st.Apply(e)
 			wantCreated := !seenEvent[e.EventID] && !seenID[e.Data.NotificationID]
@@ -397,7 +435,7 @@ func TestPBT_Limit_ParserAcceptsDateTimeSchemaRejects(t *testing.T) {
 	schema := gen.NotifySchema(t)
 	const tpl = `{"event_id":"3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34","type":"notify.created","version":1,"occurred_at":"AT","trace_id":"t",` +
 		`"data":{"notification_id":"n","github_event":"commit","repo":"r","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact":{"kind":"build-from-repo","ref":"r"}}}`
-	for _, at := range []string{"2026-01-15T10:00:00+24:00", "2026-01-15T10:00:00-24:00", "2026-01-15T10:00:00+23:60", "2026-01-15T10:00:00,5Z"} {
+	for _, at := range []string{"2026-01-15T10:00:00+24:00", "2026-01-15T10:00:00-24:00", "2026-01-15T10:00:00+23:60", "2026-01-15T10:00:00+24:01", "2026-01-15T10:00:00-23:60", "2026-01-15T10:00:00+00:60", "2026-01-15T10:00:00,5Z"} {
 		raw := []byte(strings.Replace(tpl, "AT", at, 1))
 		if gen.ValidateJSON(schema, raw) == nil {
 			t.Errorf("%s: el esquema ya no rechaza este valor; revisar el límite", at)
@@ -488,5 +526,210 @@ func TestPBT_Fixed_ListOrder(t *testing.T) {
 	}
 	if strings.Join(ids, ",") != "n-3,n-2,n-1" {
 		t.Fatalf("orden %v", ids)
+	}
+}
+
+// Ejemplo fijo de TestPBT_ParserNeverLaxerThanSchema: una mutación de cada clase
+// (campo borrado, clave extra, capitalización, tipo erróneo, sha inválido) que el
+// esquema y el parser rechazan a la vez.
+func TestPBT_Fixed_ParserNeverLaxerThanSchema(t *testing.T) {
+	schema := gen.NotifySchema(t)
+	const valid = `{"event_id":"3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34","type":"notify.created","version":1,"occurred_at":"2026-01-15T10:00:00Z","trace_id":"t",` +
+		`"data":{"notification_id":"n","github_event":"commit","repo":"r","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact":{"kind":"build-from-repo","ref":"r"}}}`
+	if _, err := inbox.ParseNotifyCreated([]byte(valid)); err != nil {
+		t.Fatal(err)
+	}
+	for name, mut := range map[string][2]string{
+		"borrar trace_id":  {`"trace_id":"t",`, ``},
+		"clave extra":      {`"trace_id"`, `"x":1,"trace_id"`},
+		"clave extra data": {`"repo"`, `"x":1,"repo"`},
+		"mayúsculas":       {`"sha"`, `"SHA"`},
+		"sha corto":        {`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `aaaa"`},
+		"sha mayúsculas":   {`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"`},
+		"version string":   {`"version":1`, `"version":"1"`},
+		"kind":             {`"build-from-repo"`, `"otro"`},
+		"fecha":            {`2026-01-15T10:00:00Z`, `ayer`},
+		"artifact null":    {`"artifact":{"kind":"build-from-repo","ref":"r"}`, `"artifact":null`},
+	} {
+		raw := []byte(strings.Replace(valid, mut[0], mut[1], 1))
+		if string(raw) == valid {
+			t.Fatalf("%s: la mutación no cambió nada", name)
+		}
+		if gen.ValidateJSON(schema, raw) == nil {
+			t.Errorf("%s: el esquema acepta", name)
+		}
+		if _, err := inbox.ParseNotifyCreated(raw); err == nil {
+			t.Errorf("%s: el parser acepta", name)
+		}
+	}
+}
+
+// Para toda notificación REST generada (los tres estados del enum, con y sin
+// artefacto), JSON ida y vuelta la devuelve igual y el estado es válido.
+func TestPBT_NotificationJSONRoundTrip(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		n := gen.Notification().Draw(t, "n")
+		raw, err := json.Marshal(n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var back inbox.Notification
+		if err := json.Unmarshal(raw, &back); err != nil || !reflect.DeepEqual(back, n) {
+			t.Fatalf("%+v / %v, quiero %+v\n%s", back, err, n, raw)
+		}
+		if !back.State.Valid() {
+			t.Fatalf("estado inválido %q", back.State)
+		}
+		if (n.Artifact == nil) != !strings.Contains(string(raw), `"artifact"`) {
+			t.Fatalf("omitempty de artifact: %s", raw)
+		}
+	})
+}
+
+// Para todo recibo generado, JSON ida y vuelta lo devuelve igual (el instante con Equal).
+func TestPBT_ReceiptJSONRoundTrip(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		r := gen.ConfirmationReceipt().Draw(t, "r")
+		raw, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var back inbox.Receipt
+		if err := json.Unmarshal(raw, &back); err != nil || !back.ConfirmedAt.Equal(r.ConfirmedAt) {
+			t.Fatalf("%+v / %v, quiero %+v", back, err, r)
+		}
+		back.ConfirmedAt, r.ConfirmedAt = time.Time{}, time.Time{}
+		if back != r {
+			t.Fatalf("%+v, quiero %+v", back, r)
+		}
+	})
+}
+
+func TestPBT_Fixed_NotificationAndReceiptJSON(t *testing.T) {
+	a := inbox.Artifact{Kind: "tag", Ref: "r"}
+	for _, n := range []inbox.Notification{
+		{ID: "n-1", GithubEvent: "commit", Repo: "a/b", SHA: strings.Repeat("a", 40), State: inbox.StateRejected},
+		{ID: "n-2", GithubEvent: "tag", Repo: "a/b", SHA: strings.Repeat("b", 40), State: inbox.StateConfirmed, Artifact: &a},
+	} {
+		raw, _ := json.Marshal(n)
+		var back inbox.Notification
+		if err := json.Unmarshal(raw, &back); err != nil || !reflect.DeepEqual(back, n) {
+			t.Fatalf("%+v %v", back, err)
+		}
+	}
+	r := inbox.Receipt{RunID: "run-" + strings.Repeat("0", 32), NotificationID: "n-1", ConfirmedBy: "u", ConfirmedAt: time.Unix(1700000000, 0).UTC()}
+	raw, _ := json.Marshal(r)
+	var back inbox.Receipt
+	if err := json.Unmarshal(raw, &back); err != nil || !back.ConfirmedAt.Equal(r.ConfirmedAt) || back.RunID != r.RunID {
+		t.Fatalf("%+v %v", back, err)
+	}
+}
+
+// path de cada campo con variantes dentro del evento.
+var variantPaths = map[string][]string{
+	"event_id": {}, "type": {}, "occurred_at": {}, "trace_id": {}, "notification_id": {"data"}, "github_event": {"data"},
+	"repo": {"data"}, "sha": {"data"}, "kind": {"data", "artifact"}, "ref": {"data", "artifact"},
+}
+
+// Acuerdo con el esquema en TODAS las variantes de texto de cada campo (límites
+// de uuid, sha, enums, fechas, vacíos), una por una y sin azar en la elección:
+// donde el esquema rechaza, el parser rechaza; donde el esquema acepta y el
+// parser rechaza, es una diferencia documentada.
+func TestPBT_ParserAgreesOnEveryFieldVariant(t *testing.T) {
+	schema := gen.NotifySchema(t)
+	rapid.Check(t, func(t *rapid.T) {
+		e := gen.NotifyCreated().Draw(t, "event")
+		raw, err := gen.MarshalEvent(e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys := make([]string, 0, len(variants))
+		for k := range variants {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			for _, v := range variants[k] {
+				var m map[string]any
+				if err := json.Unmarshal(raw, &m); err != nil {
+					t.Fatal(err)
+				}
+				objAt(m, variantPaths[k])[k] = v
+				mraw, _ := json.Marshal(m)
+				schemaErr := gen.ValidateJSON(schema, mraw)
+				_, parseErr := inbox.ParseNotifyCreated(mraw)
+				if schemaErr != nil && parseErr == nil && !(k == "occurred_at" && knownLax(v)) {
+					t.Fatalf("parser más laxo que el esquema con %s=%q: %v", k, v, schemaErr)
+				}
+				if schemaErr == nil && parseErr != nil && !documentedStricter(m) {
+					t.Fatalf("parser más estricto que el esquema fuera de lo documentado con %s=%q: %v", k, v, parseErr)
+				}
+			}
+		}
+	})
+}
+
+// El parser rechaza toda clave repetida, en la raíz, en data y en artifact, con
+// cualquier valor (incluso null o el mismo valor): es más estricto que el esquema,
+// que solo ve el último valor, y es deliberado.
+func TestPBT_ParserRejectsDuplicateKeys(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		e := gen.NotifyCreated().Draw(t, "event")
+		raw, err := gen.MarshalEvent(e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		doc := string(raw)
+		type site struct{ open, key string }
+		sites := []site{
+			{`{"event_id"`, "event_id"}, {`{"event_id"`, "type"}, {`{"event_id"`, "version"}, {`{"event_id"`, "occurred_at"},
+			{`{"event_id"`, "trace_id"}, {`{"event_id"`, "data"},
+			{`"data":{"notification_id"`, "notification_id"}, {`"data":{"notification_id"`, "github_event"},
+			{`"data":{"notification_id"`, "repo"}, {`"data":{"notification_id"`, "sha"}, {`"data":{"notification_id"`, "artifact"},
+			{`"artifact":{"kind"`, "kind"}, {`"artifact":{"kind"`, "ref"},
+		}
+		s := rapid.SampledFrom(sites).Draw(t, "site")
+		vals := append([]any{}, replacements...)
+		vals = append(vals, "dup")
+		val, _ := json.Marshal(rapid.SampledFrom(vals).Draw(t, "value"))
+		pos := strings.Index(doc, s.open)
+		if pos < 0 {
+			t.Fatalf("no encuentro %q en %s", s.open, doc)
+		}
+		cut := pos + strings.Index(s.open, "{") + 1
+		mut := doc[:cut] + `"` + s.key + `":` + string(val) + `,` + doc[cut:]
+		if _, err := inbox.ParseNotifyCreated([]byte(mut)); !errors.Is(err, inbox.ErrInvalidEvent) {
+			t.Fatalf("clave repetida %q aceptada (%v):\n%s", s.key, err, mut)
+		}
+	})
+}
+
+// Ejemplo fijo de las dos propiedades anteriores.
+func TestPBT_Fixed_ParserVariantsAndDuplicates(t *testing.T) {
+	const valid = `{"event_id":"3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34","type":"notify.created","version":1,"occurred_at":"2026-01-15T10:00:00Z","trace_id":"t",` +
+		`"data":{"notification_id":"n","github_event":"commit","repo":"r","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact":{"kind":"build-from-repo","ref":"r"}}}`
+	schema := gen.NotifySchema(t)
+	for name, mut := range map[string]string{
+		"uuid con basura": strings.Replace(valid, `"3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34"`, `"x3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34"`, 1),
+		"uuid largo":      strings.Replace(valid, `5d2e8a7f1b34"`, `5d2e8a7f1b345"`, 1),
+		"sha mayúsculas":  strings.Replace(valid, `"aaaaaaaa`, `"AAAAAAAA`, 1),
+		"sha 41":          strings.Replace(valid, `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, 1),
+		"type":            strings.Replace(valid, `"notify.created"`, `"notify.created "`, 1),
+	} {
+		if gen.ValidateJSON(schema, []byte(mut)) == nil {
+			t.Errorf("%s: el esquema acepta", name)
+		}
+		if _, err := inbox.ParseNotifyCreated([]byte(mut)); err == nil {
+			t.Errorf("%s: el parser acepta", name)
+		}
+	}
+	for _, mut := range []string{
+		strings.Replace(valid, `{"event_id"`, `{"event_id":"x","event_id"`, 1),
+		strings.Replace(valid, `"data":{`, `"data":{"repo":null,`, 1),
+		strings.Replace(valid, `"artifact":{`, `"artifact":{"kind":"x",`, 1),
+	} {
+		if _, err := inbox.ParseNotifyCreated([]byte(mut)); !errors.Is(err, inbox.ErrInvalidEvent) {
+			t.Errorf("clave repetida aceptada: %v\n%s", err, mut)
+		}
 	}
 }

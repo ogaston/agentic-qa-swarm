@@ -13,7 +13,9 @@ Reglas PBT cubiertas: PBT-02 (round-trips), PBT-07 (generadores), PBT-08 (seed) 
 
 **Generadores (PBT-07):** `internal/gen` (Owner, RepoName, Sha40, Tag válido e inválido, GitHubPushBranch, GitHubPushTag, GitHubPullRequest con y sin fork, GitHubRelease, GitHubRejected, Notification, Record, Event, ResolvableEvent). Los de `ui-api` son una copia independiente (sin `go.work` ni `replace`); `ConfirmationReceipt` solo existe allí.
 
-**Propiedades:** `internal/intake/pbt_test.go` (payload de GitHub: Classify(Marshal(Classify(p))) == Classify(p); rechazos; notify.created ida y vuelta y contra el esquema; almacén JSONL y de-duplicación), `internal/githubsig/pbt_test.go` (firma), `internal/artifact/pbt_test.go` (ref nunca `:latest`), `internal/gen/coverage_test.go`. Cada propiedad lleva un ejemplo fijo `TestPBT_Fixed_*`. go-intake no tiene `Parse`/`MarshalEvent`: el "Marshal" de la propiedad 1 reconstruye un webhook canónico desde `intake.Classified`, y el evento se serializa con `json.Marshal`.
+**Propiedades:** `internal/intake/pbt_test.go` (payload de GitHub: Classify(Marshal(Classify(p))) == Classify(p); rechazos; notify.created ida y vuelta y contra el esquema; almacén JSONL y de-duplicación), `internal/githubsig/pbt_test.go` (firma válida y firmas alteradas: un carácter en cada posición, truncadas, extendidas, mayúsculas), `internal/artifact/pbt_test.go` (ref nunca `:latest`; fail-closed con SHA largo o con basura, tag de 129 o con `/`, registro y repo inválidos), `internal/gen/coverage_test.go`. Cada propiedad lleva un ejemplo fijo `TestPBT_Fixed_*`. go-intake no tiene `Parse`/`MarshalEvent`: el "Marshal" de la propiedad 1 reconstruye un webhook canónico desde `intake.Classified`, y el evento se serializa con `json.Marshal`.
+
+**Límite conocido** (candidata, sin arreglo aquí): `HMACVerifier.Verify` acepta el hex de la firma en mayúsculas (`TestPBT_Limit_SignatureHexUpperAccepted`).
 
 **Demo:** la propiedad falsa «todo Sha40 empieza por a» solo existe con `-tags pbt_demo`: `go test -tags pbt_demo -run PBT_Demo ./internal/gen`.
 
