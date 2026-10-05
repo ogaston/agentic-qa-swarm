@@ -65,7 +65,7 @@ func rejectDuplicateKeys(raw []byte) error {
 				}
 				k, _ := kt.(string)
 				if _, dup := seen[k]; dup {
-					return invalid("clave duplicada %q", k)
+					return invalid("clave duplicada") // sin el nombre: es contenido del evento
 				}
 				seen[k] = struct{}{}
 				if err := walk(); err != nil {
@@ -86,7 +86,7 @@ func rejectDuplicateKeys(raw []byte) error {
 		if errors.Is(err, ErrInvalidEvent) {
 			return err
 		}
-		return invalid("json: %v", err)
+		return invalid("json invalido") // sin err: sus mensajes citan contenido del evento
 	}
 	return nil
 }
@@ -139,7 +139,7 @@ func ParseNotifyCreated(line []byte) (NotifyCreated, error) {
 	dec := json.NewDecoder(bytes.NewReader(line))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&ev); err != nil {
-		return ev, invalid("json: %v", err)
+		return ev, invalid("json invalido") // sin err: cita nombres de campo del evento
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return ev, invalid("datos tras el objeto")

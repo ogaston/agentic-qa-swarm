@@ -11,13 +11,15 @@
 //	UIAPI_RATE_LIMIT_RPS      por defecto 10
 //	UIAPI_RATE_LIMIT_BURST    por defecto 20
 //	UIAPI_TRUST_PROXY         true para usar X-Forwarded-For
+//	LOG_LEVEL                 debug|info|warn|error (por defecto info)
 package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,11 +31,16 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/ui-api/inbox"
 	"github.com/ogaston/agentic-qa-swarm/services/ui-api/internal/auth"
 	"github.com/ogaston/agentic-qa-swarm/services/ui-api/internal/httpapi"
+	"github.com/ogaston/agentic-qa-swarm/services/ui-api/internal/obs"
 )
 
+const serviceName = "ui-api"
+
 func main() {
-	if err := run(); err != nil {
-		log.Fatalf("ui-api: %v", err)
+	log := newLog(os.Stdout)
+	if err := run(log); err != nil {
+		log.Error("el servicio no arranca", "error", err.Error())
+		os.Exit(1)
 	}
 }
 
@@ -48,7 +55,20 @@ func verifierFromEnv() (auth.TokenVerifier, error) {
 	}
 }
 
-func run() error {
+// newLog crea el logger JSON del servicio con LOG_LEVEL del entorno y lo fija como predeterminado.
+func newLog(w io.Writer) *slog.Logger {
+	log := obs.NewLogger(w, serviceName, obs.ParseLevel(os.Getenv("LOG_LEVEL")))
+	slog.SetDefault(log)
+	return log
+}
+
+// newSubscriber crea el suscriptor del outbox; sus líneas (log.Logger) salen por el handler JSON
+// a nivel info, de modo que «evento descartado» se ve con el nivel por defecto.
+func newSubscriber(log *slog.Logger, eventsFile string) *inbox.FileSubscriber {
+	return &inbox.FileSubscriber{Path: eventsFile, Logger: slog.NewLogLogger(log.Handler(), slog.LevelInfo)}
+}
+
+func run(log *slog.Logger) error {
 	verifier, err := verifierFromEnv()
 	if err != nil {
 		return err
@@ -84,18 +104,17 @@ func run() error {
 		return err
 	}
 	if store.Skipped > 0 {
-		log.Printf("registro de confirmaciones: %d lineas ilegibles ignoradas", store.Skipped)
+		log.Warn("registro de confirmaciones: lineas ilegibles ignoradas", "count", store.Skipped)
 	}
-	h, err := httpapi.New(httpapi.Config{
+	h, err := newHandler(log, httpapi.Config{
 		Store: store, Verifier: verifier, AllowedOrigins: origins,
 		RateRPS: rps, RateBurst: burst, TrustProxy: os.Getenv("UIAPI_TRUST_PROXY") == "true",
-		Logger: log.Default(),
-	})
+	}, dataDir, eventsFile)
 	if err != nil {
 		return err
 	}
 
-	sub := &inbox.FileSubscriber{Path: eventsFile, Logger: log.Default()}
+	sub := newSubscriber(log, eventsFile)
 	handle := func(ev inbox.NotifyCreated) { store.Apply(ev) }
 	if _, err := sub.Drain(handle); err != nil { // carga inicial antes de servir
 		return err
@@ -119,9 +138,27 @@ func run() error {
 		defer cancel()
 		_ = srv.Shutdown(sctx)
 	}()
-	log.Printf("ui-api escuchando en %s", addr)
+	log.Info("ui-api escuchando", "addr", addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
+}
+
+// newHandler arma la cadena completa. obs.Wrap queda POR FUERA de httpapi: /healthz, /readyz y
+// /metrics no pasan por el token, el limitador por IP ni las cabeceras de seguridad de la API
+// (excepción documentada en el README); el resto de las rutas sí.
+func newHandler(log *slog.Logger, cfg httpapi.Config, dataDir, eventsFile string) (http.Handler, error) {
+	reg := obs.NewRegistry()
+	httpMetrics := obs.NewHTTPMetrics(reg, serviceName)
+	// httpapi registra por Slog (con request_id y trace_id); su Logger clásico solo es el respaldo
+	// de quien no configura Slog, así que aquí no se usa.
+	cfg.Slog = log // las líneas dentro de una petición llevan request_id y trace_id
+	cfg.Metrics = obs.NewInbox(reg, cfg.Store.Counts)
+	app, err := httpapi.New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return obs.Wrap(obs.Config{Service: serviceName, Log: log, Registry: reg, Metrics: httpMetrics,
+		Ready: obs.ReadyChecks(dataDir, eventsFile, func() bool { return cfg.Verifier != nil }), Route: httpapi.RoutePattern}, app), nil
 }

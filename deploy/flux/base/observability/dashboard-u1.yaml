@@ -1,0 +1,156 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aqs-dashboard-u1
+  namespace: aqs-observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  aqs-u1.json: |
+    {
+      "title": "AQS U1 Ingesta",
+      "schemaVersion": 39,
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "Peticiones por segundo por servicio",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum by (service) (rate(aqs_http_requests_total{service=~\"go-intake|ui-api\"}[5m]))",
+              "refId": "A",
+              "legendFormat": "{{service}}"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "Tasa de errores 5xx por servicio",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum by (service) (rate(aqs_http_requests_total{service=~\"go-intake|ui-api\",code=~\"5..\"}[5m]))",
+              "refId": "A",
+              "legendFormat": "{{service}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Latencia p95 por servicio (s)",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 8
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, service) (rate(aqs_http_request_duration_seconds_bucket{service=~\"go-intake|ui-api\"}[5m])))",
+              "refId": "A",
+              "legendFormat": "{{service}}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Rechazos del webhook por motivo (15 min)",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 8
+          },
+          "targets": [
+            {
+              "expr": "sum by (reason) (increase(aqs_intake_webhook_rejected_total[15m]))",
+              "refId": "A",
+              "legendFormat": "{{reason}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Notificaciones creadas (1 h)",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(aqs_intake_notifications_created_total[1h]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Fallos al publicar notify.created (1 h)",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 6,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(aqs_intake_publish_failures_total[1h]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "stat",
+          "title": "Confirmaciones registradas (1 h)",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 12,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(aqs_inbox_confirmations_total[1h]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Notificaciones del inbox por estado",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 18,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "sum by (state) (aqs_inbox_notifications)",
+              "refId": "A",
+              "legendFormat": "{{state}}"
+            }
+          ]
+        }
+      ]
+    }

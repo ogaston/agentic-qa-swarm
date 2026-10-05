@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ogaston/agentic-qa-swarm/services/ui-api/inbox"
 	"github.com/ogaston/agentic-qa-swarm/services/ui-api/internal/auth"
+	"github.com/ogaston/agentic-qa-swarm/services/ui-api/internal/obs"
 )
 
 // MaxBodyBytes es el limite del cuerpo del POST (64 KiB).
@@ -29,6 +31,10 @@ type Config struct {
 	TrustProxy     bool
 	Now            func() time.Time // reloj del limitador; nil = real
 	Logger         *log.Logger      // nil = descarta
+	// Slog es opcional: si está, las líneas emitidas dentro de una petición salen por él con el
+	// contexto de la petición (request_id y trace_id); si no, por Logger, como antes.
+	Slog    *slog.Logger
+	Metrics *obs.Inbox // nil = sin métricas de dominio
 }
 
 // Handler es el http.Handler de ui-api.
@@ -66,12 +72,34 @@ func New(cfg Config) (http.Handler, error) {
 	return h, nil
 }
 
+// Patrones de ruta de ui-api (etiqueta route de las métricas).
+const (
+	RouteList    = "/notifications"
+	RouteConfirm = "/notifications/{id}/confirm"
+)
+
+// RoutePattern devuelve el PATRÓN de ruta de la petición ("unmatched" si no hay), nunca la ruta cruda.
+// Sigue el mismo criterio que route(): un id vacío o con "/" no coincide.
+func RoutePattern(r *http.Request) string {
+	p := r.URL.Path
+	switch {
+	case p == RouteList:
+		return RouteList
+	case strings.HasPrefix(p, "/notifications/") && strings.HasSuffix(p, "/confirm"):
+		id := strings.TrimSuffix(strings.TrimPrefix(p, "/notifications/"), "/confirm")
+		if id != "" && !strings.Contains(id, "/") {
+			return RouteConfirm
+		}
+	}
+	return "unmatched"
+}
+
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	setSecurityHeaders(w)
 	defer func() {
 		if rec := recover(); rec != nil {
 			// No se registra el valor del panic: podria contener el token.
-			h.log.Printf("panic atendiendo %s (valor omitido)", r.Method)
+			h.logError(r, "panic atendiendo la petición (valor omitido)", "method", r.Method)
 			writeError(w, http.StatusInternalServerError, "internal", "error interno")
 		}
 	}()
@@ -84,6 +112,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.route(w, r)
+}
+
+// logError registra un error interno ligado a la petición: con Slog lleva request_id y trace_id
+// (vienen del contexto que puso obs.Wrap); sin él, cae al log.Logger de siempre.
+func (h *Handler) logError(r *http.Request, msg string, kv ...any) {
+	if h.cfg.Slog != nil {
+		h.cfg.Slog.WarnContext(r.Context(), msg, kv...)
+		return
+	}
+	h.log.Printf("%s %v", msg, kv)
 }
 
 func setSecurityHeaders(w http.ResponseWriter) {
@@ -220,9 +258,10 @@ func (h *Handler) confirm(w http.ResponseWriter, r *http.Request, pr auth.Princi
 	case errors.Is(err, inbox.ErrAlreadyConfirmed):
 		writeError(w, http.StatusConflict, "already_confirmed", "la notificacion ya fue confirmada")
 	case err != nil:
-		h.log.Printf("confirmando %q: %v", id, err)
+		h.logError(r, "confirmando la notificación", "notification_id", id, "error", err.Error())
 		writeError(w, http.StatusInternalServerError, "internal", "error interno")
 	default:
+		h.cfg.Metrics.Confirmed()
 		writeJSON(w, http.StatusCreated, rc)
 	}
 }
