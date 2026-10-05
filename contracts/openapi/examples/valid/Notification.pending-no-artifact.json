@@ -1,0 +1,7 @@
+{
+  "id": "n-1",
+  "github_event": "pull_request",
+  "repo": "acme/shop",
+  "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "state": "pending"
+}
