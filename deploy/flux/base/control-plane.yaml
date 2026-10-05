@@ -277,6 +277,9 @@ metadata:
     aqs.io/audit-retention-days: "90"
 spec:
   replicas: 1
+  # PVC ReadWriteOnce con una replica: RollingUpdate dejaria dos pods compitiendo por el volumen.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: go-governance
@@ -288,6 +291,8 @@ spec:
     spec:
       serviceAccountName: go-governance
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65532
       containers:
         - name: go-governance
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
@@ -298,6 +303,20 @@ spec:
               value: /data
             - name: GOVERNANCE_AUDIT_RETENTION_DAYS
               value: "90"
+            - name: GOVERNANCE_AUTH
+              value: identity
+            - name: GOVERNANCE_ENV
+              value: prod
+            - name: GOVERNANCE_TEST_NAMESPACE
+              value: aqs-test
+            - name: IDENTITY_URL
+              value: http://go-identity.aqs-system.svc:8080
+            # El Secret lo crea un humano (docs/operaciones/secrets.md); sin el, el pod no pasa /readyz.
+            - name: GOVERNANCE_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: go-governance-service-token
+                  key: token
           image: ghcr.io/ogaston/agentic-qa-swarm/go-governance:0.0.0
           ports:
             - name: http
@@ -379,12 +398,18 @@ spec:
     spec:
       serviceAccountName: go-identity
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65532
       containers:
         - name: go-identity
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
+            - name: IDENTITY_USERS_FILE
+              value: /etc/aqs/identity/users.json
+            - name: IDENTITY_TRUST_PROXY
+              value: "false"
           image: ghcr.io/ogaston/agentic-qa-swarm/go-identity:0.0.0
           ports:
             - name: http
@@ -397,6 +422,10 @@ spec:
             httpGet:
               path: /readyz
               port: http
+          volumeMounts:
+            - name: users
+              mountPath: /etc/aqs/identity
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -404,6 +433,14 @@ spec:
             limits:
               cpu: 250m
               memory: 128Mi
+      volumes:
+        - name: users
+          secret:
+            secretName: go-identity-users
+            defaultMode: 0440
+            items:
+              - key: users.json
+                path: users.json
 ---
 apiVersion: v1
 kind: Service

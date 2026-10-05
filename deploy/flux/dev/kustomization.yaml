@@ -14,3 +14,19 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: 128Mi
+  - target:
+      kind: Deployment
+      name: go-governance
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: go-governance
+      spec:
+        template:
+          spec:
+            containers:
+              - name: go-governance
+                env:
+                  - name: GOVERNANCE_ENV
+                    value: dev
