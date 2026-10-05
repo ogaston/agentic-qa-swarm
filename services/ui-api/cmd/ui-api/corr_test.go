@@ -84,6 +84,9 @@ func TestOpsEndpointsErrorLogsCarryRequestIDs(t *testing.T) {
 		if errs[i]["request_id"] != want.rid || errs[i]["trace_id"] != want.tid {
 			t.Errorf("error %d: request_id=%v trace_id=%v, esperado %s / %s", i, errs[i]["request_id"], errs[i]["trace_id"], want.rid, want.tid)
 		}
+		if e, _ := errs[i]["error"].(string); !strings.Contains(e, "confirmations.jsonl") {
+			t.Errorf("el campo error del 500 debe llevar la causa: %v", errs[i]["error"])
+		}
 		if errs[i]["level"] != "warn" || errs[i]["notification_id"] == nil {
 			t.Errorf("error %d mal formado: %v", i, errs[i])
 		}
@@ -106,7 +109,7 @@ func TestOpsEndpointsErrorLogsCarryRequestIDs(t *testing.T) {
 type panicVerifier struct{}
 
 func (panicVerifier) Verify(context.Context, string) (auth.Principal, error) {
-	panic("valor-que-no-debe-salir " + tok)
+	panic("valor-que-no-debe-salir PII-PANIC-XYZ " + tok)
 }
 
 // El mensaje de panic tampoco sale sin correlación, y no filtra el valor del panic.

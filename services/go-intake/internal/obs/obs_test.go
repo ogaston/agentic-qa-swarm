@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -346,5 +349,295 @@ func TestServerErrorAccessLogIsWarn(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if len(lines) != 2 || !strings.Contains(lines[0], `"level":"info"`) || !strings.Contains(lines[1], `"level":"warn"`) || !strings.Contains(lines[1], `"status":503`) {
 		t.Errorf("200 en info y 5xx en warn: %v", lines)
+	}
+}
+
+// ---- Ronda 3: semántica de etiquetas y unidades, y bordes del contrato ----
+
+func TestParseLevel(t *testing.T) {
+	for in, want := range map[string]slog.Level{"debug": slog.LevelDebug, "info": slog.LevelInfo, "warn": slog.LevelWarn, "error": slog.LevelError,
+		"": slog.LevelInfo, "DEBUG": slog.LevelDebug, " Warn ": slog.LevelWarn, "ERROR": slog.LevelError, "inválido": slog.LevelInfo, "trace": slog.LevelInfo} {
+		if got := ParseLevel(in); got != want {
+			t.Errorf("ParseLevel(%q) = %v, esperado %v", in, got, want)
+		}
+	}
+	buf := &bytes.Buffer{}
+	l := NewLogger(buf, "svc", ParseLevel("warn"))
+	l.Info("no")
+	l.Warn("sí")
+	if strings.Contains(buf.String(), `"message":"no"`) || !strings.Contains(buf.String(), `"message":"sí"`) {
+		t.Errorf("LOG_LEVEL=warn debe filtrar info: %s", buf)
+	}
+}
+
+func TestLoggerTimestampIsUTCEvenWithLocalZone(t *testing.T) {
+	old := time.Local
+	time.Local = time.FixedZone("UTC+3", 3*3600)
+	defer func() { time.Local = old }()
+	buf := &bytes.Buffer{}
+	NewLogger(buf, "svc", slog.LevelInfo).Info("x")
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if ts, _ := m["timestamp"].(string); !strings.HasSuffix(ts, "Z") {
+		t.Errorf("timestamp no UTC: %v", m["timestamp"])
+	}
+}
+
+func TestLoggerRedactsEverySensitiveKey(t *testing.T) {
+	for _, k := range []string{"password", "passwd", "secret", "token", "otp", "authorization", "hash", "cookie",
+		"Set-Cookie", "X-Authorization", "api_token", "client_secret", "PASSWORD"} {
+		buf := &bytes.Buffer{}
+		NewLogger(buf, "svc", slog.LevelInfo).Info("x", k, "VALOR-SECRETO-XYZ")
+		if strings.Contains(buf.String(), "VALOR-SECRETO-XYZ") || !strings.Contains(buf.String(), "[redacted]") {
+			t.Errorf("la clave %q debe redactarse: %s", k, buf)
+		}
+	}
+	buf := &bytes.Buffer{}
+	NewLogger(buf, "svc", slog.LevelInfo).Info("x", "repo", "acme/shop")
+	if !strings.Contains(buf.String(), "acme/shop") {
+		t.Error("una clave no sensible no se redacta")
+	}
+}
+
+func TestRegistryHasGoAndProcessCollectors(t *testing.T) {
+	_, _, _, scrape := newWrapped(t, nil, nil)
+	out := scrape()
+	if !strings.Contains(out, "go_goroutines") || !strings.Contains(out, "process_cpu_seconds_total") {
+		t.Error("el registro debe incluir los colectores de Go y de proceso")
+	}
+}
+
+func TestCheckTimeoutDefaultIsTwoSeconds(t *testing.T) {
+	if CheckTimeout != 2*time.Second {
+		t.Errorf("la tarea fija 2 s por chequeo: %v", CheckTimeout)
+	}
+	old := CheckTimeout
+	CheckTimeout = 50 * time.Millisecond
+	defer func() { CheckTimeout = old }()
+	release := make(chan struct{})
+	defer close(release)
+	h, _, _, _ := newWrapped(t, []Check{{Name: "lento", Fn: func(context.Context) error { <-release; return nil }}}, nil)
+	start := time.Now()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/readyz", nil))
+	if el := time.Since(start); rec.Code != 503 || el < 40*time.Millisecond || el > 400*time.Millisecond {
+		t.Errorf("el timeout debía ser ≈50 ms: %d en %v", rec.Code, el)
+	}
+}
+
+func TestTraceparentStrictShape(t *testing.T) {
+	h, _, _, _ := newWrapped(t, nil, nil)
+	shape := regexp.MustCompile(`^00-[0-9a-f]{32}-[0-9a-f]{16}-01$`)
+	const lower = "4bf92f3577b34da6a3ce929d0e0e4736"
+	for name, tc := range map[string]struct {
+		in    string
+		valid bool
+	}{
+		"válido flags 01":        {"00-" + lower + "-00f067aa0ba902b7-01", true},
+		"válido flags 00":        {"00-" + lower + "-00f067aa0ba902b7-00", true},
+		"trace-id en mayúsculas": {"00-" + strings.ToUpper(lower) + "-00f067aa0ba902b7-01", false},
+		"span en mayúsculas":     {"00-" + lower + "-00F067AA0BA902B7-01", false},
+		"flags en mayúsculas":    {"00-" + lower + "-00f067aa0ba902b7-0A", false},
+		"flags de 4 hex":         {"00-" + lower + "-00f067aa0ba902b7-0100", false},
+		"flags de 1 hex":         {"00-" + lower + "-00f067aa0ba902b7-1", false},
+		"flags de 3 hex":         {"00-" + lower + "-00f067aa0ba902b7-011", false},
+		"sufijo tras los flags":  {"00-" + lower + "-00f067aa0ba902b7-01-x", false},
+		"span corto":             {"00-" + lower + "-00f067aa0ba902b-01", false},
+		"trace-id de 31 hex":     {"00-" + lower[:31] + "-00f067aa0ba902b7-01", false},
+		"sin guiones":            {"00" + lower + "00f067aa0ba902b701", false},
+		"prefijo basura":         {"x00-" + lower + "-00f067aa0ba902b7-01", false},
+		"versión ff":             {"ff-" + lower + "-00f067aa0ba902b7-01", false},
+		"flags no hex":           {"00-" + lower + "-00f067aa0ba902b7-zz", false},
+	} {
+		req := httptest.NewRequest("GET", "/known", nil)
+		req.Header.Set("traceparent", tc.in)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		got := rec.Header().Get("traceparent")
+		if !shape.MatchString(got) {
+			t.Errorf("%s: el traceparent de respuesta debe ser 00-<32>-<16>-01: %q", name, got)
+		}
+		if kept := strings.Contains(got, "-"+lower+"-"); kept != tc.valid {
+			t.Errorf("%s: trace-id conservado=%v, esperado %v (%q)", name, kept, tc.valid, got)
+		}
+		if strings.HasSuffix(strings.Split(tc.in, "-")[len(strings.Split(tc.in, "-"))-1], "00") && tc.valid && strings.Contains(got, "00f067aa0ba902b7") {
+			t.Errorf("%s: el span de la respuesta debe ser nuevo", name)
+		}
+	}
+}
+
+// code real de cada respuesta, valor exacto (un 5xx cuenta en code=~"5..").
+func TestHTTPCodeLabelIsTheRealStatus(t *testing.T) {
+	codes := []int{200, 202, 204, 400, 401, 404, 413, 415, 422, 429, 500, 503}
+	h, _, _, scrape := newWrapped(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n, _ := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/c"))
+		w.WriteHeader(n)
+	}))
+	for _, c := range codes {
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/c"+strconv.Itoa(c), nil))
+	}
+	out := scrape()
+	for _, c := range codes {
+		if !strings.Contains(out, `aqs_http_requests_total{code="`+strconv.Itoa(c)+`",method="GET",route="unmatched",service="svc-prueba"} 1`+"\n") {
+			t.Errorf("falta code=%d con valor 1", c)
+		}
+	}
+	// sin WriteHeader explícito el código es 200
+	h2, _, _, scrape2 := newWrapped(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("x")) }))
+	h2.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/x", nil))
+	if !strings.Contains(scrape2(), `code="200",method="GET",route="unmatched"`) {
+		t.Error("una respuesta sin WriteHeader cuenta como 200")
+	}
+}
+
+// La latencia se publica en SEGUNDOS: una petición de ≈50 ms suma entre 0,04 y 5.
+func TestLatencyIsInSeconds(t *testing.T) {
+	h, _, _, scrape := newWrapped(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(50 * time.Millisecond)
+	}))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/lenta", nil))
+	out := scrape()
+	var sum, count float64
+	for _, ln := range strings.Split(out, "\n") {
+		if strings.HasPrefix(ln, `aqs_http_request_duration_seconds_sum{method="GET",route="unmatched"`) {
+			sum, _ = strconv.ParseFloat(ln[strings.LastIndex(ln, " ")+1:], 64)
+		}
+		if strings.HasPrefix(ln, `aqs_http_request_duration_seconds_count{method="GET",route="unmatched"`) {
+			count, _ = strconv.ParseFloat(ln[strings.LastIndex(ln, " ")+1:], 64)
+		}
+	}
+	if count != 1 || sum < 0.04 || sum > 5 {
+		t.Errorf("la suma del histograma debe estar en segundos (≈0,05): sum=%v count=%v", sum, count)
+	}
+	if !strings.Contains(out, `route="unmatched",service="svc-prueba",le="0.005"} 0`) || !strings.Contains(out, `route="unmatched",service="svc-prueba",le="10"} 1`) {
+		t.Error("una petición de 50 ms no cabe en el bucket de 5 ms y sí en el de 10 s")
+	}
+	// y el log de acceso lleva duration_ms en milisegundos
+}
+
+func TestAccessLogDurationMsIsMilliseconds(t *testing.T) {
+	buf := &bytes.Buffer{}
+	reg := NewRegistry()
+	h := Wrap(Config{Service: "svc", Log: NewLogger(buf, "svc", slog.LevelInfo), Registry: reg, Metrics: NewHTTPMetrics(reg, "svc")},
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { time.Sleep(50 * time.Millisecond) }))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/x", nil))
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := m["duration_ms"].(float64); d < 40 || d > 5000 {
+		t.Errorf("duration_ms debe estar en milisegundos (≈50): %v", m["duration_ms"])
+	}
+}
+
+func TestAccessLogLevelByStatusBoundaries(t *testing.T) {
+	for status, want := range map[int]string{200: "info", 301: "info", 399: "info", 400: "info", 404: "info", 429: "info", 499: "info", 500: "warn", 501: "warn", 502: "warn", 503: "warn", 599: "warn"} {
+		buf := &bytes.Buffer{}
+		reg := NewRegistry()
+		s := status
+		h := Wrap(Config{Service: "svc", Log: NewLogger(buf, "svc", slog.LevelInfo), Registry: reg, Metrics: NewHTTPMetrics(reg, "svc")},
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(s) }))
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/x", nil))
+		if !strings.Contains(buf.String(), `"level":"`+want+`"`) {
+			t.Errorf("status %d: nivel esperado %s: %s", status, want, buf)
+		}
+	}
+}
+
+func TestProbesHeadAndCacheControl(t *testing.T) {
+	h, _, _, _ := newWrapped(t, nil, nil)
+	for _, p := range []string{"/healthz", "/readyz", "/metrics"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("HEAD", p, nil))
+		if rec.Code != 200 {
+			t.Errorf("HEAD %s: %d", p, rec.Code)
+		}
+	}
+	for _, p := range []string{"/healthz", "/readyz"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", p, nil))
+		if rec.Header().Get("Cache-Control") != "no-store" || rec.Header().Get("Content-Type") != "application/json" {
+			t.Errorf("%s: cabeceras %v", p, rec.Header())
+		}
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/healthz", nil))
+	if strings.TrimSpace(rec.Body.String()) != `{"status":"ok"}` {
+		t.Errorf("cuerpo de /healthz: %q", rec.Body)
+	}
+}
+
+// El 413 conserva «Connection: close» (en net/http real) aunque el handler esté envuelto.
+func TestRequestTooLargeKeepsConnectionClose(t *testing.T) {
+	reg := NewRegistry()
+	app := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 10)); err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(Wrap(Config{Service: "svc", Log: NewLogger(&bytes.Buffer{}, "svc", slog.LevelInfo), Registry: reg, Metrics: NewHTTPMetrics(reg, "svc")}, app))
+	defer srv.Close()
+	resp, err := http.Post(srv.URL+"/x", "text/plain", strings.NewReader(strings.Repeat("a", 100)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 413 || !resp.Close {
+		t.Errorf("el 413 debe cerrar la conexión: %d close=%v %v", resp.StatusCode, resp.Close, resp.Header)
+	}
+	resp2, err := http.Post(srv.URL+"/x", "text/plain", strings.NewReader("ok"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != 200 || resp2.Close {
+		t.Errorf("un 200 no fuerza el cierre: %v", resp2.Header)
+	}
+}
+
+// El log de un chequeo fallido de /readyz sale con los ids de la petición y el nombre del chequeo.
+func TestReadyzFailureLogCarriesIDsAndCheckName(t *testing.T) {
+	h, buf, _, _ := newWrapped(t, []Check{{Name: "roto", Fn: func(context.Context) error { return errors.New("detalle") }}}, nil)
+	req := httptest.NewRequest("GET", "/readyz", nil)
+	req.Header.Set("X-Request-Id", "req-ready-1234")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	tid := strings.Split(rec.Header().Get("traceparent"), "-")[1]
+	var found bool
+	for _, ln := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var m map[string]any
+		_ = json.Unmarshal([]byte(ln), &m)
+		if m["message"] == "readyz: chequeo fallido" {
+			found = true
+			if m["check"] != "roto" || m["level"] != "warn" || m["request_id"] != "req-ready-1234" || m["trace_id"] != tid || m["error"] != "detalle" {
+				t.Errorf("línea de readyz: %s", ln)
+			}
+		}
+		if m["message"] == "request" && (m["status"] != float64(503) || m["level"] != "warn") {
+			t.Errorf("acceso del 503 de readyz: %s", ln)
+		}
+	}
+	if !found {
+		t.Errorf("falta el log del chequeo fallido: %s", buf)
+	}
+}
+
+func TestRequestIDCharset(t *testing.T) {
+	h, _, _, _ := newWrapped(t, nil, nil)
+	for id, keep := range map[string]bool{
+		"ABCDEFGH": true, "abcdefgh": true, "01234567": true, "a.b.c.d.": true, "a_b_c_d_": true, "a-b-c-d-": true, "Req.ID_1-X": true,
+		"abcd/efg": false, "abcd efg": false, "abcd:efg": false, "abcd@efg": false, "abcd+efg": false, "abcd=efg": false, "abcd;efg": false, "abcd,efg": false, "abcd\"efg": false,
+	} {
+		req := httptest.NewRequest("GET", "/known", nil)
+		req.Header.Set("X-Request-Id", id)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if got := rec.Header().Get("X-Request-Id"); (got == id) != keep {
+			t.Errorf("%q: conservar=%v, quedó %q", id, keep, got)
+		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -24,11 +25,13 @@ type env struct {
 	store *inbox.Store
 	logs  *bytes.Buffer
 	clock *time.Time
+	dir   string
 }
 
 func newEnv(t *testing.T, v auth.TokenVerifier, mod func(*Config)) *env {
 	t.Helper()
-	st, err := inbox.OpenStore(t.TempDir(), nil)
+	dir := t.TempDir()
+	st, err := inbox.OpenStore(dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +43,7 @@ func newEnv(t *testing.T, v auth.TokenVerifier, mod func(*Config)) *env {
 		v, _ = auth.NewFakeTokenVerifier(secretTok + "=u1:user,tok-admin=a1:admin")
 	}
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	env := &env{store: st, logs: &bytes.Buffer{}, clock: &now}
+	env := &env{store: st, logs: &bytes.Buffer{}, clock: &now, dir: dir}
 	cfg := Config{Store: st, Verifier: v, AllowedOrigins: []string{"https://app.example"}, RateRPS: 1000, RateBurst: 1000,
 		Now: func() time.Time { return *env.clock }, Logger: log.New(env.logs, "", 0)}
 	if mod != nil {
@@ -380,5 +383,24 @@ func TestRoutePatternBoundsCardinality(t *testing.T) {
 		if got := RoutePattern(httptest.NewRequest("GET", p, nil)); got != want {
 			t.Errorf("%s -> %s, esperado %s", p, got, want)
 		}
+	}
+}
+
+// Sin Config.Slog (modo clásico) el error interno sigue saliendo por Logger, sin token ni cuerpo.
+func TestInternalErrorFallsBackToLoggerWithoutSlog(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	if err := os.RemoveAll(e.dir); err != nil {
+		t.Fatal(err)
+	}
+	w := e.do("POST", "/notifications/n-1/confirm", secretTok, `{"flows":["PII-FLUJO-XYZ"]}`, "Content-Type", "application/json")
+	if w.Code != 500 {
+		t.Fatalf("esperado 500: %d %s", w.Code, w.Body)
+	}
+	got := e.logs.String()
+	if !strings.Contains(got, "confirmando la notificación") || !strings.Contains(got, "n-1") {
+		t.Errorf("el error interno debe registrarse por Logger: %q", got)
+	}
+	if strings.Contains(got, secretTok) || strings.Contains(got, "PII-FLUJO-XYZ") {
+		t.Errorf("el log no debe llevar token ni cuerpo: %q", got)
 	}
 }

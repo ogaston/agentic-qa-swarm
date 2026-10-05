@@ -184,6 +184,12 @@ func (w *statusWriter) WriteHeader(c int) {
 	if w.status == 0 {
 		w.status = c
 	}
+	if c == http.StatusRequestEntityTooLarge {
+		// http.MaxBytesReader solo marca «Connection: close» si el writer es el de net/http
+		// (interfaz con método no exportado, que este envoltorio no puede satisfacer): se
+		// replica aquí para que el 413 siga cerrando la conexión como antes de U1-T06.
+		w.ResponseWriter.Header().Set("Connection", "close")
+	}
 	w.ResponseWriter.WriteHeader(c)
 }
 

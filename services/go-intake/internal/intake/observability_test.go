@@ -2,10 +2,13 @@ package intake
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,13 +24,25 @@ type obsEnv struct {
 	log *bytes.Buffer
 }
 
-func newObsEnv(t *testing.T) *obsEnv {
+func newObsEnv(t *testing.T) *obsEnv { return newObsEnvWith(t, nil, nil, nil) }
+
+// newObsEnvWith permite inyectar el almacén, el publicador o el resolvedor (nil = los de siempre).
+func newObsEnvWith(t *testing.T, st NotificationStore, pub EventPublisher, res ArtifactResolver) *obsEnv {
 	t.Helper()
 	e := newEnv(t, nil)
+	if st == nil {
+		st = e.store
+	}
+	if pub == nil {
+		pub = e.pub
+	}
+	if res == nil {
+		res = NewArtifactResolver("")
+	}
 	buf := &bytes.Buffer{}
 	reg := obs.NewRegistry()
 	app, err := NewHandler(Deps{
-		Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: e.store, Publisher: e.pub, Resolver: NewArtifactResolver(""),
+		Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: st, Publisher: pub, Resolver: res,
 		Now: func() time.Time { return time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC) },
 		Log: obs.NewLogger(buf, "go-intake", slog.LevelDebug), Metrics: obs.NewIntake(reg),
 	})
@@ -220,35 +235,231 @@ func TestClipAndRejectReason(t *testing.T) {
 	}
 }
 
-// F-02 de la ronda 1: la ruta ACEPTADA tampoco filtra el contenido del payload (los payloads de
-// GitHub traen nombres y correos): ni el log (a nivel debug) ni /metrics.
-func TestObsAcceptedPayloadLeaksNothing(t *testing.T) {
+// ---- Ronda 3: la CLASE «ninguna ruta del handler loguea el payload ni PII» y la semántica de las métricas ----
+
+type putFailStore struct {
+	NotificationStore
+	failOn int // número de Put (1-based) que falla
+	puts   int
+}
+
+func (s *putFailStore) Put(rec Record) error {
+	s.puts++
+	if s.puts == s.failOn {
+		return errors.New("disco lleno")
+	}
+	return s.NotificationStore.Put(rec)
+}
+
+type failResolver struct{}
+
+func (failResolver) Resolve(context.Context, Classified) (Artifact, error) {
+	return Artifact{}, errors.New("registro caído")
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("conexión rota") }
+
+// piiMarks son las marcas distintivas inyectadas en cada campo sensible del payload.
+var piiMarks = []string{"pii-", "falso.test"}
+
+// marked devuelve el fixture con nombre, correo y una marca en cada campo sensible (también en una clave).
+func marked(t *testing.T, base []byte, mod func(map[string]any)) []byte {
+	t.Helper()
 	var p map[string]any
-	if err := json.Unmarshal(fixture(t, "push-branch.json"), &p); err != nil {
+	if err := json.Unmarshal(base, &p); err != nil {
 		t.Fatal(err)
 	}
-	p["sender"] = map[string]any{"login": "PII-LOGIN-XYZ", "email": "pii-sender@falso.test"}
-	p["head_commit"] = map[string]any{"message": "PII-MENSAJE-XYZ", "author": map[string]any{"name": "PII-NOMBRE-XYZ", "email": "pii-autor@falso.test"}}
-	body, err := json.Marshal(p)
+	p["PII-CLAVE-XYZ"] = "PII-VALOR-XYZ"
+	p["sender"] = map[string]any{"login": "PII-LOGIN-XYZ", "email": "pii-sender@falso.test", "name": "PII-NOMBRE-XYZ"}
+	p["pusher"] = map[string]any{"name": "PII-PUSHER-XYZ", "email": "pii-pusher@falso.test"}
+	p["head_commit"] = map[string]any{"message": "PII-MENSAJE-XYZ", "author": map[string]any{"name": "PII-AUTOR-XYZ", "email": "pii-autor@falso.test"}}
+	if mod != nil {
+		mod(p)
+	}
+	b, err := json.Marshal(p)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return b
+}
+
+func hasMark(s string) string {
+	l := strings.ToLower(s)
+	for _, m := range piiMarks {
+		if strings.Contains(l, m) {
+			return m
+		}
+	}
+	return ""
+}
+
+type routeCase struct {
+	name string
+	req  func(t *testing.T) req
+	raw  func(h http.Handler) *httptest.ResponseRecorder // alternativa a req
+	st   func(NotificationStore) NotificationStore
+	pub  bool // el publicador falla
+	res  ArtifactResolver
+	// esperado
+	status  int
+	code    string // código de error del cuerpo ("" = aceptada)
+	reason  string // motivo de aqs_intake_webhook_rejected_total ("" = ninguno)
+	created string
+	pubFail string
+	msg     string // mensaje de log esperado
+}
+
+func routeCases() []routeCase {
+	push := func(t *testing.T) []byte { return marked(t, fixture(t, "push-branch.json"), nil) }
+	return []routeCase{
+		{name: "aceptada", req: func(t *testing.T) req { return signed("push", "d1", push(t)) }, status: 202, created: "1", pubFail: "0", msg: "webhook aceptado"},
+		{name: "unsupported_event: evento ignorado", req: func(t *testing.T) req {
+			return signed("issues", "d1", marked(t, fixture(t, "pull-request-opened.json"), nil))
+		}, status: 400, code: "unsupported_event", reason: "unsupported_event", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "unsupported_event: acción ignorada", req: func(t *testing.T) req {
+			return signed("pull_request", "d1", marked(t, fixture(t, "pull-request-opened.json"), func(p map[string]any) { p["action"] = "closed" }))
+		}, status: 400, code: "unsupported_event", reason: "unsupported_event", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "invalid_payload", req: func(t *testing.T) req {
+			return signed("push", "d1", marked(t, fixture(t, "push-branch.json"), func(p map[string]any) { delete(p, "after") }))
+		}, status: 400, code: "invalid_payload", reason: "bad_request", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "invalid_json", req: func(t *testing.T) req {
+			return signed("push", "d1", []byte(`{"PII-CLAVE-XYZ":"PII-VALOR-XYZ","sender":{"email":"pii-x@falso.test","name":"PII-NOMBRE-XYZ"`))
+		}, status: 400, code: "invalid_json", reason: "bad_request", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "unresolvable_artifact: PR de fork", req: func(t *testing.T) req {
+			return signed("pull_request", "d1", marked(t, fixture(t, "pull-request-fork.json"), nil))
+		}, status: 422, code: "unresolvable_artifact", reason: "unresolvable_artifact", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "unsupported_media_type", req: func(t *testing.T) req {
+			r := signed("push", "d1", push(t))
+			r.ctype = "text/plain"
+			return r
+		}, status: 415, code: "unsupported_media_type", reason: "bad_request", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "missing_delivery", req: func(t *testing.T) req { return signed("push", "", push(t)) },
+			status: 400, code: "missing_delivery", reason: "bad_request", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "too_large", req: func(t *testing.T) req {
+			b := append([]byte(`{"PII-CLAVE-XYZ":"PII-VALOR-XYZ","email":"pii-x@falso.test","pad":"`), bytes.Repeat([]byte("a"), MaxBodyBytes)...)
+			return signed("push", "d1", append(b, []byte(`"}`)...))
+		}, status: 413, code: "payload_too_large", reason: "too_large", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "invalid_body: error de lectura", raw: func(h http.Handler) *httptest.ResponseRecorder {
+			hr := httptest.NewRequest(http.MethodPost, "/webhooks/github", errReader{})
+			hr.Header.Set("X-Hub-Signature-256", "sha256=00")
+			hr.Header.Set("X-GitHub-Event", "push")
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, hr)
+			return w
+		}, status: 400, code: "invalid_body", reason: "bad_request", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "firma inválida", req: func(t *testing.T) req {
+			r := signed("push", "d1", push(t))
+			r.sig = "sha256=" + strings.Repeat("0", 64)
+			return r
+		}, status: 401, code: "invalid_signature", reason: "invalid_signature", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "firma ausente", req: func(t *testing.T) req {
+			r := signed("push", "d1", push(t))
+			r.noSig = true
+			return r
+		}, status: 401, code: "invalid_signature", reason: "invalid_signature", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "artifact_unavailable (503 del resolvedor)", req: func(t *testing.T) req { return signed("push", "d1", push(t)) },
+			res: failResolver{}, status: 503, code: "artifact_unavailable", created: "0", pubFail: "0", msg: "webhook rechazado"},
+		{name: "store_unavailable: falla el primer Put", req: func(t *testing.T) req { return signed("push", "d1", push(t)) },
+			st:     func(s NotificationStore) NotificationStore { return &putFailStore{NotificationStore: s, failOn: 1} },
+			status: 503, code: "store_unavailable", created: "0", pubFail: "0", msg: "no se pudo persistir"},
+		{name: "publish_failed: falla la publicación", req: func(t *testing.T) req { return signed("push", "d1", push(t)) },
+			pub: true, status: 503, code: "publish_failed", created: "1", pubFail: "1", msg: "no se pudo publicar notify.created"},
+		{name: "store_unavailable: falla el segundo Put", req: func(t *testing.T) req { return signed("push", "d1", push(t)) },
+			st:     func(s NotificationStore) NotificationStore { return &putFailStore{NotificationStore: s, failOn: 2} },
+			status: 503, code: "store_unavailable", created: "1", pubFail: "0", msg: "no se pudo persistir"},
+	}
+}
+
+// Ninguna ruta del handler (aceptada, cada rechazo, cada 503) deja el payload ni PII en el log
+// (nivel debug), en /metrics ni en el cuerpo de la respuesta; y cada una cuenta lo que debe con
+// valores exactos: code real, motivo de rechazo, created y publish_failures.
+func TestObsEveryRouteLeaksNothingAndCountsExactly(t *testing.T) {
+	for _, c := range routeCases() {
+		t.Run(c.name, func(t *testing.T) {
+			var st NotificationStore
+			base := newEnv(t, nil)
+			if c.st != nil {
+				st = c.st(base.store)
+			}
+			var pub EventPublisher
+			if c.pub {
+				pub = &memPublisher{fail: true}
+			}
+			o := newObsEnvWith(t, st, pub, c.res)
+			var w *httptest.ResponseRecorder
+			if c.raw != nil {
+				w = c.raw(o.h)
+			} else {
+				w = do(o.h, c.req(t))
+			}
+			if w.Code != c.status {
+				t.Fatalf("status=%d, esperado %d (%s)", w.Code, c.status, w.Body)
+			}
+			if c.code != "" && errCode(t, w) != c.code {
+				t.Fatalf("code=%q, esperado %q", errCode(t, w), c.code)
+			}
+			rec := httptest.NewRecorder()
+			o.h.ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+			for what, text := range map[string]string{"respuesta": w.Body.String(), "log": o.log.String(), "/metrics": rec.Body.String()} {
+				if m := hasMark(text); m != "" {
+					t.Errorf("%s contiene la marca %q: %s", what, m, text)
+				}
+			}
+			for _, ln := range strings.Split(strings.TrimSpace(o.log.String()), "\n") {
+				var l map[string]any
+				if err := json.Unmarshal([]byte(ln), &l); err != nil {
+					t.Fatalf("no es JSON: %q", ln)
+				}
+				if l["request_id"] == "" || l["request_id"] == nil || l["trace_id"] == "" || l["trace_id"] == nil {
+					t.Errorf("línea de log dentro de una petición sin ids: %s", ln)
+				}
+			}
+			if !strings.Contains(o.log.String(), `"message":"`+c.msg+`"`) {
+				t.Errorf("falta la línea de log %q: %s", c.msg, o.log)
+			}
+			// valores exactos de las métricas
+			codeSeries := `aqs_http_requests_total{code="` + strconv.Itoa(c.status) + `",method="POST",route="/webhooks/github",service="go-intake"}`
+			if got := o.metric(t, codeSeries); got != "1" {
+				t.Errorf("%s = %s, esperado 1", codeSeries, got)
+			}
+			for _, r := range obs.RejectReasons {
+				want := "0"
+				if r == c.reason {
+					want = "1"
+				}
+				if got := o.metric(t, rejected(r)); got != want {
+					t.Errorf("%s = %s, esperado %s", rejected(r), got, want)
+				}
+			}
+			if got := o.metric(t, "aqs_intake_notifications_created_total"); got != c.created {
+				t.Errorf("created = %s, esperado %s", got, c.created)
+			}
+			if got := o.metric(t, "aqs_intake_publish_failures_total"); got != c.pubFail {
+				t.Errorf("publish_failures = %s, esperado %s", got, c.pubFail)
+			}
+		})
+	}
+}
+
+// Cada rechazo cuenta una sola vez y solo en su motivo: varias entregas seguidas acumulan exacto.
+func TestObsRejectedCountersAccumulate(t *testing.T) {
 	o := newObsEnv(t)
-	w := do(o.h, signed("push", "d-pii", body))
-	if w.Code != 202 {
-		t.Fatalf("la entrega válida debía aceptarse: %d %s", w.Code, w.Body)
+	pr := fixture(t, "pull-request-opened.json")
+	bad := signed("pull_request", "d1", pr)
+	bad.sig = "sha256=" + strings.Repeat("0", 64)
+	for i := 0; i < 3; i++ {
+		do(o.h, bad)
 	}
-	rec := httptest.NewRecorder()
-	o.h.ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
-	if !strings.Contains(o.log.String(), `"message":"webhook aceptado"`) {
-		t.Fatalf("falta la línea de aceptación: %s", o.log)
+	do(o.h, signed("issues", "d2", pr))
+	if o.metric(t, rejected("invalid_signature")) != "3" || o.metric(t, rejected("unsupported_event")) != "1" {
+		t.Errorf("acumulado: firma=%s evento=%s", o.metric(t, rejected("invalid_signature")), o.metric(t, rejected("unsupported_event")))
 	}
-	for _, s := range []string{"PII-LOGIN-XYZ", "pii-sender@falso.test", "PII-MENSAJE-XYZ", "PII-NOMBRE-XYZ", "pii-autor@falso.test", "falso.test"} {
-		if strings.Contains(o.log.String(), s) {
-			t.Errorf("el log contiene %q: %s", s, o.log)
-		}
-		if strings.Contains(rec.Body.String(), s) {
-			t.Errorf("/metrics contiene %q", s)
-		}
+	// una entrega aceptada y su duplicada: created=1
+	do(o.h, signed("pull_request", "d3", pr))
+	do(o.h, signed("pull_request", "d3", pr))
+	if o.metric(t, "aqs_intake_notifications_created_total") != "1" {
+		t.Error("la entrega duplicada no crea otra notificación")
 	}
 }
