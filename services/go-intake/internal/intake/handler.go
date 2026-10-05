@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"regexp"
@@ -17,6 +17,7 @@ import (
 
 	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/artifact"
 	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/githubsig"
+	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/obs"
 )
 
 // MaxBodyBytes es el limite del cuerpo del webhook (1 MiB).
@@ -31,6 +32,9 @@ type Deps struct {
 	Publisher EventPublisher
 	Resolver  ArtifactResolver
 	Now       func() time.Time
+	// Log y Metrics son opcionales (nil = sin log / sin métricas de dominio).
+	Log     *slog.Logger
+	Metrics *obs.Intake
 }
 
 // Handler sirve POST /webhooks/github.
@@ -50,10 +54,24 @@ func NewHandler(d Deps) (http.Handler, error) {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
+	if d.Log == nil {
+		d.Log = slog.New(slog.DiscardHandler)
+	}
 	h := &Handler{d: d}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /webhooks/github", h.webhook)
 	return mux, nil
+}
+
+// WebhookRoute es el patrón de la única ruta de negocio de go-intake.
+const WebhookRoute = "/webhooks/github"
+
+// RoutePattern devuelve el PATRÓN de ruta para las métricas ("unmatched" si no hay), nunca la ruta cruda.
+func RoutePattern(r *http.Request) string {
+	if r.URL.Path == WebhookRoute {
+		return WebhookRoute
+	}
+	return "unmatched"
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -68,8 +86,14 @@ func writeError(w http.ResponseWriter, status int, code, msg string) {
 
 func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	delivery := r.Header.Get("X-GitHub-Delivery")
+	ctx := r.Context()
 	reject := func(status int, code, msg string) {
-		log.Printf("webhook delivery=%q event=%q status=%d code=%s", delivery, r.Header.Get("X-GitHub-Event"), status, code)
+		// Solo identificadores y el código de error: nunca cuerpo, firma ni cabeceras de autenticación.
+		h.d.Log.WarnContext(ctx, "webhook rechazado", "delivery_id", clip(delivery), "github_event", clip(r.Header.Get("X-GitHub-Event")),
+			"status", status, "code", code)
+		if reason := rejectReason(code); reason != "" {
+			h.d.Metrics.Rejected(reason)
+		}
 		writeError(w, status, code, msg)
 	}
 
@@ -142,26 +166,60 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 			PublishPending: true,
 		}
 		if err := h.d.Store.Put(rec); err != nil {
-			log.Printf("webhook delivery=%q store error: %v", delivery, err)
+			h.d.Log.ErrorContext(ctx, "no se pudo persistir", "delivery_id", clip(delivery), "error", err.Error())
 			reject(http.StatusServiceUnavailable, "store_unavailable", "no se pudo persistir")
 			return
 		}
+		h.d.Metrics.Created()
 	}
 	if rec.PublishPending {
 		if err := h.publish(r.Context(), rec, r.Header.Get("traceparent")); err != nil {
-			log.Printf("webhook delivery=%q publish error: %v", delivery, err)
+			h.d.Metrics.PublishFailed()
+			h.d.Log.ErrorContext(ctx, "no se pudo publicar notify.created", "delivery_id", clip(delivery), "notification_id", rec.ID, "error", err.Error())
 			reject(http.StatusServiceUnavailable, "publish_failed", "no se pudo publicar; reintente la entrega")
 			return
 		}
 		rec.PublishPending = false
 		if err := h.d.Store.Put(rec); err != nil {
-			log.Printf("webhook delivery=%q store error: %v", delivery, err)
+			h.d.Log.ErrorContext(ctx, "no se pudo persistir", "delivery_id", clip(delivery), "error", err.Error())
 			reject(http.StatusServiceUnavailable, "store_unavailable", "no se pudo persistir")
 			return
 		}
 	}
-	log.Printf("webhook delivery=%q notification=%s status=202", delivery, rec.ID)
+	h.d.Log.InfoContext(ctx, "webhook aceptado", "delivery_id", clip(delivery), "notification_id", rec.ID,
+		"repo", rec.Repo, "sha", rec.SHA, "status", http.StatusAccepted)
 	writeJSON(w, http.StatusAccepted, rec.Notification)
+}
+
+// clip acota a 64 bytes un valor controlado por el remitente antes de loguearlo.
+func clip(s string) string {
+	if len(s) > 64 {
+		return s[:64]
+	}
+	return s
+}
+
+// rejectReason traduce el código de error al motivo de aqs_intake_webhook_rejected_total
+// ("" = no es un rechazo del remitente: 503 internos, que cuentan solo en las métricas HTTP).
+func rejectReason(code string) string {
+	switch code {
+	case "invalid_signature", "unsupported_event", "unresolvable_artifact":
+		return code
+	case "payload_too_large":
+		return "too_large"
+	case "invalid_body", "unsupported_media_type", "missing_delivery", "invalid_payload", "invalid_json":
+		return "bad_request"
+	}
+	return ""
+}
+
+// eventTraceID usa el trace_id de la petición (el mismo del log y del traceparent de la respuesta)
+// y, sin middleware, cae al traceparent entrante.
+func eventTraceID(ctx context.Context, traceparent string) string {
+	if id := obs.TraceID(ctx); id != "" {
+		return id
+	}
+	return traceID(traceparent)
 }
 
 func (h *Handler) publish(ctx context.Context, rec Record, traceparent string) error {
@@ -170,7 +228,7 @@ func (h *Handler) publish(ctx context.Context, rec Record, traceparent string) e
 		Type:       "notify.created",
 		Version:    1,
 		OccurredAt: h.d.Now().UTC().Format(time.RFC3339),
-		TraceID:    traceID(traceparent),
+		TraceID:    eventTraceID(ctx, traceparent),
 		Data: EventData{
 			NotificationID: rec.ID, GithubEvent: rec.GithubEvent, Repo: rec.Repo, SHA: rec.SHA,
 		},

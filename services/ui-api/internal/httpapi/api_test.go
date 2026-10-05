@@ -370,3 +370,15 @@ func TestRetryAfterRoundsUp(t *testing.T) {
 		t.Fatalf("Retry-After=%q, esperado 3", got)
 	}
 }
+
+func TestRoutePatternBoundsCardinality(t *testing.T) {
+	for p, want := range map[string]string{
+		"/notifications": RouteList, "/notifications/n-1/confirm": RouteConfirm, "/notifications/zzz/confirm": RouteConfirm,
+		"/notifications//confirm": "unmatched", "/notifications/a/b/confirm": "unmatched", "/notifications/n-1": "unmatched",
+		"/healthz": "unmatched", "/": "unmatched",
+	} {
+		if got := RoutePattern(httptest.NewRequest("GET", p, nil)); got != want {
+			t.Errorf("%s -> %s, esperado %s", p, got, want)
+		}
+	}
+}

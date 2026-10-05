@@ -148,6 +148,17 @@ func (s *Store) List(state State) []Notification {
 	return out
 }
 
+// Counts devuelve cuantas notificaciones hay por estado (las tres claves siempre presentes).
+func (s *Store) Counts() map[string]int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]int{string(StatePending): 0, string(StateConfirmed): 0, string(StateRejected): 0}
+	for _, e := range s.items {
+		out[string(s.view(e).State)]++
+	}
+	return out
+}
+
 // Confirm registra la confirmacion de id por principalID: persiste (fsync) y
 // solo despues cambia el estado. La segunda confirmacion devuelve
 // ErrAlreadyConfirmed sin crear otro recibo.
