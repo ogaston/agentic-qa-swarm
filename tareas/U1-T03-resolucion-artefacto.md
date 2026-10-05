@@ -107,6 +107,8 @@ Desde la raíz del worktree.
 
 ## Notas
 
+- **Go (aprendido en U4).** El módulo va en `go 1.26.8` (no `go 1.24`: con 1.24 el job `vuln` de la CI de GitHub falla por avisos de la biblioteca estándar), con las dependencias más recientes compatibles con esa versión. Patrón de referencia: `services/go-identity` y `services/go-governance`. `govulncheck` no corre en el entorno del loop (`vuln.go.dev` da 403): la confirmación es el job `vuln` de `ci` en el PR de GitHub (el orquestador lo abre como borrador para que corra).
+- **Informes del loop.** El diff de `revisiones/<tarea>/` (informes del revisor) no cuenta como desborde en los criterios de alcance.
 - Archivos que se **modifican en su sitio**: el handler/cableado de `cmd/go-intake` y de `internal/` que usaban el stub de U1-T02; se elimina el stub. Nada de duplicados con sufijo.
 - El `422` no está en el OpenAPI de U5 para `/webhooks/github`. No se edita el contrato aquí; se anota en la bitácora para C-11.
 - El mapa de eventos a `github_event` ya lo fijó U1-T02; esta tarea no lo cambia.

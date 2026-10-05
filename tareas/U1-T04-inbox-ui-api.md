@@ -163,6 +163,10 @@ start() { t=$(mktemp -d); (cd services/ui-api && go build -o "$t/ui-api" ./cmd/u
 
 ## Notas
 
+- **Go (aprendido en U4).** El módulo va en `go 1.26.8` (no `go 1.24`: con 1.24 el job `vuln` de la CI de GitHub falla por avisos de la biblioteca estándar), con las dependencias más recientes compatibles con esa versión. Patrón de referencia: `services/go-identity` y `services/go-governance`. `govulncheck` no corre en el entorno del loop (`vuln.go.dev` da 403): la confirmación es el job `vuln` de `ci` en el PR de GitHub (el orquestador lo abre como borrador para que corra).
+- **Dockerfile (aprendido en U4).** Copia el patrón de `services/go-identity/Dockerfile` (`golang:1.26.8-alpine3.24`, runtime `alpine:3.24`, tags fijados, usuario 65532). El `docker build` literal falla en el entorno del loop por la CA del proxy (x509 en `go mod download`): se verifica con un contexto temporal fuera del repo que añade `/root/.ccr/ca-bundle.crt` (`COPY` + `ENV SSL_CERT_FILE` en la etapa build); es un límite del entorno, no un defecto.
+- **Comandos con `yq` (aprendido en U4).** `keys` no ordena (usa `keys | sort`); `x // "y"` trata `false` como ausente; `if/then` de jq no parsea en yq; `yq -N` sobre un build imprime líneas en blanco (filtra con `grep -v '^$'`). Si un criterio no puede dar el esperado por esa causa, el codificador lo reporta con comando y salida; no rellena a ciegas.
+- **Informes del loop.** El diff de `revisiones/<tarea>/` (informes del revisor) no cuenta como desborde en los criterios de alcance.
 - Archivos que se **modifican en su sitio**: ninguno de U1-T01 salvo añadir paquetes. Nada de duplicados con sufijo.
 - El fake de tokens es de prueba y de dev local: con `UIAPI_AUTH` sin definir, el servicio **no arranca** (no cae a un modo abierto).
 - `Principal.Role` se propaga pero no se aplica en esta tarea (ver «Fuera»): no inventes reglas de rol.

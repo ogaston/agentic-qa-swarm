@@ -14,7 +14,7 @@
 
 Detalle:
 
-- **Módulos.** `module github.com/ogaston/agentic-qa-swarm/services/go-intake` y `.../services/ui-api`, ambos con `go 1.24`. Cada uno con su `go.mod` y su `go.sum` (SEC-10). **Prohibido** `go.work` y `replace` (C-05: el CI exige `go.mod` propio por servicio). `ui-api` se fija en **Go** (el plan dice «Go o TS»; U1-T05 fija `rapid` como framework PBT, que es Go).
+- **Módulos.** `module github.com/ogaston/agentic-qa-swarm/services/go-intake` y `.../services/ui-api`, ambos con `go 1.26.8` (ver Notas). Cada uno con su `go.mod` y su `go.sum` (SEC-10). **Prohibido** `go.work` y `replace` (C-05: el CI exige `go.mod` propio por servicio). `ui-api` se fija en **Go** (el plan dice «Go o TS»; U1-T05 fija `rapid` como framework PBT, que es Go).
 - **`githubsig`.** `Sign(secret []byte, body []byte) string` devuelve `sha256=<hex>` (formato de `X-Hub-Signature-256`). Interfaz `Verifier { Verify(secret, body []byte, header string) error }`. `FakeVerifier` programable: aceptar todo, rechazar todo, o aceptar solo un `header` concreto; por defecto **rechaza** (fail-closed). La verificación real (HMAC + `hmac.Equal`) es de U1-T02, no de esta tarea.
 - **Payloads de GitHub** (formas mínimas con los campos que usan U1-T02/T03/T05): `push-branch.json` (`ref: refs/heads/main`), `push-tag.json` (`ref: refs/tags/v1.2.0`), `pull-request-opened.json`, `pull-request-synchronize.json`, `pull-request-fork.json` (`head.repo.full_name != base.repo.full_name`), `release-published.json`, `ping.json`. Cada uno con `repository.full_name` y el SHA de 40 hex que corresponda.
 - **Ejemplos REST** en `contracts/openapi/examples/valid/` y `.../invalid/`, con nombre `<Esquema>.<caso>.json`, para `Notification` (estados `pending`, `confirmed`, `rejected`; con y sin `artifact`) y `ConfirmationReceipt`. Inválidos: `state` fuera del enum, `artifact.kind` desconocido, `artifact` con campo extra, `confirmed_at` que no es `date-time`, falta `run_id`.
@@ -113,6 +113,9 @@ AJV=(npx --yes -p ajv-cli@5.0.0 -p ajv-formats@3.0.1 ajv)
 
 ## Notas
 
+- **Go (aprendido en U4).** El módulo va en `go 1.26.8` (no `go 1.24`: con 1.24 el job `vuln` de la CI de GitHub falla por avisos de la biblioteca estándar), con las dependencias más recientes compatibles con esa versión. Patrón de referencia: `services/go-identity` y `services/go-governance`. `govulncheck` no corre en el entorno del loop (`vuln.go.dev` da 403): la confirmación es el job `vuln` de `ci` en el PR de GitHub (el orquestador lo abre como borrador para que corra).
+- **Comandos con `yq` (aprendido en U4).** `keys` no ordena (usa `keys | sort`); `x // "y"` trata `false` como ausente; `if/then` de jq no parsea en yq; `yq -N` sobre un build imprime líneas en blanco (filtra con `grep -v '^$'`). Si un criterio no puede dar el esperado por esa causa, el codificador lo reporta con comando y salida; no rellena a ciegas.
+- **Informes del loop.** El diff de `revisiones/<tarea>/` (informes del revisor) no cuenta como desborde en los criterios de alcance.
 - Archivos que se **modifican en su sitio**: ninguno. Todo es nuevo.
 - Los ejemplos REST viven en `contracts/` (no duplicados por servicio) para que U1-T04 y U1-T07 los reutilicen. Las rutas relativas desde los tests son `../../contracts/...`.
 - Sin `Dockerfile` los tests de estos módulos **no corren en `ci.yml`** hasta U1-T02; la verificación hasta entonces es local. Es una limitación conocida, no un defecto.
