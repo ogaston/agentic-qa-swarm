@@ -248,3 +248,103 @@ func TestProbeAccessLogAtInfoLevel(t *testing.T) {
 		t.Errorf("línea de acceso: %s", buf)
 	}
 }
+
+func TestRequestIDLengthBounds(t *testing.T) {
+	h, _, _, _ := newWrapped(t, nil, nil)
+	for n, keep := range map[int]bool{7: false, 8: true, 64: true, 65: false} {
+		id := strings.Repeat("a", n)
+		req := httptest.NewRequest("GET", "/known", nil)
+		req.Header.Set("X-Request-Id", id)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if got := rec.Header().Get("X-Request-Id"); (got == id) != keep || !ValidRequestID(got) {
+			t.Errorf("largo %d: conservar=%v, quedó %q", n, keep, got)
+		}
+	}
+}
+
+func TestTraceparentUppercaseHexIsRegenerated(t *testing.T) {
+	h, _, _, _ := newWrapped(t, nil, nil)
+	req := httptest.NewRequest("GET", "/known", nil)
+	req.Header.Set("traceparent", "00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if got := strings.ToLower(rec.Header().Get("traceparent")); strings.Contains(got, "4bf92f3577b34da6a3ce929d0e0e4736") {
+		t.Errorf("un traceparent con hex en mayúsculas (inválido para W3C) debía regenerarse: %q", got)
+	}
+}
+
+func TestInFlightGaugeRisesAndFalls(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	h, _, _, scrape := newWrapped(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-release
+	}))
+	done := make(chan struct{})
+	go func() {
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/known", nil))
+		close(done)
+	}()
+	<-started
+	// la petición lenta + el propio scrape
+	if out := scrape(); !strings.Contains(out, `aqs_http_in_flight{service="svc-prueba"} 2`+"\n") {
+		t.Errorf("durante la petición lenta in_flight debía ser 2: %s", out)
+	}
+	close(release)
+	<-done
+	if out := scrape(); !strings.Contains(out, `aqs_http_in_flight{service="svc-prueba"} 1`+"\n") { // solo el scrape
+		t.Errorf("tras terminar in_flight debía bajar a 1 (el scrape): %s", out)
+	}
+}
+
+func TestDurationHistogramBucketsAndProbeRoutes(t *testing.T) {
+	h, _, _, scrape := newWrapped(t, nil, nil)
+	for _, p := range []string{"/known", "/healthz", "/readyz"} {
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", p, nil))
+	}
+	out := scrape()
+	for _, le := range []string{"0.005", "0.025", "0.1", "0.5", "1", "5", "10", "+Inf"} {
+		if !strings.Contains(out, `aqs_http_request_duration_seconds_bucket{method="GET",route="/known",service="svc-prueba",le="`+le+`"}`) {
+			t.Errorf("falta el bucket le=%s (el p95 del dashboard depende de ellos)", le)
+		}
+	}
+	for _, r := range []string{"/healthz", "/readyz", "/metrics"} {
+		if r == "/metrics" {
+			continue // el propio scrape se contabiliza después de responder
+		}
+		if !strings.Contains(out, `aqs_http_requests_total{code="`+map[string]string{"/healthz": "200", "/readyz": "200"}[r]+`",method="GET",route="`+r+`",service="svc-prueba"} 1`) {
+			t.Errorf("falta la serie de la sonda %s con su route", r)
+		}
+	}
+	if out2 := scrape(); !strings.Contains(out2, `route="/metrics"`) {
+		t.Error("la sonda /metrics debe llevar route=\"/metrics\"")
+	}
+}
+
+func TestProbesMethodNotAllowedSetsAllow(t *testing.T) {
+	h, _, _, _ := newWrapped(t, nil, nil)
+	for _, p := range []string{"/healthz", "/readyz", "/metrics"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("POST", p, nil))
+		if rec.Code != 405 || rec.Header().Get("Allow") != "GET, HEAD" {
+			t.Errorf("POST %s: %d Allow=%q", p, rec.Code, rec.Header().Get("Allow"))
+		}
+	}
+}
+
+func TestServerErrorAccessLogIsWarn(t *testing.T) {
+	buf := &bytes.Buffer{}
+	reg := NewRegistry()
+	app := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/boom" {
+			w.WriteHeader(503)
+		}
+	})
+	h := Wrap(Config{Service: "svc", Log: NewLogger(buf, "svc", slog.LevelInfo), Registry: reg, Metrics: NewHTTPMetrics(reg, "svc")}, app)
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/ok", nil))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/boom", nil))
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], `"level":"info"`) || !strings.Contains(lines[1], `"level":"warn"`) || !strings.Contains(lines[1], `"status":503`) {
+		t.Errorf("200 en info y 5xx en warn: %v", lines)
+	}
+}

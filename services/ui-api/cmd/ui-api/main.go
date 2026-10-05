@@ -140,6 +140,7 @@ func newHandler(log *slog.Logger, cfg httpapi.Config, dataDir, eventsFile string
 	httpMetrics := obs.NewHTTPMetrics(reg, serviceName)
 	// Las líneas de httpapi (log.Logger) salen por el mismo handler JSON.
 	cfg.Logger = slog.NewLogLogger(log.Handler(), slog.LevelWarn)
+	cfg.Slog = log // las líneas dentro de una petición llevan request_id y trace_id
 	cfg.Metrics = obs.NewInbox(reg, cfg.Store.Counts)
 	app, err := httpapi.New(cfg)
 	if err != nil {

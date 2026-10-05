@@ -219,3 +219,36 @@ func TestClipAndRejectReason(t *testing.T) {
 		}
 	}
 }
+
+// F-02 de la ronda 1: la ruta ACEPTADA tampoco filtra el contenido del payload (los payloads de
+// GitHub traen nombres y correos): ni el log (a nivel debug) ni /metrics.
+func TestObsAcceptedPayloadLeaksNothing(t *testing.T) {
+	var p map[string]any
+	if err := json.Unmarshal(fixture(t, "push-branch.json"), &p); err != nil {
+		t.Fatal(err)
+	}
+	p["sender"] = map[string]any{"login": "PII-LOGIN-XYZ", "email": "pii-sender@falso.test"}
+	p["head_commit"] = map[string]any{"message": "PII-MENSAJE-XYZ", "author": map[string]any{"name": "PII-NOMBRE-XYZ", "email": "pii-autor@falso.test"}}
+	body, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := newObsEnv(t)
+	w := do(o.h, signed("push", "d-pii", body))
+	if w.Code != 202 {
+		t.Fatalf("la entrega válida debía aceptarse: %d %s", w.Code, w.Body)
+	}
+	rec := httptest.NewRecorder()
+	o.h.ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(o.log.String(), `"message":"webhook aceptado"`) {
+		t.Fatalf("falta la línea de aceptación: %s", o.log)
+	}
+	for _, s := range []string{"PII-LOGIN-XYZ", "pii-sender@falso.test", "PII-MENSAJE-XYZ", "PII-NOMBRE-XYZ", "pii-autor@falso.test", "falso.test"} {
+		if strings.Contains(o.log.String(), s) {
+			t.Errorf("el log contiene %q: %s", s, o.log)
+		}
+		if strings.Contains(rec.Body.String(), s) {
+			t.Errorf("/metrics contiene %q", s)
+		}
+	}
+}

@@ -250,7 +250,11 @@ func Wrap(c Config, app http.Handler) http.Handler {
 		c.Metrics.duration.WithLabelValues(c.Service, route, m).Observe(dur.Seconds())
 		// Las sondas también se registran en info (CA-3 de U1-T06 exige ver el request_id de /healthz);
 		// quien no las quiera en el log sube LOG_LEVEL a warn.
-		c.Log.Log(ctx, slog.LevelInfo, "request", "route", route, "method", m, "status", sw.status,
+		lvl := slog.LevelInfo
+		if sw.status >= 500 {
+			lvl = slog.LevelWarn // un 5xx no se pierde con LOG_LEVEL=warn
+		}
+		c.Log.Log(ctx, lvl, "request", "route", route, "method", m, "status", sw.status,
 			"duration_ms", float64(dur.Microseconds())/1000)
 	})
 }
