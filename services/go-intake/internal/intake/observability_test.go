@@ -332,7 +332,7 @@ func routeCases() []routeCase {
 		}, status: 422, code: "unresolvable_artifact", reason: "unresolvable_artifact", created: "0", pubFail: "0", msg: "webhook rechazado"},
 		{name: "unsupported_media_type", req: func(t *testing.T) req {
 			r := signed("push", "d1", push(t))
-			r.ctype = "text/plain"
+			r.ctype = "text/plain; x=PII-CT-XYZ"
 			return r
 		}, status: 415, code: "unsupported_media_type", reason: "bad_request", created: "0", pubFail: "0", msg: "webhook rechazado"},
 		{name: "missing_delivery", req: func(t *testing.T) req { return signed("push", "", push(t)) },
@@ -388,6 +388,7 @@ func TestObsEveryRouteLeaksNothingAndCountsExactly(t *testing.T) {
 				pub = &memPublisher{fail: true}
 			}
 			o := newObsEnvWith(t, st, pub, c.res)
+			o.h = withPIIHeaders(o.h)
 			var w *httptest.ResponseRecorder
 			if c.raw != nil {
 				w = c.raw(o.h)
@@ -418,6 +419,31 @@ func TestObsEveryRouteLeaksNothingAndCountsExactly(t *testing.T) {
 			}
 			if !strings.Contains(o.log.String(), `"message":"`+c.msg+`"`) {
 				t.Errorf("falta la línea de log %q: %s", c.msg, o.log)
+			}
+			// niveles y campos de los logs de dominio
+			wantLvl := map[string]string{"webhook aceptado": "info", "webhook rechazado": "warn",
+				"no se pudo publicar notify.created": "error", "no se pudo persistir": "error"}
+			for _, ln := range strings.Split(strings.TrimSpace(o.log.String()), "\n") {
+				var l map[string]any
+				_ = json.Unmarshal([]byte(ln), &l)
+				msg, _ := l["message"].(string)
+				if want, ok := wantLvl[msg]; ok && l["level"] != want {
+					t.Errorf("%q debe salir en %s: %s", msg, want, ln)
+				}
+				switch msg {
+				case "webhook rechazado":
+					if l["status"] != float64(c.status) || (c.code != "" && l["code"] != c.code) {
+						t.Errorf("el log de rechazo debe llevar el status y el code reales (%d, %s): %s", c.status, c.code, ln)
+					}
+				case "webhook aceptado":
+					if id, _ := l["notification_id"].(string); !strings.HasPrefix(id, "n-") || l["status"] != float64(202) || l["delivery_id"] != "d1" {
+						t.Errorf("el log de aceptación debe llevar notification_id, delivery_id y status: %s", ln)
+					}
+				case "no se pudo publicar notify.created":
+					if id, _ := l["notification_id"].(string); !strings.HasPrefix(id, "n-") {
+						t.Errorf("el log de publicación fallida lleva notification_id: %s", ln)
+					}
+				}
 			}
 			// valores exactos de las métricas
 			codeSeries := `aqs_http_requests_total{code="` + strconv.Itoa(c.status) + `",method="POST",route="/webhooks/github",service="go-intake"}`
@@ -462,4 +488,23 @@ func TestObsRejectedCountersAccumulate(t *testing.T) {
 	if o.metric(t, "aqs_intake_notifications_created_total") != "1" {
 		t.Error("la entrega duplicada no crea otra notificación")
 	}
+}
+
+// withPIIHeaders añade, a cada petición, marcas de PII en cabeceras (y en Host/RemoteAddr): el log de
+// acceso y /metrics no pueden reflejar ninguna, ni siquiera los X-Request-Id/traceparent crudos inválidos.
+func withPIIHeaders(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for k, v := range map[string]string{
+			"Cookie": "sesion=PII-COOKIE-XYZ", "X-Forwarded-For": "pii-ip.falso.test", "User-Agent": "PII-AGENTE-XYZ/1.0",
+			"Origin": "https://pii-origen.falso.test", "Referer": "https://pii-ref.falso.test/x", "Accept-Language": "pii-idioma",
+			"X-Request-Id": "PII-REQID XYZ", "traceparent": "PII-TRACE-XYZ", "X-Real-Ip": "pii-real.falso.test",
+		} {
+			r.Header.Set(k, v)
+		}
+		if r.Header.Get("Content-Type") == "" {
+			r.Header.Set("Content-Type", "application/PII-tipo-xyz")
+		}
+		r.Host, r.RemoteAddr = "pii-host.falso.test", "pii-addr.falso.test:1234"
+		h.ServeHTTP(w, r)
+	})
 }

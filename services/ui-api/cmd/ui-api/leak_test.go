@@ -128,6 +128,7 @@ func TestOpsEndpointsEveryRouteLeaksNothingAndCountsExactly(t *testing.T) {
 				tc.pre(t, c)
 			}
 			c.logs.Reset()
+			c.h = withPIIHeaders(c.h)
 			w := tc.act(c)
 			if w.Code != tc.status {
 				t.Fatalf("status=%d, esperado %d (%s)", w.Code, tc.status, w.Body)
@@ -203,4 +204,26 @@ func TestOpsEndpointsPanicLeaksNothing(t *testing.T) {
 	if !strings.Contains(m.Body.String(), `aqs_http_requests_total{code="500",method="POST",route="/notifications/{id}/confirm",service="ui-api"} 1`) {
 		t.Error("el panic cuenta como 500 en la ruta de confirmación")
 	}
+}
+
+// withPIIHeaders añade a cada petición marcas de PII en cabeceras (y en Host/RemoteAddr): el log de
+// acceso y /metrics no pueden reflejar ninguna, ni los X-Request-Id/traceparent crudos inválidos.
+func withPIIHeaders(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for k, v := range map[string]string{
+			"Cookie": "sesion=PII-COOKIE-XYZ", "User-Agent": "PII-AGENTE-XYZ/1.0", "Referer": "https://pii-ref.falso.test/x",
+			"Accept-Language": "pii-idioma", "X-Request-Id": "PII-REQID XYZ", "traceparent": "PII-TRACE-XYZ",
+			"X-Real-Ip": "pii-real.falso.test", "X-Hub-Signature-256": "sha256=pii-firma-falso.test",
+		} {
+			r.Header.Set(k, v)
+		}
+		if r.Header.Get("X-Forwarded-For") == "" {
+			r.Header.Set("X-Forwarded-For", "pii-ip.falso.test")
+		}
+		if r.Header.Get("Origin") == "" {
+			r.Header.Set("Origin", "https://pii-origen.falso.test")
+		}
+		r.Host, r.RemoteAddr = "pii-host.falso.test", "pii-addr.falso.test:1234"
+		h.ServeHTTP(w, r)
+	})
 }

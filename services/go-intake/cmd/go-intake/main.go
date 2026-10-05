@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,12 +20,19 @@ import (
 const serviceName = "go-intake"
 
 func main() {
-	log := obs.NewLogger(os.Stdout, serviceName, obs.ParseLevel(os.Getenv("LOG_LEVEL")))
-	slog.SetDefault(log) // los log.Printf residuales del paquete intake salen también en JSON
+	log := newLog(os.Stdout)
 	if err := run(log); err != nil {
 		log.Error("el servicio no arranca", "error", err.Error())
 		os.Exit(1)
 	}
+}
+
+// newLog crea el logger JSON del servicio con LOG_LEVEL del entorno y lo fija como predeterminado,
+// de modo que los log.Printf residuales del paquete intake salen también en JSON.
+func newLog(w io.Writer) *slog.Logger {
+	log := obs.NewLogger(w, serviceName, obs.ParseLevel(os.Getenv("LOG_LEVEL")))
+	slog.SetDefault(log)
+	return log
 }
 
 func run(log *slog.Logger) error {

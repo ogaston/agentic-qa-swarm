@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -36,8 +37,7 @@ import (
 const serviceName = "ui-api"
 
 func main() {
-	log := obs.NewLogger(os.Stdout, serviceName, obs.ParseLevel(os.Getenv("LOG_LEVEL")))
-	slog.SetDefault(log)
+	log := newLog(os.Stdout)
 	if err := run(log); err != nil {
 		log.Error("el servicio no arranca", "error", err.Error())
 		os.Exit(1)
@@ -53,6 +53,19 @@ func verifierFromEnv() (auth.TokenVerifier, error) {
 	default:
 		return nil, fmt.Errorf("UIAPI_AUTH=%q no soportado (la verificacion real llega con U1-T07)", mode)
 	}
+}
+
+// newLog crea el logger JSON del servicio con LOG_LEVEL del entorno y lo fija como predeterminado.
+func newLog(w io.Writer) *slog.Logger {
+	log := obs.NewLogger(w, serviceName, obs.ParseLevel(os.Getenv("LOG_LEVEL")))
+	slog.SetDefault(log)
+	return log
+}
+
+// newSubscriber crea el suscriptor del outbox; sus líneas (log.Logger) salen por el handler JSON
+// a nivel info, de modo que «evento descartado» se ve con el nivel por defecto.
+func newSubscriber(log *slog.Logger, eventsFile string) *inbox.FileSubscriber {
+	return &inbox.FileSubscriber{Path: eventsFile, Logger: slog.NewLogLogger(log.Handler(), slog.LevelInfo)}
 }
 
 func run(log *slog.Logger) error {
@@ -101,7 +114,7 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
-	sub := &inbox.FileSubscriber{Path: eventsFile, Logger: slog.NewLogLogger(log.Handler(), slog.LevelInfo)}
+	sub := newSubscriber(log, eventsFile)
 	handle := func(ev inbox.NotifyCreated) { store.Apply(ev) }
 	if _, err := sub.Drain(handle); err != nil { // carga inicial antes de servir
 		return err
@@ -138,8 +151,8 @@ func run(log *slog.Logger) error {
 func newHandler(log *slog.Logger, cfg httpapi.Config, dataDir, eventsFile string) (http.Handler, error) {
 	reg := obs.NewRegistry()
 	httpMetrics := obs.NewHTTPMetrics(reg, serviceName)
-	// Las líneas de httpapi (log.Logger) salen por el mismo handler JSON.
-	cfg.Logger = slog.NewLogLogger(log.Handler(), slog.LevelWarn)
+	// httpapi registra por Slog (con request_id y trace_id); su Logger clásico solo es el respaldo
+	// de quien no configura Slog, así que aquí no se usa.
 	cfg.Slog = log // las líneas dentro de una petición llevan request_id y trace_id
 	cfg.Metrics = obs.NewInbox(reg, cfg.Store.Counts)
 	app, err := httpapi.New(cfg)

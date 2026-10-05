@@ -641,3 +641,27 @@ func TestRequestIDCharset(t *testing.T) {
 		}
 	}
 }
+
+// «Connection: close» es solo del 413: ni 400, 404, 405, 500 ni 200 lo llevan.
+func TestConnectionCloseOnlyOn413(t *testing.T) {
+	for _, status := range []int{200, 201, 204, 400, 401, 404, 405, 409, 412, 413, 414, 415, 422, 429, 500, 503} {
+		s := status
+		h, _, _, _ := newWrapped(t, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(s) }))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+		got := rec.Header().Get("Connection")
+		if s == 413 && got != "close" {
+			t.Errorf("413 debe llevar Connection: close: %q", got)
+		}
+		if s != 413 && got != "" {
+			t.Errorf("%d no debe llevar Connection: %q", s, got)
+		}
+	}
+	// también las respuestas de las propias sondas (405 de POST /healthz)
+	h, _, _, _ := newWrapped(t, nil, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("POST", "/healthz", nil))
+	if rec.Code != 405 || rec.Header().Get("Connection") != "" {
+		t.Errorf("405 de sonda: %d %v", rec.Code, rec.Header())
+	}
+}
