@@ -38,6 +38,59 @@ func invalid(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalidEvent, fmt.Sprintf(format, a...))
 }
 
+// rejectDuplicateKeys recorre el JSON con json.Decoder.Token() y falla si algun
+// objeto (a cualquier nivel: raiz, data, artifact) repite una clave. Se hace
+// antes de decodificar para no depender de como encoding/json resuelve
+// duplicados (el ultimo gana, incluso un null final). Es mas estricto que el
+// esquema (que ve el ultimo valor): inocuo, el outbox nunca debe repetir claves.
+func rejectDuplicateKeys(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	var walk func() error
+	walk = func() error {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		d, ok := tok.(json.Delim)
+		if !ok {
+			return nil
+		}
+		switch d {
+		case '{':
+			seen := map[string]struct{}{}
+			for dec.More() {
+				kt, err := dec.Token()
+				if err != nil {
+					return err
+				}
+				k, _ := kt.(string)
+				if _, dup := seen[k]; dup {
+					return invalid("clave duplicada %q", k)
+				}
+				seen[k] = struct{}{}
+				if err := walk(); err != nil {
+					return err
+				}
+			}
+		case '[':
+			for dec.More() {
+				if err := walk(); err != nil {
+					return err
+				}
+			}
+		}
+		_, err = dec.Token() // cierre
+		return err
+	}
+	if err := walk(); err != nil {
+		if errors.Is(err, ErrInvalidEvent) {
+			return err
+		}
+		return invalid("json: %v", err)
+	}
+	return nil
+}
+
 // exactKeys exige que el objeto tenga EXACTAMENTE las claves de want, con
 // los nombres sensibles a mayusculas (encoding/json las casa sin distinguir
 // mayusculas, a diferencia del esquema). Devuelve los valores crudos.
@@ -69,6 +122,9 @@ func exactKeys(raw []byte, where string, want ...string) (map[string]json.RawMes
 // debe ser RFC 3339 de Go (rechaza "t"/"z" en minuscula).
 func ParseNotifyCreated(line []byte) (NotifyCreated, error) {
 	var ev NotifyCreated
+	if err := rejectDuplicateKeys(line); err != nil {
+		return ev, err
+	}
 	root, err := exactKeys(line, "evento", "event_id", "type", "version", "occurred_at", "trace_id", "data")
 	if err != nil {
 		return ev, err

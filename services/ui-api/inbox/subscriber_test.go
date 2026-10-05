@@ -1,6 +1,8 @@
 package inbox
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,5 +92,41 @@ func TestFileSubscriberSkipsOversizedLine(t *testing.T) {
 	n, err := fs.Drain(func(NotifyCreated) {})
 	if err != nil || n != 1 || fs.Discarded() != 1 {
 		t.Fatalf("n=%d err=%v discarded=%d", n, err, fs.Discarded())
+	}
+}
+
+// lineOfContentLen devuelve un evento valido (trace_id relleno) con exactamente n bytes sin el salto.
+func lineOfContentLen(t *testing.T, n int) string {
+	t.Helper()
+	good := readFile(t, filepath.Join(events, "examples/valid/notify.created.json"))
+	c, _ := compact(good)
+	const id = "4bf92f3577b34da6a3ce929d0e0e4736"
+	l := strings.Replace(c, id, strings.Repeat("x", len(id)+n-len(c)), 1)
+	if len(l) != n {
+		t.Fatalf("len=%d, esperado %d", len(l), n)
+	}
+	return l
+}
+
+func TestFileSubscriberLineLimitBoundary(t *testing.T) {
+	// Literales: el tope cuenta el \n; 1.048.575 de contenido pasa, 1.048.576 no.
+	for _, tc := range []struct {
+		content   int
+		delivered int
+		discarded int
+	}{{1048575, 1, 0}, {1048576, 0, 1}} {
+		p := filepath.Join(t.TempDir(), "events.jsonl")
+		if err := os.WriteFile(p, []byte(lineOfContentLen(t, tc.content)+"\n"), 0o640); err != nil {
+			t.Fatal(err)
+		}
+		var logs bytes.Buffer
+		fs := &FileSubscriber{Path: p, Logger: log.New(&logs, "", 0)}
+		n, err := fs.Drain(func(NotifyCreated) {})
+		if err != nil || n != tc.delivered || fs.Discarded() != tc.discarded {
+			t.Fatalf("contenido=%d: n=%d discarded=%d err=%v", tc.content, n, fs.Discarded(), err)
+		}
+		if got := strings.Contains(logs.String(), "descartada"); got != (tc.discarded == 1) {
+			t.Fatalf("contenido=%d: log=%q", tc.content, logs.String())
+		}
 	}
 }

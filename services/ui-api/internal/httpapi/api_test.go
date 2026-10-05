@@ -360,3 +360,13 @@ func TestBodyLimitLiteral64KiB(t *testing.T) {
 		t.Fatalf("65537 debe ser 413: %d", w.Code)
 	}
 }
+
+func TestRetryAfterRoundsUp(t *testing.T) {
+	// 0.4 rps, ráfaga 1: faltan 2,5 s -> Ceil=3 (Floor daría 2; con rps=3 el
+	// minimo de 1 s enmascararia la diferencia).
+	e := newEnv(t, nil, func(c *Config) { c.RateRPS, c.RateBurst = 0.4, 1 })
+	e.do("GET", "/notifications", secretTok, "")
+	if got := e.do("GET", "/notifications", secretTok, "").Header().Get("Retry-After"); got != "3" {
+		t.Fatalf("Retry-After=%q, esperado 3", got)
+	}
+}

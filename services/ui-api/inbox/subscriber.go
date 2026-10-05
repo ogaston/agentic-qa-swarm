@@ -11,7 +11,8 @@ import (
 	"time"
 )
 
-// MaxLineBytes es el tope de tamano de una linea del outbox.
+// MaxLineBytes es el tope de tamano de una linea del outbox, contando el '\n':
+// 1.048.575 bytes de contenido se aceptan; 1.048.576 de contenido se descartan.
 const MaxLineBytes = 1 << 20
 
 // EventSubscriber entrega eventos notify.created a la proyeccion.
