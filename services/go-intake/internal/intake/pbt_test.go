@@ -42,47 +42,71 @@ func marshalPayload(c intake.Classified, asRelease bool) (string, []byte) {
 	}
 }
 
+func checkRoundTrip(t interface {
+	Fatalf(string, ...any)
+	Fatal(...any)
+}, c gen.GitHubCase) {
+	first, err := intake.Classify(c.Event, c.Body)
+	if err != nil {
+		t.Fatalf("Classify(%s) = %v\n%s", c.Event, err, c.Body)
+	}
+	if first != c.Want {
+		t.Fatalf("Classify = %+v, quiero %+v\n%s", first, c.Want, c.Body)
+	}
+	for _, asRelease := range []bool{false, true} {
+		if !asRelease && first.SHA == gen.ZeroSHA && first.GithubEvent == intake.EventTag {
+			continue // un push con el SHA cero es un borrado: ese tag solo se expresa como release
+		}
+		ev, body := marshalPayload(first, asRelease)
+		second, err := intake.Classify(ev, body)
+		if err != nil || second != first {
+			t.Fatalf("round-trip (release=%v): %+v / %v, quiero %+v\n%s", asRelease, second, err, first, body)
+		}
+	}
+	raw, err := json.Marshal(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back intake.Classified
+	if err := json.Unmarshal(raw, &back); err != nil || back != first {
+		t.Fatalf("JSON del modelo: %+v / %v", back, err)
+	}
+}
+
 // Para todo payload generado de push, pull_request o release (PBT-02):
 // Classify(Marshal(Classify(p))) == Classify(p), y Classify coincide con la
 // clasificación esperada del generador; el modelo también hace round-trip JSON.
+// Antes del muestreo se recorren los casos de frontera de gen.FixedValidClassified.
 func TestPBT_GitHubPayloadRoundTrip(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		c := gen.GitHubValid().Draw(t, "case")
-		first, err := intake.Classify(c.Event, c.Body)
-		if err != nil {
-			t.Fatalf("Classify(%s) = %v\n%s", c.Event, err, c.Body)
-		}
-		if first != c.Want {
-			t.Fatalf("Classify = %+v, quiero %+v", first, c.Want)
-		}
-		for _, asRelease := range []bool{false, true} {
-			ev, body := marshalPayload(first, asRelease)
-			second, err := intake.Classify(ev, body)
-			if err != nil || second != first {
-				t.Fatalf("round-trip (release=%v): %+v / %v, quiero %+v\n%s", asRelease, second, err, first, body)
-			}
-		}
-		raw, err := json.Marshal(first)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var back intake.Classified
-		if err := json.Unmarshal(raw, &back); err != nil || back != first {
-			t.Fatalf("JSON del modelo: %+v / %v", back, err)
-		}
-	})
+	for _, c := range gen.FixedValidClassified() {
+		checkRoundTrip(t, c)
+	}
+	rapid.Check(t, func(t *rapid.T) { checkRoundTrip(t, gen.GitHubValid().Draw(t, "case")) })
 }
 
-// Todo webhook generado como no soportado o inválido se rechaza con el error
-// esperado (nunca produce una notificación).
+// Todo webhook no soportado o inválido se rechaza con el error esperado (nunca
+// produce una notificación). Antes del muestreo se recorren, siempre, todas las
+// acciones, eventos, refs y SHA rechazados de gen.FixedRejected.
 func TestPBT_ClassifyRejects(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		r := gen.GitHubRejected().Draw(t, "case")
+	check := func(t interface{ Fatalf(string, ...any) }, r gen.RejectedCase) {
 		c, err := intake.Classify(r.Event, r.Body)
 		if !errors.Is(err, r.Want) {
-			t.Fatalf("%s: Classify = %+v, %v; quiero %v\n%s", r.Class, c, err, r.Want, r.Body)
+			t.Fatalf("%s (evento %q): Classify = %+v, %v; quiero %v\n%s", r.Class, r.Event, c, err, r.Want, r.Body)
 		}
-	})
+	}
+	for _, r := range gen.FixedRejected() {
+		check(t, r)
+	}
+	// Un cuerpo que no es un objeto JSON es un error de JSON (ni ErrUnsupported ni ErrInvalidPayload).
+	for _, body := range []string{"", " ", "{", "}", "not json", "[]", "[1]", `"x"`, "1", "true", `{"ref":`, `{"ref":"refs/heads/x","after":"` + strings.Repeat("a", 40) + `"`, "\x00", "{'ref':1}"} {
+		for _, ev := range []string{"push", "pull_request", "release"} {
+			c, err := intake.Classify(ev, []byte(body))
+			if err == nil || errors.Is(err, intake.ErrUnsupported) || errors.Is(err, intake.ErrInvalidPayload) {
+				t.Fatalf("cuerpo %q (%s): Classify = %+v, %v; quiero un error de JSON", body, ev, c, err)
+			}
+		}
+	}
+	rapid.Check(t, func(t *rapid.T) { check(t, gen.GitHubRejected().Draw(t, "case")) })
 }
 
 // Para toda notificación generada: UnmarshalEvent(MarshalEvent(e)) == e y el JSON
@@ -332,5 +356,84 @@ func TestPBT_Fixed_StoreLastWinsPerID(t *testing.T) {
 		if got, ok := st.GetByDelivery("d-b"); !ok || !got.PublishPending {
 			t.Fatalf("%+v %v", got, ok)
 		}
+	}
+}
+
+// Líneas ilegibles del almacén: una línea rota, sin id o sin delivery_id, o un
+// final truncado sin salto de línea, no impide abrir ni pierde los registros
+// buenos, y el registro escrito después de un final truncado no se pega a él.
+func TestPBT_StoreIgnoresUnreadableLines(t *testing.T) {
+	base := t.TempDir()
+	garbage := []string{"", "   ", "{", "not json", "[]", "null", `{"id":"n-x"}`, `{"delivery_id":"d-x"}`, `{"id":"","delivery_id":"d-y"}`, `{"id":"n-z","delivery_id":""}`, `{"id":1}`}
+	rapid.Check(t, func(t *rapid.T) {
+		dir := tempDir(base, t)
+		good := rapid.SliceOfNDistinct(gen.Record(), 1, 6, func(r intake.Record) string { return r.ID + "|" + r.DeliveryID }).Draw(t, "good")
+		var sb strings.Builder
+		for _, r := range good {
+			for _, g := range rapid.SliceOfN(rapid.SampledFrom(garbage), 0, 2).Draw(t, "garbage") {
+				sb.WriteString(g + "\n")
+			}
+			line, _ := json.Marshal(r)
+			sb.WriteString(string(line) + "\n")
+		}
+		truncated := rapid.Bool().Draw(t, "truncated")
+		if truncated {
+			sb.WriteString(`{"id":"n-trunc","delivery_id":"d-tr`)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "notifications.jsonl"), []byte(sb.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		st, err := intake.OpenJSONLStore(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range good {
+			if got, ok := st.GetByDelivery(r.DeliveryID); !ok || !reflect.DeepEqual(got, r) {
+				t.Fatalf("GetByDelivery(%q) = %+v, %v; quiero %+v", r.DeliveryID, got, ok, r)
+			}
+		}
+		for _, d := range []string{"d-x", "d-y", "d-z", "d-tr", ""} {
+			if _, ok := st.GetByDelivery(d); ok {
+				t.Fatalf("la entrega %q de una línea ilegible está indexada", d)
+			}
+		}
+		extra := good[0]
+		extra.ID, extra.DeliveryID = "n-extra", "d-extra"
+		if err := st.Put(extra); err != nil {
+			t.Fatal(err)
+		}
+		st2, err := intake.OpenJSONLStore(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := st2.GetByDelivery("d-extra"); !ok || !reflect.DeepEqual(got, extra) {
+			t.Fatalf("el registro escrito tras una línea %s se perdió: %+v, %v", map[bool]string{true: "truncada", false: "completa"}[truncated], got, ok)
+		}
+	})
+}
+
+func TestPBT_Fixed_StoreIgnoresUnreadableLines(t *testing.T) {
+	dir := t.TempDir()
+	ok := `{"id":"n-1","github_event":"commit","repo":"a/b","sha":"` + strings.Repeat("a", 40) + `","state":"pending","delivery_id":"d-1","publish_pending":false}`
+	body := "not json\n" + `{"id":"n-x"}` + "\n" + `{"delivery_id":"d-x"}` + "\n" + ok + "\n" + `{"id":"n-2","delivery_id":"d-tr`
+	if err := os.WriteFile(filepath.Join(dir, "notifications.jsonl"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := intake.OpenJSONLStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found := st.GetByDelivery("d-1"); !found {
+		t.Fatal("falta d-1")
+	}
+	if _, found := st.GetByDelivery("d-x"); found {
+		t.Fatal("d-x indexada")
+	}
+	if err := st.Put(intake.Record{Notification: intake.Notification{ID: "n-3"}, DeliveryID: "d-3"}); err != nil {
+		t.Fatal(err)
+	}
+	st2, _ := intake.OpenJSONLStore(dir)
+	if _, found := st2.GetByDelivery("d-3"); !found {
+		t.Fatal("el registro tras el final truncado se perdió")
 	}
 }

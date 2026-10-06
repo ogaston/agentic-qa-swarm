@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -337,6 +338,9 @@ func TestPBT_ReceiptStoreRoundTrip(t *testing.T) {
 		if got := len(st2.List(inbox.StateConfirmed)); got != len(confirmed) {
 			t.Fatalf("confirmadas tras reabrir: %d, quiero %d", got, len(confirmed))
 		}
+		if _, err := st2.Confirm("n-no-existe-"+gen.UUID().Draw(t, "ghost"), "x", nil); !errors.Is(err, inbox.ErrNotFound) {
+			t.Fatalf("confirmar un id inexistente: %v", err)
+		}
 		for id := range confirmed {
 			if _, err := st2.Confirm(id, "x", nil); !errors.Is(err, inbox.ErrAlreadyConfirmed) {
 				t.Fatalf("reconfirmar %q tras reabrir: %v", id, err)
@@ -580,6 +584,9 @@ func TestPBT_NotificationJSONRoundTrip(t *testing.T) {
 		if !back.State.Valid() {
 			t.Fatalf("estado inválido %q", back.State)
 		}
+		if odd := inbox.State(gen.Free().Draw(t, "odd")); odd.Valid() != (odd == "pending" || odd == "confirmed" || odd == "rejected") {
+			t.Fatalf("State(%q).Valid() = %v", odd, odd.Valid())
+		}
 		if (n.Artifact == nil) != !strings.Contains(string(raw), `"artifact"`) {
 			t.Fatalf("omitempty de artifact: %s", raw)
 		}
@@ -627,45 +634,125 @@ func TestPBT_Fixed_NotificationAndReceiptJSON(t *testing.T) {
 
 // path de cada campo con variantes dentro del evento.
 var variantPaths = map[string][]string{
-	"event_id": {}, "type": {}, "occurred_at": {}, "trace_id": {}, "notification_id": {"data"}, "github_event": {"data"},
+	"version": {}, "event_id": {}, "type": {}, "occurred_at": {}, "trace_id": {}, "notification_id": {"data"}, "github_event": {"data"},
 	"repo": {"data"}, "sha": {"data"}, "kind": {"data", "artifact"}, "ref": {"data", "artifact"},
 }
 
-// Acuerdo con el esquema en TODAS las variantes de texto de cada campo (límites
-// de uuid, sha, enums, fechas, vacíos), una por una y sin azar en la elección:
-// donde el esquema rechaza, el parser rechaza; donde el esquema acepta y el
-// parser rechaza, es una diferencia documentada.
+const canonicalUUID = "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34"
+
+// edits enumera, para un valor base, todas las ediciones de un carácter: cambiar
+// cada posición por cada carácter de repl, borrar cada posición e insertar cada
+// carácter de repl en cada posición (incluidos los extremos). Es el recorrido
+// determinista de los límites de un patrón.
+func edits(base, repl string) []string {
+	var out []string
+	for i := 0; i <= len(base); i++ {
+		if i < len(base) {
+			out = append(out, base[:i]+base[i+1:])
+		}
+		for _, c := range repl {
+			if i < len(base) && rune(base[i]) != c {
+				out = append(out, base[:i]+string(c)+base[i+1:])
+			}
+			out = append(out, base[:i]+string(c)+base[i:])
+		}
+	}
+	return out
+}
+
+// bigVariants son las variantes deterministas por campo: uuid y sha por posición
+// (guion ausente, primer grupo de 9, g en cada grupo, sha de 39 y de 41...).
+func bigVariants() map[string][]string {
+	m := map[string][]string{}
+	for k, v := range variants {
+		m[k] = append([]string(nil), v...)
+	}
+	m["event_id"] = append(m["event_id"], edits(canonicalUUID, "gG- a")...)
+	m["event_id"] = append(m["event_id"], strings.ToUpper(canonicalUUID), canonicalUUID[:23]+strings.ToUpper(canonicalUUID[23:]),
+		strings.ReplaceAll(canonicalUUID, "-", ""), "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34-3f2b")
+	sha := strings.Repeat("a", 40)
+	m["sha"] = append(m["sha"], edits(sha, "gGA \n-")...)
+	m["sha"] = append(m["sha"], strings.ToUpper(sha), strings.Repeat("A", 40), strings.Repeat("F", 40), sha[:39], sha+"a", sha+sha, "0x"+sha[:38],
+		strings.Repeat("٣", 40))
+	return m
+}
+
+// versionValues son los valores de version recorridos siempre (el esquema pide const 1).
+var versionValues = []any{0.0, 2.0, -1.0, 1.5, 0.5, 3.0, 100.0, 1e300, "1", "", true, false, nil, []any{}, []any{1.0}, map[string]any{}}
+
+// versionRaw son formas textuales de números que json.Marshal de un map no produce.
+var versionRaw = []string{"0", "2", "-1", "-0", "1.0", "1.00", "1e0", "1E0", "1e-0", "0.1e1", "10e-1", "1.5", "1e1", "9007199254740993", "0.9999999999999999999"}
+
+func agree(t interface{ Fatalf(string, ...any) }, schema *jsonschema.Schema, label string, mraw []byte, stricterOK func() bool) {
+	schemaErr := gen.ValidateJSON(schema, mraw)
+	_, parseErr := inbox.ParseNotifyCreated(mraw)
+	if schemaErr != nil && parseErr == nil {
+		// H-1 conocido: el parser acepta hoy esos occurred_at (fijado en el Limit).
+		v := strings.Trim(strings.TrimPrefix(label, "occurred_at="), `"`)
+		if !strings.HasPrefix(label, "occurred_at=") || !knownLax(v) {
+			t.Fatalf("parser más laxo que el esquema con %s: %v\n%s", label, schemaErr, mraw)
+		}
+	}
+	if schemaErr == nil && parseErr != nil && !stricterOK() {
+		t.Fatalf("parser más estricto que el esquema fuera de lo documentado con %s: %v\n%s", label, parseErr, mraw)
+	}
+}
+
+// Acuerdo con el esquema en TODAS las variantes de cada campo, recorridas sin
+// azar: uuid y sha por posición (guion ausente, 9 caracteres en el primer grupo,
+// g en cada grupo, sha de 39, 41 y en mayúsculas), enums, fechas, vacíos y los
+// valores de version (0, 2, -1, 1.0, 1e0...). Donde el esquema rechaza, el parser
+// rechaza; donde el esquema acepta y el parser rechaza, es una diferencia
+// documentada. Después se repite con eventos generados y las variantes estáticas.
 func TestPBT_ParserAgreesOnEveryFieldVariant(t *testing.T) {
 	schema := gen.NotifySchema(t)
+	run := func(t interface{ Fatalf(string, ...any) }, raw []byte, vs map[string][]string, withVersion bool) {
+		keys := make([]string, 0, len(vs))
+		for k := range vs {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		set := func(k string, v any) (map[string]any, []byte) {
+			var m map[string]any
+			if err := json.Unmarshal(raw, &m); err != nil {
+				t.Fatalf("%v", err)
+			}
+			objAt(m, variantPaths[k])[k] = v
+			mraw, _ := json.Marshal(m)
+			return m, mraw
+		}
+		for _, k := range keys {
+			for _, v := range vs[k] {
+				m, mraw := set(k, v)
+				agree(t, schema, fmt.Sprintf("%s=%q", k, v), mraw, func() bool { return documentedStricter(m) })
+			}
+		}
+		if !withVersion {
+			return
+		}
+		for _, v := range versionValues {
+			m, mraw := set("version", v)
+			agree(t, schema, fmt.Sprintf("version=%v", v), mraw, func() bool { return documentedStricter(m) })
+		}
+		for _, v := range versionRaw {
+			mraw := []byte(strings.Replace(string(raw), `"version":1`, `"version":`+v, 1))
+			if string(mraw) == string(raw) {
+				t.Fatalf("no encuentro version en %s", raw)
+			}
+			// 1.0, 1e0 y similares: el esquema acepta el 1 numérico; el parser exige el entero 1 (documentado).
+			agree(t, schema, "version="+v, mraw, func() bool { return strings.ContainsAny(v, ".eE") })
+		}
+	}
+	canonical := []byte(`{"event_id":"` + canonicalUUID + `","type":"notify.created","version":1,"occurred_at":"2026-01-15T10:00:00Z","trace_id":"t",` +
+		`"data":{"notification_id":"n","github_event":"commit","repo":"r","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact":{"kind":"build-from-repo","ref":"r"}}}`)
+	run(t, canonical, bigVariants(), true)
 	rapid.Check(t, func(t *rapid.T) {
 		e := gen.NotifyCreated().Draw(t, "event")
 		raw, err := gen.MarshalEvent(e)
 		if err != nil {
 			t.Fatal(err)
 		}
-		keys := make([]string, 0, len(variants))
-		for k := range variants {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			for _, v := range variants[k] {
-				var m map[string]any
-				if err := json.Unmarshal(raw, &m); err != nil {
-					t.Fatal(err)
-				}
-				objAt(m, variantPaths[k])[k] = v
-				mraw, _ := json.Marshal(m)
-				schemaErr := gen.ValidateJSON(schema, mraw)
-				_, parseErr := inbox.ParseNotifyCreated(mraw)
-				if schemaErr != nil && parseErr == nil && !(k == "occurred_at" && knownLax(v)) {
-					t.Fatalf("parser más laxo que el esquema con %s=%q: %v", k, v, schemaErr)
-				}
-				if schemaErr == nil && parseErr != nil && !documentedStricter(m) {
-					t.Fatalf("parser más estricto que el esquema fuera de lo documentado con %s=%q: %v", k, v, parseErr)
-				}
-			}
-		}
+		run(t, raw, variants, true)
 	})
 }
 
@@ -673,25 +760,15 @@ func TestPBT_ParserAgreesOnEveryFieldVariant(t *testing.T) {
 // cualquier valor (incluso null o el mismo valor): es más estricto que el esquema,
 // que solo ve el último valor, y es deliberado.
 func TestPBT_ParserRejectsDuplicateKeys(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		e := gen.NotifyCreated().Draw(t, "event")
-		raw, err := gen.MarshalEvent(e)
-		if err != nil {
-			t.Fatal(err)
-		}
-		doc := string(raw)
-		type site struct{ open, key string }
-		sites := []site{
-			{`{"event_id"`, "event_id"}, {`{"event_id"`, "type"}, {`{"event_id"`, "version"}, {`{"event_id"`, "occurred_at"},
-			{`{"event_id"`, "trace_id"}, {`{"event_id"`, "data"},
-			{`"data":{"notification_id"`, "notification_id"}, {`"data":{"notification_id"`, "github_event"},
-			{`"data":{"notification_id"`, "repo"}, {`"data":{"notification_id"`, "sha"}, {`"data":{"notification_id"`, "artifact"},
-			{`"artifact":{"kind"`, "kind"}, {`"artifact":{"kind"`, "ref"},
-		}
-		s := rapid.SampledFrom(sites).Draw(t, "site")
-		vals := append([]any{}, replacements...)
-		vals = append(vals, "dup")
-		val, _ := json.Marshal(rapid.SampledFrom(vals).Draw(t, "value"))
+	type site struct{ open, key string }
+	sites := []site{
+		{`{"event_id"`, "event_id"}, {`{"event_id"`, "type"}, {`{"event_id"`, "version"}, {`{"event_id"`, "occurred_at"},
+		{`{"event_id"`, "trace_id"}, {`{"event_id"`, "data"},
+		{`"data":{"notification_id"`, "notification_id"}, {`"data":{"notification_id"`, "github_event"},
+		{`"data":{"notification_id"`, "repo"}, {`"data":{"notification_id"`, "sha"}, {`"data":{"notification_id"`, "artifact"},
+		{`"artifact":{"kind"`, "kind"}, {`"artifact":{"kind"`, "ref"},
+	}
+	check := func(t interface{ Fatalf(string, ...any) }, doc string, s site, val []byte) {
 		pos := strings.Index(doc, s.open)
 		if pos < 0 {
 			t.Fatalf("no encuentro %q en %s", s.open, doc)
@@ -701,6 +778,25 @@ func TestPBT_ParserRejectsDuplicateKeys(t *testing.T) {
 		if _, err := inbox.ParseNotifyCreated([]byte(mut)); !errors.Is(err, inbox.ErrInvalidEvent) {
 			t.Fatalf("clave repetida %q aceptada (%v):\n%s", s.key, err, mut)
 		}
+	}
+	vals := append([]any{}, replacements...)
+	vals = append(vals, "dup")
+	// Recorrido determinista: toda clave de cada nivel repetida con todos los valores.
+	canonical, _ := gen.MarshalEvent(gen.NotifyCreatedAt(rapid.Just(time.Unix(1000, 0).UTC())).Example(0))
+	for _, st := range sites {
+		for _, v := range vals {
+			val, _ := json.Marshal(v)
+			check(t, string(canonical), st, val)
+		}
+	}
+	rapid.Check(t, func(t *rapid.T) {
+		e := gen.NotifyCreated().Draw(t, "event")
+		raw, err := gen.MarshalEvent(e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		val, _ := json.Marshal(rapid.SampledFrom(vals).Draw(t, "value"))
+		check(t, string(raw), rapid.SampledFrom(sites).Draw(t, "site"), val)
 	})
 }
 
@@ -731,5 +827,87 @@ func TestPBT_Fixed_ParserVariantsAndDuplicates(t *testing.T) {
 		if _, err := inbox.ParseNotifyCreated([]byte(mut)); !errors.Is(err, inbox.ErrInvalidEvent) {
 			t.Errorf("clave repetida aceptada: %v\n%s", err, mut)
 		}
+	}
+}
+
+// Líneas ilegibles del registro de confirmaciones: una línea rota, sin run_id, sin
+// confirmed_by o sin notification_id, o un final truncado, no impide abrir, no
+// pierde los recibos buenos, se cuenta en Skipped (las líneas en blanco, no) y el
+// recibo escrito después de un final truncado no se pega a él.
+func TestPBT_ReceiptStoreIgnoresUnreadableLines(t *testing.T) {
+	base := t.TempDir()
+	type junk struct {
+		line    string
+		skipped int
+	}
+	garbage := []junk{{"", 0}, {"   ", 0}, {"{", 1}, {"not json", 1}, {"[]", 1}, {`{"notification_id":"n-x"}`, 1},
+		{`{"run_id":"run-x","confirmed_by":"u"}`, 1}, {`{"run_id":"run-x","notification_id":"n-x"}`, 1}, {`{"notification_id":"n-x","confirmed_by":"u"}`, 1},
+		{`{"run_id":"","notification_id":"n-x","confirmed_by":"u"}`, 1}}
+	rapid.Check(t, func(t *rapid.T) {
+		dir := tempDir(base, t)
+		events := rapid.SliceOfNDistinct(gen.NotifyCreated(), 1, 5, func(e inbox.NotifyCreated) string { return e.Data.NotificationID }).Draw(t, "events")
+		var sb strings.Builder
+		skipped := 0
+		for _, e := range events {
+			for _, g := range rapid.SliceOfN(rapid.SampledFrom(garbage), 0, 2).Draw(t, "garbage") {
+				sb.WriteString(g.line + "\n")
+				skipped += g.skipped
+			}
+			line, _ := json.Marshal(map[string]any{"run_id": "run-" + e.Data.NotificationID, "notification_id": e.Data.NotificationID,
+				"confirmed_by": "u", "confirmed_at": "2026-01-15T10:00:00Z", "flows": []string{}})
+			sb.WriteString(string(line) + "\n")
+		}
+		truncated := rapid.Bool().Draw(t, "truncated")
+		if truncated {
+			sb.WriteString(`{"run_id":"run-tr","notification_id":"n-tr","confirmed_by":"u","confirmed_at":"2026-01-15T10`)
+			skipped++
+		}
+		if err := os.WriteFile(filepath.Join(dir, inbox.ConfirmationsFile), []byte(sb.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		st, err := inbox.OpenStore(dir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Skipped != skipped {
+			t.Fatalf("Skipped = %d, quiero %d", st.Skipped, skipped)
+		}
+		for _, e := range events {
+			st.Apply(e)
+		}
+		for _, n := range st.List("") {
+			if n.State != inbox.StateConfirmed {
+				t.Fatalf("%s no quedó confirmada tras reabrir", n.ID)
+			}
+		}
+		extra := gen.NotifyCreated().Draw(t, "extra")
+		extra.Data.NotificationID = "n-extra"
+		st.Apply(extra)
+		if _, err := st.Confirm("n-extra", "u2", nil); err != nil {
+			t.Fatal(err)
+		}
+		st2, err := inbox.OpenStore(dir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st2.Apply(extra)
+		if n := st2.List(inbox.StateConfirmed); len(n) != 1 || n[0].ID != "n-extra" {
+			t.Fatalf("el recibo escrito tras una línea %s se perdió: %+v", map[bool]string{true: "truncada", false: "completa"}[truncated], n)
+		}
+		if st2.Skipped != skipped {
+			t.Fatalf("tras reescribir, Skipped = %d, quiero %d (el recibo nuevo no debe pegarse a una línea truncada)", st2.Skipped, skipped)
+		}
+	})
+}
+
+func TestPBT_Fixed_ReceiptStoreIgnoresUnreadableLines(t *testing.T) {
+	dir := t.TempDir()
+	body := "not json\n\n" + `{"notification_id":"n-x"}` + "\n" + `{"run_id":"run-1","notification_id":"n-1","confirmed_by":"u","confirmed_at":"2026-01-15T10:00:00Z"}` + "\n" + `{"run_id":"run-2","notification_id":"n-2","confirmed_by`
+	if err := os.WriteFile(filepath.Join(dir, inbox.ConfirmationsFile), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := inbox.OpenStore(dir, nil)
+	if err != nil || st.Skipped != 3 {
+		t.Fatalf("%v, Skipped=%d", err, st.Skipped)
 	}
 }

@@ -372,7 +372,7 @@ func ResolvableEvent() *rapid.Generator[ResolveCase] {
 func BadSHA() *rapid.Generator[string] {
 	return rapid.Custom(func(t *rapid.T) string {
 		valid := Sha40().Draw(t, "valid")
-		switch rapid.SampledFrom([]int{0, 1, 1, 1, 2, 2, 3, 3, 3, 4, 5, 6, 7, 8}).Draw(t, "kind") {
+		switch rapid.SampledFrom([]int{0, 1, 1, 1, 2, 2, 3, 3, 3, 4, 5, 6, 7, 8, 9, 9, 9}).Draw(t, "kind") {
 		case 0:
 			return valid[:rapid.IntRange(0, 39).Draw(t, "len")]
 		case 1:
@@ -389,6 +389,8 @@ func BadSHA() *rapid.Generator[string] {
 			return valid[:39] + "g"
 		case 7:
 			return valid + valid
+		case 9:
+			return rapid.SampledFrom(FixedBadSHAs()).Draw(t, "fixed")
 		}
 		return ""
 	}).Filter(func(s string) bool { return len(s) != 40 || strings.Trim(s, hexLower) != "" })

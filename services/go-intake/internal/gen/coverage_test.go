@@ -29,6 +29,7 @@ func TestPBT_GeneratorCoverage(t *testing.T) {
 	gen.AtLeastChecks(t, 500)
 	gh, rej, rec, ev, tags, res := map[string]int{}, map[string]int{}, map[string]int{}, map[string]int{}, map[string]int{}, map[string]int{}
 	n := 0
+	distinct := map[string]map[string]bool{"sha": {}, "repo": {}, "tag": {}, "event_id": {}}
 	rapid.Check(t, func(t *rapid.T) {
 		n++
 		c := gen.GitHubValid().Draw(t, "gh")
@@ -46,6 +47,10 @@ func TestPBT_GeneratorCoverage(t *testing.T) {
 		rec["pending:"+map[bool]string{true: "si", false: "no"}[record.PublishPending]]++
 		rec["state:"+record.State]++
 		e := gen.Event().Draw(t, "event")
+		distinct["sha"][gen.Sha40().Draw(t, "sha")] = true
+		distinct["repo"][gen.Repo().Draw(t, "repo")] = true
+		distinct["tag"][gen.Tag().Draw(t, "vtag")] = true
+		distinct["event_id"][e.EventID] = true
 		ev["event:"+e.Data.GithubEvent]++
 		ev["kind:"+e.Data.Artifact.Kind]++
 		switch {
@@ -98,6 +103,15 @@ func TestPBT_GeneratorCoverage(t *testing.T) {
 	})
 	if n < 500 {
 		t.Fatalf("solo %d sorteos", n)
+	}
+	// Entropía mínima: un generador constante o casi constante no cubre nada.
+	for what, set := range distinct {
+		if min := n * 9 / 10; len(set) < min && what != "tag" {
+			t.Errorf("%s: solo %d valores distintos en %d sorteos (mínimo %d)", what, len(set), n, min)
+		}
+	}
+	if len(distinct["tag"]) < 100 {
+		t.Errorf("tag: solo %d valores distintos en %d sorteos", len(distinct["tag"]), n)
 	}
 	missing(t, "github", gh, "push-branch", "push-tag", "pr-same-repo", "pr-fork", "pr-null-head-repo", "release",
 		"event:commit", "event:pull_request", "event:tag")
