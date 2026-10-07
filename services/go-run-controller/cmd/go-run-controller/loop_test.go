@@ -139,16 +139,13 @@ func TestEventAckAfterApplyAlreadyAppliedNotAppliedTwice(t *testing.T) {
 	ticks(ctl, spy, 1)
 	r1, _ := st.Get("r-1")
 	spy.evs = []runctl.Event{ev, conf, ev, conf}
-	before := st.saves
 	ticks(ctl, spy, 3)
 	if r2, _ := st.Get("r-1"); r2.EnsayoPassed != r1.EnsayoPassed || len(r2.Seen) != len(r1.Seen) {
 		t.Fatalf("un evento ya aplicado se aplicó dos veces: %+v -> %+v", r1, r2)
 	}
-	// los guardados de DriveAll avanzan la corrida; los eventos repetidos no añaden ninguno propio
 	if len(r1.Seen) != 1 {
 		t.Fatal(r1.Seen)
 	}
-	_ = before
 }
 
 // Lote [run.confirmed, rehearsal.passed] con el disco caído: el segundo falla sin Save (ErrNotFound)

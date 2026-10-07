@@ -245,3 +245,19 @@ func TestFileSourceForeignLinesAckedAndRotationResets(t *testing.T) {
 		t.Fatalf("tras el reemplazo debía releer desde 0: %+v", next)
 	}
 }
+
+// Una línea parcial que el productor completa DESPUÉS se entrega entera (el offset no la salta).
+func TestFileSourcePartialLineCompletedLaterIsDelivered(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "e.jsonl")
+	_ = os.WriteFile(p, []byte(confLine[:30]), 0o600)
+	f := &FileSource{Path: p}
+	if evs, _ := f.Poll(t.Context()); len(evs) != 0 {
+		t.Fatalf("entregó una línea parcial: %+v", evs)
+	}
+	fh, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
+	_, _ = fh.WriteString(confLine[30:] + "\n")
+	_ = fh.Close()
+	if evs, _ := f.Poll(t.Context()); len(evs) != 1 || evs[0].EventID != "e1" || f.Discarded() != 0 {
+		t.Fatalf("evento perdido tras completarse la línea: %+v (descartadas %d)", evs, f.Discarded())
+	}
+}

@@ -281,3 +281,41 @@ func TestJournalPartialWriteSyncFailureProperty(t *testing.T) {
 		}
 	})
 }
+
+// Reabrir con cola descartada, Write parcial y reabrir: size debe ser el tamaño válido (no el del archivo con cola).
+func TestJournalTornTailThenPartialWriteStillReopens(t *testing.T) {
+	dir := t.TempDir()
+	s0 := mustReopen(t, dir)
+	_ = s0.Save(runctl.Run{ID: "r", State: runctl.Confirmed})
+	_ = s0.Close()
+	p := filepath.Join(dir, JournalFile)
+	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
+	_, _ = f.WriteString(strings.Repeat("x", 200)) // cola sin \n
+	_ = f.Close()
+	s, ff := openFaulty(t, dir)
+	ff.partial = 15
+	if err := s.Save(runctl.Run{ID: "r", State: runctl.WarmReady}); err == nil {
+		t.Fatal("debía fallar")
+	}
+	_ = s.Close()
+	if r, _ := mustReopen(t, dir).Get("r"); r.State != runctl.Confirmed {
+		t.Fatalf("%+v", r)
+	}
+}
+
+// Una cola de un solo byte también se trunca: el siguiente Save no queda pegado a ella.
+func TestJournalTornTailOneByteIsTruncated(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, JournalFile), []byte("{"), 0o600)
+	s, err := OpenJournal(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(runctl.Run{ID: "r", State: runctl.Confirmed}); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Close()
+	if r, ok := mustReopen(t, dir).Get("r"); !ok || r.State != runctl.Confirmed {
+		t.Fatal(r, ok)
+	}
+}
