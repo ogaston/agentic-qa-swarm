@@ -100,6 +100,23 @@ func TestJournalPartialWriteThenNextSaveRecovers(t *testing.T) {
 	}
 }
 
+// Tras reabrir un diario con líneas, un Write parcial restaura al tamaño real del archivo (no a 0).
+func TestJournalPartialWriteAfterReopenKeepsPriorLines(t *testing.T) {
+	dir := t.TempDir()
+	s0 := mustReopen(t, dir)
+	_ = s0.Save(runctl.Run{ID: "r", State: runctl.Confirmed})
+	_ = s0.Close()
+	before, _ := os.ReadFile(filepath.Join(dir, JournalFile))
+	s, ff := openFaulty(t, dir)
+	ff.partial = 11
+	if err := s.Save(runctl.Run{ID: "r", State: runctl.WarmReady}); err == nil {
+		t.Fatal("debía fallar")
+	}
+	if after, _ := os.ReadFile(filepath.Join(dir, JournalFile)); !bytes.Equal(after, before) {
+		t.Fatalf("el fallo alteró las líneas previas: %q", after)
+	}
+}
+
 func TestJournalPartialWriteTruncateFailsMarksBroken(t *testing.T) {
 	dir := t.TempDir()
 	s, ff := openFaulty(t, dir)

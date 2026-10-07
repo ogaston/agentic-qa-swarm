@@ -222,3 +222,23 @@ func TestFileSourceUnackedIsRedeliveredAckedIsNot(t *testing.T) {
 		t.Fatalf("%+v", next)
 	}
 }
+
+// Líneas ajenas/inválidas al final se confirman solas; un Ack tardío no retrocede el offset; si el
+// archivo se reemplaza por uno más corto, se relee desde 0.
+func TestFileSourceForeignLinesAckedAndRotationResets(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "e.jsonl")
+	writeEvents(t, p, confLine, `{"event_id":"o","type":"notify.created","version":1,"trace_id":"t","data":{}}`)
+	f := &FileSource{Path: p}
+	evs, _ := f.Poll(t.Context())
+	f.Ack(evs[0])
+	late := evs[0]
+	late.Pos = 1
+	f.Ack(late) // Ack tardío: no retrocede
+	if _, _ = f.Poll(t.Context()); f.committed != int64(len(confLine)+1+len(`{"event_id":"o","type":"notify.created","version":1,"trace_id":"t","data":{}}`)+1) {
+		t.Fatalf("offset confirmado %d: debía cubrir también la línea ajena", f.committed)
+	}
+	_ = os.WriteFile(p, []byte(strings.Replace(confLine, `"e1"`, `"e9"`, 1)+"\n"), 0o600) // archivo reemplazado (más corto)
+	if next, _ := f.Poll(t.Context()); len(next) != 1 || next[0].EventID != "e9" {
+		t.Fatalf("tras el reemplazo debía releer desde 0: %+v", next)
+	}
+}

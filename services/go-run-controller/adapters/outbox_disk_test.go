@@ -116,21 +116,28 @@ func TestOutboxForeignCompleteTailIsIsolated(t *testing.T) {
 	}
 }
 
-// Doble fallo (Sync y truncado/Sync): la línea pudo quedar sin ser durable; el siguiente Publish no la
-// da por publicada hasta sincronizar con éxito.
+// Doble fallo (Sync y truncado fallan): la línea queda completa en disco sin ser durable; el siguiente
+// Publish no la da por publicada hasta sincronizar con éxito, y después ya no vuelve a sincronizar.
 func TestOutboxDoubleFailureIsNotReportedPublishedUntilSynced(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "o.jsonl")
-	ff := &faultFile{syncFails: 2}
+	ff := &faultFile{syncFails: 1, truncFail: true}
 	o := faultyOutbox(p, ff)
 	if err := o.Publish(t.Context(), doneEv); err == nil {
 		t.Fatal("debía fallar")
 	}
-	ff.syncFails = 1
+	if b, _ := os.ReadFile(p); !published(b, OutEventID("run.done", "r-1")) {
+		t.Fatalf("el escenario exige la línea completa en disco: %q", b)
+	}
+	ff.truncFail, ff.syncFails = false, 1
 	if err := o.Publish(t.Context(), doneEv); err == nil {
 		t.Fatal("con el Sync aún fallando no puede darse por publicada")
 	}
 	if err := o.Publish(t.Context(), doneEv); err != nil {
 		t.Fatal(err)
+	}
+	ff.syncFails = 5 // ya sincronizada: un Publish repetido no vuelve a tocar el disco
+	if err := o.Publish(t.Context(), doneEv); err != nil {
+		t.Fatalf("reintento innecesario de Sync: %v", err)
 	}
 	if b, _ := os.ReadFile(p); bytes.Count(b, []byte("\n")) != 1 {
 		t.Fatalf("%q", b)
