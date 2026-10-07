@@ -133,3 +133,14 @@ func TestAPIMetricsHealthNoTokenLeak(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIWrongMethodWithoutTokenIs401(t *testing.T) {
+	s, _ := srv(wm.WarmState{WarmID: "w", State: "dirty", BaselineVersion: "b"})
+	defer s.Close()
+	if code, _ := call(t, "GET", s.URL+"/warm/ensure", "", ""); code != 401 {
+		t.Fatalf("%d", code)
+	}
+	if code, _ := call(t, "GET", s.URL+"/warm/ensure", tok, ""); code != 405 {
+		t.Fatalf("con token y metodo malo debia ser 405, fue %d", code)
+	}
+}

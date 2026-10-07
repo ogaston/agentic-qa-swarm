@@ -2,7 +2,10 @@ package warmmanager_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -249,5 +252,36 @@ func TestEventsDeterministicIDAndSchema(t *testing.T) {
 	}
 	if err := validate(t, "events/deploy.schema.json", r.pub.Events[0]); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestEventsDump vuelca a disco los cuatro eventos producidos por el servicio para validarlos con ajv (CA-4).
+// Solo actua si WARM_DUMP_EVENTS_DIR esta definido; no es una prueba de comportamiento.
+func TestEventsDump(t *testing.T) {
+	dir := os.Getenv("WARM_DUMP_EVENTS_DIR")
+	if dir == "" {
+		t.Skip("WARM_DUMP_EVENTS_DIR no definido")
+	}
+	ctx := context.Background()
+	r := newRig(ws("ready", true))
+	r.web.Routes["/openapi.json"] = wm.FakeResponse{Status: 200, Body: openapi}
+	if _, _, err := r.svc.EnsureWarmReady(ctx, "4bf92f3577b34da6a3ce929d0e0e4736"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.svc.Deploy(ctx, "r-1", okArt, "4bf92f3577b34da6a3ce929d0e0e4736"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.svc.InferSurface(ctx, "r-1", "4bf92f3577b34da6a3ce929d0e0e4736"); err != nil {
+		t.Fatal(err)
+	}
+	f := newRig(ws("ready", true))
+	f.jobs.Outcome = failN(100)
+	_ = f.svc.Deploy(ctx, "r-2", okArt, "4bf92f3577b34da6a3ce929d0e0e4736")
+	all := append(r.pub.Events, f.pub.Events...)
+	for _, e := range all {
+		raw, _ := json.Marshal(e)
+		if err := os.WriteFile(filepath.Join(dir, e.Type+".json"), raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

@@ -156,7 +156,28 @@ func (s *Server) Handler() http.Handler {
 		}
 		writeJSON(w, 200, sa)
 	}))
-	return mux
+	// Autenticacion antes del enrutado: una ruta protegida sin token valido es 401 aunque el metodo sea otro.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/healthz", "/readyz", "/metrics":
+		default:
+			if !s.authorized(r) {
+				writeJSON(w, 401, map[string]string{"error": "unauthorized"})
+				return
+			}
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) authorized(r *http.Request) bool {
+	const p = "Bearer "
+	h := r.Header.Get("Authorization")
+	got := ""
+	if strings.HasPrefix(h, p) {
+		got = h[len(p):]
+	}
+	return s.Token != "" && subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) == 1
 }
 
 // HTTPServer devuelve un http.Server con timeouts.
