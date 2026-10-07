@@ -193,8 +193,13 @@ func (k *Controller) failRun(ctx context.Context, id, reason string) error {
 		target = Resetting
 	}
 	if err := k.transition(ctx, id, target); err != nil {
+		if errors.Is(err, ErrGate) {
+			// Gate caído: la corrida no se mueve (FailReason queda fijada) y el salir se reintenta en
+			// cada paso hasta que el gate responda; denegado o no, nunca se avanza sin su permiso.
+			return err
+		}
 		r, _ = k.c.Store.Get(id)
-		r.Halted = true
+		r.Halted = true // gate denegó la salida: no se reintenta
 		k.handoff(ctx, r, PhaseTransport, fmt.Sprintf("sin salida segura hacia %s: %v", target, err))
 		return errors.Join(err, k.c.Store.Save(r))
 	}
@@ -253,6 +258,9 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 	}
 	if r.State.Terminal() {
 		return nil
+	}
+	if r.FailReason != "" && r.State != Resetting {
+		return k.failRun(ctx, id, r.FailReason) // salida pendiente por gate caído
 	}
 	if r.State == Confirmed || r.State == WarmReady {
 		if err := k.transition(ctx, id, chain[r.State]); err != nil {

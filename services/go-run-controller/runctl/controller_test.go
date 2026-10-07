@@ -153,8 +153,27 @@ func TestGateErrorDownStopsRun(t *testing.T) {
 	_ = r.store.Save(Run{ID: "r", State: Confirmed, ConfirmedBy: "u"})
 	_ = r.k.Drive(t.Context(), "r")
 	got, _ := r.store.Get("r")
-	if got.State != Confirmed || !got.Halted || len(r.al.Calls) != 1 {
+	if got.State != Confirmed || got.FailReason == "" || got.Halted {
 		t.Fatalf("%+v %v", got, r.al.Calls)
+	}
+	// el gate se recupera: la salida pendiente se completa y la corrida cierra en failed
+	r.gate.Decide = func(GateRequest) (GateDecision, error) {
+		return GateDecision{Allow: true, Reason: "ok", AuditRef: "a"}, nil
+	}
+	_ = r.k.Drive(t.Context(), "r")
+	if r.state("r") != Failed {
+		t.Fatal(r.state("r"))
+	}
+}
+
+func TestGateDeniesExitHaltsRunWithHandoff(t *testing.T) {
+	r := newRig(t, denyAll())
+	_ = r.store.Save(Run{ID: "r", State: Confirmed, ConfirmedBy: "u"})
+	_ = r.k.Drive(t.Context(), "r")
+	_ = r.k.Drive(t.Context(), "r")
+	got, _ := r.store.Get("r")
+	if got.State != Confirmed || !got.Halted || len(r.al.Calls) != 1 || len(r.gate.Calls) != 2 {
+		t.Fatalf("%+v %v gate=%d", got, r.al.Calls, len(r.gate.Calls))
 	}
 }
 
