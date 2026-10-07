@@ -171,6 +171,20 @@ type PhaseLauncher interface {
 	Launch(ctx context.Context, phase string, run Run) ([]string, error)
 }
 
+// RehearsalOutcome es el resultado leído del Job de ensayo. Done=false: aún corre (o no existe).
+// Passed solo puede ser true si el Job terminó con éxito.
+type RehearsalOutcome struct {
+	Done    bool
+	Passed  bool
+	EventID string // idempotencia (se guarda en Seen)
+}
+
+// RehearsalResults lee el resultado del ensayo de la corrida (adaptador real: estado del Job vía KubeAPI).
+// Un error nunca equivale a passed.
+type RehearsalResults interface {
+	Result(ctx context.Context, run Run) (RehearsalOutcome, error)
+}
+
 // Observer recibe métricas; todos los métodos deben ser seguros con nil en el controlador.
 type Observer interface {
 	Transition(from, to State, result string)
