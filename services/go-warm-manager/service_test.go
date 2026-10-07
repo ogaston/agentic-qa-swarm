@@ -80,7 +80,13 @@ func TestEnsureWarmReady(t *testing.T) {
 		n := 0
 		r.probe.Set(errors.New("arrancando"))
 		// la sonda se pone verde tras 3 consultas
-		r.svc.Probe = probeFunc(func() error { n++; if n < 3 { return errors.New("no ready") }; return nil })
+		r.svc.Probe = probeFunc(func() error {
+			n++
+			if n < 3 {
+				return errors.New("no ready")
+			}
+			return nil
+		})
 		w, ok, err := r.svc.EnsureWarmReady(ctx, "t")
 		if err != nil || !ok || w.State != "ready" || r.rt.Calls != 1 {
 			t.Fatalf("%+v %v %v calls=%d", w, ok, err, r.rt.Calls)
