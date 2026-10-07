@@ -287,7 +287,7 @@ func (s *Service) ResolveOrphans(ctx context.Context, trace string) error {
 			errs = append(errs, s.Pub.Publish(ctx, newEvent("deploy.done", run, trace, s.Clock.Now(), deployData(w.WarmID, run, a, ""))))
 		case "pending":
 			s.logger().Warn("deploy huerfano tras reinicio: se da por indeterminado", "run_id", run, "trace_id", trace)
-			errs = append(errs, s.fail(ctx, run, w.WarmID, a, trace, st.Attempts, "deploy en vuelo huerfano tras reinicio de go-warm-manager: estado indeterminado", true))
+			errs = append(errs, s.closeFailed(ctx, run, w.WarmID, a, trace, st.Attempts, "deploy en vuelo huerfano tras reinicio de go-warm-manager: estado indeterminado", true))
 		default:
 			s.track(run, "failed", st.Attempts, st.Reason)
 			errs = append(errs, s.Pub.Publish(ctx, newEvent("deploy.failed", run, trace, s.Clock.Now(), deployData(w.WarmID, run, a, st.Reason))))
@@ -320,6 +320,13 @@ func (s *Service) logger() *slog.Logger {
 // fail cierra un deploy como fallido: estado visible con razon, log, deploy.failed y (si handoff) aviso.
 // Ningun error se pierde: se registran en el log y se devuelven unidos.
 func (s *Service) fail(ctx context.Context, runID, warmID string, a Artifact, trace string, attempts int, reason string, handoff bool) error {
+	return errors.Join(fmt.Errorf("deploy fallido tras %d intentos: %s", attempts, reason),
+		s.closeFailed(ctx, runID, warmID, a, trace, attempts, reason, handoff))
+}
+
+// closeFailed hace los efectos de cerrar un deploy como fallido y devuelve solo los errores de esos
+// efectos (handoff, publicacion).
+func (s *Service) closeFailed(ctx context.Context, runID, warmID string, a Artifact, trace string, attempts int, reason string, handoff bool) error {
 	s.track(runID, "failed", attempts, reason)
 	s.logger().Error("deploy fallido", "run_id", runID, "trace_id", trace, "reason", reason, "attempts", attempts)
 	var errs []error
@@ -332,14 +339,14 @@ func (s *Service) fail(ctx context.Context, runID, warmID string, a Artifact, tr
 		}
 	}
 	if warmID == "" { // sin warm_id el evento no seria valido (no se pudo ni leer el estado)
-		return errors.Join(fmt.Errorf("deploy fallido tras %d intentos: %s", attempts, reason), errors.Join(errs...))
+		return errors.Join(errs...)
 	}
 	ev := newEvent("deploy.failed", runID, trace, s.Clock.Now(), deployData(warmID, runID, a, reason))
 	if err := s.Pub.Publish(ctx, ev); err != nil {
 		s.logger().Error("publicar deploy.failed fallo", "run_id", runID, "trace_id", trace, "error", err.Error())
 		errs = append(errs, err)
 	}
-	return errors.Join(append([]error{fmt.Errorf("deploy fallido tras %d intentos: %s", attempts, reason)}, errs...)...)
+	return errors.Join(errs...)
 }
 
 // StatusReadRetries es el tope de lecturas fallidas seguidas del estado de un Job antes de darlo por indeterminado.
@@ -596,3 +603,6 @@ func parseOpenAPI(body []byte) ([]Endpoint, bool) {
 }
 
 var _ = errors.Is
+
+// TrackKnownForTest marca un run como conocido en memoria (solo pruebas de ResolveOrphans).
+func (s *Service) TrackKnownForTest(runID string) { s.track(runID, "pending", 1, "") }

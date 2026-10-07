@@ -292,3 +292,61 @@ func TestAPIDeployReadyWithoutResetVerifiedIs409(t *testing.T) {
 		t.Fatalf("%d %s jobs=%d", code, body, jobs.Count())
 	}
 }
+
+// N8: un warm que no llega a Ready a tiempo NUNCA puede salir como 200.
+func TestAPIEnsureTimeoutIs409Never200(t *testing.T) {
+	m := obs.NewMetrics()
+	svc := &wm.Service{Cfg: wm.Config{WarmReadyTimeout: 150 * time.Millisecond, PollInterval: 10 * time.Millisecond},
+		State: &fakes.MemState{S: wm.WarmState{WarmID: "w", State: "idle-escalado", ResetVerified: true, BaselineVersion: "b"}},
+		Probe: probeFunc(func() error { return errors.New("nunca") }), Runtime: &fakes.FakeRuntime{}, Pub: &fakes.MemPublisher{}, Clock: wm.RealClock{}}
+	s := httptest.NewServer((&api.Server{Svc: svc, Token: tok, Log: slog.New(slog.NewJSONHandler(io.Discard, nil)), Registry: m.Reg}).Handler())
+	defer s.Close()
+	code, body := call(t, "POST", s.URL+"/warm/ensure", tok, "")
+	if code != 409 || !strings.Contains(body, `"idle-escalado"`) {
+		t.Fatalf("%d %s", code, body)
+	}
+}
+
+func TestAPIEnsurePublishErrorIs503(t *testing.T) {
+	m := obs.NewMetrics()
+	svc := &wm.Service{State: &fakes.MemState{S: wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"}},
+		Probe: &fakes.FakeProbe{}, Pub: failPub{}, Clock: wm.RealClock{}}
+	s := httptest.NewServer((&api.Server{Svc: svc, Token: tok, Log: slog.New(slog.NewJSONHandler(io.Discard, nil)), Registry: m.Reg}).Handler())
+	defer s.Close()
+	if code, _ := call(t, "POST", s.URL+"/warm/ensure", tok, ""); code != 503 {
+		t.Fatalf("%d", code)
+	}
+}
+
+type failPub struct{}
+
+func (failPub) Publish(context.Context, wm.Event) error { return errors.New("outbox lleno") }
+
+func TestAPISurfaceUnreachableIs502AndNoEvent(t *testing.T) {
+	m := obs.NewMetrics()
+	pub := &fakes.MemPublisher{}
+	jobs := &fakes.FakeJobs{}
+	svc := &wm.Service{Cfg: wm.Config{Job: wm.JobConfig{AllowedRegistries: wm.DefaultAllowedRegistries}},
+		State: &fakes.MemState{S: wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"}},
+		Jobs:  jobs, Surface: &fakes.FakeProber{Base: "http://x", Err: errors.New("refused")}, Objects: &fakes.MemObjects{},
+		Alerts: &fakes.FakeAlerter{}, Pub: pub, Clock: wm.RealClock{}}
+	if err := svc.Deploy(context.Background(), "r-1", wm.Artifact{Kind: "published-image", Ref: "ghcr.io/a/b:1"}, "t"); err != nil {
+		t.Fatal(err)
+	}
+	n := len(pub.Snapshot())
+	s := httptest.NewServer((&api.Server{Svc: svc, Token: tok, Log: slog.New(slog.NewJSONHandler(io.Discard, nil)), Registry: m.Reg}).Handler())
+	defer s.Close()
+	if code, _ := call(t, "POST", s.URL+"/surface", tok, `{"run_id":"r-1"}`); code != 502 || len(pub.Snapshot()) != n {
+		t.Fatalf("%d", code)
+	}
+}
+
+func TestAPIDeployStateDerivedFromJobsAfterRestart(t *testing.T) {
+	s, jobs := srv(wm.WarmState{WarmID: "w", State: "dirty", BaselineVersion: "b"}) // instancia nueva, memoria vacia
+	defer s.Close()
+	m, _ := wm.BuildDeployJob(wm.JobConfig{AllowedRegistries: wm.DefaultAllowedRegistries}, "r-7", 0, wm.Artifact{Kind: "published-image", Ref: "ghcr.io/a/b:1"})
+	_ = jobs.Create(context.Background(), m)
+	if code, body := call(t, "GET", s.URL+"/deploys/r-7", tok, ""); code != 200 || !strings.Contains(body, `"done"`) {
+		t.Fatalf("%d %s", code, body)
+	}
+}

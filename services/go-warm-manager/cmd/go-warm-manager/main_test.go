@@ -2,6 +2,10 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"net"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -107,5 +111,127 @@ func TestRunRejectsBadTimeouts(t *testing.T) {
 				t.Errorf("%s=%s: %v", k, v, err)
 			}
 		}
+	}
+}
+
+func TestServeWaitsForInFlightRequestOnShutdown(t *testing.T) {
+	started := make(chan struct{})
+	hs := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		time.Sleep(700 * time.Millisecond)
+		w.Write([]byte("respuesta completa"))
+	})}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- serve(ctx, hs, ln, 5*time.Second) }()
+	got := make(chan string, 1)
+	go func() {
+		resp, err := http.Get("http://" + ln.Addr().String())
+		if err != nil {
+			got <- "ERROR " + err.Error()
+			return
+		}
+		b, _ := io.ReadAll(resp.Body)
+		got <- string(b)
+	}()
+	<-started
+	cancel() // SIGTERM con la peticion en vuelo
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case body := <-got:
+			if body != "respuesta completa" {
+				t.Fatalf("la respuesta se corto: %s", body)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("serve volvio antes de que la peticion en vuelo terminara")
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("serve no volvio")
+	}
+}
+
+func TestServeGraceExpiredIsAnError(t *testing.T) {
+	hs := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { time.Sleep(2 * time.Second) })}
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- serve(ctx, hs, ln, 100*time.Millisecond) }()
+	go http.Get("http://" + ln.Addr().String())
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	if err := <-done; err == nil {
+		t.Fatal("agotar la ventana debe ser un error visible")
+	}
+}
+
+func TestValidateTimeouts(t *testing.T) {
+	ok := func(r, j, p time.Duration) error { return validateTimeouts(r, j, p) }
+	if err := ok(2*time.Minute, 11*time.Minute, 2*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	for n, c := range map[string][3]time.Duration{
+		"ready enorme":   {999999 * time.Hour, 11 * time.Minute, time.Second},
+		"poll 1ns":       {time.Minute, 11 * time.Minute, time.Nanosecond},
+		"job = deadline": {time.Minute, 600 * time.Second, time.Second},
+		"job < deadline": {time.Minute, time.Minute, time.Second},
+		"job enorme":     {time.Minute, 2 * time.Hour, time.Second},
+	} {
+		if ok(c[0], c[1], c[2]) == nil {
+			t.Errorf("%s aceptado", n)
+		}
+	}
+}
+
+func TestValidateAppURL(t *testing.T) {
+	for _, good := range []string{"http://warm-app.aqs-test.svc", "https://x:8443"} {
+		if validateAppURL(good) != nil {
+			t.Errorf("%s rechazado", good)
+		}
+	}
+	for _, bad := range []string{"warm-app:8080", "ftp://x", "http://", "http://u:p@x", "//x", ""} {
+		if validateAppURL(bad) == nil {
+			t.Errorf("%q aceptado", bad)
+		}
+	}
+}
+
+func TestFileStoreFencesAndExplicitStore(t *testing.T) {
+	if err := checkFileStoreAllowed(env(map[string]string{"WARM_ALLOW_FILE_STORE": "true"})); err != nil {
+		t.Fatal(err)
+	}
+	for n, e := range map[string]map[string]string{
+		"sin permiso": {}, "cluster": {"WARM_ALLOW_FILE_STORE": "true", "KUBERNETES_SERVICE_HOST": "10.0.0.1"},
+		"prod": {"WARM_ALLOW_FILE_STORE": "true", "WARM_ENV": " Production "},
+	} {
+		if checkFileStoreAllowed(env(e)) == nil {
+			t.Errorf("%s aceptado", n)
+		}
+	}
+	base := fakeEnv(nil)
+	if err := run(env(base), nil); err == nil || !strings.Contains(err.Error(), "WARM_OBJECT_STORE") {
+		t.Fatalf("sin WARM_OBJECT_STORE debe fallar: %v", err)
+	}
+	e := fakeEnv(map[string]string{"WARM_OBJECT_STORE": "file"})
+	if err := run(env(e), nil); err == nil || !strings.Contains(err.Error(), "WARM_ALLOW_FILE_STORE") {
+		t.Fatalf("file sin permiso: %v", err)
+	}
+	e = fakeEnv(map[string]string{"WARM_OBJECT_STORE": "file", "WARM_ALLOW_FILE_STORE": "true", "WARM_APP_URL": "warm-app:8080"})
+	if err := run(env(e), nil); err == nil || !strings.Contains(err.Error(), "WARM_APP_URL") {
+		t.Fatalf("WARM_APP_URL invalida: %v", err)
+	}
+}
+
+func TestDeployerImageRequiredOutsideFakeMode(t *testing.T) {
+	e := map[string]string{"WARM_NAMESPACE": "aqs-test", "WARM_SERVICE_TOKEN": "x", "WARM_OUTBOX_FILE": "/tmp/o", "WARM_OBJECT_STORE": "s3"}
+	if err := run(env(e), nil); err == nil || !strings.Contains(err.Error(), "WARM_DEPLOYER_IMAGE") {
+		t.Fatalf("%v", err)
 	}
 }

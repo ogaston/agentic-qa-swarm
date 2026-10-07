@@ -54,17 +54,18 @@ type FakeRuntime struct {
 	mu    sync.Mutex
 	Calls int
 	OnUp  func()
+	Err   error // error de ScaleUp
 }
 
 func (f *FakeRuntime) ScaleUp(context.Context) error {
 	f.mu.Lock()
 	f.Calls++
-	cb := f.OnUp
+	cb, err := f.OnUp, f.Err
 	f.mu.Unlock()
 	if cb != nil {
 		cb()
 	}
-	return nil
+	return err
 }
 
 // FakeJobs crea Jobs que terminan según Outcome(n) (n = Jobs ya creados antes de este).
@@ -160,6 +161,7 @@ func (f *FakeJobs) List(_ context.Context, runID string) ([]wm.JobView, error) {
 type FakeProber struct {
 	Base   string
 	Routes map[string]FakeResponse
+	Err    error // si no es nil, todo Get falla (app inalcanzable)
 }
 
 // FakeResponse es una respuesta del FakeProber.
@@ -170,6 +172,9 @@ type FakeResponse struct {
 
 func (f *FakeProber) BaseURL() string { return f.Base }
 func (f *FakeProber) Get(_ context.Context, p string) (int, []byte, error) {
+	if f.Err != nil {
+		return 0, nil, f.Err
+	}
 	r, ok := f.Routes[p]
 	if !ok {
 		return 404, nil, nil
@@ -179,13 +184,17 @@ func (f *FakeProber) Get(_ context.Context, p string) (int, []byte, error) {
 
 // MemObjects es un ObjectStore en memoria.
 type MemObjects struct {
-	mu sync.Mutex
-	M  map[string][]byte
+	mu     sync.Mutex
+	M      map[string][]byte
+	PutErr error
 }
 
 func (m *MemObjects) Put(_ context.Context, key string, data []byte) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.PutErr != nil {
+		return "", m.PutErr
+	}
 	if m.M == nil {
 		m.M = map[string][]byte{}
 	}

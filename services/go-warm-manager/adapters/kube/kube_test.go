@@ -244,3 +244,45 @@ func TestJobsRejectsForeignNamespace(t *testing.T) {
 		t.Fatal("namespace ajeno aceptado")
 	}
 }
+
+// MA: el Update condicional debe llevar el resourceVersion del ConfigMap leido (protege entre replicas).
+func TestStateStoreCompareAndSwapSendsResourceVersionOfTheRead(t *testing.T) {
+	cs := fake.NewClientset(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "warm-state", Namespace: "aqs-test", ResourceVersion: "42"},
+		Data: map[string]string{"state": `{"warm_id":"warm-1","state":"ready","reset_verified":true,"baseline_version":"b1"}`}})
+	var sent string
+	cs.PrependReactor("update", "configmaps", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		sent = a.(k8stesting.UpdateAction).GetObject().(*corev1.ConfigMap).ResourceVersion
+		return false, nil, nil
+	})
+	s := &kube.StateStore{C: cs, Seed: seed}
+	dirty := wm.WarmState{WarmID: "warm-1", State: "dirty", BaselineVersion: "b1"}
+	if err := s.CompareAndSwap(context.Background(), ready, dirty); err != nil {
+		t.Fatal(err)
+	}
+	if sent != "42" {
+		t.Fatalf("el Update llevo resourceVersion %q, se esperaba el del Get (42)", sent)
+	}
+}
+
+func TestJobsListAndDerivedStatusViaKube(t *testing.T) {
+	ctx := context.Background()
+	cs := fake.NewClientset()
+	outs := []bool{true, false} // el primer Job falla y el segundo termina
+	jobOutcome(cs, func(n int) bool { return outs[n] })
+	svc, _, _ := service(cs)
+	if err := svc.Deploy(ctx, "r-1", art, "t"); err != nil {
+		t.Fatal(err)
+	}
+	fresh, _, _ := service(cs) // instancia nueva: memoria vacia
+	st, ok, err := fresh.DeployState(ctx, "r-1")
+	if err != nil || !ok || st.State != "done" || st.Attempts != 2 {
+		t.Fatalf("%+v ok=%v err=%v", st, ok, err)
+	}
+	if _, ok, _ := fresh.DeployState(ctx, "r-2"); ok {
+		t.Fatal("r-2 no existe")
+	}
+	views, err := (&kube.Jobs{C: cs}).List(ctx, "")
+	if err != nil || len(views) != 2 || views[0].Artifact != art {
+		t.Fatalf("%+v %v", views, err)
+	}
+}
