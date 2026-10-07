@@ -1,0 +1,7 @@
+{
+  "run_id": "run-001",
+  "uris": [
+    "https://minio.example.test/evidence/run-001/a.log",
+    "s3://evidence/run-001/b.log"
+  ]
+}

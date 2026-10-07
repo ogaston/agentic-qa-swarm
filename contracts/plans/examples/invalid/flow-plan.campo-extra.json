@@ -1,0 +1,24 @@
+{
+  "run_id": "run-001",
+  "workflow": "checkout",
+  "flows": [
+    {
+      "flow_id": "f1",
+      "name": "flujo 1",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/orders/1",
+          "expect_status": 201
+        },
+        {
+          "method": "GET",
+          "path": "/orders/1",
+          "expect_status": 200
+        }
+      ],
+      "invariant": "el total coincide con la suma de lineas"
+    }
+  ],
+  "extra": 1
+}

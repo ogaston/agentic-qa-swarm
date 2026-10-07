@@ -1,0 +1,6 @@
+{
+  "run_id": "run-001",
+  "base_url": "http://10.0.0.5:8080",
+  "endpoints": [],
+  "source": "probe"
+}
