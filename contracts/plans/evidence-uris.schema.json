@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-qa-swarm.example/contracts/plans/v1/evidence-uris.schema.json",
+  "title": "EvidenceURIs",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "uris": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^(s3|https)://"
+      }
+    }
+  },
+  "required": [
+    "run_id",
+    "uris"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,15 @@
+{
+  "run_id": "run-001",
+  "base_url": "https://warm.example.test",
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "method": "POST",
+      "path": "/orders"
+    }
+  ],
+  "source": "fuente"
+}

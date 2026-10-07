@@ -1,0 +1,57 @@
+{
+  "run_id": "run-001",
+  "workflow": "checkout",
+  "flows": [
+    {
+      "flow_id": "f1",
+      "name": "flujo 1",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/orders/1",
+          "expect_status": 201
+        },
+        {
+          "method": "GET",
+          "path": "/orders/1",
+          "expect_status": 200
+        }
+      ],
+      "invariant": "el total coincide con la suma de lineas"
+    },
+    {
+      "flow_id": "f2",
+      "name": "flujo 2",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/orders/2",
+          "expect_status": 201
+        },
+        {
+          "method": "GET",
+          "path": "/orders/2",
+          "expect_status": 200
+        }
+      ],
+      "invariant": "el total coincide con la suma de lineas"
+    },
+    {
+      "flow_id": "f3",
+      "name": "flujo 3",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/orders/3",
+          "expect_status": 201
+        },
+        {
+          "method": "GET",
+          "path": "/orders/3",
+          "expect_status": 200
+        }
+      ],
+      "invariant": "el total coincide con la suma de lineas"
+    }
+  ]
+}

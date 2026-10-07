@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-qa-swarm.example/contracts/plans/v1/warm-state.schema.json",
+  "title": "WarmState",
+  "type": "object",
+  "properties": {
+    "warm_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state": {
+      "enum": [
+        "ready",
+        "dirty",
+        "cuarentena",
+        "idle-escalado"
+      ]
+    },
+    "reset_verified": {
+      "type": "boolean"
+    },
+    "baseline_version": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "warm_id",
+    "state",
+    "reset_verified",
+    "baseline_version"
+  ],
+  "additionalProperties": false
+}
