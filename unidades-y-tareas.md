@@ -48,13 +48,13 @@
 
 | # | Hecho | Tarea | Historias | Comando de verificación |
 |---|---|---|---|---|
-| U1-T1 | [ ] | Stubs: validador fake de GitHub webhook (firma) + `Notification`/`ConfirmationReceipt` de ejemplo válidos contra `contracts/` | US-M1 | `go test ./...` en verde con fixtures que pasan `ajv validate` |
-| U1-T2 | [ ] | `go-intake`: `POST /webhooks/github` (verifica firma, crea notificación, publica `notify.created`) — nunca crea Jobs | US-M1 | test: un evento de prueba crea 1 notificación y `kubectl get jobs -n <test-ns>` sigue vacío en el entorno de test |
-| U1-T3 | [ ] | Resolución de artefacto V5: build-from-repo (commit/PR) vs imagen publicada (tag/release) + `ArtifactRef` | US-M2 | tests parametrizados por tipo de evento en verde; `go vet ./...` limpio |
-| U1-T4 | [ ] | `ui-api` inbox: `GET /notifications` + `POST /notifications/{id}/confirm` (auth vía stub U4, luego real) con rate limiting + security headers | US-M1, US-M2 | `curl` autenticado devuelve inbox; `curl -I` muestra CSP/HSTS/nosniff; `hey`/`k6` contra endpoint público respeta rate limit |
-| U1-T5 | [ ] | PBT parcial: round-trip de parseo/serialización de payloads GitHub (PBT-02) + generadores de dominio (PBT-07) + seed logueado (PBT-08); framework documentado (PBT-09: rapid) | US-M1 | `go test -run PBT` en verde con shrinking habilitado y seed visible en el log de fallo |
-| U1-T6 | [ ] | Logging estructurado + trazas + health shallow/deep + métricas (latencia/errores/throughput) | US-M1 | `curl /healthz` y `/readyz` 200; logs con timestamp/request-id/nivel; dashboard con el panel de U1 |
-| U1-T7 | [ ] | Integración contra U4 real (auth) y publicación de `run.confirmed` consumible por U2 (contrato verificado en CI) | US-M2 | CI verde con tests de contrato U1↔U4 y evento `run.confirmed` válido contra esquema |
+| U1-T1 | [x] | Stubs: validador fake de GitHub webhook (firma) + `Notification`/`ConfirmationReceipt` de ejemplo válidos contra `contracts/` | US-M1 | `go test ./...` en verde con fixtures que pasan `ajv validate` |
+| U1-T2 | [x] | `go-intake`: `POST /webhooks/github` (verifica firma, crea notificación, publica `notify.created`) — nunca crea Jobs | US-M1 | test: un evento de prueba crea 1 notificación y `kubectl get jobs -n <test-ns>` sigue vacío en el entorno de test |
+| U1-T3 | [x] | Resolución de artefacto V5: build-from-repo (commit/PR) vs imagen publicada (tag/release) + `ArtifactRef` | US-M2 | tests parametrizados por tipo de evento en verde; `go vet ./...` limpio |
+| U1-T4 | [x] | `ui-api` inbox: `GET /notifications` + `POST /notifications/{id}/confirm` (auth vía stub U4, luego real) con rate limiting + security headers | US-M1, US-M2 | `curl` autenticado devuelve inbox; `curl -I` muestra CSP/HSTS/nosniff; `hey`/`k6` contra endpoint público respeta rate limit |
+| U1-T5 | [x] | PBT parcial: round-trip de parseo/serialización de payloads GitHub (PBT-02) + generadores de dominio (PBT-07) + seed logueado (PBT-08); framework documentado (PBT-09: rapid) | US-M1 | `go test -run PBT` en verde con shrinking habilitado y seed visible en el log de fallo |
+| U1-T6 | [x] | Logging estructurado + trazas + health shallow/deep + métricas (latencia/errores/throughput) | US-M1 | `curl /healthz` y `/readyz` 200; logs con timestamp/request-id/nivel; dashboard con el panel de U1 |
+| U1-T7 | [x] | Integración contra U4 real (auth) y publicación de `run.confirmed` consumible por U2 (contrato verificado en CI) | US-M2 | CI verde con tests de contrato U1↔U4 y evento `run.confirmed` válido contra esquema |
 
 > **Tareas redactadas (2026-10-03)**: el detalle de cada tarea de U1 (alcance, fuera de alcance, criterios con comando, plan de pruebas) está en `tareas/U1-T01-stubs.md` … `tareas/U1-T07-integracion-u4-run-confirmed.md`. Orden: T01 → T02 → T03 → T04 → (T05, T06) → T07; T07 exige U4-T02 y U4-T03 fusionadas. Decisiones abiertas que surgieron al redactar: C-45…C-48, C-53 en `tareas/candidatas.md`.
 
@@ -103,6 +103,8 @@
 | U2-T6 | [ ] | Reset verificado + higiene: Job `reset-{run}` (restart + clean DB + flush cache + verificación → `reset_verified`); cuarentena si falla; **scale-down en idle**; CronJobs `housekeeping` (grace 24 h)/`rebuild`; sesión "incompleta" persistida | US-M7.1, US-M7.2 | test: sin `reset_verified=true` no arranca la siguiente corrida; reset fallido → cuarentena + aviso; tras fin/abandono (+grace simulado) el warm queda `ready` o en cuarentena; rebuild/teardown periódico ejecutado |
 | U2-T7 | [ ] | Resource limits/requests por Job + quotas del namespace + HPA del controller + scale-down del warm en idle + timeouts/circuit breakers en calls externos | US-M5, US-M6 | `kubeconform` + `conftest` en verde para los manifiestos (revisables, sin apply autónomo) |
 | U2-T8 | [ ] | Integración con U3 real: superficie→flujos→evidencia de extremo a extremo en dev (camino feliz journey 7.1) | US-M5, US-M6 | demo en dev: notify→confirm→warm ready→deploy→ensayo→run→reset→estado final, todo auditado (con aprobación humana del entorno) |
+
+> **Tareas redactadas (2026-10-06)**: el detalle de cada tarea de U2 está en `tareas/U2-T01-stubs.md` … `tareas/U2-T08-integracion-u3-dev.md`. Orden: T01 → (T02, T03, T06 en paralelo) → T04 → T05 → T07 → T08. T04 exige T02, T03 y T06 fusionadas; T05 exige T04 (ambas modifican `go-run-controller`); T07 exige T02–T06; **T08 no es despachable hasta que U3 exista y el humano apruebe el entorno dev**. Decisiones tomadas al redactar: T01 **añade** esquemas nuevos en `contracts/plans/` (no existían para `FlowPlan`, `SurfaceArtifact`, `EvidenceURIs`, `WarmState`); el controlador habla con `go-warm-manager` y `go-reset` por REST servicio a servicio (la API vive en sus README hasta llevarla al OpenAPI); el HPA del controlador queda en `maxReplicas: 1` hasta resolver C-45/C-49. Todos los criterios se verifican sin clúster (cliente de Kubernetes falso y MinIO local); la validación en dev es del humano.
 
 ## U3 — Agentes LLM
 
@@ -154,4 +156,5 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 | S2 | Segunda familia de flujos (p. ej. concurrencia) | U3 (agent-planner) | M4/M6 |
 | S3 | Traspaso a humano con contexto estructurado (boot/deploy, reset o ensayo fallido) | U2 | Fail-closed de M2/M5 |
 | S4 | Panel de políticas (eventos, cuotas del warm, workflows, confirm-required) | U4 (C7) | M7 |
-| S5 | Dashboard inbox + estado del warm (`ready`/`dirty`/`cuarentena`/`idle-escalado`) | U1/U2 | M1, M3 |
+| S5 | Dashboard inbox + estado del warm (`ready`/`dirty`/`cuarentena`/`idle-escalado`) — **Frontend web real** (consumiendo `ui-api` y OpenAPI; el archivo `mockups/swarm-mock.html` es únicamente un prototipo exploratorio de diseño, no la UI final) | U1/U2/Frontend | M1, M3, U1-T04 |
+
