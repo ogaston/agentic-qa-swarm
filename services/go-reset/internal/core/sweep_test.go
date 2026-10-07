@@ -47,7 +47,9 @@ type scenario struct {
 	abandoned                                                        bool
 }
 
-func (s scenario) String() string { return fmt.Sprintf("%+v", struct{ scenario }{s}) }
+type plainScenario scenario
+
+func (s scenario) String() string { return fmt.Sprintf("%+v", plainScenario(s)) }
 
 type world struct {
 	sc      scenario
