@@ -50,4 +50,4 @@ con un gate de go-governance (U4) en cada transición, `GET /runs/{id}`, `/healt
   estado del Job; `rehearsing -> running` exige `ensayo_passed=true` registrado en el almacén y nada lo salta.
 - `go-run-controller render-rehearsal-job --run <id> --flow <id>` imprime el Job sin tocar un clúster.
 - Límites conocidos (candidatas): sin fuente real de `FlowPlan` (U3): en real falla cerrado y el ensayo no pasa; el deploy
-  espera dentro de `Launch` (bloquea el lazo hasta 12 min); `ensure` con timeout de 5 s no espera salir de `idle-escalado`.
+  espera dentro de `Launch` (bloquea el lazo hasta 12 min).
