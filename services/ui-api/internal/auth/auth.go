@@ -1,5 +1,5 @@
-// Package auth define el puerto TokenVerifier de ui-api y un verificador de
-// prueba. La implementacion real contra go-identity es U1-T07.
+// Package auth define el puerto TokenVerifier de ui-api, el verificador real contra
+// go-identity (HTTPTokenVerifier) y un verificador de prueba.
 package auth
 
 import (
@@ -22,10 +22,15 @@ type Principal struct {
 	Role string
 }
 
-// ErrUnauthenticated es el error generico de un token no aceptado.
+// ErrUnauthenticated es el error generico de un token no aceptado (401).
 var ErrUnauthenticated = errors.New("no autenticado")
 
-// TokenVerifier valida un bearer. Cualquier error implica rechazo (fail-closed).
+// ErrUnavailable indica que no se pudo decidir (identidad caida, lenta, respuesta invalida o
+// circuito abierto): la capa HTTP responde 503. Nunca implica acceso.
+var ErrUnavailable = errors.New("identidad no disponible")
+
+// TokenVerifier valida un bearer. Cualquier error implica rechazo (fail-closed):
+// ErrUnavailable -> 503; el resto -> 401.
 type TokenVerifier interface {
 	Verify(ctx context.Context, bearer string) (Principal, error)
 }

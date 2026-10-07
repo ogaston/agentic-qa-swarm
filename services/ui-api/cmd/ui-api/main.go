@@ -3,8 +3,12 @@
 // Variables de entorno:
 //
 //	LISTEN_ADDR               (por defecto :8080)
-//	UIAPI_AUTH                obligatoria; unico valor soportado hoy: fake
-//	UIAPI_FAKE_TOKENS         con UIAPI_AUTH=fake: "token=id:rol,..." (solo dev/prueba)
+//	UIAPI_AUTH                obligatoria: identity (go-identity real) | fake (solo dev/prueba)
+//	IDENTITY_URL              con UIAPI_AUTH=identity: URL http(s) de go-identity (obligatoria)
+//	UIAPI_FAKE_TOKENS         con UIAPI_AUTH=fake: "token=id:rol,..."
+//	UIAPI_ALLOW_FAKE_AUTH     con UIAPI_AUTH=fake: debe ser "true"; ademas no arranca con UIAPI_ENV=prod
+//	UIAPI_ENV                 entorno (prod bloquea el verificador fake)
+//	UIAPI_OUTBOX_FILE         outbox JSONL donde se publica run.confirmed (obligatoria)
 //	UIAPI_EVENTS_FILE         outbox JSONL de go-intake (obligatoria)
 //	UIAPI_DATA_DIR            directorio del registro de confirmaciones (obligatoria)
 //	UIAPI_ALLOWED_ORIGINS     origenes CORS separados por coma (vacia = ninguno)
@@ -36,6 +40,9 @@ import (
 
 const serviceName = "ui-api"
 
+// RepublishInterval es cada cuánto se reintentan los run.confirmed pendientes.
+const RepublishInterval = 5 * time.Second
+
 func main() {
 	log := newLog(os.Stdout)
 	if err := run(log); err != nil {
@@ -48,10 +55,18 @@ func verifierFromEnv() (auth.TokenVerifier, error) {
 	switch mode := os.Getenv("UIAPI_AUTH"); mode {
 	case "":
 		return nil, errors.New("UIAPI_AUTH es obligatorio (no hay modo abierto)")
+	case "identity":
+		return auth.NewHTTPTokenVerifier(os.Getenv("IDENTITY_URL"), nil)
 	case "fake":
+		if os.Getenv("UIAPI_ENV") == "prod" {
+			return nil, errors.New("UIAPI_AUTH=fake esta prohibido con UIAPI_ENV=prod")
+		}
+		if os.Getenv("UIAPI_ALLOW_FAKE_AUTH") != "true" {
+			return nil, errors.New("UIAPI_AUTH=fake exige UIAPI_ALLOW_FAKE_AUTH=true")
+		}
 		return auth.NewFakeTokenVerifier(os.Getenv("UIAPI_FAKE_TOKENS"))
 	default:
-		return nil, fmt.Errorf("UIAPI_AUTH=%q no soportado (la verificacion real llega con U1-T07)", mode)
+		return nil, fmt.Errorf("UIAPI_AUTH=%q no soportado (identity|fake)", mode)
 	}
 }
 
@@ -74,8 +89,9 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	eventsFile, dataDir := os.Getenv("UIAPI_EVENTS_FILE"), os.Getenv("UIAPI_DATA_DIR")
-	if eventsFile == "" || dataDir == "" {
-		return errors.New("UIAPI_EVENTS_FILE y UIAPI_DATA_DIR son obligatorios")
+	outboxFile := os.Getenv("UIAPI_OUTBOX_FILE")
+	if eventsFile == "" || dataDir == "" || outboxFile == "" {
+		return errors.New("UIAPI_EVENTS_FILE, UIAPI_DATA_DIR y UIAPI_OUTBOX_FILE son obligatorios")
 	}
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
@@ -106,8 +122,9 @@ func run(log *slog.Logger) error {
 	if store.Skipped > 0 {
 		log.Warn("registro de confirmaciones: lineas ilegibles ignoradas", "count", store.Skipped)
 	}
+	pub := inbox.NewPublisher(store, inbox.NewOutbox(outboxFile), log)
 	h, err := newHandler(log, httpapi.Config{
-		Store: store, Verifier: verifier, AllowedOrigins: origins,
+		Store: store, Verifier: verifier, Publisher: pub, AllowedOrigins: origins,
 		RateRPS: rps, RateBurst: burst, TrustProxy: os.Getenv("UIAPI_TRUST_PROXY") == "true",
 	}, dataDir, eventsFile)
 	if err != nil {
@@ -122,6 +139,7 @@ func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() { _ = sub.Run(ctx, handle) }()
+	go pub.Run(ctx, RepublishInterval) // al arrancar y cada 5 s: run.confirmed pendientes
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -155,6 +173,11 @@ func newHandler(log *slog.Logger, cfg httpapi.Config, dataDir, eventsFile string
 	// de quien no configura Slog, así que aquí no se usa.
 	cfg.Slog = log // las líneas dentro de una petición llevan request_id y trace_id
 	cfg.Metrics = obs.NewInbox(reg, cfg.Store.Counts)
+	// Métricas de la integración con identidad (solo si el verificador es el real).
+	if iv, ok := cfg.Verifier.(*auth.HTTPTokenVerifier); ok {
+		iv.SetObserver(obs.NewIdentity(reg, iv.CircuitOpen))
+	}
+	obs.RegisterPublishPending(reg, cfg.Store.PublishPendingCount)
 	app, err := httpapi.New(cfg)
 	if err != nil {
 		return nil, err

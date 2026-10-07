@@ -35,7 +35,12 @@ type Config struct {
 	// contexto de la petición (request_id y trace_id); si no, por Logger, como antes.
 	Slog    *slog.Logger
 	Metrics *obs.Inbox // nil = sin métricas de dominio
+	// Publisher publica run.confirmed tras persistir el recibo; nil = no publica (solo pruebas).
+	Publisher *inbox.Publisher
 }
+
+// IdentityRetryAfter es el Retry-After (segundos) del 503 identity_unavailable.
+const IdentityRetryAfter = 10
 
 // Handler es el http.Handler de ui-api.
 type Handler struct {
@@ -185,13 +190,19 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// authenticate es fail-closed: cualquier error del verificador es 401.
+// authenticate es fail-closed: ErrUnavailable es 503 (identity_unavailable); cualquier otro error, 401.
 func (h *Handler) authenticate(w http.ResponseWriter, r *http.Request) (auth.Principal, bool) {
 	// Mas de una cabecera Authorization es ambiguo (un proxy podria validar otra): 401.
 	tok, ok := auth.BearerToken(r.Header.Get("Authorization"))
 	if len(r.Header.Values("Authorization")) == 1 && ok {
-		if pr, err := h.cfg.Verifier.Verify(r.Context(), tok); err == nil {
+		pr, err := h.cfg.Verifier.Verify(r.Context(), tok)
+		if err == nil {
 			return pr, true
+		}
+		if errors.Is(err, auth.ErrUnavailable) {
+			w.Header().Set("Retry-After", strconv.Itoa(IdentityRetryAfter))
+			writeError(w, http.StatusServiceUnavailable, "identity_unavailable", "servicio de identidad no disponible")
+			return auth.Principal{}, false
 		}
 	}
 	w.Header().Set("WWW-Authenticate", "Bearer")
@@ -251,7 +262,7 @@ func (h *Handler) confirm(w http.ResponseWriter, r *http.Request, pr auth.Princi
 		}
 	}
 	// confirmed_by sale siempre del token, nunca del cuerpo.
-	rc, err := h.cfg.Store.Confirm(id, pr.ID, body.Flows)
+	rc, err := h.cfg.Store.ConfirmTraced(id, pr.ID, body.Flows, obs.TraceID(r.Context()))
 	switch {
 	case errors.Is(err, inbox.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "notificacion inexistente")
@@ -262,7 +273,19 @@ func (h *Handler) confirm(w http.ResponseWriter, r *http.Request, pr auth.Princi
 		writeError(w, http.StatusInternalServerError, "internal", "error interno")
 	default:
 		h.cfg.Metrics.Confirmed()
+		h.publish(r, id)
 		writeJSON(w, http.StatusCreated, rc)
+	}
+}
+
+// publish envia run.confirmed. Si falla, el 201 se mantiene (el recibo ya es un hecho auditable):
+// queda publish_pending y el re-publicador lo envia.
+func (h *Handler) publish(r *http.Request, id string) {
+	if h.cfg.Publisher == nil {
+		return
+	}
+	if err := h.cfg.Publisher.Publish(r.Context(), id); err != nil {
+		h.logError(r, "run.confirmed pendiente de publicar", "notification_id", id, "error", err.Error())
 	}
 }
 

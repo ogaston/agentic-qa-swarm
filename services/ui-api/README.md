@@ -12,7 +12,10 @@ API JSON del inbox. Sin UI HTML ni Kubernetes.
 
 | Variable | Descripcion |
 |---|---|
-| `UIAPI_AUTH` | **Obligatoria.** Solo `fake` (dev/prueba); sin ella no arranca. La real es U1-T07. |
+| `UIAPI_AUTH` | **Obligatoria.** `identity` (go-identity real, valida **cada** petición, sin caché) o `fake` (dev/prueba); sin ella no arranca. |
+| `IDENTITY_URL` | Con `identity`: URL `http(s)` de go-identity (`GET /auth/session`). Obligatoria. Timeout 2 s; 5 fallos de transporte seguidos abren el circuito 10 s. Identidad caída/lenta/inválida: `503 identity_unavailable` + `Retry-After` (nunca modo abierto). |
+| `UIAPI_ALLOW_FAKE_AUTH` / `UIAPI_ENV` | `fake` exige `UIAPI_ALLOW_FAKE_AUTH=true` y no arranca con `UIAPI_ENV=prod`. |
+| `UIAPI_OUTBOX_FILE` | **Obligatoria.** Outbox JSONL donde se publica `run.confirmed` al confirmar (transporte de transición, C-45). Si publicar falla, el `201` se mantiene, el recibo queda pendiente (`aqs_inbox_publish_pending`) y se reintenta al arrancar y cada 5 s; `event_id` es UUIDv5 de `run_id`, sin duplicados. |
 | `UIAPI_FAKE_TOKENS` | Con `fake`: `token=id:rol,...` (roles `user`/`admin`). |
 | `UIAPI_EVENTS_FILE` | Outbox JSONL de go-intake (transicion, C-45). Tail desde el inicio, idempotente por `event_id`; evento invalido = descartado y contado. |
 | `UIAPI_DATA_DIR` | Contiene `confirmations.jsonl` (solo-agregar, fsync por recibo). Una linea truncada no impide arrancar. |
