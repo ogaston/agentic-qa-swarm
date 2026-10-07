@@ -77,6 +77,7 @@ type FakeJobs struct {
 	CreateErr func(call int) error
 	// Latency simula una API lenta en Create (amplia las ventanas de carrera).
 	Latency time.Duration
+	ListErr error
 	status  map[string]wm.JobPhase
 	sCalls  int
 	cCalls  int
@@ -124,6 +125,35 @@ func (f *FakeJobs) Status(_ context.Context, name string) (wm.JobPhase, string, 
 		return "", "", errors.New("job inexistente")
 	}
 	return p, "simulado", nil
+}
+
+// SetPhase fuerza el estado de un Job creado.
+func (f *FakeJobs) SetPhase(name string, p wm.JobPhase) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.status[name] = p
+}
+
+// List devuelve los Jobs creados de la corrida ("" = todos).
+func (f *FakeJobs) List(_ context.Context, runID string) ([]wm.JobView, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ListErr != nil {
+		return nil, f.ListErr
+	}
+	var out []wm.JobView
+	for _, m := range f.Created {
+		meta := m["metadata"].(map[string]any)
+		l := meta["labels"].(map[string]any)
+		an := meta["annotations"].(map[string]any)
+		if runID != "" && l["aqs.io/run-id"] != runID {
+			continue
+		}
+		name := meta["name"].(string)
+		out = append(out, wm.JobView{Name: name, RunID: l["aqs.io/run-id"].(string), Phase: f.status[name],
+			Artifact: wm.Artifact{Kind: an["aqs.io/artifact-kind"].(string), Ref: an["aqs.io/artifact-ref"].(string)}})
+	}
+	return out, nil
 }
 
 // FakeProber responde con un mapa ruta -> (status, cuerpo).

@@ -204,10 +204,18 @@ func TestDeployRefusals(t *testing.T) {
 
 const openapi = `{"openapi":"3.0.0","paths":{"/orders":{"get":{},"post":{}},"/orders/{id}":{"get":{},"parameters":[]}}}`
 
+func mustDeploy(t *testing.T, r *rig) {
+	t.Helper()
+	if err := r.svc.Deploy(context.Background(), "r-1", okArt, "t"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSurface(t *testing.T) {
 	ctx := context.Background()
 	t.Run("con OpenAPI", func(t *testing.T) {
 		r := newRig(ws("ready", true))
+		mustDeploy(t, r)
 		r.web.Routes["/openapi.json"] = fakes.FakeResponse{Status: 200, Body: openapi}
 		sa, err := r.svc.InferSurface(ctx, "r-1", "t")
 		if err != nil || sa.Source != "openapi" || len(sa.Endpoints) != 3 {
@@ -216,7 +224,7 @@ func TestSurface(t *testing.T) {
 		if err := validate(t, "plans/surface-artifact.schema.json", sa); err != nil {
 			t.Fatal(err)
 		}
-		ev := r.pub.Events[0]
+		ev := r.pub.Events[len(r.pub.Events)-1]
 		if ev.Type != "surface.ready" || ev.Data["endpoint_count"] != 3 {
 			t.Fatalf("%+v", ev)
 		}
@@ -230,6 +238,7 @@ func TestSurface(t *testing.T) {
 	})
 	t.Run("sin OpenAPI sondea", func(t *testing.T) {
 		r := newRig(ws("ready", true))
+		mustDeploy(t, r)
 		r.web.Routes["/"] = fakes.FakeResponse{Status: 200}
 		r.web.Routes["/health"] = fakes.FakeResponse{Status: 204}
 		r.web.Routes["/api"] = fakes.FakeResponse{Status: 500}
@@ -241,15 +250,13 @@ func TestSurface(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	t.Run("OpenAPI roto cae al sondeo", func(t *testing.T) {
+	t.Run("OpenAPI roto y sin rutas: error", func(t *testing.T) {
 		r := newRig(ws("ready", true))
+		mustDeploy(t, r)
 		r.web.Routes["/openapi.json"] = fakes.FakeResponse{Status: 200, Body: "<html>"}
-		sa, err := r.svc.InferSurface(ctx, "r-1", "t")
-		if err != nil || sa.Source != "probe" || len(sa.Endpoints) != 0 {
-			t.Fatalf("%+v %v", sa, err)
-		}
-		if err := validate(t, "plans/surface-artifact.schema.json", sa); err != nil {
-			t.Fatal(err)
+		_, err := r.svc.InferSurface(ctx, "r-1", "t")
+		if !errors.Is(err, wm.ErrNoSurface) || len(r.pub.Events) != 1 { // solo deploy.done
+			t.Fatalf("0 endpoints debe ser error y no publicar surface.ready: %v %v", err, r.types())
 		}
 	})
 }
@@ -347,7 +354,7 @@ func TestDeployCASConflictIsNotReadyAndNoJob(t *testing.T) {
 	if !errors.Is(err, wm.ErrNotReady) || r.jobs.Count() != 0 {
 		t.Fatalf("err=%v jobs=%d", err, r.jobs.Count())
 	}
-	if d, _ := r.svc.DeployState("r-1"); d.State != "failed" || d.Reason == "" {
+	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" || d.Reason == "" {
 		t.Fatalf("estado visible: %+v", d)
 	}
 }
@@ -391,7 +398,7 @@ func TestDeployCreateErrorFailsClosedWithoutSecondJob(t *testing.T) {
 	if err == nil || r.jobs.Count() != 0 || len(r.al.Calls) != 1 || r.types()[len(r.types())-1] != "deploy.failed" {
 		t.Fatalf("err=%v jobs=%d handoffs=%d", err, r.jobs.Count(), len(r.al.Calls))
 	}
-	if d, _ := r.svc.DeployState("r-1"); d.State != "failed" || d.Attempts != 1 {
+	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" || d.Attempts != 1 {
 		t.Fatalf("%+v", d)
 	}
 }
@@ -409,7 +416,7 @@ func TestDeployWarmNotReadyEmitsFailedWithoutHandoff(t *testing.T) {
 	if err := validate(t, "events/deploy.schema.json", last); err != nil {
 		t.Fatal(err)
 	}
-	if d, _ := r.svc.DeployState("r-1"); d.State != "failed" || d.Reason == "" {
+	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" || d.Reason == "" {
 		t.Fatalf("%+v", d)
 	}
 }
@@ -463,7 +470,7 @@ func TestDeployPutDirtyFailureIsVisibleAndLogged(t *testing.T) {
 	if err := r.svc.Deploy(context.Background(), "r-1", okArt, "trace-x"); err == nil {
 		t.Fatal("debia fallar")
 	}
-	d, _ := r.svc.DeployState("r-1")
+	d, _, _ := r.svc.DeployState(context.Background(), "r-1")
 	if d.State != "failed" || !strings.Contains(d.Reason, "etcd caido") || r.jobs.Count() != 0 {
 		t.Fatalf("%+v jobs=%d", d, r.jobs.Count())
 	}
@@ -478,7 +485,7 @@ func TestDeployStateReadFailureEmitsNoInvalidEvent(t *testing.T) {
 	if err := r.svc.Deploy(context.Background(), "r-1", okArt, "t"); err == nil || len(r.pub.Events) != 0 {
 		t.Fatalf("err=%v eventos=%v", err, r.types())
 	}
-	if d, _ := r.svc.DeployState("r-1"); d.State != "failed" {
+	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" {
 		t.Fatalf("%+v", d)
 	}
 }
@@ -490,7 +497,7 @@ func TestDeployPublishDoneFailureMarksFailedAndLogs(t *testing.T) {
 	if err := r.svc.Deploy(context.Background(), "r-1", okArt, "t9"); err == nil {
 		t.Fatal("debia devolver el error")
 	}
-	if d, _ := r.svc.DeployState("r-1"); d.State != "failed" || !strings.Contains(d.Reason, "deploy.done") {
+	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" || !strings.Contains(d.Reason, "deploy.done") {
 		t.Fatalf("%+v", d)
 	}
 	if !strings.Contains(lg.String(), "outbox lleno") || !strings.Contains(lg.String(), `"trace_id":"t9"`) {
@@ -508,7 +515,7 @@ func TestDeployHandoffAndPublishFailedAreLoggedAndReturned(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "pager caido") || !strings.Contains(err.Error(), "outbox lleno") {
 		t.Fatalf("errores perdidos: %v", err)
 	}
-	if d, _ := r.svc.DeployState("r-1"); d.State != "failed" {
+	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" {
 		t.Fatalf("%+v", d)
 	}
 	for _, want := range []string{"pager caido", "outbox lleno", `"trace_id":"t7"`} {
@@ -524,7 +531,7 @@ func TestStartDeployWarmNotReadyCreatesNoState(t *testing.T) {
 	if !errors.Is(err, wm.ErrNotReady) || w != ws("dirty", false) {
 		t.Fatalf("w=%+v err=%v", w, err)
 	}
-	if _, ok := r.svc.DeployState("r-1"); ok || r.jobs.Count() != 0 {
+	if _, ok, _ := r.svc.DeployState(context.Background(), "r-1"); ok || r.jobs.Count() != 0 {
 		t.Fatal("no debia haber estado ni Jobs")
 	}
 }

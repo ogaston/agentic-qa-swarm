@@ -90,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 		st, ok, err := s.Svc.EnsureWarmReady(r.Context(), tr)
 		switch {
 		case errors.Is(err, wm.ErrWarmTimeout):
+			s.Log.Warn("ensure: el warm no llego a Ready a tiempo", "trace_id", tr, "state", st.State)
 			writeJSON(w, 409, st)
 		case err != nil:
 			s.Log.Error("ensure fallo", "trace_id", tr, "error", err.Error())
@@ -130,7 +131,12 @@ func (s *Server) Handler() http.Handler {
 			writeJSON(w, 400, map[string]string{"error": "invalid_run_id"})
 			return
 		}
-		st, ok := s.Svc.DeployState(r.PathValue("run_id"))
+		st, ok, err := s.Svc.DeployState(r.Context(), r.PathValue("run_id"))
+		if err != nil {
+			s.Log.Error("estado del deploy no disponible", "run_id", r.PathValue("run_id"), "error", err.Error())
+			writeJSON(w, 503, map[string]string{"error": "state_unavailable"})
+			return
+		}
 		if !ok {
 			writeJSON(w, 404, map[string]string{"error": "not_found"})
 			return
@@ -147,12 +153,16 @@ func (s *Server) Handler() http.Handler {
 		}
 		tr := trace(r)
 		sa, err := s.Svc.InferSurface(r.Context(), req.RunID, tr)
-		if err != nil {
+		switch {
+		case errors.Is(err, wm.ErrDeployNotDone), errors.Is(err, wm.ErrNotReady):
+			s.Log.Warn("superficie rechazada: deploy no terminado o warm no tomado", "run_id", req.RunID, "trace_id", tr, "error", err.Error())
+			writeJSON(w, 409, map[string]string{"error": "deploy_not_done"})
+		case err != nil:
 			s.Log.Error("superficie fallo", "run_id", req.RunID, "trace_id", tr, "error", err.Error())
 			writeJSON(w, 502, map[string]string{"error": "surface_failed"})
-			return
+		default:
+			writeJSON(w, 200, sa)
 		}
-		writeJSON(w, 200, sa)
 	}))
 	// Autenticacion antes del enrutado: una ruta protegida sin token valido es 401 aunque el metodo sea otro.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

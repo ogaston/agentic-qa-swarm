@@ -58,9 +58,15 @@ func TestObjectStoreS3(t *testing.T) {
 
 	// Superficie real generada por el servicio y subida a MinIO.
 	pub := &fakes.MemPublisher{}
-	svc := &wm.Service{Surface: &fakes.FakeProber{Base: "http://warm-app.aqs-test.svc", Routes: map[string]fakes.FakeResponse{
-		"/openapi.json": {Status: 200, Body: `{"paths":{"/orders":{"get":{},"post":{}}}}`}}},
-		Objects: s, Pub: pub, Clock: wm.RealClock{}}
+	svc := &wm.Service{Cfg: wm.Config{Job: wm.JobConfig{AllowedRegistries: wm.DefaultAllowedRegistries}, PollInterval: time.Millisecond},
+		State: &fakes.MemState{S: wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"}}, Jobs: &fakes.FakeJobs{},
+		Surface: &fakes.FakeProber{Base: "http://warm-app.aqs-test.svc", Routes: map[string]fakes.FakeResponse{
+			"/openapi.json": {Status: 200, Body: `{"paths":{"/orders":{"get":{},"post":{}}}}`}}},
+		Objects: s, Pub: pub, Alerts: &fakes.FakeAlerter{}, Clock: wm.RealClock{}}
+	if err := svc.Deploy(ctx, "r-1", wm.Artifact{Kind: "published-image", Ref: "ghcr.io/a/b:1"}, "t"); err != nil {
+		t.Fatal(err)
+	}
+	pub.Events = nil
 	sa, err := svc.InferSurface(ctx, "r-1", "t")
 	if err != nil {
 		t.Fatal(err)

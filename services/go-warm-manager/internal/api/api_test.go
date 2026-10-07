@@ -115,6 +115,16 @@ func TestAPIDeployAcceptedAndStatus(t *testing.T) {
 func TestAPISurface(t *testing.T) {
 	s, _ := srv(wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"})
 	defer s.Close()
+	if code, _ := call(t, "POST", s.URL+"/surface", tok, `{"run_id":"r-1"}`); code != 409 {
+		t.Fatalf("sin deploy terminado debia ser 409, fue %d", code)
+	}
+	call(t, "POST", s.URL+"/deploys", tok, `{"run_id":"r-1","artifact":{"kind":"published-image","ref":"ghcr.io/a/b:1"}}`)
+	for i := 0; i < 100; i++ {
+		if _, b := call(t, "GET", s.URL+"/deploys/r-1", tok, ""); strings.Contains(b, `"done"`) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if code, b := call(t, "POST", s.URL+"/surface", tok, `{"run_id":"r-1"}`); code != 200 || !strings.Contains(b, `"openapi"`) {
 		t.Fatalf("%d %s", code, b)
 	}

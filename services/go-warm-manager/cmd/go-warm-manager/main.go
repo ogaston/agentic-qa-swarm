@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -106,12 +108,16 @@ func run(getenv func(string) string, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	jobTO, err := durationEnv(getenv, "WARM_JOB_TIMEOUT", 10*time.Minute)
+	jobTO, err := durationEnv(getenv, "WARM_JOB_TIMEOUT", 11*time.Minute)
 	if err != nil {
 		return err
 	}
 	pollIv, err := durationEnv(getenv, "WARM_POLL_INTERVAL", 2*time.Second)
 	if err != nil {
+		return err
+	}
+
+	if err := validateTimeouts(readyTO, jobTO, pollIv); err != nil {
 		return err
 	}
 
@@ -130,6 +136,9 @@ func run(getenv func(string) string, log *slog.Logger) error {
 			return errors.New("WARM_FAKE_STATE invalido")
 		}
 	case "", "incluster":
+		if getenv("WARM_DEPLOYER_IMAGE") == "" {
+			return errors.New("WARM_DEPLOYER_IMAGE es obligatoria fuera del modo fake (la imagen por defecto es un placeholder)")
+		}
 		cfg, err := rest.InClusterConfig()
 		if err != nil {
 			return fmt.Errorf("sin configuracion de cluster: %w", err)
@@ -143,7 +152,12 @@ func run(getenv func(string) string, log *slog.Logger) error {
 
 	var objs wm.ObjectStore
 	switch getenv("WARM_OBJECT_STORE") {
-	case "file", "":
+	case "":
+		return errors.New("WARM_OBJECT_STORE es obligatorio y explicito (file|s3)")
+	case "file":
+		if err := checkFileStoreAllowed(getenv); err != nil {
+			return err
+		}
 		dir := getenv("WARM_OBJECT_DIR")
 		if dir == "" {
 			dir = os.TempDir() + "/warm-objects"
@@ -158,7 +172,7 @@ func run(getenv func(string) string, log *slog.Logger) error {
 		if bucket == "" {
 			bucket = "evidence"
 		}
-		s3, err := objstore.NewS3(ep, ak, sk, bucket, getenv("WARM_S3_SECURE") == "true")
+		s3, err := objstore.NewS3(ep, ak, sk, bucket, getenv("WARM_S3_SECURE") != "false") // seguro por defecto; MinIO in-cluster declara false explicitamente
 		if err != nil {
 			return err
 		}
@@ -170,6 +184,9 @@ func run(getenv func(string) string, log *slog.Logger) error {
 	appURL := getenv("WARM_APP_URL")
 	if appURL == "" {
 		appURL = "http://warm-app.aqs-test.svc"
+	}
+	if err := validateAppURL(appURL); err != nil {
+		return err
 	}
 	metrics := obs.NewMetrics()
 	svc := &wm.Service{
@@ -190,15 +207,82 @@ func run(getenv func(string) string, log *slog.Logger) error {
 	hs := srv.HTTPServer(addr)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	go func() {
-		<-ctx.Done()
-		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = hs.Shutdown(c)
-	}()
-	log.Info("escuchando", "addr", addr)
-	if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	// Deploys huerfanos de un arranque anterior: se resuelven antes de aceptar trafico (ver ResolveOrphans).
+	if err := svc.ResolveOrphans(ctx, "00000000000000000000000000000000"); err != nil {
+		log.Error("resolver deploys huerfanos fallo", "error", err.Error())
 		return err
+	}
+	log.Info("escuchando", "addr", addr)
+	return serve(ctx, hs, nil, shutdownGrace)
+}
+
+// shutdownGrace es la ventana para que terminen las peticiones en vuelo tras SIGTERM.
+const shutdownGrace = 5 * time.Second
+
+// serve atiende hasta que ctx termine y ESPERA a Shutdown antes de volver (si no, el proceso sale
+// mientras las peticiones en vuelo siguen). ln nil = ListenAndServe.
+func serve(ctx context.Context, hs *http.Server, ln net.Listener, grace time.Duration) error {
+	errc := make(chan error, 1)
+	go func() {
+		if ln != nil {
+			errc <- hs.Serve(ln)
+		} else {
+			errc <- hs.ListenAndServe()
+		}
+	}()
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+	}
+	c, cancel := context.WithTimeout(context.Background(), grace)
+	defer cancel()
+	if err := hs.Shutdown(c); err != nil {
+		return fmt.Errorf("cierre incompleto: %w", err)
+	}
+	if err := <-errc; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// validateTimeouts acota las duraciones: JobTimeout debe superar activeDeadlineSeconds del Job
+// (si no, el Job sigue vivo tras el handoff), con cotas maximas razonables y minimo de sondeo.
+func validateTimeouts(ready, job, poll time.Duration) error {
+	switch {
+	case ready > 10*time.Minute:
+		return errors.New("WARM_READY_TIMEOUT no puede superar 10m")
+	case poll < 100*time.Millisecond:
+		return errors.New("WARM_POLL_INTERVAL no puede ser menor de 100ms")
+	case job <= wm.JobDeadline:
+		return fmt.Errorf("WARM_JOB_TIMEOUT debe superar el activeDeadlineSeconds del Job (%s)", wm.JobDeadline)
+	case job > time.Hour:
+		return errors.New("WARM_JOB_TIMEOUT no puede superar 1h")
+	}
+	return nil
+}
+
+// validateAppURL exige http(s)://host: el SurfaceArtifact lo publica como base_url.
+func validateAppURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		return fmt.Errorf("WARM_APP_URL debe ser http(s)://host (recibido %q)", raw)
+	}
+	return nil
+}
+
+// checkFileStoreAllowed acota el almacen de archivos (solo pruebas): exige WARM_ALLOW_FILE_STORE=true
+// y lo rechaza en un cluster o con WARM_ENV prod; su URI file:// no la lee ningun otro servicio.
+func checkFileStoreAllowed(getenv func(string) string) error {
+	if getenv("WARM_ALLOW_FILE_STORE") != "true" {
+		return errors.New("WARM_OBJECT_STORE=file exige WARM_ALLOW_FILE_STORE=true")
+	}
+	if getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return errors.New("WARM_OBJECT_STORE=file prohibido dentro de un cluster")
+	}
+	switch strings.ToLower(strings.TrimSpace(getenv("WARM_ENV"))) {
+	case "prod", "production":
+		return errors.New("WARM_OBJECT_STORE=file prohibido con WARM_ENV=prod")
 	}
 	return nil
 }

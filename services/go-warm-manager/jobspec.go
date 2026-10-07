@@ -1,14 +1,20 @@
 package warmmanager
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // DefaultDeployerImage es un PLACEHOLDER: la imagen aqs-warm-deployer aun no existe (su construccion,
 // la SA warm-deployer y el RBAC quedan para U2-T07). Tag fijado para pasar las politicas.
 const DefaultDeployerImage = "ghcr.io/ogaston/aqs-warm-deployer:0.1.0"
 
+// JobDeadline es activeDeadlineSeconds del Job; WARM_JOB_TIMEOUT debe superarlo.
+const JobDeadline = 600 * time.Second
+
 // Constantes del Job (una linea de razon cada una).
 const (
-	jobDeadlineSeconds = int64(600)  // tope duro de un intento de deploy
+	jobDeadlineSeconds = int64(600)  // tope duro de un intento de deploy (JobDeadline)
 	jobTTLSeconds      = int64(3600) // el Job terminado se limpia a la hora
 	jobCPURequest      = "100m"      // el deployer solo aplica un parche
 	jobMemRequest      = "128Mi"
@@ -63,6 +69,10 @@ func BuildDeployJob(cfg JobConfig, runID string, attempt int, a Artifact) (Manif
 			"name":      JobName(runID, attempt),
 			"namespace": Namespace,
 			"labels":    labels,
+			"annotations": map[string]any{ // el artefacto viaja en el Job: permite reconstruir el deploy tras un reinicio
+				"aqs.io/artifact-kind": a.Kind,
+				"aqs.io/artifact-ref":  a.Ref,
+			},
 		},
 		"spec": map[string]any{
 			"backoffLimit":            int64(0), // los reintentos los decide go-warm-manager (V8)

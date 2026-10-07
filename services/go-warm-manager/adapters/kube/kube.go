@@ -188,19 +188,44 @@ func (j *Jobs) Status(ctx context.Context, name string) (wm.JobPhase, string, er
 	if err != nil {
 		return "", "", err
 	}
+	ph, why := jobPhase(job)
+	return ph, why, nil
+}
+
+// List lista los Jobs de deploy (etiqueta aqs.io/run-id si se da runID, o todos los warm-deploy).
+func (j *Jobs) List(ctx context.Context, runID string) ([]wm.JobView, error) {
+	sel := "app.kubernetes.io/name=warm-deploy"
+	if runID != "" {
+		sel += ",aqs.io/run-id=" + runID
+	}
+	l, err := j.C.BatchV1().Jobs(wm.Namespace).List(ctx, metav1.ListOptions{LabelSelector: sel})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]wm.JobView, 0, len(l.Items))
+	for i := range l.Items {
+		job := &l.Items[i]
+		ph, why := jobPhase(job)
+		out = append(out, wm.JobView{Name: job.Name, RunID: job.Labels["aqs.io/run-id"], Phase: ph, Reason: why,
+			Artifact: wm.Artifact{Kind: job.Annotations["aqs.io/artifact-kind"], Ref: job.Annotations["aqs.io/artifact-ref"]}})
+	}
+	return out, nil
+}
+
+func jobPhase(job *batchv1.Job) (wm.JobPhase, string) {
 	for _, c := range job.Status.Conditions {
 		if c.Status != corev1.ConditionTrue {
 			continue
 		}
 		switch c.Type {
 		case batchv1.JobComplete:
-			return wm.JobSucceeded, "", nil
+			return wm.JobSucceeded, ""
 		case batchv1.JobFailed:
-			return wm.JobFailed, c.Reason + ": " + c.Message, nil
+			return wm.JobFailed, c.Reason + ": " + c.Message
 		}
 	}
 	if job.Status.Succeeded > 0 {
-		return wm.JobSucceeded, "", nil
+		return wm.JobSucceeded, ""
 	}
-	return wm.JobPending, "", nil
+	return wm.JobPending, ""
 }

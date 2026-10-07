@@ -40,6 +40,17 @@ type Manifest map[string]any
 type Jobs interface {
 	Create(ctx context.Context, m Manifest) error
 	Status(ctx context.Context, name string) (JobPhase, string, error)
+	// List devuelve los Jobs de deploy de una corrida ("" = todos), por la etiqueta aqs.io/run-id.
+	List(ctx context.Context, runID string) ([]JobView, error)
+}
+
+// JobView es la vista de un Job de deploy para derivar el estado de una corrida.
+type JobView struct {
+	Name     string
+	RunID    string
+	Phase    JobPhase
+	Reason   string
+	Artifact Artifact
 }
 
 // Nota: el puerto ContainerRuntime (build/pull) de la tarea no existe: el artefacto viaja por

@@ -42,6 +42,7 @@ type Service struct {
 	Observer Observer
 
 	takeMu  sync.Mutex // serializa ready->dirty
+	wakeMu  sync.Mutex // serializa idle-escalado->ready
 	Log     *slog.Logger
 	mu      sync.Mutex
 	deploys map[string]*DeployStatus
@@ -100,47 +101,71 @@ func (s *Service) EnsureWarmReady(ctx context.Context, trace string) (WarmState,
 		return WarmState{}, false, err
 	}
 	if w.State == StateIdleEscalado {
-		if err := s.Runtime.ScaleUp(ctx); err != nil {
+		if w, err = s.wakeWarm(ctx, w); err != nil {
 			return w, false, err
 		}
-		timeout := s.Cfg.WarmReadyTimeout
-		if timeout <= 0 {
-			timeout = DefaultWarmReadyTimeout
-		}
-		deadline := s.Clock.Now().Add(timeout)
-		for {
-			if s.Probe.Check(ctx) == nil {
-				break
-			}
-			if !s.Clock.Now().Before(deadline) {
-				return w, false, ErrWarmTimeout
-			}
-			if err := s.Clock.Sleep(ctx, s.pollInterval()); err != nil {
-				return w, false, err
-			}
-		}
-		nw, err := Transition(w, StateReady, false)
-		if err != nil {
-			return w, false, err
-		}
-		if err := s.State.CompareAndSwap(ctx, w, nw); err != nil {
-			return w, false, err
-		}
-		w = nw
-		s.obs().WarmState(w.State)
 	}
 	if w.State != StateReady || !w.ResetVerified {
 		return w, false, nil
 	}
 	if err := s.Probe.Check(ctx); err != nil {
+		s.logger().Warn("ensure: sonda del warm caida", "trace_id", trace, "warm_id", w.WarmID, "error", err.Error())
 		return w, false, nil
 	}
 	ev := newEvent("warm.ready", w.WarmID+"/"+w.BaselineVersion+"/"+fmt.Sprint(s.Clock.Now().UnixNano()), trace, s.Clock.Now(),
 		map[string]any{"warm_id": w.WarmID, "state": StateReady, "baseline_version": w.BaselineVersion})
 	if err := s.Pub.Publish(ctx, ev); err != nil {
+		s.logger().Error("publicar warm.ready fallo", "trace_id", trace, "error", err.Error())
 		return w, false, err
 	}
 	return w, true, nil
+}
+
+// wakeWarm saca al warm de idle-escalado. Serializado (un solo ScaleUp efectivo con N ensures
+// concurrentes) y tolerante a otras instancias: ante ErrStateConflict relee y sigue evaluando.
+func (s *Service) wakeWarm(ctx context.Context, w WarmState) (WarmState, error) {
+	s.wakeMu.Lock()
+	defer s.wakeMu.Unlock()
+	cur, err := s.State.Get(ctx) // otro ensure pudo haberlo despertado mientras esperabamos el cerrojo
+	if err != nil {
+		return w, err
+	}
+	if cur.State != StateIdleEscalado {
+		return cur, nil
+	}
+	if err := s.Runtime.ScaleUp(ctx); err != nil {
+		s.logger().Error("ensure: ScaleUp fallo", "warm_id", cur.WarmID, "error", err.Error())
+		return cur, err
+	}
+	timeout := s.Cfg.WarmReadyTimeout
+	if timeout <= 0 {
+		timeout = DefaultWarmReadyTimeout
+	}
+	deadline := s.Clock.Now().Add(timeout)
+	for s.Probe.Check(ctx) != nil {
+		if !s.Clock.Now().Before(deadline) {
+			return cur, ErrWarmTimeout
+		}
+		if err := s.Clock.Sleep(ctx, s.pollInterval()); err != nil {
+			return cur, err
+		}
+	}
+	nw, err := Transition(cur, StateReady, false)
+	if err != nil {
+		return cur, err
+	}
+	if err := s.State.CompareAndSwap(ctx, cur, nw); err != nil {
+		if errors.Is(err, ErrStateConflict) { // otra instancia lo cambio: se relee y se evalua lo que haya
+			re, gerr := s.State.Get(ctx)
+			if gerr != nil {
+				return cur, gerr
+			}
+			return re, nil
+		}
+		return cur, err
+	}
+	s.obs().WarmState(nw.State)
+	return nw, nil
 }
 
 // StartDeploy valida y, si el warm esta listo, lanza el deploy en segundo plano (idempotente por run_id).
@@ -188,15 +213,87 @@ func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, tra
 	return out, WarmState{}, nil
 }
 
-// DeployState devuelve el estado de un deploy conocido.
-func (s *Service) DeployState(runID string) (DeployStatus, bool) {
+// DeployState devuelve el estado de un deploy: de memoria si esta, y si no derivado de los Jobs
+// del run (etiqueta aqs.io/run-id). El estado es memoria + Jobs; no hay otra persistencia.
+func (s *Service) DeployState(ctx context.Context, runID string) (DeployStatus, bool, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	d, ok := s.deploys[runID]
-	if !ok {
-		return DeployStatus{}, false
+	if ok {
+		out := *d
+		s.mu.Unlock()
+		return out, true, nil
 	}
-	return *d, true
+	s.mu.Unlock()
+	jobs, err := s.Jobs.List(ctx, runID)
+	if err != nil {
+		return DeployStatus{}, false, err
+	}
+	if len(jobs) == 0 {
+		return DeployStatus{}, false, nil
+	}
+	return deriveStatus(runID, jobs), true, nil
+}
+
+func deriveStatus(runID string, jobs []JobView) DeployStatus {
+	st := DeployStatus{RunID: runID, Attempts: len(jobs), State: "failed"}
+	for _, j := range jobs {
+		switch j.Phase {
+		case JobSucceeded:
+			st.State = "done"
+			st.Reason = ""
+			return st
+		case JobPending:
+			st.State, st.Reason = "pending", ""
+		case JobFailed:
+			if st.State == "failed" {
+				st.Reason = "el Job fallo: " + j.Reason
+			}
+		}
+	}
+	return st
+}
+
+// ResolveOrphans cierra, al arrancar, los deploys que quedaron sin observador (reinicio o SIGTERM
+// con un deploy en vuelo). Eleccion fail-closed y simple: no se retoma la observacion; un Job aun en
+// vuelo se da por indeterminado y se emite deploy.failed + handoff (el warm sigue dirty, asi que nada
+// se despliega encima); un Job terminado reemite su evento terminal (event_id determinista: el
+// outbox deduplica). El warm_id sale del estado persistido.
+func (s *Service) ResolveOrphans(ctx context.Context, trace string) error {
+	jobs, err := s.Jobs.List(ctx, "")
+	if err != nil {
+		return err
+	}
+	w, err := s.State.Get(ctx)
+	if err != nil {
+		return err
+	}
+	byRun := map[string][]JobView{}
+	for _, j := range jobs {
+		byRun[j.RunID] = append(byRun[j.RunID], j)
+	}
+	var errs []error
+	for run, js := range byRun {
+		s.mu.Lock()
+		_, known := s.deploys[run]
+		s.mu.Unlock()
+		if known {
+			continue
+		}
+		st := deriveStatus(run, js)
+		a := js[len(js)-1].Artifact
+		switch st.State {
+		case "done":
+			s.track(run, "done", st.Attempts, "")
+			errs = append(errs, s.Pub.Publish(ctx, newEvent("deploy.done", run, trace, s.Clock.Now(), deployData(w.WarmID, run, a, ""))))
+		case "pending":
+			s.logger().Warn("deploy huerfano tras reinicio: se da por indeterminado", "run_id", run, "trace_id", trace)
+			errs = append(errs, s.fail(ctx, run, w.WarmID, a, trace, st.Attempts, "deploy en vuelo huerfano tras reinicio de go-warm-manager: estado indeterminado", true))
+		default:
+			s.track(run, "failed", st.Attempts, st.Reason)
+			errs = append(errs, s.Pub.Publish(ctx, newEvent("deploy.failed", run, trace, s.Clock.Now(), deployData(w.WarmID, run, a, st.Reason))))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (s *Service) track(runID, state string, attempts int, reason string) {
@@ -385,29 +482,73 @@ var openAPIPaths = []string{"/openapi.json", "/v3/api-docs", "/swagger.json"}
 var probePaths = []string{"/", "/health", "/healthz", "/api", "/status"}
 var methods = map[string]string{"get": "GET", "post": "POST", "put": "PUT", "patch": "PATCH", "delete": "DELETE"}
 
-// InferSurface infiere la superficie consultando solo el exterior del Service del warm.
+// Errores de la superficie.
+var (
+	ErrDeployNotDone      = errors.New("el deploy de la corrida no ha terminado bien")
+	ErrSurfaceUnreachable = errors.New("la app del warm no responde a ningun sondeo")
+	ErrNoSurface          = errors.New("no se encontro ningun endpoint")
+)
+
+// InferSurface infiere la superficie consultando solo el exterior del Service del warm. Falla
+// cerrado: exige el deploy de la corrida terminado y el warm tomado (dirty); si ningun sondeo
+// responde o no hay endpoints, error (nunca surface.ready con 0 endpoints); valida el artefacto
+// contra el esquema en tiempo de ejecucion antes de guardar o publicar.
 func (s *Service) InferSurface(ctx context.Context, runID, trace string) (SurfaceArtifact, error) {
 	if err := ValidateRunID(runID); err != nil {
 		return SurfaceArtifact{}, err
 	}
+	d, ok, err := s.DeployState(ctx, runID)
+	if err != nil {
+		return SurfaceArtifact{}, err
+	}
+	if !ok || d.State != "done" {
+		return SurfaceArtifact{}, fmt.Errorf("%w: run %s", ErrDeployNotDone, runID)
+	}
+	w, err := s.State.Get(ctx)
+	if err != nil {
+		return SurfaceArtifact{}, err
+	}
+	// Tras un deploy el warm esta dirty (lo usa la corrida); idle/cuarentena/ready no sirven de blanco.
+	if w.State != StateDirty {
+		return SurfaceArtifact{}, fmt.Errorf("%w: el warm esta %s", ErrNotReady, w.State)
+	}
 	sa := SurfaceArtifact{RunID: runID, BaseURL: s.Surface.BaseURL(), Endpoints: []Endpoint{}, Source: "probe"}
-	for _, p := range openAPIPaths {
+	answered := 0
+	probe := func(p string) (int, []byte, bool) {
 		st, body, err := s.Surface.Get(ctx, p)
-		if err != nil || st != 200 {
+		if err != nil {
+			s.logger().Warn("sondeo de superficie fallo", "run_id", runID, "trace_id", trace, "path", p, "error", err.Error())
+			return 0, nil, false
+		}
+		answered++
+		return st, body, true
+	}
+	for _, p := range openAPIPaths {
+		st, body, ok := probe(p)
+		if !ok || st != 200 {
 			continue
 		}
-		if eps, ok := parseOpenAPI(body); ok {
+		if eps, ok := parseOpenAPI(body); ok && len(eps) > 0 {
 			sa.Source, sa.Endpoints = "openapi", eps
 			break
 		}
 	}
 	if sa.Source == "probe" {
 		for _, p := range probePaths {
-			st, _, err := s.Surface.Get(ctx, p)
-			if err == nil && st > 0 && st < 400 {
+			if st, _, ok := probe(p); ok && st > 0 && st < 400 {
 				sa.Endpoints = append(sa.Endpoints, Endpoint{Method: "GET", Path: p})
 			}
 		}
+	}
+	if answered == 0 {
+		return SurfaceArtifact{}, ErrSurfaceUnreachable
+	}
+	if len(sa.Endpoints) == 0 {
+		return SurfaceArtifact{}, ErrNoSurface
+	}
+	if err := ValidateSurface(sa); err != nil {
+		s.logger().Error("superficie invalida", "run_id", runID, "trace_id", trace, "error", err.Error())
+		return SurfaceArtifact{}, err
 	}
 	raw, err := json.Marshal(sa)
 	if err != nil {
@@ -415,11 +556,13 @@ func (s *Service) InferSurface(ctx context.Context, runID, trace string) (Surfac
 	}
 	uri, err := s.Objects.Put(ctx, runID+"/surface.json", raw)
 	if err != nil {
+		s.logger().Error("guardar la superficie fallo", "run_id", runID, "trace_id", trace, "error", err.Error())
 		return SurfaceArtifact{}, err
 	}
 	ev := newEvent("surface.ready", runID, trace, s.Clock.Now(),
 		map[string]any{"run_id": runID, "surface_uri": uri, "endpoint_count": len(sa.Endpoints)})
 	if err := s.Pub.Publish(ctx, ev); err != nil {
+		s.logger().Error("publicar surface.ready fallo", "run_id", runID, "trace_id", trace, "error", err.Error())
 		return SurfaceArtifact{}, err
 	}
 	return sa, nil
