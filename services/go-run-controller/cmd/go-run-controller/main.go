@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -19,18 +21,35 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/internal/obs"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/rehearsal"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runner"
 	"k8s.io/client-go/kubernetes"
 )
 
 const serviceName = "go-run-controller"
 
 type config struct {
-	namespace, dataDir, eventsFile, outboxFile string
-	govURL, govToken, identityURL, addr        string
-	real                                       bool
-	warmURL, warmToken, resetURL, resetToken   string
-	artifactRef, rehearsalImage, rehearsalSA   string
-	rehearsalTarget                            string
+	namespace, dataDir, eventsFile, outboxFile       string
+	govURL, govToken, identityURL, addr              string
+	real                                             bool
+	warmURL, warmToken, resetURL, resetToken         string
+	artifactRef, rehearsalImage, rehearsalSA         string
+	rehearsalTarget                                  string
+	runnerImage, runnerSA                            string
+	evEndpoint, evBucket, evAccessFile, evSecretFile string
+	maxParallel                                      int
+	flowTimeout, runTimeout                          time.Duration
+}
+
+// parseSeconds lee una duración en segundos (vacío: def). Valor no numérico o <=0 es un error.
+func parseSeconds(name, v string, def int) (time.Duration, error) {
+	if v == "" {
+		return time.Duration(def) * time.Second, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 || n > 86400 {
+		return 0, fmt.Errorf("%s debe ser un entero de segundos entre 1 y 86400", name)
+	}
+	return time.Duration(n) * time.Second, nil
 }
 
 func loadConfig(env func(string) string) (config, error) {
@@ -56,6 +75,28 @@ func loadConfig(env func(string) string) (config, error) {
 			return c, fmt.Errorf("%s %w", u.n, err)
 		}
 	}
+	// EVIDENCE_ENDPOINT, si está, se valida siempre (también en fake): un valor no http(s) no arranca.
+	c.evEndpoint = env("EVIDENCE_ENDPOINT")
+	if c.evEndpoint != "" {
+		if u, err := url.Parse(c.evEndpoint); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return c, errors.New("EVIDENCE_ENDPOINT debe ser http(s)://host[:puerto]")
+		}
+	}
+	c.maxParallel = 3
+	if v := env("RUN_MAX_PARALLEL_RUNNERS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 20 {
+			return c, errors.New("RUN_MAX_PARALLEL_RUNNERS debe ser un entero entre 1 y 20")
+		}
+		c.maxParallel = n
+	}
+	var err error
+	if c.flowTimeout, err = parseSeconds("RUNNER_FLOW_TIMEOUT_SECONDS", env("RUNNER_FLOW_TIMEOUT_SECONDS"), 300); err != nil {
+		return c, err
+	}
+	if c.runTimeout, err = parseSeconds("RUNNER_RUN_TIMEOUT_SECONDS", env("RUNNER_RUN_TIMEOUT_SECONDS"), 900); err != nil {
+		return c, err
+	}
 	switch env("RUN_PHASES") {
 	case "fake":
 		if env("RUN_ALLOW_FAKE_PHASES") != "true" {
@@ -70,12 +111,19 @@ func loadConfig(env func(string) string) (config, error) {
 		c.warmURL, c.warmToken, c.resetURL, c.resetToken = env("WARM_URL"), env("WARM_SERVICE_TOKEN"), env("RESET_URL"), env("RESET_SERVICE_TOKEN")
 		c.artifactRef, c.rehearsalImage, c.rehearsalTarget = env("RUN_ARTIFACT_REF"), env("REHEARSAL_IMAGE"), env("REHEARSAL_TARGET_URL")
 		c.rehearsalSA = env("REHEARSAL_SERVICE_ACCOUNT")
+		c.runnerImage, c.runnerSA = env("RUNNER_IMAGE"), env("RUNNER_SERVICE_ACCOUNT")
+		c.evBucket, c.evAccessFile, c.evSecretFile = env("EVIDENCE_BUCKET"), env("EVIDENCE_ACCESS_KEY_FILE"), env("EVIDENCE_SECRET_KEY_FILE")
+		if c.runnerSA == "" {
+			c.runnerSA = "aqs-runner"
+		}
 		if c.rehearsalSA == "" {
 			c.rehearsalSA = "aqs-runner"
 		}
 		for _, m := range []struct{ n, v string }{{"WARM_URL", c.warmURL}, {"WARM_SERVICE_TOKEN", c.warmToken}, {"RESET_URL", c.resetURL},
 			{"RESET_SERVICE_TOKEN", c.resetToken}, {"RUN_ARTIFACT_REF", c.artifactRef}, {"REHEARSAL_IMAGE", c.rehearsalImage},
-			{"REHEARSAL_TARGET_URL", c.rehearsalTarget}} {
+			{"REHEARSAL_TARGET_URL", c.rehearsalTarget},
+			{"RUNNER_IMAGE", c.runnerImage}, {"EVIDENCE_ENDPOINT", c.evEndpoint}, {"EVIDENCE_BUCKET", c.evBucket},
+			{"EVIDENCE_ACCESS_KEY_FILE", c.evAccessFile}, {"EVIDENCE_SECRET_KEY_FILE", c.evSecretFile}} {
 			if m.v == "" {
 				return c, fmt.Errorf("RUN_PHASES=real: %s es obligatorio", m.n)
 			}
@@ -86,6 +134,9 @@ func loadConfig(env func(string) string) (config, error) {
 			}
 		}
 		if err := (rehearsal.Config{Namespace: c.namespace, Image: c.rehearsalImage, ServiceAccount: c.rehearsalSA, TargetURL: c.rehearsalTarget}).Validate(); err != nil {
+			return c, err
+		}
+		if err := (runner.Config{Namespace: c.namespace, Image: c.runnerImage, ServiceAccount: c.runnerSA, DeadlineSeconds: int64(c.flowTimeout / time.Second)}).Validate(); err != nil {
 			return c, err
 		}
 	default:
@@ -103,6 +154,13 @@ func (a logAlerter) Handoff(ctx context.Context, runID, phase, reason string) {
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "render-rehearsal-job" {
 		if err := renderRehearsalJob(os.Stdout, os.Args[2:], os.Getenv); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "render-runner-job" {
+		if err := renderRunnerJob(os.Stdout, os.Args[2:], os.Getenv); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -150,7 +208,7 @@ func run(log *slog.Logger, env func(string) string) error {
 			return err
 		}
 	}
-	cfg, err := buildConfig(c, cs, gate, store, &adapters.Outbox{Path: c.outboxFile}, logAlerter{log}, metrics, log)
+	cfg, err := buildConfig(c, cs, gate, store, &adapters.Outbox{Path: c.outboxFile}, logAlerter{log}, metrics, obs.NewRunnerMetrics(reg), log)
 	if err != nil {
 		return err
 	}

@@ -326,12 +326,13 @@ func (r *ResetClient) Reset(ctx context.Context, runID string) error {
 type ArtifactSource func(runID string) (kind, ref string, err error)
 
 // RealPhases es el PhaseLauncher de deploy, superficie y reset sobre HTTP, y delega el ensayo en
-// Rehearse (Job). run y report no existen hasta U2-T05: fallan cerrado.
+// Rehearse (Job) y la fase run en Run (runners). report (U3) falla cerrado.
 type RealPhases struct {
 	Warm     *WarmClient
 	Reset    *ResetClient
 	Artifact ArtifactSource
 	Rehearse runctl.PhaseLauncher
+	Run      runctl.PhaseLauncher // runners (U2-T05); sin él la fase run falla cerrado
 }
 
 var _ runctl.PhaseLauncher = (*RealPhases)(nil)
@@ -359,6 +360,11 @@ func (p *RealPhases) Launch(ctx context.Context, phase string, run runctl.Run) (
 			return nil, errors.New("sin lanzador de ensayo")
 		}
 		return p.Rehearse.Launch(ctx, phase, run)
+	case runctl.PhaseRun:
+		if p.Run == nil {
+			return nil, errors.New("sin lanzador de runners")
+		}
+		return p.Run.Launch(ctx, phase, run)
 	case runctl.PhaseReset:
 		return nil, p.Reset.Reset(ctx, run.ID)
 	}

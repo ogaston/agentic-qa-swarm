@@ -23,6 +23,9 @@ func realEnv() map[string]string {
 	m["RUN_ARTIFACT_REF"] = "ghcr.io/x/app:1.0"
 	m["REHEARSAL_IMAGE"] = "ghcr.io/ogaston/aqs-rehearsal:0.1.0"
 	m["REHEARSAL_TARGET_URL"] = "http://warm-app.aqs-test.svc:8080"
+	m["RUNNER_IMAGE"] = "ghcr.io/ogaston/aqs-runner:0.1.0"
+	m["EVIDENCE_ENDPOINT"], m["EVIDENCE_BUCKET"] = "http://minio.aqs-system.svc:9000", "evidence"
+	m["EVIDENCE_ACCESS_KEY_FILE"], m["EVIDENCE_SECRET_KEY_FILE"] = "/nope/ak", "/nope/sk"
 	return m
 }
 
@@ -114,7 +117,7 @@ func buildFor(t *testing.T, env map[string]string, cs kubernetes.Interface) (run
 	if err != nil {
 		t.Fatal(err)
 	}
-	return buildConfig(c, cs, runctl.AllowAll(), runctl.NewMemStore(), &runctl.FakePublisher{}, &runctl.FakeAlerter{}, nil, nil)
+	return buildConfig(c, cs, runctl.AllowAll(), runctl.NewMemStore(), &runctl.FakePublisher{}, &runctl.FakeAlerter{}, nil, nil, nil)
 }
 
 // Cableado de real: todos los puertos de warm y de fase son reales y ningún Fake* queda en la config.
