@@ -65,7 +65,7 @@ type Run struct {
 	Evidence     []string        `json:"evidence_uris,omitempty"`
 	DonePublish  bool            `json:"done_published,omitempty"`
 	Seen         []string        `json:"seen_events,omitempty"` // event_id ya aplicados (idempotencia ante el replay del archivo)
-	Launched     map[string]bool `json:"launched,omitempty"` // fase ya lanzada con éxito en el estado actual
+	Launched     map[string]bool `json:"launched,omitempty"`    // fase ya lanzada con éxito en el estado actual
 }
 
 func (r Run) clone() Run {
