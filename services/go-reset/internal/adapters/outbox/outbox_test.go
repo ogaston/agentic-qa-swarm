@@ -11,6 +11,7 @@ import (
 
 	"github.com/ogaston/agentic-qa-swarm/services/go-reset/internal/adapters/outbox"
 	"github.com/ogaston/agentic-qa-swarm/services/go-reset/internal/core"
+	"github.com/ogaston/agentic-qa-swarm/services/go-reset/internal/fakes"
 )
 
 var at = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
@@ -65,5 +66,27 @@ func TestEventsDump(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(d, name), b, 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// Integración Service + Outbox real: en cuarentena no hay línea reset.verified; verificado, hay exactamente una.
+func TestOutboxIntegrationQuarantineWritesNoResetVerified(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "o.jsonl")
+	b := fakes.NewBundle()
+	b.Svc.Events = outbox.New(p)
+	b.DB.Sticky = 2
+	if res, _ := b.Svc.Reset(context.Background(), "r-1", ""); res.Verified {
+		t.Fatal("no debía verificar")
+	}
+	if raw, _ := os.ReadFile(p); strings.Contains(string(raw), "reset.verified") {
+		t.Fatalf("outbox con reset.verified en cuarentena: %s", raw)
+	}
+	b.DB.Sticky = 0
+	if res, _ := b.Svc.Reset(context.Background(), "r-1", ""); !res.Verified {
+		t.Fatal("debía verificar")
+	}
+	raw, _ := os.ReadFile(p)
+	if strings.Count(string(raw), "reset.verified") != 1 {
+		t.Fatalf("%s", raw)
 	}
 }

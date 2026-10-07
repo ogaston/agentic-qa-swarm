@@ -15,15 +15,29 @@ import (
 
 type Cleaner struct {
 	Path    string
-	Timeout time.Duration
+	Timeout time.Duration // obligatorio (viene de RESET_SCRIPT_TIMEOUT)
+	// StaticVersion (RESET_BASELINE_VERSION) tiene prioridad; si está vacía, `script version` la informa.
+	StaticVersion string
+}
+
+// Version devuelve la versión del baseline o error si no se conoce.
+func (c *Cleaner) Version(ctx context.Context) (string, error) {
+	if c.StaticVersion != "" {
+		return c.StaticVersion, nil
+	}
+	o, err := c.run(ctx, "version")
+	if err != nil {
+		return "", err
+	}
+	v := strings.TrimSpace(o)
+	if v == "" {
+		return "", fmt.Errorf("`version` no imprimió nada")
+	}
+	return v, nil
 }
 
 func (c *Cleaner) run(ctx context.Context, arg string) (string, error) {
-	t := c.Timeout
-	if t == 0 {
-		t = 60 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(ctx, t)
+	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
 	var out, errb bytes.Buffer
 	cmd := exec.CommandContext(ctx, c.Path, arg) //nolint:gosec // ruta fijada por configuración

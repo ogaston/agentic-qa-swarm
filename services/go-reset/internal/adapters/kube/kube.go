@@ -102,13 +102,28 @@ func (c *Client) Teardown(ctx context.Context) error {
 	return c.ScaleApp(ctx, 1)
 }
 
-// AppReady lee los pods reales: al menos uno, todos Running y Ready, ninguno terminando.
+// AppReady exige el rollout completo del Deployment (observedGeneration>=generation y
+// updatedReplicas==replicas==availableReplicas) y que los pods reales sean exactamente los
+// deseados, todos Running y Ready y ninguno terminando: un restart aplicado pero no completado
+// (pod viejo todavía Ready) NO cuenta.
 func (c *Client) AppReady(ctx context.Context) (bool, error) {
+	d, err := c.cs.AppsV1().Deployments(c.ns).Get(ctx, appName, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+	want := int32(1)
+	if d.Spec.Replicas != nil {
+		want = *d.Spec.Replicas
+	}
+	st := d.Status
+	if want == 0 || st.ObservedGeneration < d.Generation || st.UpdatedReplicas != want || st.AvailableReplicas != want {
+		return false, nil
+	}
 	pl, err := c.cs.CoreV1().Pods(c.ns).List(ctx, metav1.ListOptions{LabelSelector: appLabelValue})
 	if err != nil {
 		return false, err
 	}
-	if len(pl.Items) == 0 {
+	if int32(len(pl.Items)) != want {
 		return false, nil
 	}
 	for _, p := range pl.Items {
@@ -157,7 +172,10 @@ func (c *Client) Get(ctx context.Context) (core.Snapshot, bool, error) {
 	if err := json.Unmarshal([]byte(cm.Data[stateKey]), &w); err != nil {
 		return core.Snapshot{}, false, fmt.Errorf("warm-state ilegible: %w", err)
 	}
-	at, _ := time.Parse(time.RFC3339Nano, cm.Data[updatedAtKey])
+	at, perr := time.Parse(time.RFC3339Nano, cm.Data[updatedAtKey])
+	if perr != nil {
+		at = time.Time{} // desconocido: IdleCheck no escala
+	}
 	return core.Snapshot{WarmState: w, UpdatedAt: at}, true, nil
 }
 

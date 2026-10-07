@@ -59,7 +59,7 @@ func run(args []string) error {
 	case "render-reset-job":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		runID := fs.String("run", "", "run_id")
-		image := fs.String("image", "", "imagen con tag fijado")
+		image := fs.String("image", os.Getenv("RESET_JOB_IMAGE"), "imagen con tag fijado (por defecto RESET_JOB_IMAGE)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -94,13 +94,13 @@ func build(c config.Config) (*wiring, error) {
 	}
 	w := &wiring{sessions: ss, reg: prometheus.NewRegistry()}
 	svc := &core.Service{Sessions: ss, Events: outbox.New(c.OutboxFile), Alert: obs.LogAlerter{Log: log},
-		Clock: realClock{}, Cfg: core.Config{DefaultWarmID: "warm-aqs-test", BaselineVersion: "baseline-1",
-			ReadyTimeout: 120 * time.Second, ReadyInterval: 2 * time.Second, Grace: c.Grace}}
+		Clock: realClock{}, Cfg: core.Config{DefaultWarmID: c.WarmID, BaselineVersion: c.BaselineVersion,
+			ReadyTimeout: c.ReadyTimeout, ReadyInterval: c.ReadyInterval, Grace: c.Grace}}
 	if c.Backend == "fake" {
 		b := fakes.NewBundle()
 		b.State.Exists = false
 		svc.Kube, svc.DB, svc.Cache, w.state = b.Kube, b.DB, b.Cache, b.State
-		svc.Cfg.ReadyInterval = 10 * time.Millisecond
+		b.DB.Ver = c.BaselineVersion
 	} else {
 		rc, err := rest.InClusterConfig()
 		if err != nil {
@@ -115,8 +115,8 @@ func build(c config.Config) (*wiring, error) {
 			return nil, err
 		}
 		svc.Kube, w.state = k, k
-		svc.DB = &script.Cleaner{Path: c.BaselineScript}
-		svc.Cache = &redis.Flusher{Addr: c.RedisAddr}
+		svc.DB = &script.Cleaner{Path: c.BaselineScript, Timeout: c.ScriptTimeout, StaticVersion: c.BaselineVersion}
+		svc.Cache = &redis.Flusher{Addr: c.RedisAddr, Timeout: c.RedisTimeout}
 	}
 	svc.State = w.state
 	svc.Metrics = obs.New(w.reg, func() float64 {

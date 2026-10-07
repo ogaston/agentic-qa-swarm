@@ -31,6 +31,7 @@ type Service struct {
 	Metrics  Metrics
 	Cfg      Config
 	mu       sync.Mutex
+	baseline string // versión del baseline del último intento verificado
 }
 
 // Result es el resultado de un reset o rebuild.
@@ -42,7 +43,10 @@ type Result struct {
 	Reason   string
 }
 
-const maxAttempts = 2 // 1 intento + 1 reintento
+const (
+	maxAttempts     = 2             // 1 intento + 1 reintento (US-M7.1)
+	unknownBaseline = "desconocida" // solo en estados no verificados; nunca llega a un evento
+)
 
 func (s *Service) metrics() Metrics {
 	if s.Metrics == nil {
@@ -57,7 +61,11 @@ func (s *Service) current(ctx context.Context) (WarmState, error) {
 		return WarmState{}, err
 	}
 	if !ok {
-		return WarmState{WarmID: s.Cfg.DefaultWarmID, State: StateDirty, BaselineVersion: s.Cfg.BaselineVersion}, nil
+		bv := s.Cfg.BaselineVersion
+		if bv == "" {
+			bv = unknownBaseline
+		}
+		return WarmState{WarmID: s.Cfg.DefaultWarmID, State: StateDirty, BaselineVersion: bv}, nil
 	}
 	return snap.WarmState, nil
 }
@@ -133,7 +141,7 @@ func (s *Service) run(ctx context.Context, kind, runID, traceID string, first fu
 		res.State, res.Reason = st, lastErr.Error()
 		return res, nil
 	}
-	st.State, st.ResetVerified = StateReady, true
+	st.State, st.ResetVerified, st.BaselineVersion = StateReady, true, s.baseline
 	if err := s.State.Put(ctx, st, s.Clock.Now()); err != nil {
 		return res, err
 	}
@@ -143,11 +151,11 @@ func (s *Service) run(ctx context.Context, kind, runID, traceID string, first fu
 	} else {
 		ev = TeardownVerifiedEvent(st.WarmID, kind, traceID, s.Clock.Now())
 	}
-	s.metrics().Reset("verified")
 	res.Verified, res.State, res.Checks = true, st, checks
 	if err := s.Events.Publish(ctx, ev); err != nil {
 		return res, fmt.Errorf("publicar %s: %w", ev.Type, err)
 	}
+	s.metrics().Reset("verified") // solo tras un Publish exitoso
 	return res, nil
 }
 
@@ -168,7 +176,16 @@ func (s *Service) attempt(ctx context.Context, first func(context.Context) error
 	if err := s.Cache.Flush(ctx); err != nil {
 		return nil, fmt.Errorf("cache flush: %w", err)
 	}
-	return s.Verify(ctx)
+	checks, err := s.Verify(ctx)
+	if err != nil {
+		return nil, err
+	}
+	v, err := s.DB.Version(ctx)
+	if err != nil || v == "" {
+		return nil, fmt.Errorf("versión del baseline desconocida: no se publica reset.verified con una inventada (%v)", err)
+	}
+	s.baseline = v
+	return checks, nil
 }
 
 // Verify lee de vuelta el estado real: pod Ready, filas de la DB frente al baseline y DBSIZE.
@@ -235,6 +252,9 @@ func (s *Service) IdleCheck(ctx context.Context) (bool, error) {
 	sessions, err := s.Sessions.List(ctx)
 	if err != nil {
 		return false, err
+	}
+	if snap.UpdatedAt.IsZero() {
+		return false, nil // updated_at ausente o ilegible: fail-closed, no se sabe desde cuándo está idle
 	}
 	last := snap.UpdatedAt
 	for _, se := range sessions {

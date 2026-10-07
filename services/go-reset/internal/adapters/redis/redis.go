@@ -13,14 +13,11 @@ import (
 
 type Flusher struct {
 	Addr    string
-	Timeout time.Duration
+	Timeout time.Duration // obligatorio
 }
 
 func (f *Flusher) do(ctx context.Context, args ...string) (string, error) {
-	t := f.Timeout
-	if t == 0 {
-		t = 5 * time.Second
-	}
+	t := f.Timeout // obligatorio (RESET_REDIS_TIMEOUT)
 	d := net.Dialer{Timeout: t}
 	conn, err := d.DialContext(ctx, "tcp", f.Addr)
 	if err != nil {

@@ -90,6 +90,14 @@ type DB struct {
 	CleanErr  error
 	Sticky    int
 	CleanCall int
+	Ver       string // versión del baseline; "" = desconocida
+	VerErr    error
+}
+
+func (d *DB) Version(context.Context) (string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.Ver, d.VerErr
 }
 
 func (d *DB) Clean(context.Context) error {
@@ -233,7 +241,7 @@ type Bundle struct {
 
 // NewBundle arma un servicio con un warm ready y limpio.
 func NewBundle() *Bundle {
-	b := &Bundle{Kube: NewKube(), DB: &DB{}, Cache: &Cache{}, State: &State{}, Sessions: &Sessions{},
+	b := &Bundle{Kube: NewKube(), DB: &DB{Ver: "b1"}, Cache: &Cache{}, State: &State{}, Sessions: &Sessions{},
 		Events: &Events{}, Alert: &Alert{}, Clock: NewClock(time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC))}
 	b.State.Snap = core.Snapshot{WarmState: core.WarmState{WarmID: "warm-1", State: core.StateDirty, BaselineVersion: "b1"}, UpdatedAt: b.Clock.Now()}
 	b.State.Exists = true

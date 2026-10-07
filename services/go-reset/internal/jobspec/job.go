@@ -16,7 +16,17 @@ import (
 const (
 	Namespace      = "aqs-test"
 	ServiceAccount = "aqs-reset-job"
-	DefaultImage   = "ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0"
+	// DefaultImage se sobreescribe con RESET_JOB_IMAGE o --image (siempre con tag fijado).
+	DefaultImage = "ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0"
+
+	// Decisiones de dimensionado del Job (no son datos del entorno):
+	jobDeadlineSeconds int64 = 600     // un reset debe acabar en 10 min o se aborta
+	jobTTLSeconds      int32 = 3600    // el Job terminado se conserva 1 h para diagnóstico
+	jobUID             int64 = 65532   // usuario no root de la imagen (patrón go-identity)
+	cpuRequest               = "50m"   // resources: mismos valores que los CronJobs de deploy/
+	memRequest               = "64Mi"  // idem
+	cpuLimit                 = "250m"  // idem
+	memLimit                 = "128Mi" // idem
 )
 
 var runIDRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$`)
@@ -34,10 +44,7 @@ func Build(runID, image string) (*batchv1.Job, error) {
 		return nil, fmt.Errorf("imagen %q sin tag fijado", image)
 	}
 	f, t := false, true
-	var uid int64 = 65532
-	var back int32
-	var ttl int32 = 3600
-	var deadline int64 = 600
+	uid, back, ttl, deadline := jobUID, int32(0), jobTTLSeconds, jobDeadlineSeconds // backoffLimit 0: el reintento lo decide go-reset
 	return &batchv1.Job{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "batch/v1", Kind: "Job"},
 		ObjectMeta: metav1.ObjectMeta{Name: "reset-" + runID, Namespace: Namespace, Labels: map[string]string{"app.kubernetes.io/name": "reset", "aqs/run-id": runID}},
@@ -62,8 +69,8 @@ func Build(runID, image string) (*batchv1.Job, error) {
 							Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 						},
 						Resources: corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("50m"), corev1.ResourceMemory: resource.MustParse("64Mi")},
-							Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("128Mi")},
+							Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(cpuRequest), corev1.ResourceMemory: resource.MustParse(memRequest)},
+							Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(cpuLimit), corev1.ResourceMemory: resource.MustParse(memLimit)},
 						},
 					}},
 				},

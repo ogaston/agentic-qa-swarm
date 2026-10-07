@@ -87,6 +87,8 @@ type (
 	DatabaseCleaner interface {
 		Clean(ctx context.Context) error
 		Diff(ctx context.Context) (int, error)
+		// Version es la versión del baseline contra la que se limpió; error si no se conoce.
+		Version(ctx context.Context) (string, error)
 	}
 	// CacheFlusher hace FLUSHALL y lee DBSIZE.
 	CacheFlusher interface {

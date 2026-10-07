@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ogaston/agentic-qa-swarm/services/go-reset/internal/adapters/redis"
 )
@@ -62,7 +63,7 @@ func itoa(n int) string {
 
 func TestRedisFlushAndDBSizeReadBack(t *testing.T) {
 	keys := 7
-	f := &redis.Flusher{Addr: fakeRedis(t, &keys, map[string]string{"DBSIZE": ":7\r\n"})}
+	f := &redis.Flusher{Timeout: 5 * time.Second, Addr: fakeRedis(t, &keys, map[string]string{"DBSIZE": ":7\r\n"})}
 	if n, err := f.DBSize(context.Background()); err != nil || n != 7 {
 		t.Fatalf("%d %v", n, err)
 	}
@@ -73,7 +74,7 @@ func TestRedisFlushAndDBSizeReadBack(t *testing.T) {
 
 func TestRedisErrorReplies(t *testing.T) {
 	k := 0
-	f := &redis.Flusher{Addr: fakeRedis(t, &k, map[string]string{"FLUSHALL": "-ERR denied\r\n", "DBSIZE": "$3\r\n"})}
+	f := &redis.Flusher{Timeout: 5 * time.Second, Addr: fakeRedis(t, &k, map[string]string{"FLUSHALL": "-ERR denied\r\n", "DBSIZE": "$3\r\n"})}
 	if err := f.Flush(context.Background()); err == nil {
 		t.Fatal("error de redis ignorado")
 	}
@@ -83,7 +84,7 @@ func TestRedisErrorReplies(t *testing.T) {
 }
 
 func TestRedisUnreachable(t *testing.T) {
-	f := &redis.Flusher{Addr: "127.0.0.1:1"}
+	f := &redis.Flusher{Addr: "127.0.0.1:1", Timeout: time.Second}
 	if err := f.Flush(context.Background()); err == nil {
 		t.Fatal("sin servidor debe fallar")
 	}

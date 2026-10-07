@@ -42,14 +42,17 @@ func TestKubeRejectsForeignNamespace(t *testing.T) {
 }
 
 func TestKubeAppReadyReadsPods(t *testing.T) {
-	cs, c := seed()
+	cs, c := seed() // 2 réplicas deseadas
+	setStatus(t, cs, 1, 1, 2, 2)
 	if ok, _ := c.AppReady(ctx); ok {
 		t.Fatal("sin pods no es Ready")
 	}
 	_, _ = cs.CoreV1().Pods("aqs-test").Create(ctx, pod("a", true, corev1.PodRunning), metav1.CreateOptions{})
+	_, _ = cs.CoreV1().Pods("aqs-test").Create(ctx, pod("b", true, corev1.PodRunning), metav1.CreateOptions{})
 	if ok, _ := c.AppReady(ctx); !ok {
-		t.Fatal("pod Ready no detectado")
+		t.Fatal("pods Ready y rollout completo no detectados")
 	}
+	_ = cs.CoreV1().Pods("aqs-test").Delete(ctx, "b", metav1.DeleteOptions{})
 	_, _ = cs.CoreV1().Pods("aqs-test").Create(ctx, pod("b", false, corev1.PodRunning), metav1.CreateOptions{})
 	if ok, _ := c.AppReady(ctx); ok {
 		t.Fatal("un pod no Ready debe bloquear")
@@ -126,5 +129,62 @@ func TestKubeStateStoreRoundTrip(t *testing.T) {
 	got, ok, err := c.Get(ctx)
 	if err != nil || !ok || got.WarmState != w || !got.UpdatedAt.Equal(at) {
 		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func setStatus(t *testing.T, cs *fake.Clientset, gen, obs int64, upd, avail int32) {
+	t.Helper()
+	d, _ := cs.AppsV1().Deployments("aqs-test").Get(ctx, "warm-app", metav1.GetOptions{})
+	d.Generation = gen
+	d.Status = appsv1.DeploymentStatus{ObservedGeneration: obs, UpdatedReplicas: upd, AvailableReplicas: avail, Replicas: 2}
+	if _, err := cs.AppsV1().Deployments("aqs-test").Update(ctx, d, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Patch hecho, rollout no completado: el pod viejo sigue Ready pero la verificación NO debe pasar.
+func TestKubeAppReadyRequiresCompletedRollout(t *testing.T) {
+	cases := map[string]struct {
+		gen, obs   int64
+		upd, avail int32
+		extraPod   bool
+		want       bool
+	}{
+		"rollout completo":            {2, 2, 2, 2, false, true},
+		"controlador no observó":      {2, 1, 2, 2, false, false},
+		"réplicas sin actualizar":     {2, 2, 1, 2, false, false},
+		"réplicas no disponibles":     {2, 2, 2, 1, false, false},
+		"pod extra del rollout viejo": {2, 2, 2, 2, true, false},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			cs, k := seed() // 2 réplicas deseadas
+			_, _ = cs.CoreV1().Pods("aqs-test").Create(ctx, pod("a", true, corev1.PodRunning), metav1.CreateOptions{})
+			_, _ = cs.CoreV1().Pods("aqs-test").Create(ctx, pod("b", true, corev1.PodRunning), metav1.CreateOptions{})
+			if c.extraPod {
+				_, _ = cs.CoreV1().Pods("aqs-test").Create(ctx, pod("old", true, corev1.PodRunning), metav1.CreateOptions{})
+			}
+			setStatus(t, cs, c.gen, c.obs, c.upd, c.avail)
+			if got, err := k.AppReady(ctx); err != nil || got != c.want {
+				t.Fatalf("AppReady=%v err=%v, quería %v", got, err, c.want)
+			}
+		})
+	}
+}
+
+func TestKubeStateUnreadableUpdatedAtIsZero(t *testing.T) {
+	cs, c := seed()
+	_, _ = cs.CoreV1().ConfigMaps("aqs-test").Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "warm-state", Namespace: "aqs-test"},
+		Data: map[string]string{"state": `{"warm_id":"w","state":"ready","reset_verified":true,"baseline_version":"b"}`, "updated_at": "basura"}}, metav1.CreateOptions{})
+	got, ok, err := c.Get(ctx)
+	if err != nil || !ok || !got.UpdatedAt.IsZero() {
+		t.Fatalf("%+v %v", got, err)
+	}
+	// ausente
+	cm, _ := cs.CoreV1().ConfigMaps("aqs-test").Get(ctx, "warm-state", metav1.GetOptions{})
+	delete(cm.Data, "updated_at")
+	_, _ = cs.CoreV1().ConfigMaps("aqs-test").Update(ctx, cm, metav1.UpdateOptions{})
+	if got, _, _ := c.Get(ctx); !got.UpdatedAt.IsZero() {
+		t.Fatal("ausente debe ser cero")
 	}
 }

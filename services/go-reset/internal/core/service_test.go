@@ -355,36 +355,111 @@ func TestEventIDDeterministicUUIDv5(t *testing.T) {
 // ready nunca con reset_verified=false; siempre termina.
 func TestResetPropertyEventIffClean(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		b := fakes.NewBundle()
-		if rapid.Bool().Draw(t, "restartErr") {
-			b.Kube.RestartErr = fakes.ErrBoom
-		}
-		if rapid.Bool().Draw(t, "dbErr") {
-			b.DB.CleanErr = fakes.ErrBoom
-		}
-		if rapid.Bool().Draw(t, "cacheErr") {
-			b.Cache.FlushErr = fakes.ErrBoom
-		}
-		b.DB.Sticky = rapid.IntRange(0, 2).Draw(t, "dirtyRows")
-		b.Cache.Sticky = int64(rapid.IntRange(0, 2).Draw(t, "dirtyKeys"))
-		b.Kube.ReadyAfterRestart = rapid.Bool().Draw(t, "ready")
-		b.DB.Rows, b.Cache.Keys = 5, 5
-		clean := b.Kube.RestartErr == nil && b.DB.CleanErr == nil && b.Cache.FlushErr == nil &&
-			b.DB.Sticky == 0 && b.Cache.Sticky == 0 && b.Kube.ReadyAfterRestart
-		res, err := b.Svc.Reset(ctx, "r-p", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		published := len(b.Events.Got) == 1
-		if published != clean || res.Verified != clean {
-			t.Fatalf("clean=%v published=%v verified=%v", clean, published, res.Verified)
-		}
-		s, _, _ := b.State.Get(ctx)
-		if s.State == core.StateReady && !s.ResetVerified {
-			t.Fatal("ready sin reset_verified")
-		}
-		if (s.State == core.StateReady) != clean {
-			t.Fatalf("estado %v clean=%v", s.State, clean)
-		}
+		combo(t, rapid.Bool().Draw(t, "restartErr"), rapid.Bool().Draw(t, "dbErr"), rapid.Bool().Draw(t, "cacheErr"),
+			rapid.IntRange(0, 2).Draw(t, "rows"), int64(rapid.IntRange(0, 2).Draw(t, "keys")), rapid.Bool().Draw(t, "ready"))
 	})
+}
+
+type countMetrics struct{ verified, quarantined int }
+
+func (m *countMetrics) Reset(r string) {
+	if r == "verified" {
+		m.verified++
+	} else {
+		m.quarantined++
+	}
+}
+func (*countMetrics) IdleScaled()        {}
+func (*countMetrics) SessionsClosed(int) {}
+
+func TestVerifiedMetricOnlyAfterSuccessfulPublish(t *testing.T) {
+	b := fakes.NewBundle()
+	m := &countMetrics{}
+	b.Svc.Metrics = m
+	b.Events.Err = fakes.ErrBoom
+	_, err := b.Svc.Reset(ctx, "r-1", "")
+	if err == nil || m.verified != 0 {
+		t.Fatalf("err=%v verified=%d", err, m.verified)
+	}
+	b.Events.Err = nil
+	if _, err := b.Svc.Reset(ctx, "r-1", ""); err != nil || m.verified != 1 {
+		t.Fatalf("err=%v verified=%d", err, m.verified)
+	}
+}
+
+func TestResetUnknownBaselineVersionNeverPublishes(t *testing.T) {
+	for _, c := range []struct {
+		ver string
+		err error
+	}{{"", nil}, {"b1", fakes.ErrBoom}} {
+		b := fakes.NewBundle()
+		b.DB.Ver, b.DB.VerErr = c.ver, c.err
+		res, _ := b.Svc.Reset(ctx, "r-1", "")
+		assertQuarantined(t, b, res)
+	}
+}
+
+func TestResetStoresBaselineVersionFromCleaner(t *testing.T) {
+	b := fakes.NewBundle()
+	b.DB.Ver = "v7"
+	_, _ = b.Svc.Reset(ctx, "r-1", "")
+	if st := state(t, b); st.BaselineVersion != "v7" {
+		t.Fatalf("%+v", st)
+	}
+}
+
+func TestIdleCheckFailClosedWithoutUpdatedAt(t *testing.T) {
+	b := fakes.NewBundle()
+	b.State.Snap = core.Snapshot{WarmState: core.WarmState{WarmID: "w", State: core.StateReady, ResetVerified: true, BaselineVersion: "b"}}
+	b.Clock.Advance(100 * time.Hour)
+	if ok, err := b.Svc.IdleCheck(ctx); ok || err != nil || b.Kube.Reps != 1 {
+		t.Fatalf("escaló con updated_at desconocido: ok=%v err=%v", ok, err)
+	}
+}
+
+// Casos fijos exhaustivos: todas las combinaciones, para que anular cualquier comprobación falle siempre.
+func TestResetExhaustiveCombinations(t *testing.T) {
+	bools := []bool{false, true}
+	for _, re := range bools {
+		for _, de := range bools {
+			for _, ce := range bools {
+				for rows := 0; rows <= 1; rows++ {
+					for keys := 0; keys <= 1; keys++ {
+						for _, rdy := range bools {
+							combo(t, re, de, ce, rows, int64(keys), rdy)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func combo(t interface {
+	Helper()
+	Fatalf(string, ...any)
+	Fatal(...any)
+}, restartErr, dbErr, cacheErr bool, rows int, keys int64, ready bool) {
+	t.Helper()
+	b := fakes.NewBundle()
+	if restartErr {
+		b.Kube.RestartErr = fakes.ErrBoom
+	}
+	if dbErr {
+		b.DB.CleanErr = fakes.ErrBoom
+	}
+	if cacheErr {
+		b.Cache.FlushErr = fakes.ErrBoom
+	}
+	b.DB.Sticky, b.Cache.Sticky, b.Kube.ReadyAfterRestart = rows, keys, ready
+	b.DB.Rows, b.Cache.Keys = 5, 5
+	clean := !restartErr && !dbErr && !cacheErr && rows == 0 && keys == 0 && ready
+	res, err := b.Svc.Reset(ctx, "r-p", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _, _ := b.State.Get(ctx)
+	if (len(b.Events.Got) == 1) != clean || res.Verified != clean || (s.State == core.StateReady) != clean || (s.State == core.StateReady && !s.ResetVerified) {
+		t.Fatalf("restartErr=%v dbErr=%v cacheErr=%v rows=%d keys=%d ready=%v: eventos=%d estado=%s", restartErr, dbErr, cacheErr, rows, keys, ready, len(b.Events.Got), s.State)
+	}
 }
