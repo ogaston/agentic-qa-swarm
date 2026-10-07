@@ -1,0 +1,13 @@
+diff --git a/services/ui-api/inbox/store.go b/services/ui-api/inbox/store.go
+index 254cfd4..1602e48 100644
+--- a/services/ui-api/inbox/store.go
++++ b/services/ui-api/inbox/store.go
+@@ -137,7 +137,7 @@ func (s *Store) List(state State) []Notification {
+ 		if !es[i].at.Equal(es[j].at) {
+ 			return es[i].at.After(es[j].at)
+ 		}
+-		return es[i].seq > es[j].seq
++		return es[i].seq < es[j].seq
+ 	})
+ 	out := make([]Notification, 0, len(es))
+ 	for _, e := range es {

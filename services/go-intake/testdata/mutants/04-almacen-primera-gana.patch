@@ -1,0 +1,14 @@
+diff --git a/services/go-intake/internal/intake/store.go b/services/go-intake/internal/intake/store.go
+index eaf545a..0b82990 100644
+--- a/services/go-intake/internal/intake/store.go
++++ b/services/go-intake/internal/intake/store.go
+@@ -75,6 +75,9 @@ func (s *JSONLStore) load() error {
+ }
+ 
+ func (s *JSONLStore) apply(rec Record) {
++	if _, ok := s.byID[rec.ID]; ok {
++		return
++	}
+ 	s.byID[rec.ID] = rec
+ 	s.byDeliv[rec.DeliveryID] = rec.ID
+ }

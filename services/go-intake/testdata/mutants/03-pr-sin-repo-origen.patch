@@ -1,0 +1,12 @@
+diff --git a/services/go-intake/internal/intake/classify.go b/services/go-intake/internal/intake/classify.go
+index 9b302b2..9333590 100644
+--- a/services/go-intake/internal/intake/classify.go
++++ b/services/go-intake/internal/intake/classify.go
+@@ -82,7 +82,6 @@ func Classify(event string, body []byte) (Classified, error) {
+ 		}
+ 		c.GithubEvent = EventPullRequest
+ 		c.SHA = p.PullRequest.Head.SHA
+-		c.HeadRepo = p.PullRequest.Head.Repo.FullName
+ 	case "release":
+ 		if p.Action != "published" {
+ 			return Classified{}, ErrUnsupported

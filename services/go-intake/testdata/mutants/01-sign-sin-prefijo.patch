@@ -1,0 +1,13 @@
+diff --git a/services/go-intake/internal/githubsig/githubsig.go b/services/go-intake/internal/githubsig/githubsig.go
+index 6bb2fea..199edd6 100644
+--- a/services/go-intake/internal/githubsig/githubsig.go
++++ b/services/go-intake/internal/githubsig/githubsig.go
+@@ -22,7 +22,7 @@ var ErrInvalidSignature = errors.New("githubsig: firma invalida")
+ func Sign(secret []byte, body []byte) string {
+ 	m := hmac.New(sha256.New, secret)
+ 	m.Write(body)
+-	return Prefix + hex.EncodeToString(m.Sum(nil))
++	return hex.EncodeToString(m.Sum(nil))
+ }
+ 
+ // Verifier valida el encabezado de firma de un cuerpo de webhook.

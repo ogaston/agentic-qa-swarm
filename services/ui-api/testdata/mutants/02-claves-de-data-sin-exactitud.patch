@@ -1,0 +1,19 @@
+diff --git a/services/ui-api/inbox/event.go b/services/ui-api/inbox/event.go
+index f403a77..fc962b4 100644
+--- a/services/ui-api/inbox/event.go
++++ b/services/ui-api/inbox/event.go
+@@ -129,13 +129,7 @@ func ParseNotifyCreated(line []byte) (NotifyCreated, error) {
+ 	if err != nil {
+ 		return ev, err
+ 	}
+-	data, err := exactKeys(root["data"], "data", "notification_id", "github_event", "repo", "sha", "artifact")
+-	if err != nil {
+-		return ev, err
+-	}
+-	if _, err := exactKeys(data["artifact"], "data.artifact", "kind", "ref"); err != nil {
+-		return ev, err
+-	}
++	_ = root
+ 	dec := json.NewDecoder(bytes.NewReader(line))
+ 	dec.DisallowUnknownFields()
+ 	if err := dec.Decode(&ev); err != nil {
