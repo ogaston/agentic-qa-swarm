@@ -1,0 +1,85 @@
+package warmmanager
+
+import (
+	"context"
+	"time"
+)
+
+// StateStore persiste el WarmState (adaptador Kubernetes: ConfigMap warm-state).
+type StateStore interface {
+	Get(ctx context.Context) (WarmState, error)
+	Put(ctx context.Context, s WarmState) error
+	// CompareAndSwap escribe next solo si el estado persistido sigue siendo expect;
+	// si otro lo cambió devuelve ErrStateConflict (nunca pisa).
+	CompareAndSwap(ctx context.Context, expect, next WarmState) error
+}
+
+// HealthProbe comprueba app, DB y Redis del warm. nil = todo en verde.
+type HealthProbe interface {
+	Check(ctx context.Context) error
+}
+
+// WarmRuntime escala el warm (solo sale de idle-escalado; el scale-down es de go-reset).
+type WarmRuntime interface {
+	ScaleUp(ctx context.Context) error
+}
+
+// JobPhase es el estado de un Job.
+type JobPhase string
+
+const (
+	JobPending   JobPhase = "pending"
+	JobSucceeded JobPhase = "succeeded"
+	JobFailed    JobPhase = "failed"
+)
+
+// Manifest es un manifiesto Kubernetes genérico (el dominio no importa client-go).
+type Manifest map[string]any
+
+// Jobs crea y consulta Jobs de deploy.
+type Jobs interface {
+	Create(ctx context.Context, m Manifest) error
+	Status(ctx context.Context, name string) (JobPhase, string, error)
+	// List devuelve los Jobs de deploy de una corrida ("" = todos), por la etiqueta aqs.io/run-id.
+	List(ctx context.Context, runID string) ([]JobView, error)
+}
+
+// JobView es la vista de un Job de deploy para derivar el estado de una corrida.
+type JobView struct {
+	Name     string
+	RunID    string
+	Phase    JobPhase
+	Reason   string
+	Artifact Artifact
+}
+
+// Nota: el puerto ContainerRuntime (build/pull) de la tarea no existe: el artefacto viaja por
+// argumentos del Job y la construccion/descarga la hace la imagen del deployer (U2-T07).
+
+// SurfaceProber consulta SOLO el exterior del Service del warm (nunca el código fuente).
+type SurfaceProber interface {
+	BaseURL() string
+	Get(ctx context.Context, path string) (status int, body []byte, err error)
+}
+
+// ObjectStore guarda objetos y devuelve su URI.
+type ObjectStore interface {
+	Put(ctx context.Context, key string, data []byte) (uri string, err error)
+	Get(ctx context.Context, uri string) ([]byte, error)
+}
+
+// Alerter avisa a un humano (handoff) cuando se agotan los reintentos.
+type Alerter interface {
+	Handoff(ctx context.Context, phase, runID, reason string) error
+}
+
+// EventPublisher publica un evento ya serializado.
+type EventPublisher interface {
+	Publish(ctx context.Context, e Event) error
+}
+
+// Clock es el reloj inyectable.
+type Clock interface {
+	Now() time.Time
+	Sleep(ctx context.Context, d time.Duration) error
+}
