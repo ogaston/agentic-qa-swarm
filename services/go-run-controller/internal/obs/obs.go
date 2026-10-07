@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -75,7 +77,11 @@ func sensitiveKey(k string) bool {
 type ctxHandler struct{ slog.Handler }
 
 func (h ctxHandler) Handle(ctx context.Context, r slog.Record) error {
-	r.AddAttrs(slog.String("request_id", RequestID(ctx)), slog.String("trace_id", TraceID(ctx)))
+	tid := TraceID(ctx)
+	if tid == "" {
+		tid = runctl.TraceFrom(ctx) // corrida en curso fuera de una petición
+	}
+	r.AddAttrs(slog.String("request_id", RequestID(ctx)), slog.String("trace_id", tid))
 	return h.Handler.Handle(ctx, r)
 }
 func (h ctxHandler) WithAttrs(a []slog.Attr) slog.Handler { return ctxHandler{h.Handler.WithAttrs(a)} }

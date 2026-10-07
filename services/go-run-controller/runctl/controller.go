@@ -94,7 +94,13 @@ func (k *Controller) Apply(ctx context.Context, ev Event) error {
 		if ev.EventID != "" {
 			r.Seen = append(r.Seen, ev.EventID)
 		}
-		if r.State.Terminal() {
+		if r.State != Rehearsing {
+			// Fuera de la fase de ensayo el hecho no se observó: se descarta (y no se aplicará en un replay).
+			k.c.Log.WarnContext(withTrace(ctx, r.TraceID), "evento de ensayo fuera de estado descartado",
+				"run_id", r.ID, "type", ev.Type, "state", r.State)
+			if k.c.Observer != nil {
+				k.c.Observer.EventDropped(ev.Type)
+			}
 			return k.c.Store.Save(r)
 		}
 		r.EnsayoPassed = FactOf(ev.Type == EvRehearsalPassed)
@@ -140,6 +146,7 @@ func (k *Controller) transition(ctx context.Context, id string, to State) error 
 	if !ok {
 		return ErrNotFound
 	}
+	ctx = withTrace(ctx, r.TraceID)
 	from := r.State
 	if !Legal(from, to) {
 		k.obsTransition(from, to, ResIllegal)
@@ -155,17 +162,17 @@ func (k *Controller) transition(ctx context.Context, id string, to State) error 
 		k.gateCall(ResDeny)
 		k.obsTransition(from, to, ResDenied)
 		k.c.Log.WarnContext(ctx, "gate denegó la transición", "run_id", id, "from", from, "to", to,
-			"reason", dec.Reason, "audit_ref", dec.AuditRef, "trace_id", r.TraceID)
+			"reason", dec.Reason, "audit_ref", dec.AuditRef)
 		return fmt.Errorf("%w: %s", ErrDenied, dec.Reason)
 	}
 	k.gateCall(ResAllow)
 	r.State, r.Launched = to, nil
 	if err := k.c.Store.Save(r); err != nil {
 		k.obsTransition(from, to, ResError)
-		return fmt.Errorf("persistiendo la transición: %w", err)
+		return fmt.Errorf("%w: %v", ErrPersist, err)
 	}
 	k.obsTransition(from, to, ResApplied)
-	k.c.Log.InfoContext(ctx, "transición aplicada", "run_id", id, "from", from, "to", to, "trace_id", r.TraceID)
+	k.c.Log.InfoContext(ctx, "transición aplicada", "run_id", id, "from", from, "to", to)
 	return nil
 }
 
@@ -182,6 +189,7 @@ func (k *Controller) failRun(ctx context.Context, id, reason string) error {
 	if !ok {
 		return ErrNotFound
 	}
+	ctx = withTrace(ctx, r.TraceID)
 	if r.FailReason == "" {
 		r.FailReason = reason
 		if err := k.c.Store.Save(r); err != nil {
@@ -193,8 +201,8 @@ func (k *Controller) failRun(ctx context.Context, id, reason string) error {
 		target = Resetting
 	}
 	if err := k.transition(ctx, id, target); err != nil {
-		if errors.Is(err, ErrGate) {
-			// Gate caído: la corrida no se mueve (FailReason queda fijada) y el salir se reintenta en
+		if errors.Is(err, ErrGate) || errors.Is(err, ErrPersist) {
+			// Gate caído o disco: la corrida no se mueve (FailReason queda fijada) y el salir se reintenta en
 			// cada paso hasta que el gate responda; denegado o no, nunca se avanza sin su permiso.
 			return err
 		}
@@ -211,14 +219,14 @@ func (k *Controller) handoff(ctx context.Context, r Run, phase, reason string) {
 	if k.c.Observer != nil {
 		k.c.Observer.Handoff(phase)
 	}
-	k.c.Log.ErrorContext(ctx, "handoff humano", "run_id", r.ID, "phase", phase, "reason", reason, "trace_id", r.TraceID)
+	k.c.Log.ErrorContext(ctx, "handoff humano", "run_id", r.ID, "phase", phase, "reason", reason)
 }
 
 // DriveAll avanza un paso cada corrida no terminal (y reintenta publicar run.done pendientes).
 func (k *Controller) DriveAll(ctx context.Context) {
 	for _, r := range k.c.Store.List() {
 		if err := k.Drive(ctx, r.ID); err != nil {
-			k.c.Log.WarnContext(ctx, "la corrida no avanzó", "run_id", r.ID, "state", r.State, "error", err.Error(), "trace_id", r.TraceID)
+			k.c.Log.WarnContext(ctx, "la corrida no avanzó", "run_id", r.ID, "state", r.State, "error", err.Error())
 		}
 	}
 }
@@ -250,6 +258,7 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 	if !ok {
 		return ErrNotFound
 	}
+	ctx = withTrace(ctx, r.TraceID)
 	if r.Halted {
 		return nil
 	}
@@ -259,7 +268,8 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 	if r.State.Terminal() {
 		return nil
 	}
-	if r.FailReason != "" && r.State != Resetting {
+	if r.FailReason != "" && (r.State != Resetting || r.Attempts[PhaseReset] > MaxRetries) {
+		// Salida pendiente (gate caído o disco): solo se reintenta la transición, nunca la fase agotada.
 		return k.failRun(ctx, id, r.FailReason) // salida pendiente por gate caído
 	}
 	if r.State == Confirmed || r.State == WarmReady {
@@ -326,7 +336,7 @@ func (k *Controller) phaseFailed(ctx context.Context, r Run, phase, reason strin
 	}
 	if r.Attempts[phase] <= MaxRetries {
 		k.c.Log.WarnContext(ctx, "fase fallida; se reintentará", "run_id", r.ID, "phase", phase,
-			"attempt", r.Attempts[phase], "trace_id", r.TraceID)
+			"attempt", r.Attempts[phase])
 		return nil
 	}
 	k.handoff(ctx, r, phase, reason)
@@ -343,3 +353,16 @@ func (k *Controller) publishDone(ctx context.Context, r Run) error {
 	r.DonePublish = true
 	return k.c.Store.Save(r)
 }
+
+type traceKey struct{}
+
+// withTrace pone el trace_id de la corrida en el contexto: el logger lo añade una sola vez.
+func withTrace(ctx context.Context, id string) context.Context {
+	if id == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, traceKey{}, id)
+}
+
+// TraceFrom devuelve el trace_id de la corrida puesto por el controlador ("" si no hay).
+func TraceFrom(ctx context.Context) string { s, _ := ctx.Value(traceKey{}).(string); return s }

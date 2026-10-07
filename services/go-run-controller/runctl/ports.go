@@ -164,6 +164,7 @@ type Observer interface {
 	Transition(from, to State, result string)
 	GateCall(result string)
 	Handoff(phase string)
+	EventDropped(eventType string)
 }
 
 // Resultados de aqs_run_transitions_total{result} y aqs_gate_calls_total{result}.
@@ -183,4 +184,5 @@ var (
 	ErrIllegal  = errors.New("transición ilegal")
 	ErrDenied   = errors.New("gate denegó la transición")
 	ErrGate     = errors.New("gate no disponible o respuesta inválida")
+	ErrPersist  = errors.New("no se pudo persistir")
 )

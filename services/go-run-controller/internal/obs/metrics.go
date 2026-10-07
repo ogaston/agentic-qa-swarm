@@ -11,6 +11,7 @@ type RunMetrics struct {
 	transitions *prometheus.CounterVec
 	gate        *prometheus.CounterVec
 	handoff     *prometheus.CounterVec
+	dropped     *prometheus.CounterVec
 }
 
 var _ runctl.Observer = (*RunMetrics)(nil)
@@ -25,8 +26,10 @@ func NewRunMetrics(reg prometheus.Registerer, active func() float64) *RunMetrics
 			Help: "Llamadas al gate de go-governance por resultado."}, []string{"result"}),
 		handoff: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "aqs_handoff_total",
 			Help: "Handoffs humanos por fase."}, []string{"phase"}),
+		dropped: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "aqs_events_dropped_total",
+			Help: "Eventos de entrada descartados por llegar fuera de estado."}, []string{"type"}),
 	}
-	reg.MustRegister(m.transitions, m.gate, m.handoff,
+	reg.MustRegister(m.transitions, m.gate, m.handoff, m.dropped,
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "aqs_runs_active", Help: "Corridas no terminales."}, active))
 	// Series iniciales para que existan desde el arranque.
 	m.gate.WithLabelValues(runctl.ResAllow)
@@ -44,3 +47,6 @@ func (m *RunMetrics) GateCall(res string) { m.gate.WithLabelValues(res).Inc() }
 
 // Handoff implementa runctl.Observer.
 func (m *RunMetrics) Handoff(phase string) { m.handoff.WithLabelValues(phase).Inc() }
+
+// EventDropped implementa runctl.Observer.
+func (m *RunMetrics) EventDropped(t string) { m.dropped.WithLabelValues(t).Inc() }

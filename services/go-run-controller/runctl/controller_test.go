@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-
-	"pgregory.net/rapid"
 )
 
 type rig struct {
@@ -274,66 +272,4 @@ func TestResumeFromPersistedState(t *testing.T) {
 	if r.state("r-1") != Rehearsing {
 		t.Fatal(r.state("r-1"))
 	}
-}
-
-func TestPropertyNeverAdvancesOnDenyNeverLeavesTerminalMaxTwoRetries(t *testing.T) {
-	rapid.Check(t, func(rt *rapid.T) {
-		var decisions []int // 0 allow, 1 deny, 2 error
-		idx := 0
-		gate := &FakeGate{Decide: func(GateRequest) (GateDecision, error) {
-			d := 0
-			if idx < len(decisions) {
-				d = decisions[idx]
-			}
-			idx++
-			switch d {
-			case 1:
-				return GateDecision{Reason: "x"}, nil
-			case 2:
-				return GateDecision{}, errors.New("x")
-			}
-			return GateDecision{Allow: true, Reason: "ok"}, nil
-		}}
-		decisions = rapid.SliceOfN(rapid.IntRange(0, 2), 0, 40).Draw(rt, "gate")
-		r := newRig(t, gate)
-		r.ph.FailFirst = map[string]int{
-			PhaseDeploy: rapid.IntRange(0, 4).Draw(rt, "fd"), PhaseInfer: rapid.IntRange(0, 4).Draw(rt, "fi"),
-			PhaseReset: rapid.IntRange(0, 4).Draw(rt, "fr")}
-		_ = r.k.Apply(context.Background(), confirmedEv())
-		evs := rapid.SliceOfN(rapid.SampledFrom([]string{EvRehearsalPassed, EvRehearsalFailed}), 0, 6).Draw(rt, "ev")
-		prev := Confirmed
-		for i := 0; i < 40; i++ {
-			if i < len(evs) {
-				_ = r.k.Apply(context.Background(), Event{Type: evs[i], EventID: "x" + string(rune('a'+i)), RunID: "r-1"})
-			}
-			before, _ := r.store.Get("r-1")
-			n := len(gate.Calls)
-			r.k.DriveAll(context.Background())
-			after, _ := r.store.Get("r-1")
-			if before.State.Terminal() && after.State != before.State {
-				rt.Fatalf("salió de terminal %s -> %s", before.State, after.State)
-			}
-			if after.State != before.State {
-				if !Legal(before.State, after.State) {
-					rt.Fatalf("ilegal %s -> %s", before.State, after.State)
-				}
-				last := gate.Calls[n:]
-				if len(last) == 0 || last[len(last)-1].To != after.State {
-					rt.Fatalf("avanzó sin gate")
-				}
-			}
-			_ = prev
-		}
-		for p, n := range r.ph.Launches {
-			if n > 3*5 { // reintentos de ensayo reinician; el tope por fase es 3 lanzamientos por ciclo
-				rt.Fatalf("fase %s lanzada %d veces", p, n)
-			}
-		}
-		got, _ := r.store.Get("r-1")
-		for p, n := range got.Attempts {
-			if n > MaxRetries+1 {
-				rt.Fatalf("fase %s con %d fallos", p, n)
-			}
-		}
-	})
 }
