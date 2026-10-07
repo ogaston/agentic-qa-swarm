@@ -36,6 +36,12 @@ func TestFakeAuthIsFencedAndIdentityNeedsURL(t *testing.T) {
 	if _, err := verifierFromEnv(); err == nil {
 		t.Fatal("fake en prod no debe arrancar")
 	}
+	for _, env := range []string{"PROD", "Production", " prod "} {
+		t.Setenv("UIAPI_ENV", env)
+		if _, err := verifierFromEnv(); err == nil {
+			t.Fatalf("fake con UIAPI_ENV=%q no debe arrancar", env)
+		}
+	}
 	t.Setenv("UIAPI_AUTH", "identity")
 	t.Setenv("IDENTITY_URL", "")
 	if _, err := verifierFromEnv(); err == nil {

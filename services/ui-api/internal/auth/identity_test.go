@@ -205,3 +205,37 @@ func TestNewHTTPTokenVerifierRejectsBadURLs(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestHTTPVerifierParentCancelDoesNotCountAsIdentityFailure(t *testing.T) {
+	v, _, clk, c := newV(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(goodSession)) })
+	for i := 0; i < CircuitThreshold*2; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, err := v.Verify(ctx, "x"); !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("err=%v", err)
+		}
+	}
+	if v.CircuitOpen() || c[ResultError] != 0 {
+		t.Fatalf("los abortos del llamante no abren el circuito (abierto=%v c=%v)", v.CircuitOpen(), c)
+	}
+	if _, err := v.Verify(context.Background(), "x"); err != nil {
+		t.Fatalf("identidad sana debe seguir sirviendo: %v", err)
+	}
+	// Una sonda abortada libera el slot sin reabrir.
+	v.mu.Lock()
+	v.openUntil = clk.t.Add(-time.Second)
+	v.fails = CircuitThreshold
+	v.mu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _ = v.Verify(ctx, "x")
+	v.mu.Lock()
+	probing := v.probing
+	v.mu.Unlock()
+	if probing {
+		t.Fatal("la sonda abortada debe liberar probing")
+	}
+	if _, err := v.Verify(context.Background(), "x"); err != nil || v.CircuitOpen() {
+		t.Fatalf("la siguiente sonda debe poder cerrar el circuito: %v", err)
+	}
+}

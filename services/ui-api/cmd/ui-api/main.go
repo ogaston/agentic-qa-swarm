@@ -58,7 +58,7 @@ func verifierFromEnv() (auth.TokenVerifier, error) {
 	case "identity":
 		return auth.NewHTTPTokenVerifier(os.Getenv("IDENTITY_URL"), nil)
 	case "fake":
-		if os.Getenv("UIAPI_ENV") == "prod" {
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("UIAPI_ENV")), "prod") || strings.EqualFold(strings.TrimSpace(os.Getenv("UIAPI_ENV")), "production") {
 			return nil, errors.New("UIAPI_AUTH=fake esta prohibido con UIAPI_ENV=prod")
 		}
 		if os.Getenv("UIAPI_ALLOW_FAKE_AUTH") != "true" {

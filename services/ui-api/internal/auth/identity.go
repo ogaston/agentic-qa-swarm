@@ -115,6 +115,15 @@ func (v *HTTPTokenVerifier) settle(probe, healthy bool) {
 	}
 }
 
+// abort libera una sonda medio-abierta cuyo llamante abortó, sin tocar el contador ni el circuito.
+func (v *HTTPTokenVerifier) abort(probe bool) {
+	if probe {
+		v.mu.Lock()
+		v.probing = false
+		v.mu.Unlock()
+	}
+}
+
 // Verify implementa TokenVerifier.
 func (v *HTTPTokenVerifier) Verify(ctx context.Context, bearer string) (Principal, error) {
 	probe, ok := v.admit()
@@ -132,6 +141,11 @@ func (v *HTTPTokenVerifier) Verify(ctx context.Context, bearer string) (Principa
 		v.settle(probe, true)
 		v.record(ResultUnauthorized)
 		return Principal{}, ErrUnauthenticated
+	case ctx.Err() != nil:
+		// El llamante abortó (no el timeout propio): no es un fallo de identidad. Se libera la
+		// sonda sin contar el fallo ni reabrir el circuito. Sigue siendo fail-closed (503).
+		v.abort(probe)
+		return Principal{}, ErrUnavailable
 	default:
 		v.settle(probe, false)
 		v.record(ResultError)

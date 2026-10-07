@@ -129,3 +129,14 @@ func TestOutboxIsIdempotentByEventIDAndValidatesAgainstSchema(t *testing.T) {
 		t.Fatalf("run.confirmed invalido: %v", err)
 	}
 }
+
+func TestPublishPendingCountIgnoresOrphanPublishedIDs(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, PublishedFile), []byte("{\"notification_id\":\"huerfano-1\"}\n{\"notification_id\":\"huerfano-2\"}\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	st, err := OpenStore(dir, nil)
+	if err != nil || st.PublishPendingCount() != 0 {
+		t.Fatalf("err=%v pendientes=%d", err, st.PublishPendingCount())
+	}
+}

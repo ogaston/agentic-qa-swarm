@@ -73,7 +73,13 @@ func (s *Store) PublishPending() []Confirmed {
 func (s *Store) PublishPendingCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.receipt) - len(s.pubDone)
+	n := 0
+	for id := range s.receipt { // no resta: ids huérfanos en published.jsonl no pueden dar un valor negativo
+		if _, done := s.pubDone[id]; !done {
+			n++
+		}
+	}
+	return n
 }
 
 // IsPublished indica si el run.confirmed de id ya se publico.
