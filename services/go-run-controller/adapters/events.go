@@ -22,7 +22,8 @@ type FileSource struct {
 	Path string
 
 	mu        sync.Mutex
-	offset    int64
+	committed int64 // offset confirmado (Ack): desde aquí se relee
+	scanned   int64 // hasta dónde se contaron líneas inválidas (no recontar al releer)
 	discarded int
 }
 
@@ -64,7 +65,8 @@ func ParseEvent(line []byte) (ev runctl.Event, ok bool, err error) {
 		ConfirmedBy: r.Data.ConfirmedBy, Flows: r.Data.Flows}, true, nil
 }
 
-// Poll implementa EventSource.
+// Poll implementa EventSource. Relee desde el último offset confirmado: un evento sin Ack se vuelve
+// a entregar. Las líneas que no son de este servicio o son inválidas se confirman solas.
 func (f *FileSource) Poll(context.Context) ([]runctl.Event, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -76,34 +78,53 @@ func (f *FileSource) Poll(context.Context) ([]runctl.Event, error) {
 		return nil, err
 	}
 	defer file.Close()
-	if st, err := file.Stat(); err == nil && st.Size() < f.offset {
-		f.offset = 0
+	if st, err := file.Stat(); err == nil && st.Size() < f.committed {
+		f.committed, f.scanned = 0, 0
 	}
-	if _, err := file.Seek(f.offset, io.SeekStart); err != nil {
+	if _, err := file.Seek(f.committed, io.SeekStart); err != nil {
 		return nil, err
 	}
 	var out []runctl.Event
+	off := f.committed
 	r := bufio.NewReader(file)
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
 			break // línea parcial: se reintenta
 		}
-		f.offset += int64(len(line))
+		off += int64(len(line))
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}
 		ev, ok, perr := ParseEvent(line)
 		if perr != nil {
-			f.discarded++
+			if off > f.scanned {
+				f.discarded++
+			}
 			continue
 		}
 		if ok {
+			ev.Pos = off
 			out = append(out, ev)
 		}
 	}
+	if off > f.scanned {
+		f.scanned = off
+	}
+	if len(out) == 0 {
+		f.committed = off
+	}
 	return out, nil
+}
+
+// Ack confirma que ev se aplicó: el offset avanza hasta el final de su línea.
+func (f *FileSource) Ack(ev runctl.Event) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if ev.Pos > f.committed {
+		f.committed = ev.Pos
+	}
 }
 
 var outNamespace = [16]byte{0x5c, 0x2e, 0x91, 0x0a, 0x37, 0x6b, 0x4d, 0x12, 0x9a, 0x4e, 0x80, 0x1f, 0x6d, 0x33, 0xb7, 0x08}
@@ -121,13 +142,41 @@ func OutEventID(typ, runID string) string {
 }
 
 // Outbox escribe eventos del controlador (run.done) en RUN_OUTBOX_FILE, idempotente por event_id.
+// Solo cuentan como publicadas las líneas completas (con '\n'); un fallo de escritura devuelve el
+// archivo a su tamaño previo.
 type Outbox struct {
 	Path string
 	Now  func() time.Time
 	mu   sync.Mutex
+	open openAppendFunc
+	// dirty: un Publish anterior no pudo restaurar el archivo (Write/Sync y truncado fallaron): su línea
+	// pudo quedar completa sin ser durable; antes de darla por publicada hay que sincronizar.
+	dirty bool
 }
 
 var _ runctl.EventPublisher = (*Outbox)(nil)
+
+// published dice si alguna línea completa de b lleva event_id == id.
+func published(b []byte, id string) bool {
+	complete := b[:bytes.LastIndexByte(b, '\n')+1]
+	for _, ln := range bytes.Split(complete, []byte("\n")) {
+		var e struct {
+			EventID string `json:"event_id"`
+		}
+		if json.Unmarshal(ln, &e) == nil && e.EventID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// completeTail dice si la cola sin '\n' es ya el objeto JSON completo del evento id.
+func completeTail(tail []byte, id string) bool {
+	var e struct {
+		EventID string `json:"event_id"`
+	}
+	return json.Unmarshal(tail, &e) == nil && e.EventID == id
+}
 
 // Publish implementa EventPublisher.
 func (o *Outbox) Publish(_ context.Context, ev runctl.OutEvent) error {
@@ -159,19 +208,41 @@ func (o *Outbox) Publish(_ context.Context, ev runctl.OutEvent) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if bytes.Contains(b, []byte(`"event_id":"`+id+`"`)) {
+	open := o.open
+	if open == nil {
+		open = osOpenAppend
+	}
+	if published(b, id) {
+		if !o.dirty {
+			return nil
+		}
+		f, err := open(o.Path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if err := f.Sync(); err != nil {
+			return err
+		}
+		o.dirty = false
 		return nil
 	}
-	if len(b) > 0 && b[len(b)-1] != '\n' {
-		line = append([]byte("\n"), line...)
+	data := append(line, '\n')
+	if tail := b[bytes.LastIndexByte(b, '\n')+1:]; len(tail) > 0 {
+		if completeTail(tail, id) {
+			data = []byte("\n") // el kill -9 cayó justo antes del '\n': la línea ya está entera
+		} else {
+			data = append([]byte("\n"), data...) // cola huérfana: se aísla en su propia línea
+		}
 	}
-	f, err := os.OpenFile(o.Path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	f, err := open(o.Path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	if _, err := f.Write(append(line, '\n')); err != nil {
-		return err
+	intact, err := appendDurable(f, int64(len(b)), data)
+	if !intact {
+		o.dirty = true
 	}
-	return f.Sync()
+	return err
 }

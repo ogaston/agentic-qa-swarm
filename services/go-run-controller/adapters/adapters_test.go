@@ -57,14 +57,6 @@ func TestJournalBrokenHashRefusesToStart(t *testing.T) {
 	}
 }
 
-func TestJournalTornLineRefuses(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, JournalFile), []byte(`{"seq":1`), 0o600)
-	if _, err := OpenJournal(dir); err == nil {
-		t.Fatal("debía rechazar")
-	}
-}
-
 func gateSrv(t *testing.T, h http.HandlerFunc) *HTTPGate {
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
@@ -139,6 +131,7 @@ func TestFileSourceFullLinesOnlyAndFilters(t *testing.T) {
 	if err != nil || len(evs) != 1 || evs[0].RunID != "r-1" || f.Discarded() != 1 {
 		t.Fatal(evs, err, f.Discarded())
 	}
+	f.Ack(evs[0])
 	again, _ := f.Poll(t.Context())
 	if len(again) != 0 {
 		t.Fatal("reentregó")
@@ -188,5 +181,83 @@ func TestPublishThenSaveFailsWritesOneOutboxLine(t *testing.T) {
 	b, _ := os.ReadFile(p)
 	if strings.Count(string(b), "\n") != 1 {
 		t.Fatalf("run.done escrito %d veces", strings.Count(string(b), "\n"))
+	}
+}
+
+func writeEvents(t *testing.T, p string, lines ...string) {
+	t.Helper()
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for _, l := range lines {
+		_, _ = f.WriteString(l + "\n")
+	}
+}
+
+const confLine = `{"event_id":"e1","type":"run.confirmed","version":1,"trace_id":"t","data":{"run_id":"r-1","confirmed_by":"u","flows":["a"]}}`
+
+// Sin Ack el evento se vuelve a entregar; con Ack ya no; las líneas inválidas no se recuentan.
+func TestFileSourceUnackedIsRedeliveredAckedIsNot(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "e.jsonl")
+	writeEvents(t, p, `{"event_id":"x","type":"run.confirmed","version":1}`, confLine)
+	f := &FileSource{Path: p}
+	for i := 0; i < 3; i++ {
+		evs, _ := f.Poll(t.Context())
+		if len(evs) != 1 || evs[0].EventID != "e1" {
+			t.Fatalf("entrega %d: %+v", i, evs)
+		}
+	}
+	if f.Discarded() != 1 {
+		t.Fatalf("la línea inválida se recontó al releer: %d", f.Discarded())
+	}
+	evs, _ := f.Poll(t.Context())
+	f.Ack(evs[0])
+	if again, _ := f.Poll(t.Context()); len(again) != 0 {
+		t.Fatalf("reentregó tras Ack: %+v", again)
+	}
+	writeEvents(t, p, strings.Replace(confLine, `"e1"`, `"e2"`, 1))
+	if next, _ := f.Poll(t.Context()); len(next) != 1 || next[0].EventID != "e2" {
+		t.Fatalf("%+v", next)
+	}
+}
+
+// Líneas ajenas/inválidas al final se confirman solas; un Ack tardío no retrocede el offset; si el
+// archivo se reemplaza por uno más corto, se relee desde 0.
+func TestFileSourceForeignLinesAckedAndRotationResets(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "e.jsonl")
+	writeEvents(t, p, confLine, `{"event_id":"o","type":"notify.created","version":1,"trace_id":"t","data":{}}`)
+	f := &FileSource{Path: p}
+	evs, _ := f.Poll(t.Context())
+	f.Ack(evs[0])
+	late := evs[0]
+	late.Pos = 1
+	f.Ack(late) // Ack tardío: no retrocede
+	if f.committed != evs[0].Pos {
+		t.Fatalf("el Ack tardío retrocedió el offset a %d", f.committed)
+	}
+	if _, _ = f.Poll(t.Context()); f.committed != int64(len(confLine)+1+len(`{"event_id":"o","type":"notify.created","version":1,"trace_id":"t","data":{}}`)+1) {
+		t.Fatalf("offset confirmado %d: debía cubrir también la línea ajena", f.committed)
+	}
+	_ = os.WriteFile(p, []byte(strings.Replace(confLine, `"e1"`, `"e9"`, 1)+"\n"), 0o600) // archivo reemplazado (más corto)
+	if next, _ := f.Poll(t.Context()); len(next) != 1 || next[0].EventID != "e9" {
+		t.Fatalf("tras el reemplazo debía releer desde 0: %+v", next)
+	}
+}
+
+// Una línea parcial que el productor completa DESPUÉS se entrega entera (el offset no la salta).
+func TestFileSourcePartialLineCompletedLaterIsDelivered(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "e.jsonl")
+	_ = os.WriteFile(p, []byte(confLine[:30]), 0o600)
+	f := &FileSource{Path: p}
+	if evs, _ := f.Poll(t.Context()); len(evs) != 0 {
+		t.Fatalf("entregó una línea parcial: %+v", evs)
+	}
+	fh, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
+	_, _ = fh.WriteString(confLine[30:] + "\n")
+	_ = fh.Close()
+	if evs, _ := f.Poll(t.Context()); len(evs) != 1 || evs[0].EventID != "e1" || f.Discarded() != 0 {
+		t.Fatalf("evento perdido tras completarse la línea: %+v (descartadas %d)", evs, f.Discarded())
 	}
 }

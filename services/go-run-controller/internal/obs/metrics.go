@@ -13,6 +13,7 @@ type RunMetrics struct {
 	handoff     *prometheus.CounterVec
 	dropped     *prometheus.CounterVec
 	persist     prometheus.Counter
+	tail        prometheus.Counter
 }
 
 var _ runctl.Observer = (*RunMetrics)(nil)
@@ -31,8 +32,10 @@ func NewRunMetrics(reg prometheus.Registerer, active func() float64) *RunMetrics
 			Help: "Eventos de entrada descartados por llegar fuera de estado."}, []string{"type"}),
 		persist: prometheus.NewCounter(prometheus.CounterOpts{Name: "aqs_persist_errors_total",
 			Help: "Guardados del diario de corridas que fallaron."}),
+		tail: prometheus.NewCounter(prometheus.CounterOpts{Name: "aqs_journal_tail_discarded_total",
+			Help: "Colas incompletas (sin salto de línea) del diario descartadas al arrancar."}),
 	}
-	reg.MustRegister(m.transitions, m.gate, m.handoff, m.dropped, m.persist,
+	reg.MustRegister(m.transitions, m.gate, m.handoff, m.dropped, m.persist, m.tail,
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "aqs_runs_active", Help: "Corridas no terminales."}, active))
 	// Series iniciales para que existan desde el arranque.
 	m.gate.WithLabelValues(runctl.ResAllow)
@@ -56,3 +59,6 @@ func (m *RunMetrics) EventDropped(t string) { m.dropped.WithLabelValues(t).Inc()
 
 // PersistError implementa runctl.Observer.
 func (m *RunMetrics) PersistError() { m.persist.Inc() }
+
+// JournalTailDiscarded cuenta una cola de diario descartada al arrancar.
+func (m *RunMetrics) JournalTailDiscarded() { m.tail.Inc() }

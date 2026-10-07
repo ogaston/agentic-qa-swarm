@@ -108,6 +108,7 @@ type Event struct {
 	RunID       string
 	ConfirmedBy string
 	Flows       []string
+	Pos         int64 // posición opaca en la fuente (fin de la línea); la usa EventSource.Ack
 }
 
 // Tipos de evento que consume el controlador.
@@ -117,10 +118,12 @@ const (
 	EvRehearsalFailed = "rehearsal.failed"
 )
 
-// EventSource entrega eventos nuevos (marcador de transición C-45). Poll devuelve los que aún
-// no entregó; un archivo inexistente no es error.
+// EventSource entrega eventos (marcador de transición C-45). Poll devuelve los que aún no se
+// confirmaron con Ack; un archivo inexistente no es error. Quien consume llama a Ack solo cuando
+// Apply salió bien (o falló sin remedio): ante ErrPersist el evento se vuelve a entregar.
 type EventSource interface {
 	Poll(ctx context.Context) ([]Event, error)
+	Ack(ev Event)
 }
 
 // OutEvent es un evento que publica el controlador (run.done).
@@ -159,6 +162,11 @@ const (
 
 // PhaseLauncher ejecuta una fase que crea Jobs (adaptadores reales: T03 a T06).
 // Devuelve las URIs de evidencia (solo la fase report las llena).
+//
+// Launch DEBE ser idempotente por (corrida, fase): ante un reintento (un crash entre Launch y el
+// guardado de Launched repite el lanzamiento, hasta 3 veces por fase) el lanzador debe ADOPTAR el
+// trabajo vivo de esa (corrida, fase) en vez de crear otro. Run.Started[fase] es solo el número de
+// intento (tope 3) y NO sirve como clave de deduplicación: cambia en cada intento.
 type PhaseLauncher interface {
 	Launch(ctx context.Context, phase string, run Run) ([]string, error)
 }

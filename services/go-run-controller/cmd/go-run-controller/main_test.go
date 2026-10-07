@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"log/slog"
+	"testing"
+)
 
 func envOf(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 
@@ -36,3 +39,5 @@ func TestLoadConfigFailsClosed(t *testing.T) {
 		}
 	}
 }
+
+func nopLog() *slog.Logger { return slog.New(slog.DiscardHandler) }
