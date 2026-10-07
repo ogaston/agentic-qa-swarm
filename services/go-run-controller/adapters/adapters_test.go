@@ -234,6 +234,9 @@ func TestFileSourceForeignLinesAckedAndRotationResets(t *testing.T) {
 	late := evs[0]
 	late.Pos = 1
 	f.Ack(late) // Ack tardío: no retrocede
+	if f.committed != evs[0].Pos {
+		t.Fatalf("el Ack tardío retrocedió el offset a %d", f.committed)
+	}
 	if _, _ = f.Poll(t.Context()); f.committed != int64(len(confLine)+1+len(`{"event_id":"o","type":"notify.created","version":1,"trace_id":"t","data":{}}`)+1) {
 		t.Fatalf("offset confirmado %d: debía cubrir también la línea ajena", f.committed)
 	}

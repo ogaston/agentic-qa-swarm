@@ -143,3 +143,16 @@ func TestOutboxDoubleFailureIsNotReportedPublishedUntilSynced(t *testing.T) {
 		t.Fatalf("%q", b)
 	}
 }
+
+// Tras una publicación exitosa un repetido es un no-op: no toca el disco (no sincroniza).
+func TestOutboxRepeatAfterSuccessDoesNotTouchDisk(t *testing.T) {
+	ff := &faultFile{}
+	o := faultyOutbox(filepath.Join(t.TempDir(), "o.jsonl"), ff)
+	if err := o.Publish(t.Context(), doneEv); err != nil {
+		t.Fatal(err)
+	}
+	ff.syncFails = 3
+	if err := o.Publish(t.Context(), doneEv); err != nil {
+		t.Fatalf("un repetido no debe sincronizar: %v", err)
+	}
+}
