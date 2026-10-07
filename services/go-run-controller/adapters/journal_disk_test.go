@@ -297,8 +297,11 @@ func TestJournalTornTailThenPartialWriteStillReopens(t *testing.T) {
 	if err := s.Save(runctl.Run{ID: "r", State: runctl.WarmReady}); err == nil {
 		t.Fatal("debía fallar")
 	}
+	if err := s.Save(runctl.Run{ID: "r", State: runctl.Deploying}); err != nil {
+		t.Fatal(err)
+	}
 	_ = s.Close()
-	if r, _ := mustReopen(t, dir).Get("r"); r.State != runctl.Confirmed {
+	if r, _ := mustReopen(t, dir).Get("r"); r.State != runctl.Deploying {
 		t.Fatalf("%+v", r)
 	}
 }
