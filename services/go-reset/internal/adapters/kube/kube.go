@@ -71,7 +71,16 @@ func (c *Client) ScaleApp(ctx context.Context, n int32) error {
 }
 
 func (c *Client) deletePods(ctx context.Context) error {
-	return c.cs.CoreV1().Pods(c.ns).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: appLabelValue})
+	pl, err := c.cs.CoreV1().Pods(c.ns).List(ctx, metav1.ListOptions{LabelSelector: appLabelValue})
+	if err != nil {
+		return err
+	}
+	for _, p := range pl.Items {
+		if err := c.cs.CoreV1().Pods(c.ns).Delete(ctx, p.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 // Rebuild reinicia y borra los pods para que vuelvan desde la imagen base.
