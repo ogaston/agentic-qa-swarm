@@ -102,6 +102,11 @@ func build(c config.Config) (*wiring, error) {
 		svc.Kube, svc.DB, svc.Cache, w.state = b.Kube, b.DB, b.Cache, b.State
 		b.DB.Ver = c.BaselineVersion
 	} else {
+		cl := &script.Cleaner{Path: c.BaselineScript, Timeout: c.ScriptTimeout, StaticVersion: c.BaselineVersion}
+		// Fail-closed en el arranque: sin baseline_version conocida ningún reset podría verificarse.
+		if v, err := cl.Version(context.Background()); err != nil || v == "" {
+			return nil, fmt.Errorf("baseline_version desconocida: define RESET_BASELINE_VERSION o haz que %s version la imprima (%v)", c.BaselineScript, err)
+		}
 		rc, err := rest.InClusterConfig()
 		if err != nil {
 			return nil, err
@@ -115,7 +120,7 @@ func build(c config.Config) (*wiring, error) {
 			return nil, err
 		}
 		svc.Kube, w.state = k, k
-		svc.DB = &script.Cleaner{Path: c.BaselineScript, Timeout: c.ScriptTimeout, StaticVersion: c.BaselineVersion}
+		svc.DB = cl
 		svc.Cache = &redis.Flusher{Addr: c.RedisAddr, Timeout: c.RedisTimeout}
 	}
 	svc.State = w.state

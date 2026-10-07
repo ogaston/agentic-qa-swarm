@@ -141,6 +141,9 @@ type State struct {
 	Snap   core.Snapshot
 	Exists bool
 	PutErr error
+	// FailPutN: si >0, falla el Put número N (1-based) y los siguientes.
+	FailPutN int
+	puts     int
 }
 
 func (s *State) Get(context.Context) (core.Snapshot, bool, error) {
@@ -151,8 +154,9 @@ func (s *State) Get(context.Context) (core.Snapshot, bool, error) {
 func (s *State) Put(_ context.Context, w core.WarmState, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.PutErr != nil {
-		return s.PutErr
+	s.puts++
+	if s.PutErr != nil || (s.FailPutN > 0 && s.puts >= s.FailPutN) {
+		return errPut(s.PutErr)
 	}
 	s.Snap, s.Exists = core.Snapshot{WarmState: w, UpdatedAt: at}, true
 	return nil
@@ -250,4 +254,11 @@ func NewBundle() *Bundle {
 		Cfg: core.Config{DefaultWarmID: "warm-1", BaselineVersion: "b1", ReadyTimeout: 10 * time.Second,
 			ReadyInterval: time.Second, Grace: 24 * time.Hour}}
 	return b
+}
+
+func errPut(e error) error {
+	if e != nil {
+		return e
+	}
+	return ErrBoom
 }

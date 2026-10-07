@@ -463,3 +463,18 @@ func combo(t interface {
 		t.Fatalf("restartErr=%v dbErr=%v cacheErr=%v rows=%d keys=%d ready=%v: eventos=%d estado=%s", restartErr, dbErr, cacheErr, rows, keys, ready, len(b.Events.Got), s.State)
 	}
 }
+
+// F-09: el Put final falla justo tras verificar: ni evento ni ready.
+func TestResetFinalPutFailureNoEventNotReady(t *testing.T) {
+	b := fakes.NewBundle()
+	b.State.FailPutN = 2 // el 1.º (dirty) pasa; el 2.º (ready) falla
+	if _, err := b.Svc.Reset(ctx, "r-1", ""); err == nil {
+		t.Fatal("esperaba error")
+	}
+	if n := len(b.Events.Got); n != 0 {
+		t.Fatalf("%d eventos", n)
+	}
+	if st := state(t, b); st.State == core.StateReady || st.ResetVerified {
+		t.Fatalf("%+v", st)
+	}
+}

@@ -85,6 +85,14 @@ func (c *Client) deletePods(ctx context.Context) error {
 
 // Rebuild reinicia y borra los pods para que vuelvan desde la imagen base.
 func (c *Client) Rebuild(ctx context.Context) error {
+	// Un warm idle-escalado (0 réplicas) se sube a 1: sin pods no hay rollout que verificar.
+	if n, err := c.Replicas(ctx); err != nil {
+		return err
+	} else if n == 0 {
+		if err := c.ScaleApp(ctx, 1); err != nil {
+			return err
+		}
+	}
 	if err := c.RestartApp(ctx); err != nil {
 		return err
 	}
