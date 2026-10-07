@@ -57,14 +57,6 @@ func TestJournalBrokenHashRefusesToStart(t *testing.T) {
 	}
 }
 
-func TestJournalTornLineRefuses(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, JournalFile), []byte(`{"seq":1`), 0o600)
-	if _, err := OpenJournal(dir); err == nil {
-		t.Fatal("debía rechazar")
-	}
-}
-
 func gateSrv(t *testing.T, h http.HandlerFunc) *HTTPGate {
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
@@ -139,6 +131,7 @@ func TestFileSourceFullLinesOnlyAndFilters(t *testing.T) {
 	if err != nil || len(evs) != 1 || evs[0].RunID != "r-1" || f.Discarded() != 1 {
 		t.Fatal(evs, err, f.Discarded())
 	}
+	f.Ack(evs[0])
 	again, _ := f.Poll(t.Context())
 	if len(again) != 0 {
 		t.Fatal("reentregó")
@@ -188,5 +181,44 @@ func TestPublishThenSaveFailsWritesOneOutboxLine(t *testing.T) {
 	b, _ := os.ReadFile(p)
 	if strings.Count(string(b), "\n") != 1 {
 		t.Fatalf("run.done escrito %d veces", strings.Count(string(b), "\n"))
+	}
+}
+
+func writeEvents(t *testing.T, p string, lines ...string) {
+	t.Helper()
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for _, l := range lines {
+		_, _ = f.WriteString(l + "\n")
+	}
+}
+
+const confLine = `{"event_id":"e1","type":"run.confirmed","version":1,"trace_id":"t","data":{"run_id":"r-1","confirmed_by":"u","flows":["a"]}}`
+
+// Sin Ack el evento se vuelve a entregar; con Ack ya no; las líneas inválidas no se recuentan.
+func TestFileSourceUnackedIsRedeliveredAckedIsNot(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "e.jsonl")
+	writeEvents(t, p, `{"event_id":"x","type":"run.confirmed","version":1}`, confLine)
+	f := &FileSource{Path: p}
+	for i := 0; i < 3; i++ {
+		evs, _ := f.Poll(t.Context())
+		if len(evs) != 1 || evs[0].EventID != "e1" {
+			t.Fatalf("entrega %d: %+v", i, evs)
+		}
+	}
+	if f.Discarded() != 1 {
+		t.Fatalf("la línea inválida se recontó al releer: %d", f.Discarded())
+	}
+	evs, _ := f.Poll(t.Context())
+	f.Ack(evs[0])
+	if again, _ := f.Poll(t.Context()); len(again) != 0 {
+		t.Fatalf("reentregó tras Ack: %+v", again)
+	}
+	writeEvents(t, p, strings.Replace(confLine, `"e1"`, `"e2"`, 1))
+	if next, _ := f.Poll(t.Context()); len(next) != 1 || next[0].EventID != "e2" {
+		t.Fatalf("%+v", next)
 	}
 }

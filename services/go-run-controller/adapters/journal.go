@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,34 +26,56 @@ type journalLine struct {
 }
 
 // JournalStore es un RunStore con diario JSONL append-only: cada línea lleva seq y el hash de la
-// anterior; se reproduce al abrir y una cadena rota impide arrancar.
+// anterior; se reproduce al abrir y una cadena rota impide arrancar. Un Save que falla deja el
+// archivo como estaba (o el diario queda roto y rechaza todo Save posterior): nunca bytes huérfanos.
 type JournalStore struct {
-	mu   sync.Mutex
-	f    *os.File
-	seq  int
-	last string
-	runs map[string]runctl.Run
+	mu        sync.Mutex
+	f         appendFile
+	size      int64 // bytes válidos en disco (todas las líneas completas)
+	seq       int
+	last      string
+	runs      map[string]runctl.Run
+	broken    error
+	discarded int
 }
 
 var _ runctl.RunStore = (*JournalStore)(nil)
 
+// ErrJournalBroken indica que un Save fallido no pudo devolver el archivo a su estado previo.
+var ErrJournalBroken = errors.New("diario roto: no se pudo restaurar tras un fallo de escritura")
+
+// JournalOptions son los parámetros opcionales de OpenJournalOpts.
+type JournalOptions struct {
+	Log  *slog.Logger // registra la cola descartada; nil = silencio
+	open openAppendFunc
+}
+
 func lineHash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
 // OpenJournal abre (o crea) dir/runs.jsonl y reproduce el diario verificando la cadena.
-func OpenJournal(dir string) (*JournalStore, error) {
+func OpenJournal(dir string) (*JournalStore, error) { return OpenJournalOpts(dir, JournalOptions{}) }
+
+// OpenJournalOpts es OpenJournal con opciones. Una cola sin '\n' final (escritura interrumpida que
+// nunca tuvo un Save exitoso detrás) se descarta y se registra; una línea con '\n' que no encadena
+// sigue siendo error de arranque.
+func OpenJournalOpts(dir string, o JournalOptions) (*JournalStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
+	open := o.open
+	if open == nil {
+		open = osOpenAppend
+	}
 	path := filepath.Join(dir, JournalFile)
 	s := &JournalStore{runs: map[string]runctl.Run{}}
-	if b, err := os.ReadFile(path); err == nil {
-		if len(b) > 0 && b[len(b)-1] != '\n' {
-			return nil, errors.New("diario: última línea incompleta")
-		}
-		for i, ln := range bytes.Split(bytes.TrimSuffix(b, []byte("\n")), []byte("\n")) {
-			if len(b) == 0 {
-				break
-			}
+	b, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	valid := b[:bytes.LastIndexByte(b, '\n')+1]
+	s.discarded = len(b) - len(valid)
+	if len(valid) > 0 {
+		for i, ln := range bytes.Split(bytes.TrimSuffix(valid, []byte("\n")), []byte("\n")) {
 			var jl journalLine
 			dec := json.NewDecoder(bytes.NewReader(ln))
 			dec.DisallowUnknownFields()
@@ -65,16 +88,25 @@ func OpenJournal(dir string) (*JournalStore, error) {
 			s.seq, s.last = jl.Seq, lineHash(ln)
 			s.runs[jl.Run.ID] = jl.Run
 		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if s.discarded > 0 {
+		if err := os.Truncate(path, int64(len(valid))); err != nil {
+			return nil, fmt.Errorf("diario: no se pudo descartar la cola incompleta: %w", err)
+		}
+		if o.Log != nil {
+			o.Log.Warn("diario: cola sin salto de línea descartada", "bytes_descartados", s.discarded, "bytes_validos", len(valid))
+		}
+	}
+	f, err := open(path)
 	if err != nil {
 		return nil, err
 	}
-	s.f = f
+	s.f, s.size = f, int64(len(valid))
 	return s, nil
 }
+
+// TailDiscarded devuelve los bytes de cola incompleta descartados al abrir (0 si no hubo).
+func (s *JournalStore) TailDiscarded() int { return s.discarded }
 
 // Close cierra el archivo.
 func (s *JournalStore) Close() error { return s.f.Close() }
@@ -103,6 +135,9 @@ func (s *JournalStore) List() []runctl.Run {
 func (s *JournalStore) Healthy() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.broken != nil {
+		return s.broken
+	}
 	return s.f.Sync()
 }
 
@@ -113,20 +148,26 @@ func cloneRun(r runctl.Run) runctl.Run {
 	return c
 }
 
-// Save añade una línea (fsync) y solo entonces actualiza la memoria.
+// Save añade una línea (fsync) y solo entonces actualiza la memoria. Ante un fallo de Write o Sync
+// trunca el archivo al tamaño previo y no avanza seq/last; si no puede, el diario queda roto.
 func (s *JournalStore) Save(r runctl.Run) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.broken != nil {
+		return s.broken
+	}
 	line, err := json.Marshal(journalLine{Seq: s.seq + 1, Prev: s.last, Run: r})
 	if err != nil {
 		return err
 	}
-	if _, err := s.f.Write(append(append([]byte(nil), line...), '\n')); err != nil {
+	data := append(append([]byte(nil), line...), '\n')
+	if err, intact := appendDurable(s.f, s.size, data); err != nil {
+		if !intact {
+			s.broken = fmt.Errorf("%w: %v", ErrJournalBroken, err)
+		}
 		return err
 	}
-	if err := s.f.Sync(); err != nil {
-		return err
-	}
+	s.size += int64(len(data))
 	s.seq, s.last = s.seq+1, lineHash(line)
 	s.runs[r.ID] = cloneRun(r)
 	return nil

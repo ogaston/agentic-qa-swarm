@@ -84,7 +84,7 @@ func run(log *slog.Logger, env func(string) string) error {
 	if err != nil {
 		return err
 	}
-	store, err := adapters.OpenJournal(c.dataDir)
+	store, err := adapters.OpenJournalOpts(c.dataDir, adapters.JournalOptions{Log: log})
 	if err != nil {
 		return err
 	}
@@ -104,6 +104,7 @@ func run(log *slog.Logger, env func(string) string) error {
 		return float64(n)
 	}
 	metrics := obs.NewRunMetrics(reg, active)
+	noteJournalTail(store, metrics)
 	ctl, err := runctl.New(runctl.Config{Namespace: c.namespace, Gate: gate, Store: store,
 		Publisher: &adapters.Outbox{Path: c.outboxFile}, Warm: &runctl.FakeWarm{Fact: runctl.True},
 		Alerter: logAlerter{log}, Phases: &runctl.FakePhases{}, Observer: metrics, Log: log})
@@ -111,10 +112,7 @@ func run(log *slog.Logger, env func(string) string) error {
 		return err
 	}
 	src := &adapters.FileSource{Path: c.eventsFile}
-	checks := []obs.Check{
-		{Name: "journal", Fn: func(context.Context) error { return store.Healthy() }},
-		{Name: "persist", Fn: func(context.Context) error { return ctl.PersistHealthy() }}, // el último Save salió bien
-	}
+	checks := readyChecks(store, ctl)
 	app := httpapi.New(store, httpapi.NewIdentityVerifier(strings.TrimRight(c.identityURL, "/")))
 	h := obs.Wrap(obs.Config{Service: serviceName, Log: log, Registry: reg, Metrics: obs.NewHTTPMetrics(reg, serviceName), Ready: checks,
 		Route: func(r *http.Request) string {
@@ -141,24 +139,51 @@ func run(log *slog.Logger, env func(string) string) error {
 	}
 }
 
+// noteJournalTail cuenta en aqs_journal_tail_discarded_total la cola incompleta descartada al abrir.
+func noteJournalTail(j interface{ TailDiscarded() int }, m interface{ JournalTailDiscarded() }) {
+	if j.TailDiscarded() > 0 {
+		m.JournalTailDiscarded()
+	}
+}
+
+// readyChecks son los chequeos de /readyz: el diario escribible y el último Save exitoso.
+func readyChecks(journal interface{ Healthy() error }, ctl interface{ PersistHealthy() error }) []obs.Check {
+	return []obs.Check{
+		{Name: "journal", Fn: func(context.Context) error { return journal.Healthy() }},
+		{Name: "persist", Fn: func(context.Context) error { return ctl.PersistHealthy() }}, // el último Save salió bien
+	}
+}
+
 func loop(ctx context.Context, log *slog.Logger, ctl *runctl.Controller, src runctl.EventSource) {
 	t := time.NewTicker(500 * time.Millisecond)
 	defer t.Stop()
 	for {
-		evs, err := src.Poll(ctx)
-		if err != nil {
-			log.WarnContext(ctx, "leyendo eventos", "error", err.Error())
-		}
-		for _, ev := range evs {
-			if err := ctl.Apply(ctx, ev); err != nil {
-				log.WarnContext(ctx, "evento no aplicado", "type", ev.Type, "run_id", ev.RunID, "error", err.Error())
-			}
-		}
-		ctl.DriveAll(ctx)
+		tick(ctx, log, ctl, src)
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
 		}
 	}
+}
+
+// tick es un paso del lazo: entrega eventos y avanza las corridas. El evento se confirma (Ack)
+// solo cuando Apply no falló por el almacén; con ErrPersist se corta y se vuelve a entregar.
+func tick(ctx context.Context, log *slog.Logger, ctl *runctl.Controller, src runctl.EventSource) {
+	evs, err := src.Poll(ctx)
+	if err != nil {
+		log.WarnContext(ctx, "leyendo eventos", "error", err.Error())
+	}
+	for _, ev := range evs {
+		err := ctl.Apply(ctx, ev)
+		if errors.Is(err, runctl.ErrPersist) {
+			log.WarnContext(ctx, "evento no aplicado por el almacén; se reintenta", "type", ev.Type, "run_id", ev.RunID, "error", err.Error())
+			break
+		}
+		if err != nil {
+			log.WarnContext(ctx, "evento no aplicado", "type", ev.Type, "run_id", ev.RunID, "error", err.Error())
+		}
+		src.Ack(ev)
+	}
+	ctl.DriveAll(ctx)
 }
