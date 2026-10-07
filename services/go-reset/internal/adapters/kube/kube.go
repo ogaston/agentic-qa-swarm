@@ -160,6 +160,9 @@ func (c *Client) WarmPolicy(ctx context.Context) (core.Policy, error) {
 	if err != nil {
 		return core.Policy{}, fmt.Errorf("idleScaleDownAfter: %w", err)
 	}
+	if d <= 0 {
+		return core.Policy{}, fmt.Errorf("idleScaleDownAfter %v inválido: debe ser > 0", d)
+	}
 	n, err := strconv.Atoi(cm.Data["minReplicasIdle"])
 	if err != nil || n < 0 {
 		return core.Policy{}, fmt.Errorf("minReplicasIdle inválido")
@@ -176,15 +179,34 @@ func (c *Client) Get(ctx context.Context) (core.Snapshot, bool, error) {
 	if err != nil {
 		return core.Snapshot{}, false, err
 	}
-	var w core.WarmState
-	if err := json.Unmarshal([]byte(cm.Data[stateKey]), &w); err != nil {
-		return core.Snapshot{}, false, fmt.Errorf("warm-state ilegible: %w", err)
-	}
 	at, perr := time.Parse(time.RFC3339Nano, cm.Data[updatedAtKey])
 	if perr != nil {
 		at = time.Time{} // desconocido: IdleCheck no escala
 	}
+	// El ConfigMap existe: si su contenido no se entiende, el estado es DESCONOCIDO (dirty, no
+	// verificado) y un reset puede sobrescribirlo tras verificar. Solo un error de la API se propaga.
+	w, ok := parseWarmState(cm.Data[stateKey])
+	if !ok {
+		return core.Snapshot{WarmState: core.WarmState{State: core.StateDirty}, UpdatedAt: at, Unreadable: true}, true, nil
+	}
 	return core.Snapshot{WarmState: w, UpdatedAt: at}, true, nil
+}
+
+// parseWarmState exige un objeto JSON con un state conocido.
+func parseWarmState(raw string) (core.WarmState, bool) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &obj); err != nil || obj == nil {
+		return core.WarmState{}, false
+	}
+	var w core.WarmState
+	if err := json.Unmarshal([]byte(raw), &w); err != nil {
+		return core.WarmState{}, false
+	}
+	switch w.State {
+	case core.StateReady, core.StateDirty, core.StateQuarantine, core.StateIdle:
+		return w, true
+	}
+	return core.WarmState{}, false
 }
 
 // Put escribe (crea o actualiza) el ConfigMap warm-state.

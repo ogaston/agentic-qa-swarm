@@ -37,6 +37,7 @@ type Kube struct {
 	Reps       int32
 	Ready      bool
 	RestartErr error
+	ScaleErr   error // ScaleApp falla sin cambiar las réplicas
 	Policy     core.Policy
 	Calls      []string
 	// ReadyAfterRestart: si es false, el pod nunca queda Ready tras un restart aunque RestartApp "tenga éxito".
@@ -71,6 +72,9 @@ func (k *Kube) ScaleApp(_ context.Context, n int32) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.rec("scale")
+	if k.ScaleErr != nil {
+		return k.ScaleErr
+	}
 	k.Reps = n
 	k.Ready = n > 0 && k.ReadyAfterRestart
 	return nil

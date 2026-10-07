@@ -93,7 +93,7 @@ func build(c config.Config) (*wiring, error) {
 		return nil, err
 	}
 	w := &wiring{sessions: ss, reg: prometheus.NewRegistry()}
-	svc := &core.Service{Sessions: ss, Events: outbox.New(c.OutboxFile), Alert: obs.LogAlerter{Log: log},
+	svc := &core.Service{Sessions: ss, Events: outbox.New(c.OutboxFile), Alert: obs.LogAlerter{Log: log}, Log: log,
 		Clock: realClock{}, Cfg: core.Config{DefaultWarmID: c.WarmID, BaselineVersion: c.BaselineVersion,
 			ReadyTimeout: c.ReadyTimeout, ReadyInterval: c.ReadyInterval, Grace: c.Grace}}
 	if c.Backend == "fake" {

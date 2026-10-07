@@ -371,6 +371,7 @@ func (m *countMetrics) Reset(r string) {
 }
 func (*countMetrics) IdleScaled()        {}
 func (*countMetrics) SessionsClosed(int) {}
+func (*countMetrics) StateUnreadable()   {}
 
 func TestVerifiedMetricOnlyAfterSuccessfulPublish(t *testing.T) {
 	b := fakes.NewBundle()
