@@ -121,7 +121,11 @@ func (c *Cache) Flush(context.Context) error {
 	c.Keys = c.Sticky
 	return nil
 }
-func (c *Cache) DBSize(context.Context) (int64, error) { c.mu.Lock(); defer c.mu.Unlock(); return c.Keys, nil }
+func (c *Cache) DBSize(context.Context) (int64, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.Keys, nil
+}
 
 // State es un StateStore en memoria.
 type State struct {
