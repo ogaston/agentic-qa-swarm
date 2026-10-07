@@ -120,7 +120,7 @@ Desde la raíz del worktree.
 
 ## Notas
 
-- **Heredado de U2-T02 (ronda 3, F-05):** `Launch` es idempotente por (corrida, fase, `Started[fase]`): el Job `runner-<run>-<flow>-<Started>` se nombra de forma determinista y `AlreadyExists` cuenta como éxito del lanzamiento. Misma prueba que en U2-T04.
+- **Heredado de U2-T02 (rondas 3, F-05, y U2-T02b, F-03):** `Launch` es idempotente por (corrida, fase, flujo), no por intento: `Started[fase]` es solo el número de intento (tope 3). Antes de crear `runner-<run>-<flow>-<Started>`, el lanzador busca por etiquetas el Job vivo de esa (corrida, flujo) y lo **adopta** si existe; `AlreadyExists` cuenta como éxito del lanzamiento. Misma prueba que en U2-T04.
 
 - **Go y Dockerfile.** Igual que U2-T02/T04; `Dockerfile` en su sitio. Podman: montajes con `:z`.
 - **Orden de fusión.** U2-T04 debe estar fusionada antes de despachar esta tarea.
