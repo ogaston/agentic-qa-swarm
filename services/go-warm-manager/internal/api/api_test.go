@@ -273,3 +273,12 @@ func TestAPIDefaultWriteTimeoutExceedsDefaultReadyTimeout(t *testing.T) {
 type probeFunc func() error
 
 func (f probeFunc) Check(context.Context) error { return f() }
+
+func TestAPIDeployReadyWithoutResetVerifiedIs409(t *testing.T) {
+	s, jobs := srv(wm.WarmState{WarmID: "w", State: "ready", ResetVerified: false, BaselineVersion: "b"})
+	defer s.Close()
+	code, body := call(t, "POST", s.URL+"/deploys", tok, `{"run_id":"r-1","artifact":{"kind":"published-image","ref":"ghcr.io/a/b:1"}}`)
+	if code != 409 || !strings.Contains(body, `"reset_verified":false`) || jobs.Count() != 0 {
+		t.Fatalf("%d %s jobs=%d", code, body, jobs.Count())
+	}
+}
