@@ -58,8 +58,8 @@ func TestObjectStoreS3(t *testing.T) {
 
 	// Superficie real generada por el servicio y subida a MinIO.
 	pub := &fakes.MemPublisher{}
-	svc := &wm.Service{Cfg: wm.Config{Job: wm.JobConfig{AllowedRegistries: wm.DefaultAllowedRegistries}, PollInterval: time.Millisecond},
-		State: &fakes.MemState{S: wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"}}, Jobs: &fakes.FakeJobs{},
+	svc := &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, PollInterval: time.Millisecond},
+		State: &fakes.MemState{S: wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"}}, Deployer: &fakes.FakeDeployer{},
 		Surface: &fakes.FakeProber{Base: "http://warm-app.aqs-test.svc", Routes: map[string]fakes.FakeResponse{
 			"/openapi.json": {Status: 200, Body: `{"paths":{"/orders":{"get":{},"post":{}}}}`}}},
 		Objects: s, Pub: pub, Alerts: &fakes.FakeAlerter{}, Clock: wm.RealClock{}}
