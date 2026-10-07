@@ -53,10 +53,33 @@ func TestSurfaceRequiresFinishedDeployAndTakenWarm(t *testing.T) {
 	}
 	r = newRig(ws("ready", true))
 	r.web.Routes["/"] = fakes.FakeResponse{Status: 200}
-	r.jobs.Outcome = failN(100)
+	neverUntil(r, 100)
 	_ = r.svc.Deploy(ctx, "r-1", okArt, "t")
 	if _, err := r.svc.InferSurface(ctx, "r-1", "t"); !errors.Is(err, wm.ErrDeployNotDone) { // deploy fallido
 		t.Fatalf("deploy fallido: %v", err)
+	}
+	r = newRig(ws("ready", true)) // deploy en vuelo (pending): la superficie se rechaza con ErrDeployNotDone
+	r.web.Routes["/"] = fakes.FakeResponse{Status: 200}
+	gate := make(chan struct{})
+	r.dep.Gate = gate
+	if _, _, err := r.svc.StartDeploy(ctx, "r-1", okArt, "t"); err != nil {
+		t.Fatal(err)
+	}
+	if d, ok, _ := r.svc.DeployState(ctx, "r-1"); !ok || d.State != "pending" {
+		t.Fatalf("%+v", d)
+	}
+	if _, err := r.svc.InferSurface(ctx, "r-1", "t"); !errors.Is(err, wm.ErrDeployNotDone) {
+		t.Fatalf("deploy pending: %v", err)
+	}
+	if len(r.objs.M) != 0 || len(r.pub.Snapshot()) != 0 {
+		t.Fatal("con el deploy pending no se guarda ni publica nada")
+	}
+	close(gate)
+	for i := 0; i < 500; i++ {
+		if d, _, _ := r.svc.DeployState(ctx, "r-1"); d.State == "done" {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
 	for _, st := range []string{"cuarentena", "idle-escalado", "ready"} { // el warm ya no esta tomado
 		r = newRig(ws("ready", true))
@@ -217,14 +240,14 @@ func TestEnsureIdleConcurrentSingleScaleUp(t *testing.T) {
 	}
 }
 
-// ---- Dos instancias del servicio sobre un mismo almacen (reemplaza la justificacion de «defensa en profundidad») ----
+// ---- Dos instancias del servicio sobre un mismo almacen ----
 
-func TestTwoServicesSharingStoreCreateOneJob(t *testing.T) {
+func TestTwoServicesSharingStorePatchOnce(t *testing.T) {
 	a := newRig(ws("ready", true))
 	b := newRig(ws("ready", true))
 	shared := slowState{a.state}
 	a.svc.State, b.svc.State = shared, shared
-	b.svc.Jobs = a.jobs // mismo clúster
+	b.svc.Deployer = a.dep // mismo clúster
 	var wg sync.WaitGroup
 	for i, r := range []*rig{a, b} {
 		wg.Add(1)
@@ -234,94 +257,28 @@ func TestTwoServicesSharingStoreCreateOneJob(t *testing.T) {
 		}(i, r)
 	}
 	wg.Wait()
-	if a.jobs.Count() != 1 {
-		t.Fatalf("Jobs=%d: el CAS debe proteger entre instancias", a.jobs.Count())
+	if a.dep.Patches() != 1 {
+		t.Fatalf("parches=%d: el CAS debe proteger entre instancias", a.dep.Patches())
 	}
 }
 
-// ---- Estado derivado de Jobs y deploys huerfanos (F-03) ----
+// ---- Reinicio: el estado del deploy es solo memoria y el warm persistido esta dirty ----
 
-func createJob(t *testing.T, j *fakes.FakeJobs, run string, n int, art wm.Artifact) {
-	t.Helper()
-	m, err := wm.BuildDeployJob(jcfg, run, n, art)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := j.Create(context.Background(), m); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestDeployStateDerivedFromJobsAfterRestart(t *testing.T) {
+func TestDeployStateIsMemoryOnly(t *testing.T) {
 	ctx := context.Background()
-	for _, c := range []struct {
-		name  string
-		outs  []wm.JobPhase
-		state string
-		att   int
-	}{{"en vuelo", []wm.JobPhase{wm.JobFailed, wm.JobPending}, "pending", 2}, {"terminado", []wm.JobPhase{wm.JobFailed, wm.JobSucceeded}, "done", 2}, {"fallido", []wm.JobPhase{wm.JobFailed, wm.JobFailed, wm.JobFailed}, "failed", 3}} {
-		t.Run(c.name, func(t *testing.T) {
-			r := newRig(ws("dirty", false))
-			i := 0
-			r.jobs.Outcome = func(int) wm.JobPhase { p := c.outs[i]; i++; return p }
-			for n := range c.outs {
-				createJob(t, r.jobs, "r-1", n, okArt)
-			}
-			st, ok, err := r.svc.DeployState(ctx, "r-1") // memoria vacia: instancia recien arrancada
-			if err != nil || !ok || st.State != c.state || st.Attempts != c.att {
-				t.Fatalf("%+v ok=%v err=%v", st, ok, err)
-			}
-			if _, ok, _ := r.svc.DeployState(ctx, "otro"); ok {
-				t.Fatal("run desconocido debe ser 404")
-			}
-		})
+	r := newRig(ws("ready", true))
+	mustDeploy(t, r)
+	if d, ok, err := r.svc.DeployState(ctx, "r-1"); err != nil || !ok || d.State != "done" {
+		t.Fatalf("%+v %v %v", d, ok, err)
 	}
-	r := newRig(ws("dirty", false))
-	r.jobs.ListErr = errors.New("apiserver caido")
-	if _, _, err := r.svc.DeployState(ctx, "r-1"); err == nil {
-		t.Fatal("el error de lectura no debe confundirse con 'no existe'")
+	// instancia nueva sobre el mismo warm persistido (dirty): no conoce el run y no despliega nada
+	n := newRig(ws("dirty", false))
+	n.state = r.state
+	n.svc.State = r.state
+	if _, ok, _ := n.svc.DeployState(ctx, "r-1"); ok {
+		t.Fatal("tras un reinicio el deploy no se conoce")
+	}
+	if err := n.svc.Deploy(ctx, "r-2", okArt, "t"); !errors.Is(err, wm.ErrNotReady) || n.dep.Patches() != 0 {
+		t.Fatalf("warm dirty: no se despliega: %v", err)
 	}
 }
-
-func TestResolveOrphans(t *testing.T) {
-	ctx := context.Background()
-	r := newRig(ws("dirty", false))
-	phases := map[string]wm.JobPhase{"r-pend": wm.JobPending, "r-done": wm.JobSucceeded, "r-fail": wm.JobFailed, "r-known": wm.JobPending}
-	cur := ""
-	r.jobs.Outcome = func(int) wm.JobPhase { return phases[cur] }
-	for run := range phases {
-		cur = run
-		createJob(t, r.jobs, run, 0, okArt)
-	}
-	r.svc.Cfg.Job = jcfg
-	r.svc.TrackKnownForTest("r-known")
-	if err := r.svc.ResolveOrphans(ctx, "tr"); err != nil {
-		t.Fatal(err)
-	}
-	byRun := map[string]wm.Event{}
-	for _, e := range r.pub.Events {
-		byRun[e.Data["run_id"].(string)] = e
-		if err := validate(t, "events/deploy.schema.json", e); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if byRun["r-pend"].Type != "deploy.failed" || byRun["r-done"].Type != "deploy.done" || byRun["r-fail"].Type != "deploy.failed" || len(byRun) != 3 {
-		t.Fatalf("eventos: %v", r.types())
-	}
-	if len(r.al.Calls) != 1 || !strings.Contains(r.al.Calls[0], "r-pend") {
-		t.Fatalf("handoff solo para el deploy en vuelo huerfano: %v", r.al.Calls)
-	}
-	if d, _, _ := r.svc.DeployState(ctx, "r-pend"); d.State != "failed" || d.Reason == "" {
-		t.Fatalf("%+v", d)
-	}
-	// idempotencia: el event_id de deploy.done coincide con el que habria emitido el deploy original
-	if byRun["r-done"].EventID != wm.EventID("deploy.done/r-done") {
-		t.Fatal("event_id no determinista")
-	}
-	r.jobs.ListErr = errors.New("sin acceso")
-	if err := r.svc.ResolveOrphans(ctx, "tr"); err == nil {
-		t.Fatal("error de lectura tragado")
-	}
-}
-
-var _ = time.Second

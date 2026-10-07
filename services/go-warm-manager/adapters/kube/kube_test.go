@@ -10,7 +10,6 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,19 +27,84 @@ import (
 var seed = wm.WarmState{WarmID: "warm-1", State: "dirty", ResetVerified: false, BaselineVersion: "b1"}
 var ready = wm.WarmState{WarmID: "warm-1", State: "ready", ResetVerified: true, BaselineVersion: "b1"}
 
-// jobOutcome hace que el clientset falso marque cada Job creado como Failed o Complete.
-func jobOutcome(cs *fake.Clientset, fail func(n int) bool) {
-	n := 0
-	cs.PrependReactor("create", "jobs", func(a k8stesting.Action) (bool, runtime.Object, error) {
-		job := a.(k8stesting.CreateAction).GetObject().(*batchv1.Job)
-		t := batchv1.JobComplete
-		if fail(n) {
-			t = batchv1.JobFailed
-		}
-		n++
-		job.Status.Conditions = []batchv1.JobCondition{{Type: t, Status: corev1.ConditionTrue, Reason: "Simulado", Message: "x"}}
-		return false, nil, nil
+// ---- Deploy en proceso sobre el clientset falso con un rollout simulado ----
+
+// cluster simula el Deployment warm-app: cada parche sube la generacion y el rollout completa segun
+// done(parches, sondeos desde el ultimo parche). Mientras no completa, el status sigue en la generacion
+// anterior y el pod viejo (imagen vieja) sigue Ready: justo lo que AppReady/RolloutComplete no deben aceptar.
+type cluster struct {
+	cs      *fake.Clientset
+	mu      sync.Mutex
+	patches []string // cuerpos de los parches de imagen
+	polls   int
+	done    func(patches, polls int) bool
+}
+
+const oldImage = "nginx:1.27.2"
+
+func newCluster(done func(patches, polls int) bool) *cluster {
+	one := int32(1)
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "warm-app", Namespace: "aqs-test", Generation: 1},
+		Spec: appsv1.DeploymentSpec{Replicas: &one, Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "warm-app", Image: oldImage, Env: []corev1.EnvVar{{Name: "TZ", Value: "UTC"}}}}}}},
+	}
+	c := &cluster{cs: fake.NewClientset(dep), done: done}
+	gvr := appsv1.SchemeGroupVersion.WithResource("deployments")
+	c.cs.PrependReactor("patch", "deployments", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		c.mu.Lock()
+		c.patches = append(c.patches, string(a.(k8stesting.PatchAction).GetPatch()))
+		c.polls = 0
+		c.mu.Unlock()
+		return false, nil, nil // lo aplica el tracker (strategic merge patch real)
 	})
+	c.cs.PrependReactor("get", "deployments", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		obj, err := c.cs.Tracker().Get(gvr, "aqs-test", "warm-app")
+		if err != nil {
+			return true, nil, err
+		}
+		d := obj.(*appsv1.Deployment).DeepCopy()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.polls++
+		d.Generation = int64(1 + len(c.patches))
+		if len(c.patches) == 0 || c.done(len(c.patches), c.polls) {
+			d.Status = appsv1.DeploymentStatus{ObservedGeneration: d.Generation, UpdatedReplicas: 1, AvailableReplicas: 1, Replicas: 1}
+		} else {
+			d.Status = appsv1.DeploymentStatus{ObservedGeneration: d.Generation - 1, UpdatedReplicas: 0, AvailableReplicas: 1, Replicas: 1}
+		}
+		return true, d, nil
+	})
+	c.cs.PrependReactor("list", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		obj, _ := c.cs.Tracker().Get(gvr, "aqs-test", "warm-app")
+		img := obj.(*appsv1.Deployment).Spec.Template.Spec.Containers[0].Image
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if len(c.patches) > 0 && !c.done(len(c.patches), c.polls) {
+			img = oldImage // el pod viejo sigue vivo y Ready
+		}
+		return true, &corev1.PodList{Items: []corev1.Pod{readyPod(img)}}, nil
+	})
+	return c
+}
+
+func readyPod(img string) corev1.Pod {
+	return corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "warm-app-x", Namespace: "aqs-test", Labels: map[string]string{"app.kubernetes.io/name": "warm-app"}},
+		Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "warm-app", Image: img}}},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}}}
+}
+
+func (c *cluster) patchCount() int { c.mu.Lock(); defer c.mu.Unlock(); return len(c.patches) }
+
+// verbs cuenta las acciones del clientset por recurso y verbo.
+func (c *cluster) actions(resource, verb string) int {
+	n := 0
+	for _, a := range c.cs.Actions() {
+		if a.GetResource().Resource == resource && (verb == "" || a.GetVerb() == verb) {
+			n++
+		}
+	}
+	return n
 }
 
 func service(cs *fake.Clientset) (*wm.Service, *fakes.MemPublisher, *fakes.FakeAlerter) {
@@ -50,75 +114,208 @@ func service(cs *fake.Clientset) (*wm.Service, *fakes.MemPublisher, *fakes.FakeA
 		panic(err)
 	}
 	return &wm.Service{
-		Cfg:   wm.Config{Job: wm.JobConfig{AllowedRegistries: wm.DefaultAllowedRegistries}, PollInterval: time.Second},
-		State: st, Probe: &fakes.FakeProbe{}, Runtime: &kube.Runtime{C: cs}, Jobs: &kube.Jobs{C: cs},
+		Cfg:   wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, PollInterval: time.Second, DeployTimeout: time.Minute},
+		State: st, Probe: &fakes.FakeProbe{}, Runtime: &kube.Runtime{C: cs}, Deployer: &kube.Deployer{C: cs},
 		Surface: &fakes.FakeProber{}, Objects: &fakes.MemObjects{}, Alerts: al, Pub: pub, Clock: &fakes.FakeClock{T: time.Unix(0, 0)},
 	}, pub, al
 }
 
 var art = wm.Artifact{Kind: "published-image", Ref: "ghcr.io/ogaston/demo:1.2.3"}
 
-func listDeployJobs(t *testing.T, cs *fake.Clientset) []string {
-	t.Helper()
-	l, err := cs.BatchV1().Jobs("aqs-test").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, j := range l.Items {
-		if strings.HasPrefix(j.Name, "deploy-r-1-") {
-			names = append(names, j.Name)
-		}
-	}
-	return names
-}
+func never(int, int) bool { return false }
 
 func TestDeployExhaustedFailClosedOnFakeClientset(t *testing.T) {
-	cs := fake.NewClientset()
-	jobOutcome(cs, func(int) bool { return true })
-	svc, pub, al := service(cs)
+	c := newCluster(never)
+	svc, pub, al := service(c.cs)
 	if err := svc.Deploy(context.Background(), "r-1", art, "t"); err == nil {
 		t.Fatal("debia fallar")
 	}
-	if names := listDeployJobs(t, cs); len(names) != 3 {
-		t.Fatalf("Jobs leidos del clientset: %v", names)
+	if c.patchCount() != 3 || c.actions("deployments", "patch") != 3 { // leido del clientset, no del servicio
+		t.Fatalf("parches=%d", c.patchCount())
+	}
+	for _, p := range c.patches {
+		if !strings.Contains(p, art.Ref) {
+			t.Fatalf("el parche no lleva la imagen: %s", p)
+		}
 	}
 	last := pub.Events[len(pub.Events)-1]
-	if last.Type != "deploy.failed" || last.Data["reason"] == "" || len(al.Calls) != 1 {
-		t.Fatalf("evento=%+v handoffs=%d", last, len(al.Calls))
+	if last.Type != "deploy.failed" || last.Data["reason"] == "" || len(al.Calls) != 1 || len(pub.Events) != 1 {
+		t.Fatalf("evento=%+v eventos=%d handoffs=%d", last, len(pub.Events), len(al.Calls))
 	}
-	// un deploy posterior no crea un cuarto Job: el warm quedo dirty
-	if err := svc.Deploy(context.Background(), "r-1", art, "t"); err == nil || len(listDeployJobs(t, cs)) != 3 {
-		t.Fatalf("no debia crear mas Jobs: %v", err)
+	// un deploy posterior no parchea: el warm quedo dirty
+	if err := svc.Deploy(context.Background(), "r-2", art, "t"); !errors.Is(err, wm.ErrNotReady) || c.patchCount() != 3 {
+		t.Fatalf("no debia parchear mas: %v", err)
 	}
 }
 
 func TestDeployRetryRecoversOnFakeClientset(t *testing.T) {
-	cs := fake.NewClientset()
-	jobOutcome(cs, func(n int) bool { return n < 2 })
-	svc, pub, al := service(cs)
+	c := newCluster(func(patches, polls int) bool { return patches >= 3 && polls >= 2 }) // los 2 primeros intentos no completan
+	svc, pub, al := service(c.cs)
 	if err := svc.Deploy(context.Background(), "r-1", art, "t"); err != nil {
 		t.Fatal(err)
 	}
-	if len(listDeployJobs(t, cs)) != 3 || pub.Events[len(pub.Events)-1].Type != "deploy.done" || len(al.Calls) != 0 {
-		t.Fatal("se esperaban 3 Jobs y deploy.done sin handoff")
+	if c.patchCount() != 3 || pub.Events[len(pub.Events)-1].Type != "deploy.done" || len(al.Calls) != 0 {
+		t.Fatalf("parches=%d eventos=%v", c.patchCount(), pub.Events)
 	}
 }
 
-func TestDeployFailedJobsPassSecurityShape(t *testing.T) {
-	cs := fake.NewClientset()
-	jobOutcome(cs, func(int) bool { return false })
-	svc, _, _ := service(cs)
+func TestDeployNeverCreatesJobsOnFakeClientset(t *testing.T) {
+	c := newCluster(func(patches, polls int) bool { return polls >= 3 }) // completa tras unos sondeos (con retardo)
+	svc, pub, _ := service(c.cs)
 	if err := svc.Deploy(context.Background(), "r-1", art, "t"); err != nil {
 		t.Fatal(err)
 	}
-	j, err := cs.BatchV1().Jobs("aqs-test").Get(context.Background(), "deploy-r-1-0", metav1.GetOptions{})
-	if err != nil {
+	if n := c.actions("jobs", ""); n != 0 { // ni crear, ni listar, ni leer Jobs
+		t.Fatalf("acciones sobre Jobs: %d", n)
+	}
+	if l, _ := c.cs.BatchV1().Jobs("aqs-test").List(context.Background(), metav1.ListOptions{}); len(l.Items) != 0 {
+		t.Fatalf("Jobs: %d", len(l.Items))
+	}
+	if c.patchCount() != 1 || pub.Events[len(pub.Events)-1].Type != "deploy.done" {
+		t.Fatalf("parches=%d", c.patchCount())
+	}
+	d, _ := c.cs.AppsV1().Deployments("aqs-test").Get(context.Background(), "warm-app", metav1.GetOptions{})
+	ct := d.Spec.Template.Spec.Containers
+	if len(ct) != 1 || ct[0].Image != art.Ref || len(ct[0].Env) != 1 { // solo cambia la imagen
+		t.Fatalf("contenedores tras el parche: %+v", ct)
+	}
+}
+
+// Un rollout que no completa NUNCA es exito, ni aunque el status ya cuente replicas o haya un pod Ready.
+func TestDeployRolloutTimeoutNeverSucceedsOnFakeClientset(t *testing.T) {
+	c := newCluster(never)
+	svc, pub, al := service(c.cs)
+	err := svc.Deploy(context.Background(), "r-1", art, "t")
+	d, _, _ := svc.DeployState(context.Background(), "r-1")
+	if err == nil || d.State != "failed" || d.Attempts != 3 || !strings.Contains(d.Reason, "timeout") {
+		t.Fatalf("err=%v %+v", err, d)
+	}
+	for _, e := range pub.Events {
+		if e.Type == "deploy.done" {
+			t.Fatal("un timeout fue exito")
+		}
+	}
+	if len(pub.Events) != 1 || len(al.Calls) != 1 {
+		t.Fatalf("eventos=%d handoffs=%d", len(pub.Events), len(al.Calls))
+	}
+}
+
+func TestDeployConcurrentOnKubeStorePatchesOnce(t *testing.T) {
+	c := newCluster(func(int, int) bool { return true })
+	svc, _, _ := service(c.cs)
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) { defer wg.Done(); _ = svc.Deploy(context.Background(), fmt.Sprintf("r-%d", i), art, "t") }(i)
+	}
+	wg.Wait()
+	if c.patchCount() != 1 {
+		t.Fatalf("parches=%d", c.patchCount())
+	}
+}
+
+// Reinicio: el warm persistido quedo dirty (CAS en el ConfigMap) y el estado del deploy es de memoria.
+func TestDeployRestartLeavesWarmDirtyAndForgetsDeploys(t *testing.T) {
+	ctx := context.Background()
+	c := newCluster(func(int, int) bool { return true })
+	svc, _, _ := service(c.cs)
+	if err := svc.Deploy(ctx, "r-1", art, "t"); err != nil {
 		t.Fatal(err)
 	}
-	p := j.Spec.Template.Spec
-	if *p.AutomountServiceAccountToken || p.HostNetwork || p.ServiceAccountName == "" || *j.Spec.BackoffLimit != 0 {
-		t.Fatalf("Job creado inseguro: %+v", p)
+	st := &kube.StateStore{C: c.cs, Seed: seed}
+	if w, _ := st.Get(ctx); w.State != "dirty" || w.ResetVerified {
+		t.Fatalf("el ConfigMap debia quedar dirty: %+v", w)
+	}
+	fresh := &wm.Service{Cfg: svc.Cfg, State: st, Probe: &fakes.FakeProbe{}, Deployer: &kube.Deployer{C: c.cs}, Alerts: &fakes.FakeAlerter{},
+		Pub: &fakes.MemPublisher{}, Clock: &fakes.FakeClock{T: time.Unix(0, 0)}}
+	if _, ok, _ := fresh.DeployState(ctx, "r-1"); ok {
+		t.Fatal("tras reinicio el deploy no se conoce")
+	}
+	if err := fresh.Deploy(ctx, "r-2", art, "t"); !errors.Is(err, wm.ErrNotReady) || c.patchCount() != 1 {
+		t.Fatalf("no debia parchear: %v parches=%d", err, c.patchCount())
+	}
+}
+
+// SetImage: el parche por nombre inexistente AGREGARIA un contenedor; el adaptador lo impide.
+func TestDeployerSetImageNeedsTheContainer(t *testing.T) {
+	ctx := context.Background()
+	one := int32(1)
+	cs := fake.NewClientset(&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "warm-app", Namespace: "aqs-test"},
+		Spec: appsv1.DeploymentSpec{Replicas: &one, Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "otro", Image: "x"}}}}}})
+	if err := (&kube.Deployer{C: cs}).SetImage(ctx, art.Ref); err == nil {
+		t.Fatal("sin contenedor warm-app debia fallar")
+	}
+	n := 0
+	for _, a := range cs.Actions() {
+		if a.GetVerb() == "patch" {
+			n++
+		}
+	}
+	if n != 0 {
+		t.Fatal("no debia parchear")
+	}
+	if err := (&kube.Deployer{C: fake.NewClientset()}).SetImage(ctx, art.Ref); err == nil {
+		t.Fatal("sin Deployment debia fallar")
+	}
+}
+
+// Cada criterio del rollout completo por separado: si uno falla, NO esta completo.
+func TestRolloutCompleteCriteria(t *testing.T) {
+	ctx := context.Background()
+	two := int32(2)
+	base := func() (*appsv1.Deployment, []corev1.Pod) {
+		one := int32(1)
+		d := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "warm-app", Namespace: "aqs-test", Generation: 2},
+			Spec:   appsv1.DeploymentSpec{Replicas: &one, Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "warm-app", Image: art.Ref}}}}},
+			Status: appsv1.DeploymentStatus{ObservedGeneration: 2, UpdatedReplicas: 1, AvailableReplicas: 1}}
+		return d, []corev1.Pod{readyPod(art.Ref)}
+	}
+	cases := []struct {
+		name string
+		mut  func(*appsv1.Deployment, *[]corev1.Pod)
+		want bool
+	}{
+		{"completo", func(*appsv1.Deployment, *[]corev1.Pod) {}, true},
+		{"observedGeneration vieja", func(d *appsv1.Deployment, _ *[]corev1.Pod) { d.Status.ObservedGeneration = 1 }, false},
+		{"updatedReplicas distinto", func(d *appsv1.Deployment, _ *[]corev1.Pod) { d.Status.UpdatedReplicas = 0 }, false},
+		{"availableReplicas distinto", func(d *appsv1.Deployment, _ *[]corev1.Pod) { d.Status.AvailableReplicas = 0 }, false},
+		{"replicas 2 con 1 disponible", func(d *appsv1.Deployment, _ *[]corev1.Pod) { d.Spec.Replicas = &two; d.Status.UpdatedReplicas = 2 }, false},
+		{"replicas 0", func(d *appsv1.Deployment, _ *[]corev1.Pod) {
+			z := int32(0)
+			d.Spec.Replicas = &z
+			d.Status.UpdatedReplicas, d.Status.AvailableReplicas = 0, 0
+		}, false},
+		{"plantilla con otra imagen", func(d *appsv1.Deployment, _ *[]corev1.Pod) { d.Spec.Template.Spec.Containers[0].Image = oldImage }, false},
+		{"pod extra (el viejo sigue)", func(_ *appsv1.Deployment, p *[]corev1.Pod) { *p = append(*p, readyPod(oldImage)) }, false},
+		{"sin pods", func(_ *appsv1.Deployment, p *[]corev1.Pod) { *p = nil }, false},
+		{"pod con imagen vieja", func(_ *appsv1.Deployment, p *[]corev1.Pod) { *p = []corev1.Pod{readyPod(oldImage)} }, false},
+		{"pod no Ready", func(_ *appsv1.Deployment, p *[]corev1.Pod) {
+			(*p)[0].Status.Conditions[0].Status = corev1.ConditionFalse
+		}, false},
+		{"pod sin condicion Ready", func(_ *appsv1.Deployment, p *[]corev1.Pod) { (*p)[0].Status.Conditions = nil }, false},
+		{"pod no Running", func(_ *appsv1.Deployment, p *[]corev1.Pod) { (*p)[0].Status.Phase = corev1.PodPending }, false},
+		{"pod terminando", func(_ *appsv1.Deployment, p *[]corev1.Pod) {
+			now := metav1.Now()
+			(*p)[0].DeletionTimestamp = &now
+		}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d, pods := base()
+			c.mut(d, &pods)
+			objs := []runtime.Object{d}
+			for i := range pods {
+				pods[i].Name, pods[i].Labels = fmt.Sprintf("p%d", i), map[string]string{"app.kubernetes.io/name": "warm-app"}
+				objs = append(objs, &pods[i])
+			}
+			got, err := (&kube.Deployer{C: fake.NewClientset(objs...)}).RolloutComplete(ctx, art.Ref)
+			if err != nil || got != c.want {
+				t.Fatalf("got=%v err=%v want=%v", got, err, c.want)
+			}
+		})
+	}
+	if _, err := (&kube.Deployer{C: fake.NewClientset()}).RolloutComplete(ctx, art.Ref); err == nil {
+		t.Fatal("sin Deployment el error debe propagarse, no tragarse como 'no completo'")
 	}
 }
 
@@ -183,22 +380,6 @@ func TestStateStoreCompareAndSwapConflictFromAPIServer(t *testing.T) {
 	}
 }
 
-func TestDeployConcurrentOnKubeStoreCreatesOneJob(t *testing.T) {
-	cs := fake.NewClientset()
-	jobOutcome(cs, func(int) bool { return false })
-	svc, _, _ := service(cs)
-	var wg sync.WaitGroup
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(i int) { defer wg.Done(); _ = svc.Deploy(context.Background(), fmt.Sprintf("r-%d", i), art, "t") }(i)
-	}
-	wg.Wait()
-	l, _ := cs.BatchV1().Jobs("aqs-test").List(context.Background(), metav1.ListOptions{})
-	if len(l.Items) != 1 {
-		t.Fatalf("Jobs=%d", len(l.Items))
-	}
-}
-
 func TestHealthNeedsAllThreeComponentsReady(t *testing.T) {
 	pod := func(name string, ready bool) *corev1.Pod {
 		st := corev1.ConditionFalse
@@ -237,14 +418,6 @@ func TestRuntimeScaleUp(t *testing.T) {
 	}
 }
 
-func TestJobsRejectsForeignNamespace(t *testing.T) {
-	m, _ := wm.BuildDeployJob(wm.JobConfig{AllowedRegistries: wm.DefaultAllowedRegistries}, "r-1", 0, art)
-	m["metadata"].(map[string]any)["namespace"] = "aqs-prod"
-	if err := (&kube.Jobs{C: fake.NewClientset()}).Create(context.Background(), m); err == nil {
-		t.Fatal("namespace ajeno aceptado")
-	}
-}
-
 // MA: el Update condicional debe llevar el resourceVersion del ConfigMap leido (protege entre replicas).
 func TestStateStoreCompareAndSwapSendsResourceVersionOfTheRead(t *testing.T) {
 	cs := fake.NewClientset(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "warm-state", Namespace: "aqs-test", ResourceVersion: "42"},
@@ -261,28 +434,5 @@ func TestStateStoreCompareAndSwapSendsResourceVersionOfTheRead(t *testing.T) {
 	}
 	if sent != "42" {
 		t.Fatalf("el Update llevo resourceVersion %q, se esperaba el del Get (42)", sent)
-	}
-}
-
-func TestJobsListAndDerivedStatusViaKube(t *testing.T) {
-	ctx := context.Background()
-	cs := fake.NewClientset()
-	outs := []bool{true, false} // el primer Job falla y el segundo termina
-	jobOutcome(cs, func(n int) bool { return outs[n] })
-	svc, _, _ := service(cs)
-	if err := svc.Deploy(ctx, "r-1", art, "t"); err != nil {
-		t.Fatal(err)
-	}
-	fresh, _, _ := service(cs) // instancia nueva: memoria vacia
-	st, ok, err := fresh.DeployState(ctx, "r-1")
-	if err != nil || !ok || st.State != "done" || st.Attempts != 2 {
-		t.Fatalf("%+v ok=%v err=%v", st, ok, err)
-	}
-	if _, ok, _ := fresh.DeployState(ctx, "r-2"); ok {
-		t.Fatal("r-2 no existe")
-	}
-	views, err := (&kube.Jobs{C: cs}).List(ctx, "")
-	if err != nil || len(views) != 2 || views[0].Artifact != art {
-		t.Fatalf("%+v %v", views, err)
 	}
 }

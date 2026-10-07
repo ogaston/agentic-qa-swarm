@@ -116,6 +116,8 @@ func (s *Server) Handler() http.Handler {
 		case errors.Is(err, wm.ErrNotReady):
 			s.Log.Warn("deploy rechazado: el warm no esta listo", "run_id", req.RunID, "trace_id", tr, "state", warm.State)
 			writeJSON(w, 409, warm)
+		case errors.Is(err, wm.ErrBuildNotSupported):
+			writeJSON(w, 422, map[string]string{"error": "unsupported_artifact", "reason": "build-from-repo no soportado"})
 		case err != nil && (errors.Is(err, wm.ErrInvalidRunID) || errors.Is(err, wm.ErrInvalidArtifact) || errors.Is(err, wm.ErrRegistryNotAllowed)):
 			writeJSON(w, 400, map[string]string{"error": "invalid_request"})
 		case err != nil:

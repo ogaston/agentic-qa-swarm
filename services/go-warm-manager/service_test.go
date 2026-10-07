@@ -18,12 +18,14 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/internal/fakes"
 )
 
+var okArt = wm.Artifact{Kind: "published-image", Ref: "ghcr.io/ogaston/demo:1.2.3"}
+
 type rig struct {
 	svc   *wm.Service
 	state *fakes.MemState
 	probe *fakes.FakeProbe
 	rt    *fakes.FakeRuntime
-	jobs  *fakes.FakeJobs
+	dep   *fakes.FakeDeployer
 	pub   *fakes.MemPublisher
 	al    *fakes.FakeAlerter
 	objs  *fakes.MemObjects
@@ -31,11 +33,11 @@ type rig struct {
 }
 
 func newRig(st wm.WarmState) *rig {
-	r := &rig{state: &fakes.MemState{S: st}, probe: &fakes.FakeProbe{}, rt: &fakes.FakeRuntime{}, jobs: &fakes.FakeJobs{},
+	r := &rig{state: &fakes.MemState{S: st}, probe: &fakes.FakeProbe{}, rt: &fakes.FakeRuntime{}, dep: &fakes.FakeDeployer{},
 		pub: &fakes.MemPublisher{}, al: &fakes.FakeAlerter{}, objs: &fakes.MemObjects{},
 		web: &fakes.FakeProber{Base: "http://warm-app.aqs-test.svc", Routes: map[string]fakes.FakeResponse{}}}
-	r.svc = &wm.Service{Cfg: wm.Config{Job: jcfg, PollInterval: time.Second}, State: r.state, Probe: r.probe, Runtime: r.rt,
-		Jobs: r.jobs, Surface: r.web, Objects: r.objs, Alerts: r.al, Pub: r.pub,
+	r.svc = &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, PollInterval: time.Second, DeployTimeout: time.Minute}, State: r.state, Probe: r.probe, Runtime: r.rt,
+		Deployer: r.dep, Surface: r.web, Objects: r.objs, Alerts: r.al, Pub: r.pub,
 		Clock: &fakes.FakeClock{T: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}
 	return r
 }
@@ -121,13 +123,10 @@ type probeFunc func() error
 
 func (f probeFunc) Check(context.Context) error { return f() }
 
-func failN(k int) func(int) wm.JobPhase { // los primeros k Jobs fallan
-	return func(n int) wm.JobPhase {
-		if n < k {
-			return wm.JobFailed
-		}
-		return wm.JobSucceeded
-	}
+// neverUntil hace que el rollout solo complete tras el k-esimo parche: los intentos anteriores
+// llegan al timeout (el reloj falso avanza con cada Sleep, asi que el timeout es instantaneo).
+func neverUntil(r *rig, k int) {
+	r.dep.Rollout = func(int) (bool, error) { return r.dep.Patches() > k, nil }
 }
 
 func TestDeployRetry(t *testing.T) {
@@ -139,13 +138,13 @@ func TestDeployRetry(t *testing.T) {
 	}{{"sin reintentos", 0, 1, "deploy.done"}, {"un reintento", 1, 2, "deploy.done"}, {"dos reintentos", 2, 3, "deploy.done"}, {"tercera falla", 3, 3, "deploy.failed"}} {
 		t.Run(c.name, func(t *testing.T) {
 			r := newRig(ws("ready", true))
-			r.jobs.Outcome = failN(c.fail)
+			neverUntil(r, c.fail)
 			err := r.svc.Deploy(context.Background(), "r-1", okArt, "t")
 			if (c.lastType == "deploy.done") != (err == nil) {
 				t.Fatalf("err=%v", err)
 			}
-			if len(r.jobs.Created) != c.jobs {
-				t.Fatalf("jobs=%d want %d", len(r.jobs.Created), c.jobs)
+			if r.dep.Patches() != c.jobs {
+				t.Fatalf("parches=%d want %d", r.dep.Patches(), c.jobs)
 			}
 			last := r.pub.Events[len(r.pub.Events)-1]
 			if last.Type != c.lastType {
@@ -168,33 +167,58 @@ func TestDeployRetry(t *testing.T) {
 	}
 }
 
-func TestDeployExhaustedNeverCreatesFourthJob(t *testing.T) {
+func TestDeployExhaustedNeverPatchesFourthTime(t *testing.T) {
 	r := newRig(ws("ready", true))
-	r.jobs.Outcome = failN(100)
+	neverUntil(r, 100)
 	err := r.svc.Deploy(context.Background(), "r-1", okArt, "t")
-	if err == nil || len(r.jobs.Created) != 3 || len(r.al.Calls) != 1 {
-		t.Fatalf("err=%v jobs=%d handoffs=%d", err, len(r.jobs.Created), len(r.al.Calls))
+	if err == nil || r.dep.Patches() != 3 || len(r.al.Calls) != 1 {
+		t.Fatalf("err=%v parches=%d handoffs=%d", err, r.dep.Patches(), len(r.al.Calls))
 	}
-	if !strings.Contains(r.pub.Events[len(r.pub.Events)-1].Data["reason"].(string), "fallo") {
+	if !strings.Contains(r.pub.Events[len(r.pub.Events)-1].Data["reason"].(string), "timeout") {
 		t.Fatal("reason vacio")
+	}
+	// el warm queda dirty: otro deploy no parchea
+	if err := r.svc.Deploy(context.Background(), "r-2", okArt, "t"); !errors.Is(err, wm.ErrNotReady) || r.dep.Patches() != 3 {
+		t.Fatalf("no debia parchear mas: %v", err)
+	}
+}
+
+// Un rollout que NUNCA completa llega al timeout: deploy.failed + 1 handoff, jamas deploy.done.
+func TestDeployRolloutTimeoutNeverSucceeds(t *testing.T) {
+	r := newRig(ws("ready", true))
+	r.dep.Rollout = func(int) (bool, error) { return false, nil }
+	err := r.svc.Deploy(context.Background(), "r-1", okArt, "t")
+	if err == nil || r.dep.Patches() != 3 || len(r.al.Calls) != 1 {
+		t.Fatalf("err=%v parches=%d handoffs=%d", err, r.dep.Patches(), len(r.al.Calls))
+	}
+	for _, ty := range r.types() {
+		if ty == "deploy.done" {
+			t.Fatalf("un timeout fue exito: %v", r.types())
+		}
+	}
+	if n := len(r.types()); n != 1 || r.types()[0] != "deploy.failed" {
+		t.Fatalf("eventos: %v", r.types())
+	}
+	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" || d.Attempts != 3 || !strings.Contains(d.Reason, "timeout") {
+		t.Fatalf("%+v", d)
 	}
 }
 
 func TestDeployRefusals(t *testing.T) {
 	ctx := context.Background()
 	r := newRig(ws("dirty", false))
-	if err := r.svc.Deploy(ctx, "r-1", okArt, "t"); !errors.Is(err, wm.ErrNotReady) || len(r.jobs.Created) != 0 {
+	if err := r.svc.Deploy(ctx, "r-1", okArt, "t"); !errors.Is(err, wm.ErrNotReady) || r.dep.Patches() != 0 {
 		t.Fatalf("dirty: %v", err)
 	}
 	r = newRig(ws("ready", false)) // ready pero sin reset verificado: tampoco se despliega
-	if err := r.svc.Deploy(ctx, "r-1", okArt, "t"); !errors.Is(err, wm.ErrNotReady) || r.jobs.Count() != 0 {
+	if err := r.svc.Deploy(ctx, "r-1", okArt, "t"); !errors.Is(err, wm.ErrNotReady) || r.dep.Patches() != 0 {
 		t.Fatalf("ready sin reset_verified: %v", err)
 	}
 	if got, _ := r.state.Get(ctx); got != ws("ready", false) {
 		t.Fatal("el estado no debia cambiar")
 	}
 	r = newRig(ws("ready", true))
-	if err := r.svc.Deploy(ctx, "r-1", wm.Artifact{Kind: "published-image", Ref: "docker.io/evil/x:1"}, "t"); !errors.Is(err, wm.ErrRegistryNotAllowed) || len(r.jobs.Created) != 0 {
+	if err := r.svc.Deploy(ctx, "r-1", wm.Artifact{Kind: "published-image", Ref: "docker.io/evil/x:1"}, "t"); !errors.Is(err, wm.ErrRegistryNotAllowed) || r.dep.Patches() != 0 {
 		t.Fatalf("registro: %v", err)
 	}
 	if got, _ := r.state.Get(ctx); got.State != "ready" {
@@ -294,7 +318,7 @@ func TestEventsDump(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := newRig(ws("ready", true))
-	f.jobs.Outcome = failN(100)
+	neverUntil(f, 100)
 	_ = f.svc.Deploy(ctx, "r-2", okArt, "4bf92f3577b34da6a3ce929d0e0e4736")
 	all := append(r.pub.Events, f.pub.Events...)
 	for _, e := range all {
@@ -335,8 +359,8 @@ func TestDeployConcurrentTakesWarmOnce(t *testing.T) {
 			t.Fatalf("los perdedores deben fallar con ErrNotReady: %v", e)
 		}
 	}
-	if r.jobs.Count() != 1 || ok != 1 {
-		t.Fatalf("Jobs=%d ganadores=%d", r.jobs.Count(), ok)
+	if r.dep.Patches() != 1 || ok != 1 {
+		t.Fatalf("parches=%d ganadores=%d", r.dep.Patches(), ok)
 	}
 }
 
@@ -347,43 +371,43 @@ func (c casLoser) CompareAndSwap(context.Context, wm.WarmState, wm.WarmState) er
 	return wm.ErrStateConflict
 }
 
-func TestDeployCASConflictIsNotReadyAndNoJob(t *testing.T) {
+func TestDeployCASConflictIsNotReadyAndNoPatch(t *testing.T) {
 	r := newRig(ws("ready", true))
 	r.svc.State = casLoser{r.state}
 	err := r.svc.Deploy(context.Background(), "r-1", okArt, "t")
-	if !errors.Is(err, wm.ErrNotReady) || r.jobs.Count() != 0 {
-		t.Fatalf("err=%v jobs=%d", err, r.jobs.Count())
+	if !errors.Is(err, wm.ErrNotReady) || r.dep.Patches() != 0 {
+		t.Fatalf("err=%v parches=%d", err, r.dep.Patches())
 	}
 	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" || d.Reason == "" {
 		t.Fatalf("estado visible: %+v", d)
 	}
 }
 
-func TestDeployStatusReadErrorDoesNotConsumeRetry(t *testing.T) {
+func TestDeployRolloutReadErrorDoesNotConsumeRetry(t *testing.T) {
 	r := newRig(ws("ready", true))
-	r.jobs.StatusErr = func(call int) error {
+	r.dep.Rollout = func(call int) (bool, error) {
 		if call == 1 {
-			return errors.New("apiserver 500")
+			return false, errors.New("apiserver 500")
 		}
-		return nil
+		return true, nil
 	}
 	if err := r.svc.Deploy(context.Background(), "r-1", okArt, "t"); err != nil {
 		t.Fatal(err)
 	}
-	if r.jobs.Count() != 1 || r.types()[len(r.types())-1] != "deploy.done" {
-		t.Fatalf("Jobs=%d eventos=%v", r.jobs.Count(), r.types())
+	if r.dep.Patches() != 1 || r.types()[len(r.types())-1] != "deploy.done" {
+		t.Fatalf("parches=%d eventos=%v", r.dep.Patches(), r.types())
 	}
 }
 
-func TestDeployStatusReadErrorPersistentFailsClosed(t *testing.T) {
+func TestDeployRolloutReadErrorPersistentFailsClosed(t *testing.T) {
 	r := newRig(ws("ready", true))
-	r.jobs.StatusErr = func(int) error { return errors.New("apiserver caido") }
+	r.dep.Rollout = func(int) (bool, error) { return false, errors.New("apiserver caido") }
 	err := r.svc.Deploy(context.Background(), "r-1", okArt, "t")
 	last := r.pub.Events[len(r.pub.Events)-1]
-	if err == nil || r.jobs.Count() != 1 || last.Type != "deploy.failed" || len(r.al.Calls) != 1 {
-		t.Fatalf("err=%v jobs=%d ev=%s handoffs=%d", err, r.jobs.Count(), last.Type, len(r.al.Calls))
+	if err == nil || r.dep.Patches() != 3 || last.Type != "deploy.failed" || len(r.al.Calls) != 1 {
+		t.Fatalf("err=%v parches=%d ev=%s handoffs=%d", err, r.dep.Patches(), last.Type, len(r.al.Calls))
 	}
-	if !strings.Contains(last.Data["reason"].(string), "indeterminado") {
+	if !strings.Contains(last.Data["reason"].(string), "no se pudo leer el rollout") {
 		t.Fatalf("reason=%v", last.Data["reason"])
 	}
 	if err := validate(t, "events/deploy.schema.json", last); err != nil {
@@ -391,22 +415,34 @@ func TestDeployStatusReadErrorPersistentFailsClosed(t *testing.T) {
 	}
 }
 
-func TestDeployCreateErrorFailsClosedWithoutSecondJob(t *testing.T) {
+// Un parche rechazado cuenta como intento fallido: se reintenta (el parche es idempotente) y agotados falla cerrado.
+func TestDeployPatchErrorRetriesThenFailsClosed(t *testing.T) {
 	r := newRig(ws("ready", true))
-	r.jobs.CreateErr = func(int) error { return errors.New("timeout al crear") }
+	r.dep.SetErr = func(int) error { return errors.New("forbidden") }
 	err := r.svc.Deploy(context.Background(), "r-1", okArt, "t")
-	if err == nil || r.jobs.Count() != 0 || len(r.al.Calls) != 1 || r.types()[len(r.types())-1] != "deploy.failed" {
-		t.Fatalf("err=%v jobs=%d handoffs=%d", err, r.jobs.Count(), len(r.al.Calls))
+	if err == nil || r.dep.Patches() != 0 || len(r.al.Calls) != 1 || r.types()[len(r.types())-1] != "deploy.failed" {
+		t.Fatalf("err=%v parches=%d handoffs=%d", err, r.dep.Patches(), len(r.al.Calls))
 	}
-	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" || d.Attempts != 1 {
+	d, _, _ := r.svc.DeployState(context.Background(), "r-1")
+	if d.State != "failed" || d.Attempts != 3 || !strings.Contains(d.Reason, "forbidden") {
 		t.Fatalf("%+v", d)
+	}
+	r = newRig(ws("ready", true)) // un parche transitorio se recupera en el reintento
+	r.dep.SetErr = func(call int) error {
+		if call == 1 {
+			return errors.New("conflicto")
+		}
+		return nil
+	}
+	if err := r.svc.Deploy(context.Background(), "r-1", okArt, "t"); err != nil || r.dep.Patches() != 1 || len(r.al.Calls) != 0 {
+		t.Fatalf("err=%v parches=%d", err, r.dep.Patches())
 	}
 }
 
 func TestDeployWarmNotReadyEmitsFailedWithoutHandoff(t *testing.T) {
 	r := newRig(ws("dirty", false))
 	err := r.svc.Deploy(context.Background(), "r-1", okArt, "t")
-	if !errors.Is(err, wm.ErrNotReady) || len(r.al.Calls) != 0 || r.jobs.Count() != 0 {
+	if !errors.Is(err, wm.ErrNotReady) || len(r.al.Calls) != 0 || r.dep.Patches() != 0 {
 		t.Fatalf("err=%v", err)
 	}
 	last := r.pub.Events[len(r.pub.Events)-1]
@@ -471,8 +507,8 @@ func TestDeployPutDirtyFailureIsVisibleAndLogged(t *testing.T) {
 		t.Fatal("debia fallar")
 	}
 	d, _, _ := r.svc.DeployState(context.Background(), "r-1")
-	if d.State != "failed" || !strings.Contains(d.Reason, "etcd caido") || r.jobs.Count() != 0 {
-		t.Fatalf("%+v jobs=%d", d, r.jobs.Count())
+	if d.State != "failed" || !strings.Contains(d.Reason, "etcd caido") || r.dep.Patches() != 0 {
+		t.Fatalf("%+v parches=%d", d, r.dep.Patches())
 	}
 	if !strings.Contains(lg.String(), `"run_id":"r-1"`) || !strings.Contains(lg.String(), `"trace_id":"trace-x"`) {
 		t.Fatalf("log sin run_id/trace_id: %s", lg)
@@ -508,7 +544,7 @@ func TestDeployPublishDoneFailureMarksFailedAndLogs(t *testing.T) {
 func TestDeployHandoffAndPublishFailedAreLoggedAndReturned(t *testing.T) {
 	r := newRig(ws("ready", true))
 	lg := logged(r)
-	r.jobs.Outcome = failN(100)
+	neverUntil(r, 100)
 	r.svc.Alerts = failingAlerter{}
 	r.svc.Pub = failingPub{r.pub, "deploy.failed"}
 	err := r.svc.Deploy(context.Background(), "r-1", okArt, "t7")
@@ -525,14 +561,77 @@ func TestDeployHandoffAndPublishFailedAreLoggedAndReturned(t *testing.T) {
 	}
 }
 
+// StartDeploy repetido con el mismo run_id (deploy aun pending) devuelve el estado existente sin tocar
+// el warm: ni un segundo parche ni un cambio del WarmState.
+func TestStartDeployIdempotentReturnsExistingStateWithoutTouchingWarm(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(ws("ready", true))
+	gate := make(chan struct{})
+	r.dep.Gate = gate
+	first, _, err := r.svc.StartDeploy(ctx, "r-1", okArt, "t")
+	if err != nil || first.State != "pending" {
+		t.Fatalf("%+v %v", first, err)
+	}
+	for i := 0; i < 500 && r.dep.Patches() == 0; i++ { // el parche ya se aplico y el rollout espera la compuerta
+		time.Sleep(2 * time.Millisecond)
+	}
+	if r.dep.Patches() != 1 {
+		t.Fatalf("parches=%d", r.dep.Patches())
+	}
+	warmBefore, _ := r.state.Get(ctx)
+	for i := 0; i < 3; i++ {
+		again, w, err := r.svc.StartDeploy(ctx, "r-1", okArt, "otro-trace")
+		if err != nil || again.RunID != "r-1" || again.State != "pending" || w != (wm.WarmState{}) {
+			t.Fatalf("repetido: %+v %+v %v", again, w, err)
+		}
+	}
+	if warmAfter, _ := r.state.Get(ctx); warmAfter != warmBefore || r.dep.Patches() != 1 || len(r.pub.Snapshot()) != 0 {
+		t.Fatalf("el repetido toco el warm o parcheo: %+v parches=%d", warmAfter, r.dep.Patches())
+	}
+	close(gate)
+	var d wm.DeployStatus
+	for i := 0; i < 500; i++ {
+		if d, _, _ = r.svc.DeployState(ctx, "r-1"); d.State == "done" {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if d.State != "done" || r.dep.Patches() != 1 {
+		t.Fatalf("%+v parches=%d", d, r.dep.Patches())
+	}
+	// ya terminado, un repetido tampoco toca nada (el warm sigue dirty)
+	if again, _, err := r.svc.StartDeploy(ctx, "r-1", okArt, "t"); err != nil || again.State != "done" || r.dep.Patches() != 1 {
+		t.Fatalf("%+v %v", again, err)
+	}
+}
+
+// build-from-repo no esta soportado: se rechaza sin tomar el warm ni parchear (fail-closed).
+func TestBuildFromRepoRejectedTouchesNothing(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(ws("ready", true))
+	a := wm.Artifact{Kind: "build-from-repo", Ref: "ogaston/demo@" + strings.Repeat("a", 40)}
+	if _, _, err := r.svc.StartDeploy(ctx, "r-1", a, "t"); !errors.Is(err, wm.ErrBuildNotSupported) {
+		t.Fatalf("StartDeploy: %v", err)
+	}
+	if err := r.svc.Deploy(ctx, "r-1", a, "t"); !errors.Is(err, wm.ErrBuildNotSupported) {
+		t.Fatalf("Deploy: %v", err)
+	}
+	if got, _ := r.state.Get(ctx); got != ws("ready", true) || r.dep.Patches() != 0 || len(r.pub.Snapshot()) != 0 {
+		t.Fatalf("toco algo: %+v parches=%d", got, r.dep.Patches())
+	}
+	if _, ok, _ := r.svc.DeployState(ctx, "r-1"); ok {
+		t.Fatal("no debia crearse estado")
+	}
+}
+
 func TestStartDeployWarmNotReadyCreatesNoState(t *testing.T) {
 	r := newRig(ws("dirty", false))
 	_, w, err := r.svc.StartDeploy(context.Background(), "r-1", okArt, "t")
 	if !errors.Is(err, wm.ErrNotReady) || w != ws("dirty", false) {
 		t.Fatalf("w=%+v err=%v", w, err)
 	}
-	if _, ok, _ := r.svc.DeployState(context.Background(), "r-1"); ok || r.jobs.Count() != 0 {
-		t.Fatal("no debia haber estado ni Jobs")
+	if _, ok, _ := r.svc.DeployState(context.Background(), "r-1"); ok || r.dep.Patches() != 0 {
+		t.Fatal("no debia haber estado ni parches")
 	}
 }
 

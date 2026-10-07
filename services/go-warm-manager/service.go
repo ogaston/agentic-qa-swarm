@@ -16,15 +16,18 @@ import (
 // DefaultWarmReadyTimeout es la espera maxima por defecto a que el warm llegue a Ready.
 const DefaultWarmReadyTimeout = 120 * time.Second
 
-// MaxRetries son los reintentos del deploy tras el intento inicial (V8): 3 Jobs como máximo.
+// DefaultDeployTimeout es la espera maxima por defecto del rollout de un intento de deploy.
+const DefaultDeployTimeout = 10 * time.Minute
+
+// MaxRetries son los reintentos del deploy tras el intento inicial (V8): 3 intentos como máximo.
 const MaxRetries = 2
 
 // Config del servicio.
 type Config struct {
-	Job              JobConfig
-	WarmReadyTimeout time.Duration // 120 s por defecto
-	PollInterval     time.Duration
-	JobTimeout       time.Duration
+	AllowedRegistries []string
+	WarmReadyTimeout  time.Duration // 120 s por defecto
+	PollInterval      time.Duration
+	DeployTimeout     time.Duration // espera maxima del rollout de cada intento (10 min por defecto)
 }
 
 // Service reúne el dominio y los puertos.
@@ -33,7 +36,7 @@ type Service struct {
 	State    StateStore
 	Probe    HealthProbe
 	Runtime  WarmRuntime
-	Jobs     Jobs
+	Deployer Deployer
 	Surface  SurfaceProber
 	Objects  ObjectStore
 	Alerts   Alerter
@@ -174,8 +177,11 @@ func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, tra
 	if err := ValidateRunID(runID); err != nil {
 		return DeployStatus{}, WarmState{}, err
 	}
-	if err := ValidateArtifact(a, s.Cfg.Job.AllowedRegistries); err != nil {
+	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries); err != nil {
 		return DeployStatus{}, WarmState{}, err
+	}
+	if a.Kind == KindBuildFromRepo {
+		return DeployStatus{}, WarmState{}, ErrBuildNotSupported
 	}
 	s.mu.Lock()
 	if d, ok := s.deploys[runID]; ok {
@@ -213,87 +219,16 @@ func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, tra
 	return out, WarmState{}, nil
 }
 
-// DeployState devuelve el estado de un deploy: de memoria si esta, y si no derivado de los Jobs
-// del run (etiqueta aqs.io/run-id). El estado es memoria + Jobs; no hay otra persistencia.
-func (s *Service) DeployState(ctx context.Context, runID string) (DeployStatus, bool, error) {
+// DeployState devuelve el estado de un deploy. Vive solo en memoria: tras un reinicio no hay
+// deploys conocidos (404) y el warm persistido esta dirty, asi que nada se despliega hasta un reset verificado.
+func (s *Service) DeployState(_ context.Context, runID string) (DeployStatus, bool, error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	d, ok := s.deploys[runID]
-	if ok {
-		out := *d
-		s.mu.Unlock()
-		return out, true, nil
-	}
-	s.mu.Unlock()
-	jobs, err := s.Jobs.List(ctx, runID)
-	if err != nil {
-		return DeployStatus{}, false, err
-	}
-	if len(jobs) == 0 {
+	if !ok {
 		return DeployStatus{}, false, nil
 	}
-	return deriveStatus(runID, jobs), true, nil
-}
-
-func deriveStatus(runID string, jobs []JobView) DeployStatus {
-	st := DeployStatus{RunID: runID, Attempts: len(jobs), State: "failed"}
-	for _, j := range jobs {
-		switch j.Phase {
-		case JobSucceeded:
-			st.State = "done"
-			st.Reason = ""
-			return st
-		case JobPending:
-			st.State, st.Reason = "pending", ""
-		case JobFailed:
-			if st.State == "failed" {
-				st.Reason = "el Job fallo: " + j.Reason
-			}
-		}
-	}
-	return st
-}
-
-// ResolveOrphans cierra, al arrancar, los deploys que quedaron sin observador (reinicio o SIGTERM
-// con un deploy en vuelo). Eleccion fail-closed y simple: no se retoma la observacion; un Job aun en
-// vuelo se da por indeterminado y se emite deploy.failed + handoff (el warm sigue dirty, asi que nada
-// se despliega encima); un Job terminado reemite su evento terminal (event_id determinista: el
-// outbox deduplica). El warm_id sale del estado persistido.
-func (s *Service) ResolveOrphans(ctx context.Context, trace string) error {
-	jobs, err := s.Jobs.List(ctx, "")
-	if err != nil {
-		return err
-	}
-	w, err := s.State.Get(ctx)
-	if err != nil {
-		return err
-	}
-	byRun := map[string][]JobView{}
-	for _, j := range jobs {
-		byRun[j.RunID] = append(byRun[j.RunID], j)
-	}
-	var errs []error
-	for run, js := range byRun {
-		s.mu.Lock()
-		_, known := s.deploys[run]
-		s.mu.Unlock()
-		if known {
-			continue
-		}
-		st := deriveStatus(run, js)
-		a := js[len(js)-1].Artifact
-		switch st.State {
-		case "done":
-			s.track(run, "done", st.Attempts, "")
-			errs = append(errs, s.Pub.Publish(ctx, newEvent("deploy.done", run, trace, s.Clock.Now(), deployData(w.WarmID, run, a, ""))))
-		case "pending":
-			s.logger().Warn("deploy huerfano tras reinicio: se da por indeterminado", "run_id", run, "trace_id", trace)
-			errs = append(errs, s.closeFailed(ctx, run, w.WarmID, a, trace, st.Attempts, "deploy en vuelo huerfano tras reinicio de go-warm-manager: estado indeterminado", true))
-		default:
-			s.track(run, "failed", st.Attempts, st.Reason)
-			errs = append(errs, s.Pub.Publish(ctx, newEvent("deploy.failed", run, trace, s.Clock.Now(), deployData(w.WarmID, run, a, st.Reason))))
-		}
-	}
-	return errors.Join(errs...)
+	return *d, true, nil
 }
 
 func (s *Service) track(runID, state string, attempts int, reason string) {
@@ -349,18 +284,22 @@ func (s *Service) closeFailed(ctx context.Context, runID, warmID string, a Artif
 	return errors.Join(errs...)
 }
 
-// StatusReadRetries es el tope de lecturas fallidas seguidas del estado de un Job antes de darlo por indeterminado.
+// StatusReadRetries es el tope de lecturas fallidas seguidas del rollout antes de dar el intento por fallido.
 const StatusReadRetries = 5
 
-// Deploy ejecuta el deploy de forma sincrona: toma el warm (ready->dirty atomico), crea el Job
-// deploy-{run}-0 y, si falla, hasta MaxRetries reintentos. Agotados, o ante un intento
-// indeterminado (no se pudo crear/leer el Job): deploy.failed + handoff, sin Job adicional.
+// Deploy ejecuta el deploy de forma sincrona: toma el warm (ready->dirty atomico ANTES de parchear),
+// parchea la imagen de warm-app y espera el rollout completo. Si el intento falla (parche
+// rechazado, rollout que no completa, lectura imposible) reintenta hasta MaxRetries veces; agotados:
+// deploy.failed + handoff. Un timeout del rollout NUNCA es exito.
 func (s *Service) Deploy(ctx context.Context, runID string, a Artifact, trace string) error {
 	if err := ValidateRunID(runID); err != nil {
 		return err
 	}
-	if err := ValidateArtifact(a, s.Cfg.Job.AllowedRegistries); err != nil {
+	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries); err != nil {
 		return err
+	}
+	if a.Kind == KindBuildFromRepo {
+		return ErrBuildNotSupported
 	}
 	dirty, w, err := s.takeWarm(ctx)
 	if err != nil {
@@ -370,41 +309,31 @@ func (s *Service) Deploy(ctx context.Context, runID string, a Artifact, trace st
 	s.obs().WarmState(dirty.State)
 	s.track(runID, "pending", 0, "")
 
-	var reason string
+	reason := "deploy fallido"
 	attempts := 0
 	for n := 0; n <= MaxRetries; n++ {
-		m, err := BuildDeployJob(s.Cfg.Job, runID, n, a)
-		if err != nil {
-			return s.fail(ctx, runID, dirty.WarmID, a, trace, attempts, err.Error(), true)
-		}
 		attempts = n + 1
 		s.track(runID, "pending", attempts, "")
-		if err := s.Jobs.Create(ctx, m); err != nil {
-			// Un error al crear no prueba que el Job no exista: no se crea otro, se falla cerrado.
-			s.obs().DeployAttempt("error")
-			return s.fail(ctx, runID, dirty.WarmID, a, trace, attempts, "intento indeterminado, no se pudo crear el Job: "+err.Error(), true)
+		if err := s.Deployer.SetImage(ctx, a.Ref); err != nil {
+			s.obs().DeployAttempt("failure")
+			reason = "no se pudo parchear la imagen de warm-app: " + err.Error()
+			continue
 		}
-		phase, why, err := s.waitJob(ctx, JobName(runID, n))
-		if err != nil {
-			s.obs().DeployAttempt("error")
-			return s.fail(ctx, runID, dirty.WarmID, a, trace, attempts, "intento indeterminado, no se pudo leer el Job: "+err.Error(), true)
+		ok, why := s.waitRollout(ctx, a.Ref)
+		if !ok {
+			s.obs().DeployAttempt("failure")
+			reason = why
+			continue
 		}
-		if phase == JobSucceeded {
-			s.obs().DeployAttempt("success")
-			ev := newEvent("deploy.done", runID, trace, s.Clock.Now(), deployData(dirty.WarmID, runID, a, ""))
-			if err := s.Pub.Publish(ctx, ev); err != nil {
-				s.logger().Error("publicar deploy.done fallo", "run_id", runID, "trace_id", trace, "error", err.Error())
-				s.track(runID, "failed", attempts, "deploy ok pero no se pudo publicar deploy.done: "+err.Error())
-				return err
-			}
-			s.track(runID, "done", attempts, "")
-			return nil
+		s.obs().DeployAttempt("success")
+		ev := newEvent("deploy.done", runID, trace, s.Clock.Now(), deployData(dirty.WarmID, runID, a, ""))
+		if err := s.Pub.Publish(ctx, ev); err != nil {
+			s.logger().Error("publicar deploy.done fallo", "run_id", runID, "trace_id", trace, "error", err.Error())
+			s.track(runID, "failed", attempts, "deploy ok pero no se pudo publicar deploy.done: "+err.Error())
+			return err
 		}
-		s.obs().DeployAttempt("failure")
-		reason = "el Job fallo: " + why
-	}
-	if reason == "" {
-		reason = "deploy fallido"
+		s.track(runID, "done", attempts, "")
+		return nil
 	}
 	return s.fail(ctx, runID, dirty.WarmID, a, trace, attempts, reason, true)
 }
@@ -442,31 +371,32 @@ func deployData(warmID, runID string, a Artifact, reason string) map[string]any 
 	return d
 }
 
-func (s *Service) waitJob(ctx context.Context, name string) (JobPhase, string, error) {
-	timeout := s.Cfg.JobTimeout
+// waitRollout espera el rollout completo de ref hasta DeployTimeout. Devuelve (false, razon) ante
+// timeout, cancelacion o lecturas fallidas seguidas: solo un rollout completo devuelve true.
+func (s *Service) waitRollout(ctx context.Context, ref string) (bool, string) {
+	timeout := s.Cfg.DeployTimeout
 	if timeout <= 0 {
-		timeout = 10 * time.Minute
+		timeout = DefaultDeployTimeout
 	}
 	deadline := s.Clock.Now().Add(timeout)
 	readFails := 0
 	for {
-		p, why, err := s.Jobs.Status(ctx, name)
-		if err != nil {
-			// Error de lectura: el Job puede seguir vivo. Se relee con tope; no cuenta como intento.
+		done, err := s.Deployer.RolloutComplete(ctx, ref)
+		switch {
+		case err != nil:
 			if readFails++; readFails >= StatusReadRetries {
-				return "", "", err
+				return false, "no se pudo leer el rollout de warm-app: " + err.Error()
 			}
-		} else {
+		case done:
+			return true, ""
+		default:
 			readFails = 0
-			if p != JobPending {
-				return p, why, nil
-			}
 		}
 		if !s.Clock.Now().Before(deadline) {
-			return "", "", fmt.Errorf("timeout esperando al Job %s", name)
+			return false, fmt.Sprintf("timeout esperando el rollout completo de warm-app tras %s", timeout)
 		}
 		if err := s.Clock.Sleep(ctx, s.pollInterval()); err != nil {
-			return "", "", err
+			return false, "espera del rollout interrumpida: " + err.Error()
 		}
 	}
 }
@@ -603,6 +533,3 @@ func parseOpenAPI(body []byte) ([]Endpoint, bool) {
 }
 
 var _ = errors.Is
-
-// TrackKnownForTest marca un run como conocido en memoria (solo pruebas de ResolveOrphans).
-func (s *Service) TrackKnownForTest(runID string) { s.track(runID, "pending", 1, "") }

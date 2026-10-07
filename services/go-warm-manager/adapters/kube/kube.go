@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
 	wm "github.com/ogaston/agentic-qa-swarm/services/go-warm-manager"
@@ -160,72 +160,86 @@ func (r *Runtime) ScaleUp(ctx context.Context) error {
 	return err
 }
 
-// Jobs crea y consulta Jobs en el namespace de prueba.
-type Jobs struct{ C kubernetes.Interface }
+// Deployer parchea la imagen de warm-app y consulta su rollout (deploy en proceso).
+type Deployer struct{ C kubernetes.Interface }
 
-// Create convierte el Manifest en batchv1.Job (decodificación estricta) y lo crea.
-func (j *Jobs) Create(ctx context.Context, m wm.Manifest) error {
-	raw, err := json.Marshal(m)
+const (
+	appName     = "warm-app"
+	appSelector = "app.kubernetes.io/name=warm-app"
+)
+
+// SetImage cambia la imagen del contenedor warm-app con un strategic merge patch. Antes lee el
+// Deployment y exige que el contenedor exista (un parche por nombre inexistente AGREGARIA un contenedor).
+func (d *Deployer) SetImage(ctx context.Context, ref string) error {
+	dep, err := d.C.AppsV1().Deployments(wm.Namespace).Get(ctx, appName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	var job batchv1.Job
-	dec := json.NewDecoder(bytesReader(string(raw)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&job); err != nil {
-		return fmt.Errorf("manifiesto de Job invalido: %w", err)
+	found := false
+	for _, c := range dep.Spec.Template.Spec.Containers {
+		found = found || c.Name == appName
 	}
-	if job.Namespace != wm.Namespace {
-		return errors.New("el Job no es del namespace de prueba")
+	if !found {
+		return fmt.Errorf("el Deployment %s no tiene el contenedor %s", appName, appName)
 	}
-	_, err = j.C.BatchV1().Jobs(wm.Namespace).Create(ctx, &job, metav1.CreateOptions{})
+	patch, err := json.Marshal(map[string]any{"spec": map[string]any{"template": map[string]any{"spec": map[string]any{
+		"containers": []any{map[string]any{"name": appName, "image": ref}}}}}})
+	if err != nil {
+		return err
+	}
+	_, err = d.C.AppsV1().Deployments(wm.Namespace).Patch(ctx, appName, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
 	return err
 }
 
-// Status resume las condiciones del Job.
-func (j *Jobs) Status(ctx context.Context, name string) (wm.JobPhase, string, error) {
-	job, err := j.C.BatchV1().Jobs(wm.Namespace).Get(ctx, name, metav1.GetOptions{})
+// RolloutComplete exige el rollout completo de ref (criterio copiado de AppReady de go-reset, mas la
+// imagen): observedGeneration>=generation, updatedReplicas==replicas==availableReplicas, la plantilla y
+// TODOS los pods con la imagen ref, pods reales exactamente los deseados, Running, Ready y ninguno
+// terminando. Un pod viejo todavia Ready NO cuenta.
+func (d *Deployer) RolloutComplete(ctx context.Context, ref string) (bool, error) {
+	dep, err := d.C.AppsV1().Deployments(wm.Namespace).Get(ctx, appName, metav1.GetOptions{})
 	if err != nil {
-		return "", "", err
+		return false, err
 	}
-	ph, why := jobPhase(job)
-	return ph, why, nil
-}
-
-// List lista los Jobs de deploy (etiqueta aqs.io/run-id si se da runID, o todos los warm-deploy).
-func (j *Jobs) List(ctx context.Context, runID string) ([]wm.JobView, error) {
-	sel := "app.kubernetes.io/name=warm-deploy"
-	if runID != "" {
-		sel += ",aqs.io/run-id=" + runID
+	want := int32(1)
+	if dep.Spec.Replicas != nil {
+		want = *dep.Spec.Replicas
 	}
-	l, err := j.C.BatchV1().Jobs(wm.Namespace).List(ctx, metav1.ListOptions{LabelSelector: sel})
+	st := dep.Status
+	if want == 0 || st.ObservedGeneration < dep.Generation || st.UpdatedReplicas != want || st.AvailableReplicas != want {
+		return false, nil
+	}
+	if !hasImage(dep.Spec.Template.Spec.Containers, ref) {
+		return false, nil
+	}
+	pl, err := d.C.CoreV1().Pods(wm.Namespace).List(ctx, metav1.ListOptions{LabelSelector: appSelector})
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	out := make([]wm.JobView, 0, len(l.Items))
-	for i := range l.Items {
-		job := &l.Items[i]
-		ph, why := jobPhase(job)
-		out = append(out, wm.JobView{Name: job.Name, RunID: job.Labels["aqs.io/run-id"], Phase: ph, Reason: why,
-			Artifact: wm.Artifact{Kind: job.Annotations["aqs.io/artifact-kind"], Ref: job.Annotations["aqs.io/artifact-ref"]}})
+	if int32(len(pl.Items)) != want {
+		return false, nil
 	}
-	return out, nil
-}
-
-func jobPhase(job *batchv1.Job) (wm.JobPhase, string) {
-	for _, c := range job.Status.Conditions {
-		if c.Status != corev1.ConditionTrue {
-			continue
-		}
-		switch c.Type {
-		case batchv1.JobComplete:
-			return wm.JobSucceeded, ""
-		case batchv1.JobFailed:
-			return wm.JobFailed, c.Reason + ": " + c.Message
+	for _, p := range pl.Items {
+		if p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning || !podReady(p) || !hasImage(p.Spec.Containers, ref) {
+			return false, nil
 		}
 	}
-	if job.Status.Succeeded > 0 {
-		return wm.JobSucceeded, ""
+	return true, nil
+}
+
+func hasImage(cs []corev1.Container, ref string) bool {
+	for _, c := range cs {
+		if c.Name == appName {
+			return c.Image == ref
+		}
 	}
-	return wm.JobPending, ""
+	return false
+}
+
+func podReady(p corev1.Pod) bool {
+	for _, c := range p.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }

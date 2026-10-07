@@ -36,20 +36,18 @@ func TestPBTResetVerifiedOnlyByReset(t *testing.T) {
 	})
 }
 
-// Para toda secuencia de resultados de Job: nunca mas de 3 Jobs por corrida.
-func TestPBTAtMostThreeJobs(t *testing.T) {
+// Para toda secuencia de resultados de rollout: nunca mas de 3 parches por corrida.
+func TestPBTAtMostThreePatches(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		outcomes := rapid.SliceOfN(rapid.Bool(), 0, 10).Draw(t, "outcomes")
 		r := newRig(ws("ready", true))
-		r.jobs.Outcome = func(n int) wm.JobPhase {
-			if n < len(outcomes) && outcomes[n] {
-				return wm.JobSucceeded
-			}
-			return wm.JobFailed
+		r.dep.Rollout = func(int) (bool, error) {
+			n := r.dep.Patches() - 1
+			return n < len(outcomes) && outcomes[n], nil
 		}
 		_ = r.svc.Deploy(context.Background(), "r-1", okArt, "t")
-		if len(r.jobs.Created) > 3 || len(r.jobs.Created) < 1 {
-			t.Fatalf("jobs=%d", len(r.jobs.Created))
+		if r.dep.Patches() > 3 || r.dep.Patches() < 1 {
+			t.Fatalf("parches=%d", r.dep.Patches())
 		}
 	})
 }
