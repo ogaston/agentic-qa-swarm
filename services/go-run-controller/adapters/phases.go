@@ -29,6 +29,7 @@ var runIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 type svc struct {
 	name, base, token string
 	client            *http.Client
+	timeout           time.Duration // plazo por llamada (contexto); PhaseTimeout salvo ensure
 }
 
 func newSvc(name, base, token string) (*svc, error) {
@@ -40,7 +41,7 @@ func newSvc(name, base, token string) (*svc, error) {
 		return nil, fmt.Errorf("%s: el token de servicio es obligatorio", name)
 	}
 	return &svc{name: name, base: strings.TrimRight(u.String(), "/"), token: token,
-		client: &http.Client{Timeout: PhaseTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+		timeout: PhaseTimeout, client: &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 
 // call hace la petición y devuelve el cuerpo si el estado es uno de ok; si no, error con el estado.
@@ -50,6 +51,12 @@ func (s *svc) call(ctx context.Context, method, path string, in any, ok ...int) 
 }
 
 func (s *svc) callStatus(ctx context.Context, method, path string, in any, ok ...int) ([]byte, int, error) {
+	return s.callStatusT(ctx, s.timeout, method, path, in, ok...)
+}
+
+func (s *svc) callStatusT(ctx context.Context, d time.Duration, method, path string, in any, ok ...int) ([]byte, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, d)
+	defer cancel()
 	var rd io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -104,7 +111,9 @@ type WarmClient struct {
 	s *svc
 	// PollEvery y MaxWait gobiernan la espera de GET /deploys/{run_id}; Sleep es inyectable.
 	PollEvery, MaxWait time.Duration
-	Sleep              func(context.Context, time.Duration) error
+	// EnsureTimeout: go-warm-manager espera hasta WARM_READY_TIMEOUT (120 s) a que el warm salga de idle-escalado.
+	EnsureTimeout time.Duration
+	Sleep         func(context.Context, time.Duration) error
 }
 
 // NewWarmClient valida URL http(s) y token.
@@ -113,7 +122,7 @@ func NewWarmClient(base, token string) (*WarmClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &WarmClient{s: s, PollEvery: 2 * time.Second, MaxWait: 12 * time.Minute, Sleep: sleepCtx}, nil
+	return &WarmClient{s: s, PollEvery: 2 * time.Second, MaxWait: 12 * time.Minute, EnsureTimeout: 130 * time.Second, Sleep: sleepCtx}, nil
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {
@@ -159,7 +168,7 @@ func (w *WarmClient) ResetVerified(ctx context.Context) (runctl.Fact, error) {
 
 // Ensure exige 200 (409, 5xx, cuerpo inválido o warm no ready+verificado son error).
 func (w *WarmClient) Ensure(ctx context.Context) error {
-	b, err := w.s.call(ctx, http.MethodPost, "/warm/ensure", nil, 200)
+	b, _, err := w.s.callStatusT(ctx, w.EnsureTimeout, http.MethodPost, "/warm/ensure", nil, 200)
 	if err != nil {
 		return err
 	}

@@ -2,8 +2,16 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/adapters"
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/rehearsal"
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
 )
 
 func realEnv() map[string]string {
@@ -97,5 +105,60 @@ func TestRenderRehearsalJob(t *testing.T) {
 	}
 	if err := renderRehearsalJob(&out, []string{"--run", "r-1", "--flow", "f"}, envOf(map[string]string{"REHEARSAL_IMAGE": "x:latest"})); err == nil {
 		t.Error("imagen latest aceptada")
+	}
+}
+
+func buildFor(t *testing.T, env map[string]string, cs kubernetes.Interface) (runctl.Config, error) {
+	t.Helper()
+	c, err := loadConfig(envOf(env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return buildConfig(c, cs, runctl.AllowAll(), runctl.NewMemStore(), &runctl.FakePublisher{}, &runctl.FakeAlerter{}, nil, nil)
+}
+
+// Cableado de real: todos los puertos de warm y de fase son reales y ningún Fake* queda en la config.
+func TestBuildConfigRealWiresEveryRealPort(t *testing.T) {
+	cfg, err := buildFor(t, realEnv(), fake.NewSimpleClientset())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Warm.(*adapters.WarmClient); !ok {
+		t.Fatalf("Warm = %T", cfg.Warm)
+	}
+	rp, ok := cfg.Phases.(*adapters.RealPhases)
+	if !ok || rp.Rehearse == nil || rp.Warm == nil || rp.Reset == nil || rp.Artifact == nil || cfg.Results == nil {
+		t.Fatalf("Phases = %T %+v Results=%v", cfg.Phases, rp, cfg.Results)
+	}
+	if _, ok := cfg.Results.(*rehearsal.Launcher); !ok || cfg.Results != rp.Rehearse.(runctl.RehearsalResults) {
+		t.Fatalf("Results y Rehearse deben ser el mismo lanzador: %T", cfg.Results)
+	}
+	for _, p := range []any{cfg.Warm, cfg.Phases, cfg.Results, cfg.Gate, cfg.Store, cfg.Publisher, cfg.Alerter, rp.Rehearse} {
+		if n := fmt.Sprintf("%T", p); strings.Contains(n, "Fake") && n != "*runctl.FakeAlerter" && n != "*runctl.FakePublisher" && n != "*runctl.FakeGate" {
+			t.Errorf("queda un fake de fase/warm en real: %s", n)
+		}
+	}
+}
+
+func TestBuildConfigRealWithoutClientsetFailsAndFakeStaysFake(t *testing.T) {
+	if _, err := buildFor(t, realEnv(), nil); err == nil {
+		t.Fatal("real sin clientset aceptado")
+	}
+	cfg, err := buildFor(t, good(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Phases.(*runctl.FakePhases); !ok || cfg.Results != nil {
+		t.Fatalf("fake: %T %v", cfg.Phases, cfg.Results)
+	}
+}
+
+func TestLoadConfigRunEnvVariantsRejectFake(t *testing.T) {
+	for _, v := range []string{"prod", "PROD", " Production ", "production", "Prod"} {
+		m := good()
+		m["RUN_ENV"] = v
+		if _, err := loadConfig(envOf(m)); err == nil {
+			t.Errorf("RUN_ENV=%q aceptado con fake", v)
+		}
 	}
 }

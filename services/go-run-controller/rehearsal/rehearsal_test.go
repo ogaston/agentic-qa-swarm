@@ -315,3 +315,16 @@ func TestEventJSONValidatesAgainstSchema(t *testing.T) {
 		}
 	}
 }
+
+// Respaldo de jobState: Failed>0 sin condición es failed (nunca passed).
+func TestResultFailedCounterWithoutConditionIsFailed(t *testing.T) {
+	l, cs := newLauncher(goodPlan())
+	run := runctl.Run{ID: "r-1", Started: map[string]int{"rehearse": 1}}
+	_, _ = l.Launch(context.Background(), runctl.PhaseRehearse, run)
+	j, _ := cs.BatchV1().Jobs(ns).Get(context.Background(), "rehearsal-r-1-1", metav1.GetOptions{})
+	j.Status.Failed = 1
+	_, _ = cs.BatchV1().Jobs(ns).Update(context.Background(), j, metav1.UpdateOptions{})
+	if out, err := l.Result(context.Background(), run); err != nil || !out.Done || out.Passed {
+		t.Fatalf("%+v %v", out, err)
+	}
+}

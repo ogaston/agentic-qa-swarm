@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"sigs.k8s.io/yaml"
@@ -23,32 +24,42 @@ func (noFlows) Flows(string) (plan.FlowPlan, error) {
 	return plan.FlowPlan{}, errors.New("sin fuente de FlowPlan (U3): falla cerrado")
 }
 
-// wireReal sustituye los puertos de fase y de warm por los adaptadores reales.
-func wireReal(cfg *runctl.Config, c config) error {
+// inClusterClient crea el clientset del clúster (solo en RUN_PHASES=real).
+func inClusterClient() (kubernetes.Interface, error) {
+	rc, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("RUN_PHASES=real requiere ejecutarse en el clúster: %w", err)
+	}
+	return kubernetes.NewForConfig(rc)
+}
+
+// buildConfig elige en UNA rama los puertos de warm y de fase: o todos reales (con cs) o todos fakes.
+func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, store runctl.RunStore, pub runctl.EventPublisher,
+	al runctl.Alerter, obs runctl.Observer, log *slog.Logger) (runctl.Config, error) {
+	base := runctl.Config{Namespace: c.namespace, Gate: gate, Store: store, Publisher: pub, Alerter: al, Observer: obs, Log: log}
+	if !c.real {
+		base.Warm, base.Phases = &runctl.FakeWarm{Fact: runctl.True}, &runctl.FakePhases{}
+		return base, nil
+	}
+	if cs == nil {
+		return base, errors.New("RUN_PHASES=real exige un clientset de Kubernetes")
+	}
 	wc, err := adapters.NewWarmClient(c.warmURL, c.warmToken)
 	if err != nil {
-		return err
+		return base, err
 	}
 	rc, err := adapters.NewResetClient(c.resetURL, c.resetToken)
 	if err != nil {
-		return err
-	}
-	rest, err := rest.InClusterConfig()
-	if err != nil {
-		return fmt.Errorf("RUN_PHASES=real requiere ejecutarse en el clúster: %w", err)
-	}
-	cs, err := kubernetes.NewForConfig(rest)
-	if err != nil {
-		return err
+		return base, err
 	}
 	l := &rehearsal.Launcher{Kube: rehearsal.ClientGo{CS: cs, NS: c.namespace}, Plans: noFlows{},
 		Cfg: rehearsal.Config{Namespace: c.namespace, Image: c.rehearsalImage, ServiceAccount: c.rehearsalSA, TargetURL: c.rehearsalTarget}}
 	ref := c.artifactRef
-	cfg.Warm = wc
-	cfg.Results = l
-	cfg.Phases = &adapters.RealPhases{Warm: wc, Reset: rc, Rehearse: l,
+	base.Warm = wc
+	base.Results = l
+	base.Phases = &adapters.RealPhases{Warm: wc, Reset: rc, Rehearse: l,
 		Artifact: func(string) (string, string, error) { return "published-image", ref, nil }}
-	return nil
+	return base, nil
 }
 
 // renderRehearsalJob imprime el Job de ensayo como YAML sin tocar un clúster.

@@ -56,6 +56,12 @@ func TestWarmEnsureFailsClosed(t *testing.T) {
 	for _, c := range []httpCase{
 		{"200 listo", func(w http.ResponseWriter, _ *http.Request) { js(w, 200, warmReady) }, false},
 		{"200 pero dirty", func(w http.ResponseWriter, _ *http.Request) { js(w, 200, warmDirty) }, true},
+		{"ready pero reset_verified=false", func(w http.ResponseWriter, _ *http.Request) {
+			js(w, 200, `{"warm_id":"w","state":"ready","reset_verified":false,"baseline_version":"v1"}`)
+		}, true},
+		{"dirty con reset_verified=true", func(w http.ResponseWriter, _ *http.Request) {
+			js(w, 200, `{"warm_id":"w","state":"dirty","reset_verified":true,"baseline_version":"v1"}`)
+		}, true},
 		{"409", func(w http.ResponseWriter, _ *http.Request) { js(w, 409, warmDirty) }, true},
 		{"409 con cuerpo ready", func(w http.ResponseWriter, _ *http.Request) { js(w, 409, warmReady) }, true},
 		{"500", func(w http.ResponseWriter, _ *http.Request) { js(w, 500, `{}`) }, true},
@@ -290,5 +296,56 @@ func TestRealPhasesDispatchAndUnimplementedFailClosed(t *testing.T) {
 	}
 	if _, err := p.Launch(t.Context(), runctl.PhaseDeploy, runctl.Run{ID: "r-1"}); err == nil {
 		t.Error("deploy sin fuente de artefacto aceptado")
+	}
+}
+
+// El POST /deploys con run_id ajeno es error aunque el estado posterior diga done.
+func TestWarmDeployPostRunIDMismatch(t *testing.T) {
+	var gets atomic.Int32
+	w := warmClient(t, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/warm/ensure":
+			js(rw, 200, warmReady)
+		case r.Method == "POST":
+			js(rw, 202, `{"run_id":"otra","state":"done","attempts":1}`)
+		default:
+			if gets.Add(1) == 1 {
+				js(rw, 404, `{"error":"not_found"}`)
+				return
+			}
+			js(rw, 200, st("done"))
+		}
+	}))
+	if err := w.Deploy(t.Context(), "r-1", "published-image", "ghcr.io/x/y:1"); err == nil {
+		t.Fatal("run_id ajeno aceptado")
+	}
+}
+
+func TestDefaultTimeoutsAndEnsureOwnDeadline(t *testing.T) {
+	w, _ := NewWarmClient("http://x", "t")
+	if w.s.timeout != 5*time.Second || w.EnsureTimeout != 130*time.Second {
+		t.Fatalf("plazos %v %v", w.s.timeout, w.EnsureTimeout)
+	}
+	r, _ := NewResetClient("http://x", "t")
+	if r.s.timeout != 5*time.Second {
+		t.Fatalf("reset %v", r.s.timeout)
+	}
+	// ensure lento (300 ms) pasa con su plazo propio aunque el de fase sea menor; el resto de llamadas no.
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		js(rw, 200, warmReady)
+	}))
+	defer srv.Close()
+	w, _ = NewWarmClient(srv.URL, "t")
+	w.s.timeout, w.EnsureTimeout = 100*time.Millisecond, 3*time.Second
+	if err := w.Ensure(t.Context()); err != nil {
+		t.Fatalf("ensure debe esperar su plazo propio: %v", err)
+	}
+	if _, err := w.State(t.Context()); err == nil {
+		t.Fatal("GET /warm debe respetar el plazo de fase")
+	}
+	w.EnsureTimeout = 100 * time.Millisecond
+	if err := w.Ensure(t.Context()); err == nil {
+		t.Fatal("ensure debe fallar al agotar su plazo")
 	}
 }

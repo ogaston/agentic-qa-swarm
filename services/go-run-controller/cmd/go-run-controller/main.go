@@ -19,6 +19,7 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/internal/obs"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/rehearsal"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
+	"k8s.io/client-go/kubernetes"
 )
 
 const serviceName = "go-run-controller"
@@ -143,13 +144,15 @@ func run(log *slog.Logger, env func(string) string) error {
 		return err
 	}
 	defer store.Close()
-	cfg := runctl.Config{Namespace: c.namespace, Gate: gate, Store: store,
-		Publisher: &adapters.Outbox{Path: c.outboxFile}, Warm: &runctl.FakeWarm{Fact: runctl.True},
-		Alerter: logAlerter{log}, Phases: &runctl.FakePhases{}, Observer: metrics, Log: log}
+	var cs kubernetes.Interface
 	if c.real {
-		if err := wireReal(&cfg, c); err != nil {
+		if cs, err = inClusterClient(); err != nil {
 			return err
 		}
+	}
+	cfg, err := buildConfig(c, cs, gate, store, &adapters.Outbox{Path: c.outboxFile}, logAlerter{log}, metrics, log)
+	if err != nil {
+		return err
 	}
 	ctl, err := runctl.New(cfg)
 	if err != nil {
