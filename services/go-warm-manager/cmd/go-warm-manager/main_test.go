@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net"
@@ -13,23 +12,6 @@ import (
 )
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
-
-func TestRenderDeployJobYAML(t *testing.T) {
-	var b bytes.Buffer
-	err := renderDeployJob([]string{"--run", "r-1", "--artifact-kind", "published-image", "--artifact-ref", "ghcr.io/ogaston/demo:1.2.3"}, env(nil), &b)
-	if err != nil || !strings.Contains(b.String(), "kind: Job") || !strings.Contains(b.String(), "automountServiceAccountToken: false") {
-		t.Fatalf("%v\n%s", err, b.String())
-	}
-}
-
-func TestRenderDeployJobRejects(t *testing.T) {
-	for _, ref := range []string{"ghcr.io/ogaston/demo:latest", "docker.io/evil/x:1"} {
-		var b bytes.Buffer
-		if err := renderDeployJob([]string{"--run", "r-1", "--artifact-kind", "published-image", "--artifact-ref", ref}, env(nil), &b); err == nil || b.Len() != 0 {
-			t.Errorf("%s aceptado", ref)
-		}
-	}
-}
 
 func TestRunFailsClosedOnBadConfig(t *testing.T) {
 	cases := map[string]map[string]string{
@@ -106,7 +88,7 @@ func TestDurationEnv(t *testing.T) {
 }
 
 func TestRunRejectsBadTimeouts(t *testing.T) {
-	for _, k := range []string{"WARM_READY_TIMEOUT", "WARM_JOB_TIMEOUT", "WARM_POLL_INTERVAL"} {
+	for _, k := range []string{"WARM_READY_TIMEOUT", "WARM_DEPLOY_TIMEOUT", "WARM_POLL_INTERVAL"} {
 		for _, v := range []string{"0", "-1s", "x"} {
 			if err := run(env(fakeEnv(map[string]string{k: v})), nil); err == nil || !strings.Contains(err.Error(), k) {
 				t.Errorf("%s=%s: %v", k, v, err)
@@ -184,11 +166,10 @@ func TestValidateTimeouts(t *testing.T) {
 		t.Fatal(err)
 	}
 	for n, c := range map[string][3]time.Duration{
-		"ready enorme":   {999999 * time.Hour, 11 * time.Minute, time.Second},
-		"poll 1ns":       {time.Minute, 11 * time.Minute, time.Nanosecond},
-		"job = deadline": {time.Minute, 600 * time.Second, time.Second},
-		"job < deadline": {time.Minute, time.Minute, time.Second},
-		"job enorme":     {time.Minute, 2 * time.Hour, time.Second},
+		"ready enorme":  {999999 * time.Hour, 11 * time.Minute, time.Second},
+		"poll 1ns":      {time.Minute, 11 * time.Minute, time.Nanosecond},
+		"deploy < poll": {time.Minute, time.Second, 2 * time.Second},
+		"deploy enorme": {time.Minute, 2 * time.Hour, time.Second},
 	} {
 		if ok(c[0], c[1], c[2]) == nil {
 			t.Errorf("%s aceptado", n)
@@ -232,12 +213,5 @@ func TestFileStoreFencesAndExplicitStore(t *testing.T) {
 	e = fakeEnv(map[string]string{"WARM_OBJECT_STORE": "file", "WARM_ALLOW_FILE_STORE": "true", "WARM_APP_URL": "warm-app:8080"})
 	if err := run(env(e), nil); err == nil || !strings.Contains(err.Error(), "WARM_APP_URL") {
 		t.Fatalf("WARM_APP_URL invalida: %v", err)
-	}
-}
-
-func TestDeployerImageRequiredOutsideFakeMode(t *testing.T) {
-	e := map[string]string{"WARM_NAMESPACE": "aqs-test", "WARM_SERVICE_TOKEN": "x", "WARM_OUTBOX_FILE": "/tmp/o", "WARM_OBJECT_STORE": "s3"}
-	if err := run(env(e), nil); err == nil || !strings.Contains(err.Error(), "WARM_DEPLOYER_IMAGE") {
-		t.Fatalf("%v", err)
 	}
 }

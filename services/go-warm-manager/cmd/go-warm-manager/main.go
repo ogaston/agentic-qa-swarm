@@ -1,13 +1,10 @@
 // Command go-warm-manager gestiona el entorno warm y el deploy por corrida.
-// Subcomando: render-deploy-job --run <id> --artifact-kind <k> --artifact-ref <ref>.
 package main
 
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -21,7 +18,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/yaml"
 
 	wm "github.com/ogaston/agentic-qa-swarm/services/go-warm-manager"
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/adapters/kube"
@@ -34,14 +30,7 @@ import (
 
 func main() {
 	if len(os.Args) > 1 {
-		if os.Args[1] == "render-deploy-job" {
-			if err := renderDeployJob(os.Args[2:], os.Getenv, os.Stdout); err != nil {
-				fmt.Fprintln(os.Stderr, "error:", err)
-				os.Exit(1)
-			}
-			return
-		}
-		fmt.Fprintln(os.Stderr, "uso: go-warm-manager [render-deploy-job --run <id> --artifact-kind <k> --artifact-ref <ref>]")
+		fmt.Fprintln(os.Stderr, "uso: go-warm-manager (sin argumentos; se configura por variables de entorno)")
 		os.Exit(2)
 	}
 	log := obs.NewLogger(os.Stdout)
@@ -63,27 +52,6 @@ func registries(getenv func(string) string) []string {
 		}
 	}
 	return out
-}
-
-func renderDeployJob(args []string, getenv func(string) string, out io.Writer) error {
-	fs := flag.NewFlagSet("render-deploy-job", flag.ContinueOnError)
-	runID := fs.String("run", "", "run_id")
-	kind := fs.String("artifact-kind", "", "build-from-repo|published-image")
-	ref := fs.String("artifact-ref", "", "referencia del artefacto")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	m, err := wm.BuildDeployJob(wm.JobConfig{AllowedRegistries: registries(getenv), DeployerImage: getenv("WARM_DEPLOYER_IMAGE")},
-		*runID, 0, wm.Artifact{Kind: *kind, Ref: *ref})
-	if err != nil {
-		return err
-	}
-	b, err := yaml.Marshal(m)
-	if err != nil {
-		return err
-	}
-	_, err = out.Write(b)
-	return err
 }
 
 func run(getenv func(string) string, log *slog.Logger) error {
@@ -108,7 +76,7 @@ func run(getenv func(string) string, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	jobTO, err := durationEnv(getenv, "WARM_JOB_TIMEOUT", 11*time.Minute)
+	deployTO, err := durationEnv(getenv, "WARM_DEPLOY_TIMEOUT", wm.DefaultDeployTimeout)
 	if err != nil {
 		return err
 	}
@@ -117,7 +85,7 @@ func run(getenv func(string) string, log *slog.Logger) error {
 		return err
 	}
 
-	if err := validateTimeouts(readyTO, jobTO, pollIv); err != nil {
+	if err := validateTimeouts(readyTO, deployTO, pollIv); err != nil {
 		return err
 	}
 
@@ -136,9 +104,6 @@ func run(getenv func(string) string, log *slog.Logger) error {
 			return errors.New("WARM_FAKE_STATE invalido")
 		}
 	case "", "incluster":
-		if getenv("WARM_DEPLOYER_IMAGE") == "" {
-			return errors.New("WARM_DEPLOYER_IMAGE es obligatoria fuera del modo fake (la imagen por defecto es un placeholder)")
-		}
 		cfg, err := rest.InClusterConfig()
 		if err != nil {
 			return fmt.Errorf("sin configuracion de cluster: %w", err)
@@ -190,28 +155,23 @@ func run(getenv func(string) string, log *slog.Logger) error {
 	}
 	metrics := obs.NewMetrics()
 	svc := &wm.Service{
-		Cfg: wm.Config{Job: wm.JobConfig{AllowedRegistries: registries(getenv), DeployerImage: getenv("WARM_DEPLOYER_IMAGE")},
-			WarmReadyTimeout: readyTO, JobTimeout: jobTO, PollInterval: pollIv},
-		Log:     log,
-		State:   &kube.StateStore{C: cs, Seed: seed},
-		Probe:   &kube.Health{C: cs},
-		Runtime: &kube.Runtime{C: cs},
-		Jobs:    &kube.Jobs{C: cs},
-		Surface: &probe.HTTP{Base: appURL},
-		Objects: objs,
-		Alerts:  logAlerter{log},
-		Pub:     &outbox.File{Path: outFile},
-		Clock:   wm.RealClock{}, Observer: metrics,
+		Cfg: wm.Config{AllowedRegistries: registries(getenv),
+			WarmReadyTimeout: readyTO, DeployTimeout: deployTO, PollInterval: pollIv},
+		Log:      log,
+		State:    &kube.StateStore{C: cs, Seed: seed},
+		Probe:    &kube.Health{C: cs},
+		Runtime:  &kube.Runtime{C: cs},
+		Deployer: &kube.Deployer{C: cs},
+		Surface:  &probe.HTTP{Base: appURL},
+		Objects:  objs,
+		Alerts:   logAlerter{log},
+		Pub:      &outbox.File{Path: outFile},
+		Clock:    wm.RealClock{}, Observer: metrics,
 	}
 	srv := &api.Server{Svc: svc, Token: token, Log: log, Registry: metrics.Reg}
 	hs := srv.HTTPServer(addr)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	// Deploys huerfanos de un arranque anterior: se resuelven antes de aceptar trafico (ver ResolveOrphans).
-	if err := svc.ResolveOrphans(ctx, "00000000000000000000000000000000"); err != nil {
-		log.Error("resolver deploys huerfanos fallo", "error", err.Error())
-		return err
-	}
 	log.Info("escuchando", "addr", addr)
 	return serve(ctx, hs, nil, shutdownGrace)
 }
@@ -246,18 +206,18 @@ func serve(ctx context.Context, hs *http.Server, ln net.Listener, grace time.Dur
 	return nil
 }
 
-// validateTimeouts acota las duraciones: JobTimeout debe superar activeDeadlineSeconds del Job
-// (si no, el Job sigue vivo tras el handoff), con cotas maximas razonables y minimo de sondeo.
-func validateTimeouts(ready, job, poll time.Duration) error {
+// validateTimeouts acota las duraciones: el rollout debe poder sondearse al menos una vez
+// (deploy >= poll) y tiene cotas maximas razonables.
+func validateTimeouts(ready, deploy, poll time.Duration) error {
 	switch {
 	case ready > 10*time.Minute:
 		return errors.New("WARM_READY_TIMEOUT no puede superar 10m")
 	case poll < 100*time.Millisecond:
 		return errors.New("WARM_POLL_INTERVAL no puede ser menor de 100ms")
-	case job <= wm.JobDeadline:
-		return fmt.Errorf("WARM_JOB_TIMEOUT debe superar el activeDeadlineSeconds del Job (%s)", wm.JobDeadline)
-	case job > time.Hour:
-		return errors.New("WARM_JOB_TIMEOUT no puede superar 1h")
+	case deploy < poll:
+		return errors.New("WARM_DEPLOY_TIMEOUT no puede ser menor que WARM_POLL_INTERVAL")
+	case deploy > time.Hour:
+		return errors.New("WARM_DEPLOY_TIMEOUT no puede superar 1h")
 	}
 	return nil
 }

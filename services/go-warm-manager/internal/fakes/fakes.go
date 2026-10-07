@@ -68,93 +68,54 @@ func (f *FakeRuntime) ScaleUp(context.Context) error {
 	return err
 }
 
-// FakeJobs crea Jobs que terminan según Outcome(n) (n = Jobs ya creados antes de este).
-type FakeJobs struct {
-	mu      sync.Mutex
-	Created []wm.Manifest
-	Outcome func(n int) wm.JobPhase
-	// StatusErr decide el error de la k-esima consulta de Status (1-based); CreateErr el de la k-esima creacion.
-	StatusErr func(call int) error
-	CreateErr func(call int) error
-	// Latency simula una API lenta en Create (amplia las ventanas de carrera).
-	Latency time.Duration
-	ListErr error
-	status  map[string]wm.JobPhase
-	sCalls  int
-	cCalls  int
+// FakeDeployer registra los parches de imagen y decide cuando el rollout completa.
+type FakeDeployer struct {
+	mu sync.Mutex
+	// Images son las imagenes parcheadas, en orden.
+	Images []string
+	// SetErr decide el error del k-esimo SetImage (1-based).
+	SetErr func(call int) error
+	// Rollout decide la k-esima consulta (1-based) de RolloutComplete; nil = completa de inmediato.
+	Rollout func(call int) (bool, error)
+	// Gate, si no es nil, bloquea RolloutComplete hasta cerrarse (o ctx).
+	Gate   chan struct{}
+	rCalls int
+	sCalls int
 }
 
-// Count devuelve los Jobs creados.
-func (f *FakeJobs) Count() int { f.mu.Lock(); defer f.mu.Unlock(); return len(f.Created) }
+// Patches devuelve cuantos parches de imagen se aplicaron.
+func (f *FakeDeployer) Patches() int { f.mu.Lock(); defer f.mu.Unlock(); return len(f.Images) }
 
-func (f *FakeJobs) Create(_ context.Context, m wm.Manifest) error {
-	if f.Latency > 0 {
-		time.Sleep(f.Latency)
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.cCalls++
-	if f.CreateErr != nil {
-		if err := f.CreateErr(f.cCalls); err != nil {
-			return err
-		}
-	}
-	if f.status == nil {
-		f.status = map[string]wm.JobPhase{}
-	}
-	name := m["metadata"].(map[string]any)["name"].(string)
-	p := wm.JobSucceeded
-	if f.Outcome != nil {
-		p = f.Outcome(len(f.Created))
-	}
-	f.Created = append(f.Created, m)
-	f.status[name] = p
-	return nil
-}
-
-func (f *FakeJobs) Status(_ context.Context, name string) (wm.JobPhase, string, error) {
+func (f *FakeDeployer) SetImage(_ context.Context, ref string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sCalls++
-	if f.StatusErr != nil {
-		if err := f.StatusErr(f.sCalls); err != nil {
-			return "", "", err
+	if f.SetErr != nil {
+		if err := f.SetErr(f.sCalls); err != nil {
+			return err
 		}
 	}
-	p, ok := f.status[name]
-	if !ok {
-		return "", "", errors.New("job inexistente")
-	}
-	return p, "simulado", nil
+	f.Images = append(f.Images, ref)
+	return nil
 }
 
-// SetPhase fuerza el estado de un Job creado.
-func (f *FakeJobs) SetPhase(name string, p wm.JobPhase) {
+func (f *FakeDeployer) RolloutComplete(ctx context.Context, _ string) (bool, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.status[name] = p
-}
-
-// List devuelve los Jobs creados de la corrida ("" = todos).
-func (f *FakeJobs) List(_ context.Context, runID string) ([]wm.JobView, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.ListErr != nil {
-		return nil, f.ListErr
-	}
-	var out []wm.JobView
-	for _, m := range f.Created {
-		meta := m["metadata"].(map[string]any)
-		l := meta["labels"].(map[string]any)
-		an := meta["annotations"].(map[string]any)
-		if runID != "" && l["aqs.io/run-id"] != runID {
-			continue
+	gate := f.Gate
+	f.rCalls++
+	call, fn := f.rCalls, f.Rollout
+	f.mu.Unlock()
+	if gate != nil {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return false, ctx.Err()
 		}
-		name := meta["name"].(string)
-		out = append(out, wm.JobView{Name: name, RunID: l["aqs.io/run-id"].(string), Phase: f.status[name],
-			Artifact: wm.Artifact{Kind: an["aqs.io/artifact-kind"].(string), Ref: an["aqs.io/artifact-ref"].(string)}})
 	}
-	return out, nil
+	if fn == nil {
+		return true, nil
+	}
+	return fn(call)
 }
 
 // FakeProber responde con un mapa ruta -> (status, cuerpo).

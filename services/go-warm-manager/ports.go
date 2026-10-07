@@ -24,37 +24,14 @@ type WarmRuntime interface {
 	ScaleUp(ctx context.Context) error
 }
 
-// JobPhase es el estado de un Job.
-type JobPhase string
-
-const (
-	JobPending   JobPhase = "pending"
-	JobSucceeded JobPhase = "succeeded"
-	JobFailed    JobPhase = "failed"
-)
-
-// Manifest es un manifiesto Kubernetes genérico (el dominio no importa client-go).
-type Manifest map[string]any
-
-// Jobs crea y consulta Jobs de deploy.
-type Jobs interface {
-	Create(ctx context.Context, m Manifest) error
-	Status(ctx context.Context, name string) (JobPhase, string, error)
-	// List devuelve los Jobs de deploy de una corrida ("" = todos), por la etiqueta aqs.io/run-id.
-	List(ctx context.Context, runID string) ([]JobView, error)
+// Deployer parchea la imagen del Deployment warm-app y consulta su rollout (deploy en proceso).
+type Deployer interface {
+	// SetImage cambia la imagen del contenedor warm-app a ref (parche; falla si el contenedor no existe).
+	SetImage(ctx context.Context, ref string) error
+	// RolloutComplete dice si el rollout de ref esta COMPLETO: generacion observada, replicas
+	// actualizadas y disponibles, sin pods extra, todos con la imagen ref y Ready.
+	RolloutComplete(ctx context.Context, ref string) (bool, error)
 }
-
-// JobView es la vista de un Job de deploy para derivar el estado de una corrida.
-type JobView struct {
-	Name     string
-	RunID    string
-	Phase    JobPhase
-	Reason   string
-	Artifact Artifact
-}
-
-// Nota: el puerto ContainerRuntime (build/pull) de la tarea no existe: el artefacto viaja por
-// argumentos del Job y la construccion/descarga la hace la imagen del deployer (U2-T07).
 
 // SurfaceProber consulta SOLO el exterior del Service del warm (nunca el código fuente).
 type SurfaceProber interface {

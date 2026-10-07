@@ -47,11 +47,12 @@ var (
 	ErrInvalidRunID       = errors.New("run_id invalido")
 	ErrInvalidArtifact    = errors.New("artefacto invalido")
 	ErrRegistryNotAllowed = errors.New("registro no permitido")
+	ErrBuildNotSupported  = errors.New("build-from-repo no soportado")
 )
 
 var runIDRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
 
-// ValidateRunID exige un run_id apto como parte del nombre de un Job (DNS-1123, <= 32).
+// ValidateRunID exige un run_id acotado y apto como identificador (DNS-1123, <= 32).
 func ValidateRunID(id string) error {
 	if !runIDRe.MatchString(id) {
 		return fmt.Errorf("%w: %q", ErrInvalidRunID, id)
@@ -143,3 +144,6 @@ func ValidateArtifact(a Artifact, allowedRegistries []string) error {
 	}
 	return nil
 }
+
+// DefaultAllowedRegistries son los registros permitidos si WARM_ALLOWED_REGISTRIES no se define.
+var DefaultAllowedRegistries = []string{"ghcr.io"}
