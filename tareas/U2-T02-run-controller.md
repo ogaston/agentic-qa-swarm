@@ -89,15 +89,21 @@ Desde la raíz del worktree. Arranque común (el controlador contra `go-identity
   ```
   Esperado: `--- PASS` en al menos tres pruebas (reanuda desde el último estado; no duplica una corrida por `run.confirmed` repetido; rechaza arrancar si el hash del diario no encadena) y ningún `FAIL`.
 
-- [ ] **CA-6** — Fail-closed al arrancar y vallas del fake.
+- [ ] **CA-6** — Fail-closed al arrancar y vallas del fake: cada rechazo tiene **su** causa, no una variable que falta.
   ```bash
   t=$(mktemp -d); (cd services/go-run-controller && go build -o "$t/rc" ./cmd/go-run-controller)
+  B=(RUN_TEST_NAMESPACE=aqs-test RUN_DATA_DIR="$t/d" RUN_EVENTS_FILE="$t/ev" RUN_OUTBOX_FILE="$t/out" GOVERNANCE_URL=http://127.0.0.1:1 GOVERNANCE_SERVICE_TOKEN="$(head -c 48 /dev/urandom | base64 | tr -d '=+/')" IDENTITY_URL=http://127.0.0.1:2 LISTEN_ADDR=127.0.0.1:18399)
+  chk() { PAT=$1; shift; out=$(timeout 3 env "${B[@]}" "$@" "$t/rc" 2>&1 >/dev/null); rc=$?; echo "rc=$rc motivo=$(echo "$out" | grep -o -E "$PAT" | head -n1)"; }
   env -i PATH="$PATH" "$t/rc" >/dev/null 2>&1; echo "sin config rc=$?"
-  env RUN_PHASES=fake RUN_ENV=prod RUN_ALLOW_FAKE_PHASES=true RUN_DATA_DIR="$t/d" "$t/rc" >/dev/null 2>&1; echo "prod+fake rc=$?"
-  env RUN_PHASES=fake RUN_DATA_DIR="$t/d" "$t/rc" >/dev/null 2>&1; echo "fake sin permiso rc=$?"
-  env GOVERNANCE_URL=ftp://x RUN_DATA_DIR="$t/d" "$t/rc" >/dev/null 2>&1; echo "url no http rc=$?"; rm -rf "$t"
+  chk 'RUN_ENV=prod'                RUN_PHASES=fake RUN_ALLOW_FAKE_PHASES=true RUN_ENV=prod
+  chk 'RUN_ENV=prod'                RUN_PHASES=fake RUN_ALLOW_FAKE_PHASES=true "RUN_ENV= Production "
+  chk 'RUN_ALLOW_FAKE_PHASES=true'  RUN_PHASES=fake
+  chk 'URL http\(s\)'              RUN_PHASES=fake RUN_ALLOW_FAKE_PHASES=true GOVERNANCE_URL=ftp://x
+  chk '.'                           RUN_PHASES=fake RUN_ALLOW_FAKE_PHASES=true RUN_ENV=staging
+  rm -rf "$t"
   ```
-  Esperado: cuatro `rc=` distintos de `0`.
+
+  Esperado: `sin config rc=` distinto de `0`; luego cuatro líneas con `rc=1` **y el motivo concreto** (`RUN_ENV=prod` dos veces, `RUN_ALLOW_FAKE_PHASES=true`, `URL http(s)`); y el control positivo con `RUN_ENV=staging` termina por el `timeout` (`rc=124`, sigue vivo). Un `rc=1` sin el motivo esperado **no** cuenta: el literal antiguo de este criterio pasaba por variables faltantes y no discriminaba (hallazgo del revisor, U2-T02 ronda 1).
 
 - [ ] **CA-7** — Métricas y logs sin secretos.
   ```bash

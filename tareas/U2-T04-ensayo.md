@@ -121,6 +121,8 @@ Desde la raíz del worktree.
 
 ## Notas
 
+- **Heredado de U2-T02 (ronda 3, F-05): `Launch` es idempotente por (corrida, fase, `Started[fase]`).** El controlador persiste `Started[fase]++` **antes** de llamar a `Launch`; un fallo entre `Launch` y el guardado de `Launched` repite el efecto (hasta 3 veces). Por eso el constructor de Jobs de esta tarea (y el de T05) nombra el Job de forma **determinista** con ese contador (`rehearsal-<run>-<Started>`), y crear un Job que ya existe (`AlreadyExists`) se trata como éxito del lanzamiento, no como error. Prueba obligatoria: dos `Launch` con los mismos argumentos dejan **un** Job en el clientset falso.
+
 - **Go y Dockerfile.** Igual que U2-T02; el `Dockerfile` ya existe y se modifica en su sitio solo si hace falta (p. ej. el subcomando de render no lo requiere). Podman: montajes con `:z`.
 - **Orden de fusión.** T02, T03 y T06 deben estar fusionadas. Si no lo están, el orquestador reporta el hueco y no despacha.
 - **Candidatas a registrar:** imagen del ensayo y del runner; circuito en los clientes HTTP del controlador; esquema de evento de handoff.
