@@ -17,6 +17,7 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/adapters"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/internal/httpapi"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/internal/obs"
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/rehearsal"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
 )
 
@@ -25,6 +26,10 @@ const serviceName = "go-run-controller"
 type config struct {
 	namespace, dataDir, eventsFile, outboxFile string
 	govURL, govToken, identityURL, addr        string
+	real                                       bool
+	warmURL, warmToken, resetURL, resetToken   string
+	artifactRef, rehearsalImage, rehearsalSA   string
+	rehearsalTarget                            string
 }
 
 func loadConfig(env func(string) string) (config, error) {
@@ -59,8 +64,31 @@ func loadConfig(env func(string) string) (config, error) {
 		case "prod", "production":
 			return c, errors.New("RUN_PHASES=fake no se permite con RUN_ENV=prod")
 		}
+	case "real":
+		c.real = true
+		c.warmURL, c.warmToken, c.resetURL, c.resetToken = env("WARM_URL"), env("WARM_SERVICE_TOKEN"), env("RESET_URL"), env("RESET_SERVICE_TOKEN")
+		c.artifactRef, c.rehearsalImage, c.rehearsalTarget = env("RUN_ARTIFACT_REF"), env("REHEARSAL_IMAGE"), env("REHEARSAL_TARGET_URL")
+		c.rehearsalSA = env("REHEARSAL_SERVICE_ACCOUNT")
+		if c.rehearsalSA == "" {
+			c.rehearsalSA = "aqs-runner"
+		}
+		for _, m := range []struct{ n, v string }{{"WARM_URL", c.warmURL}, {"WARM_SERVICE_TOKEN", c.warmToken}, {"RESET_URL", c.resetURL},
+			{"RESET_SERVICE_TOKEN", c.resetToken}, {"RUN_ARTIFACT_REF", c.artifactRef}, {"REHEARSAL_IMAGE", c.rehearsalImage},
+			{"REHEARSAL_TARGET_URL", c.rehearsalTarget}} {
+			if m.v == "" {
+				return c, fmt.Errorf("RUN_PHASES=real: %s es obligatorio", m.n)
+			}
+		}
+		for _, u := range []struct{ n, v string }{{"WARM_URL", c.warmURL}, {"RESET_URL", c.resetURL}, {"REHEARSAL_TARGET_URL", c.rehearsalTarget}} {
+			if _, err := adapters.ValidateHTTPURL(u.v); err != nil {
+				return c, fmt.Errorf("%s %w", u.n, err)
+			}
+		}
+		if err := (rehearsal.Config{Namespace: c.namespace, Image: c.rehearsalImage, ServiceAccount: c.rehearsalSA, TargetURL: c.rehearsalTarget}).Validate(); err != nil {
+			return c, err
+		}
 	default:
-		return c, errors.New("RUN_PHASES es obligatorio: los adaptadores reales de fase llegan con U2-T03 a T06 (solo fake)")
+		return c, errors.New("RUN_PHASES es obligatorio: fake (con RUN_ALLOW_FAKE_PHASES=true) o real")
 	}
 	return c, nil
 }
@@ -72,6 +100,13 @@ func (a logAlerter) Handoff(ctx context.Context, runID, phase, reason string) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "render-rehearsal-job" {
+		if err := renderRehearsalJob(os.Stdout, os.Args[2:], os.Getenv); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	log := obs.NewLogger(os.Stdout, serviceName, obs.ParseLevel(os.Getenv("LOG_LEVEL")))
 	if err := run(log, os.Getenv); err != nil {
 		log.Error("el servicio no arranca", "error", err.Error())
@@ -108,9 +143,15 @@ func run(log *slog.Logger, env func(string) string) error {
 		return err
 	}
 	defer store.Close()
-	ctl, err := runctl.New(runctl.Config{Namespace: c.namespace, Gate: gate, Store: store,
+	cfg := runctl.Config{Namespace: c.namespace, Gate: gate, Store: store,
 		Publisher: &adapters.Outbox{Path: c.outboxFile}, Warm: &runctl.FakeWarm{Fact: runctl.True},
-		Alerter: logAlerter{log}, Phases: &runctl.FakePhases{}, Observer: metrics, Log: log})
+		Alerter: logAlerter{log}, Phases: &runctl.FakePhases{}, Observer: metrics, Log: log}
+	if c.real {
+		if err := wireReal(&cfg, c); err != nil {
+			return err
+		}
+	}
+	ctl, err := runctl.New(cfg)
 	if err != nil {
 		return err
 	}

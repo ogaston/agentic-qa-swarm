@@ -45,17 +45,22 @@ func newSvc(name, base, token string) (*svc, error) {
 
 // call hace la petición y devuelve el cuerpo si el estado es uno de ok; si no, error con el estado.
 func (s *svc) call(ctx context.Context, method, path string, in any, ok ...int) ([]byte, error) {
+	b, _, err := s.callStatus(ctx, method, path, in, ok...)
+	return b, err
+}
+
+func (s *svc) callStatus(ctx context.Context, method, path string, in any, ok ...int) ([]byte, int, error) {
 	var rd io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		rd = bytes.NewReader(b)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, s.base+path, rd)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("Authorization", "Bearer "+s.token)
 	if in != nil {
@@ -66,19 +71,19 @@ func (s *svc) call(ctx context.Context, method, path string, in any, ok ...int) 
 	}
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%s %s inalcanzable", s.name, path)
+		return nil, 0, fmt.Errorf("%s %s inalcanzable", s.name, path)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil || len(body) > maxBody {
-		return nil, fmt.Errorf("%s %s: cuerpo ilegible o demasiado grande", s.name, path)
+		return nil, 0, fmt.Errorf("%s %s: cuerpo ilegible o demasiado grande", s.name, path)
 	}
 	for _, c := range ok {
 		if resp.StatusCode == c {
-			return body, nil
+			return body, resp.StatusCode, nil
 		}
 	}
-	return nil, fmt.Errorf("%s %s respondió %d", s.name, path, resp.StatusCode)
+	return nil, resp.StatusCode, fmt.Errorf("%s %s respondió %d", s.name, path, resp.StatusCode)
 }
 
 // strict decodifica un único objeto JSON sin campos desconocidos.
@@ -235,13 +240,12 @@ func (w *WarmClient) Deploy(ctx context.Context, runID, kind, ref string) error 
 }
 
 func (w *WarmClient) deployStateOrMissing(ctx context.Context, runID string) (deployState, bool, error) {
-	b, err := w.s.call(ctx, http.MethodGet, "/deploys/"+url.PathEscape(runID), nil, 200, 404)
+	b, code, err := w.s.callStatus(ctx, http.MethodGet, "/deploys/"+url.PathEscape(runID), nil, 200, 404)
 	if err != nil {
 		return deployState{}, false, err
 	}
-	var probe map[string]json.RawMessage
-	if json.Unmarshal(b, &probe) == nil && probe["error"] != nil {
-		return deployState{}, false, nil // 404 not_found
+	if code == 404 {
+		return deployState{}, false, nil
 	}
 	var d deployState
 	if err := strict(b, &d); err != nil || d.RunID != runID || (d.State != "pending" && d.State != "done" && d.State != "failed") {
