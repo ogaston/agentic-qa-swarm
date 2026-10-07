@@ -65,6 +65,8 @@ type Run struct {
 	Evidence     []string        `json:"evidence_uris,omitempty"`
 	DonePublish  bool            `json:"done_published,omitempty"`
 	Seen         []string        `json:"seen_events,omitempty"` // event_id ya aplicados (idempotencia ante el replay del archivo)
+	Started      map[string]int  `json:"started,omitempty"`     // lanzamientos iniciados por fase (se persiste ANTES de lanzar; tope 3)
+	HandedOff    map[string]bool `json:"handed_off,omitempty"`  // fases cuyo handoff ya se emitió (a lo sumo uno)
 	Launched     map[string]bool `json:"launched,omitempty"`    // fase ya lanzada con éxito en el estado actual
 }
 
@@ -75,6 +77,8 @@ func (r Run) clone() Run {
 	c.Seen = append([]string(nil), r.Seen...)
 	c.Attempts = copyMap(r.Attempts)
 	c.Launched = copyMap(r.Launched)
+	c.Started = copyMap(r.Started)
+	c.HandedOff = copyMap(r.HandedOff)
 	return c
 }
 
@@ -165,6 +169,7 @@ type Observer interface {
 	GateCall(result string)
 	Handoff(phase string)
 	EventDropped(eventType string)
+	PersistError()
 }
 
 // Resultados de aqs_run_transitions_total{result} y aqs_gate_calls_total{result}.

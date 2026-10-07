@@ -32,6 +32,9 @@ type Config struct {
 type Controller struct {
 	c  Config
 	mu sync.Mutex
+
+	healthMu    sync.Mutex
+	lastSaveErr error
 }
 
 // New valida la configuración (puertos presentes).
@@ -81,7 +84,7 @@ func (k *Controller) Apply(ctx context.Context, ev Event) error {
 		if _, ok := k.c.Store.Get(ev.RunID); ok {
 			return nil
 		}
-		return k.c.Store.Save(Run{ID: ev.RunID, State: Confirmed, TraceID: ev.TraceID,
+		return k.save(Run{ID: ev.RunID, State: Confirmed, TraceID: ev.TraceID,
 			ConfirmedBy: ev.ConfirmedBy, Flows: ev.Flows, Seen: []string{ev.EventID}})
 	case EvRehearsalPassed, EvRehearsalFailed:
 		r, ok := k.c.Store.Get(ev.RunID)
@@ -94,17 +97,17 @@ func (k *Controller) Apply(ctx context.Context, ev Event) error {
 		if ev.EventID != "" {
 			r.Seen = append(r.Seen, ev.EventID)
 		}
-		if r.State != Rehearsing {
+		if r.State != Rehearsing || !r.Launched[PhaseRehearse] {
 			// Fuera de la fase de ensayo el hecho no se observó: se descarta (y no se aplicará en un replay).
-			k.c.Log.WarnContext(withTrace(ctx, r.TraceID), "evento de ensayo fuera de estado descartado",
+			k.c.Log.WarnContext(withTrace(ctx, r.TraceID), "evento de ensayo fuera de estado o antes del lanzamiento descartado",
 				"run_id", r.ID, "type", ev.Type, "state", r.State)
 			if k.c.Observer != nil {
 				k.c.Observer.EventDropped(ev.Type)
 			}
-			return k.c.Store.Save(r)
+			return k.save(r)
 		}
 		r.EnsayoPassed = FactOf(ev.Type == EvRehearsalPassed)
-		return k.c.Store.Save(r)
+		return k.save(r)
 	}
 	return fmt.Errorf("tipo de evento no soportado %q", ev.Type)
 }
@@ -167,9 +170,9 @@ func (k *Controller) transition(ctx context.Context, id string, to State) error 
 	}
 	k.gateCall(ResAllow)
 	r.State, r.Launched = to, nil
-	if err := k.c.Store.Save(r); err != nil {
+	if err := k.save(r); err != nil {
 		k.obsTransition(from, to, ResError)
-		return fmt.Errorf("%w: %v", ErrPersist, err)
+		return err
 	}
 	k.obsTransition(from, to, ResApplied)
 	k.c.Log.InfoContext(ctx, "transición aplicada", "run_id", id, "from", from, "to", to)
@@ -183,18 +186,16 @@ func (k *Controller) gateCall(res string) {
 }
 
 // failRun lleva la corrida a resetting (si ya desplegó) o a failed, pasando por el gate. Si el
-// gate tampoco lo permite, la corrida queda detenida (Halted) con handoff: sin salida segura.
+// gate lo deniega, la corrida queda detenida (Halted) con un handoff; si está caído o el disco
+// falla, la salida se reintenta en cada paso (nunca se avanza sin permiso del gate).
 func (k *Controller) failRun(ctx context.Context, id, reason string) error {
 	r, ok := k.c.Store.Get(id)
 	if !ok {
 		return ErrNotFound
 	}
 	ctx = withTrace(ctx, r.TraceID)
-	if r.FailReason == "" {
-		r.FailReason = reason
-		if err := k.c.Store.Save(r); err != nil {
-			return err
-		}
+	if err := k.markFail(r, reason); err != nil {
+		return err
 	}
 	target := Failed
 	if r.State.Resettable() {
@@ -202,24 +203,83 @@ func (k *Controller) failRun(ctx context.Context, id, reason string) error {
 	}
 	if err := k.transition(ctx, id, target); err != nil {
 		if errors.Is(err, ErrGate) || errors.Is(err, ErrPersist) {
-			// Gate caído o disco: la corrida no se mueve (FailReason queda fijada) y el salir se reintenta en
-			// cada paso hasta que el gate responda; denegado o no, nunca se avanza sin su permiso.
 			return err
 		}
 		r, _ = k.c.Store.Get(id)
-		r.Halted = true // gate denegó la salida: no se reintenta
-		k.handoff(ctx, r, PhaseTransport, fmt.Sprintf("sin salida segura hacia %s: %v", target, err))
-		return errors.Join(err, k.c.Store.Save(r))
+		r.Halted = true // el gate denegó la salida: no se reintenta
+		if herr := k.handoffOnce(ctx, r, PhaseTransport, fmt.Sprintf("sin salida segura hacia %s: %v", target, err)); herr != nil {
+			return errors.Join(err, herr)
+		}
+		return err
 	}
 	return nil
 }
 
-func (k *Controller) handoff(ctx context.Context, r Run, phase, reason string) {
+// markFail fija FailReason (si no estaba) y lo persiste.
+func (k *Controller) markFail(r Run, reason string) error {
+	if r.FailReason != "" {
+		return nil
+	}
+	r.FailReason = reason
+	return k.save(r)
+}
+
+// save persiste vía el puerto, registra el fallo (métrica y readyz) y lo marca como ErrPersist.
+func (k *Controller) save(r Run) error {
+	err := k.c.Store.Save(r)
+	k.healthMu.Lock()
+	k.lastSaveErr = err
+	k.healthMu.Unlock()
+	if err != nil {
+		if k.c.Observer != nil {
+			k.c.Observer.PersistError()
+		}
+		return fmt.Errorf("%w: %v", ErrPersist, err)
+	}
+	return nil
+}
+
+// PersistHealthy es nil si el último Save salió bien (usado por /readyz).
+func (k *Controller) PersistHealthy() error {
+	k.healthMu.Lock()
+	defer k.healthMu.Unlock()
+	return k.lastSaveErr
+}
+
+// handoffOnce persiste que el handoff de la fase se emitió ANTES de alertar: un Save que falla
+// impide el efecto, y uno que sale bien garantiza que no se repite (a lo sumo una vez por fase).
+func (k *Controller) handoffOnce(ctx context.Context, r Run, phase, reason string) error {
+	if r.HandedOff[phase] {
+		return nil
+	}
+	if r.HandedOff == nil {
+		r.HandedOff = map[string]bool{}
+	}
+	r.HandedOff[phase] = true
+	if err := k.save(r); err != nil {
+		return err
+	}
 	k.c.Alerter.Handoff(ctx, r.ID, phase, reason)
 	if k.c.Observer != nil {
 		k.c.Observer.Handoff(phase)
 	}
 	k.c.Log.ErrorContext(ctx, "handoff humano", "run_id", r.ID, "phase", phase, "reason", reason)
+	return nil
+}
+
+// exhausted indica que la fase ya no puede lanzarse: más de MaxRetries fallos o 3 lanzamientos
+// iniciados (contados en el almacén ANTES de lanzar: cota dura aunque falle el guardado posterior).
+func exhausted(r Run, phase string) bool {
+	return r.Attempts[phase] > MaxRetries || r.Started[phase] >= MaxRetries+1
+}
+
+// exhaust hace el handoff (una vez) y saca la corrida por failRun.
+func (k *Controller) exhaust(ctx context.Context, r Run, phase, reason string) error {
+	if err := k.handoffOnce(ctx, r, phase, reason); err != nil {
+		return err
+	}
+	r, _ = k.c.Store.Get(r.ID)
+	return k.failRun(ctx, r.ID, fmt.Sprintf("fase %s agotó sus reintentos: %s", phase, reason))
 }
 
 // DriveAll avanza un paso cada corrida no terminal (y reintenta publicar run.done pendientes).
@@ -268,21 +328,29 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 	if r.State.Terminal() {
 		return nil
 	}
-	if r.FailReason != "" && (r.State != Resetting || r.Attempts[PhaseReset] > MaxRetries) {
+	if r.FailReason != "" && (r.State != Resetting || exhausted(r, PhaseReset)) {
 		// Salida pendiente (gate caído o disco): solo se reintenta la transición, nunca la fase agotada.
-		return k.failRun(ctx, id, r.FailReason) // salida pendiente por gate caído
+		return k.failRun(ctx, id, r.FailReason)
 	}
 	if r.State == Confirmed || r.State == WarmReady {
-		if err := k.transition(ctx, id, chain[r.State]); err != nil {
-			return errors.Join(err, k.failRun(ctx, id, err.Error()))
-		}
-		return nil
+		return k.advance(ctx, r, chain[r.State])
 	}
 	phase, next := phaseOf(r.State)
 	if phase == PhaseReset && r.FailReason != "" {
 		next = Failed // la corrida fallida cierra en failed tras el reset verificado
 	}
 	if !r.Launched[phase] {
+		if exhausted(r, phase) {
+			return k.exhaust(ctx, r, phase, "reintentos agotados")
+		}
+		// Se persiste la intención de lanzar ANTES de lanzar: sin Save no hay efecto externo.
+		if r.Started == nil {
+			r.Started = map[string]int{}
+		}
+		r.Started[phase]++
+		if err := k.save(r); err != nil {
+			return err
+		}
 		uris, err := k.c.Phases.Launch(ctx, phase, r.clone())
 		if err != nil {
 			return k.phaseFailed(ctx, r, phase, err.Error())
@@ -294,7 +362,7 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 		if phase == PhaseReport {
 			r.Evidence = uris
 		}
-		if err := k.c.Store.Save(r); err != nil {
+		if err := k.save(r); err != nil {
 			return err
 		}
 	}
@@ -307,17 +375,28 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 			return nil // esperando rehearsal.passed: no hay nada que preguntar al gate todavía
 		}
 	}
-	if err := k.transition(ctx, id, next); err != nil {
-		if errors.Is(err, ErrIllegal) || errors.Is(err, ErrNotFound) {
-			return err
-		}
-		return errors.Join(err, k.failRun(ctx, id, err.Error()))
+	if err := k.advance(ctx, r, next); err != nil {
+		return err
 	}
 	if next == Done {
 		r, _ = k.c.Store.Get(id)
 		return k.publishDone(ctx, r)
 	}
 	return nil
+}
+
+// advance aplica el avance normal. Gate caído: se fija FailReason y la salida se reintenta en el
+// siguiente paso (una sola llamada al gate por paso). Gate deniega: salida inmediata. Error de
+// persistencia: no pasa nada (no avanza, no falla, no hace handoff) y se reintenta.
+func (k *Controller) advance(ctx context.Context, r Run, to State) error {
+	err := k.transition(ctx, r.ID, to)
+	switch {
+	case err == nil, errors.Is(err, ErrIllegal), errors.Is(err, ErrNotFound), errors.Is(err, ErrPersist):
+		return err
+	case errors.Is(err, ErrGate):
+		return errors.Join(err, k.markFail(r, err.Error()))
+	}
+	return errors.Join(err, k.failRun(ctx, r.ID, err.Error()))
 }
 
 // phaseFailed cuenta un fallo de la fase; hasta MaxRetries se reintenta en el próximo paso, al
@@ -331,7 +410,7 @@ func (k *Controller) phaseFailed(ctx context.Context, r Run, phase, reason strin
 	if phase == PhaseRehearse {
 		r.EnsayoPassed = Unknown
 	}
-	if err := k.c.Store.Save(r); err != nil {
+	if err := k.save(r); err != nil {
 		return err
 	}
 	if r.Attempts[phase] <= MaxRetries {
@@ -339,8 +418,7 @@ func (k *Controller) phaseFailed(ctx context.Context, r Run, phase, reason strin
 			"attempt", r.Attempts[phase])
 		return nil
 	}
-	k.handoff(ctx, r, phase, reason)
-	return k.failRun(ctx, r.ID, fmt.Sprintf("fase %s agotó sus reintentos: %s", phase, reason))
+	return k.exhaust(ctx, r, phase, reason)
 }
 
 func (k *Controller) publishDone(ctx context.Context, r Run) error {
@@ -351,7 +429,7 @@ func (k *Controller) publishDone(ctx context.Context, r Run) error {
 		return fmt.Errorf("publicando run.done: %w", err)
 	}
 	r.DonePublish = true
-	return k.c.Store.Save(r)
+	return k.save(r)
 }
 
 type traceKey struct{}

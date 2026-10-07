@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -162,5 +163,30 @@ func TestOutboxIdempotentDeterministicID(t *testing.T) {
 	}
 	if OutEventID("run.done", "r-1") == OutEventID("run.done", "r-2") {
 		t.Fatal("ids iguales")
+	}
+}
+
+type failDoneStore struct{ *runctl.MemStore }
+
+func (s failDoneStore) Save(r runctl.Run) error {
+	if r.DonePublish {
+		return errors.New("disco")
+	}
+	return s.MemStore.Save(r)
+}
+
+// Publish seguido de un Save que falla: el outbox idempotente deja una sola línea por run.done.
+func TestPublishThenSaveFailsWritesOneOutboxLine(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "o.jsonl")
+	st := failDoneStore{runctl.NewMemStore()}
+	_ = st.MemStore.Save(runctl.Run{ID: "r", State: runctl.Done, TraceID: "t", Evidence: []string{"s3://x"}})
+	k, _ := runctl.New(runctl.Config{Gate: runctl.AllowAll(), Store: st, Publisher: &Outbox{Path: p}, Warm: &runctl.FakeWarm{Fact: runctl.True},
+		Alerter: &runctl.FakeAlerter{}, Phases: &runctl.FakePhases{}})
+	for i := 0; i < 10; i++ {
+		_ = k.Drive(context.Background(), "r")
+	}
+	b, _ := os.ReadFile(p)
+	if strings.Count(string(b), "\n") != 1 {
+		t.Fatalf("run.done escrito %d veces", strings.Count(string(b), "\n"))
 	}
 }

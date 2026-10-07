@@ -70,8 +70,9 @@ func TestEveryPhaseExhaustedWithGateDownLaunchesExactlyThree(t *testing.T) {
 	_ = r.store.Save(Run{ID: "r", State: Rehearsing, ConfirmedBy: "u", Flows: []string{"f"}})
 	down = true
 	for i := 0; i < 3; i++ {
-		r.k.DriveAll(t.Context())
+		r.k.DriveAll(t.Context()) // lanza el ensayo
 		_ = r.k.Apply(t.Context(), Event{Type: EvRehearsalFailed, EventID: "f" + string(rune('a'+i)), RunID: "r"})
+		r.k.DriveAll(t.Context()) // cuenta el fallo
 	}
 	for i := 0; i < 30; i++ {
 		r.k.DriveAll(t.Context())
@@ -112,12 +113,13 @@ func TestRehearsalEventOutsideRehearsingIsDroppedAndNeverSetsFact(t *testing.T) 
 	}
 }
 
-type countObs struct{ dropped int }
+type countObs struct{ dropped, persist int }
 
 func (c *countObs) Transition(State, State, string) {}
 func (c *countObs) GateCall(string)                 {}
 func (c *countObs) Handoff(string)                  {}
 func (c *countObs) EventDropped(string)             { c.dropped++ }
+func (c *countObs) PersistError()                   { c.persist++ }
 
 func TestDroppedEventIsCounted(t *testing.T) {
 	o := &countObs{}
@@ -157,68 +159,74 @@ func TestPersistErrorIsNotADenial(t *testing.T) {
 	}
 }
 
-// Propiedad fuerte: toda llamada previa al avance fue allow, y ninguna fase pasa de 3 lanzamientos.
+// Propiedad fuerte: toda llamada previa al avance fue allow, ninguna fase pasa de 3 lanzamientos
+// (incluida rehearse), a lo sumo un handoff por fase y el almacén falla de forma aleatoria.
 func TestPropertyAdvanceOnlyAfterAllowAndExactlyThreeLaunchCap(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		decisions := rapid.SliceOfN(rapid.IntRange(0, 2), 0, 60).Draw(rt, "gate")
-		idx := 0
-		var lastAllowed bool
+		saveFails := rapid.SliceOfN(rapid.Bool(), 0, 120).Draw(rt, "saveFails")
+		idx, nsave := 0, 0
 		gate := &FakeGate{Decide: func(GateRequest) (GateDecision, error) {
 			d := 0
 			if idx < len(decisions) {
 				d = decisions[idx]
 			}
 			idx++
-			lastAllowed = false
 			switch d {
 			case 1:
 				return GateDecision{Reason: "x"}, nil
 			case 2:
 				return GateDecision{}, errors.New("x")
 			}
-			lastAllowed = true
 			return GateDecision{Allow: true, Reason: "ok"}, nil
 		}}
-		r := newRig(t, gate)
-		r.ph.FailFirst = map[string]int{PhaseDeploy: rapid.IntRange(0, 9).Draw(rt, "fd"), PhaseInfer: rapid.IntRange(0, 9).Draw(rt, "fi"),
-			PhaseRun: rapid.IntRange(0, 9).Draw(rt, "fu"), PhaseReset: rapid.IntRange(0, 9).Draw(rt, "fr")}
-		_ = r.k.Apply(context.Background(), confirmedEv())
-		for i := 0; i < 60; i++ {
+		st := &schedStore{MemStore: NewMemStore(), failIf: func(Run) bool {
+			nsave++
+			return nsave-1 < len(saveFails) && saveFails[nsave-1]
+		}}
+		ph, al := &FakePhases{FailFirst: map[string]int{PhaseDeploy: rapid.IntRange(0, 9).Draw(rt, "fd"),
+			PhaseInfer: rapid.IntRange(0, 9).Draw(rt, "fi"), PhaseRun: rapid.IntRange(0, 9).Draw(rt, "fu"),
+			PhaseReset: rapid.IntRange(0, 9).Draw(rt, "fr"), PhaseRehearse: rapid.IntRange(0, 9).Draw(rt, "fh"),
+			PhaseReport: rapid.IntRange(0, 9).Draw(rt, "fp")}}, &FakeAlerter{}
+		k, _ := New(Config{Gate: gate, Store: st, Publisher: &FakePublisher{}, Warm: &FakeWarm{Fact: True}, Alerter: al, Phases: ph})
+		_ = k.Apply(context.Background(), confirmedEv())
+		for i := 0; i < 80; i++ {
 			if i%7 == 3 {
 				ty := rapid.SampledFrom([]string{EvRehearsalPassed, EvRehearsalFailed}).Draw(rt, "ev")
-				_ = r.k.Apply(context.Background(), Event{Type: ty, EventID: "x" + string(rune('A'+i)), RunID: "r-1"})
+				_ = k.Apply(context.Background(), Event{Type: ty, EventID: "x" + string(rune('A'+i)), RunID: "r-1"})
 			}
-			before, _ := r.store.Get("r-1")
+			before, _ := st.Get("r-1")
 			n := len(gate.Calls)
-			r.k.DriveAll(context.Background())
-			after, _ := r.store.Get("r-1")
+			ni := idx
+			k.DriveAll(context.Background())
+			after, _ := st.Get("r-1")
 			if before.State.Terminal() && after.State != before.State {
 				rt.Fatalf("salió de terminal")
 			}
 			if after.State != before.State {
 				calls := gate.Calls[n:]
-				if len(calls) == 0 || calls[len(calls)-1].To != after.State || !lastAllowedAt(gate, decisions, len(gate.Calls)-1) {
+				if len(calls) == 0 || calls[len(calls)-1].To != after.State || !lastAllowedAt(decisions, idx-1) || idx == ni {
 					rt.Fatalf("avanzó %s->%s sin un allow del gate", before.State, after.State)
 				}
 			}
 		}
-		_ = lastAllowed
-		for p, n := range r.ph.Launches {
-			if p == PhaseRehearse {
-				continue
-			}
+		for p, n := range ph.Launches {
 			if n > 3 {
 				rt.Fatalf("fase %s lanzada %d veces (tope 3)", p, n)
 			}
 		}
-		if len(r.al.Calls) > 4*1+len(r.al.Calls)/(len(r.al.Calls)+1) { // un handoff por agotamiento: acotado por fases + salida
-			rt.Fatalf("handoffs %v", r.al.Calls)
+		seen := map[string]bool{}
+		for _, c := range al.Calls {
+			if seen[c] {
+				rt.Fatalf("handoff duplicado %s en %v", c, al.Calls)
+			}
+			seen[c] = true
 		}
 	})
 }
 
 // lastAllowedAt: la llamada idx-ésima consumió decisions[idx]==0 (allow); más allá de la lista, allow.
-func lastAllowedAt(_ *FakeGate, decisions []int, idx int) bool {
+func lastAllowedAt(decisions []int, idx int) bool {
 	if idx < len(decisions) {
 		return decisions[idx] == 0
 	}

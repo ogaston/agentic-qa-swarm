@@ -111,7 +111,10 @@ func run(log *slog.Logger, env func(string) string) error {
 		return err
 	}
 	src := &adapters.FileSource{Path: c.eventsFile}
-	checks := []obs.Check{{Name: "journal", Fn: func(context.Context) error { return store.Healthy() }}}
+	checks := []obs.Check{
+		{Name: "journal", Fn: func(context.Context) error { return store.Healthy() }},
+		{Name: "persist", Fn: func(context.Context) error { return ctl.PersistHealthy() }}, // el último Save salió bien
+	}
 	app := httpapi.New(store, httpapi.NewIdentityVerifier(strings.TrimRight(c.identityURL, "/")))
 	h := obs.Wrap(obs.Config{Service: serviceName, Log: log, Registry: reg, Metrics: obs.NewHTTPMetrics(reg, serviceName), Ready: checks,
 		Route: func(r *http.Request) string {

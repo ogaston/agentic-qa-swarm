@@ -12,6 +12,7 @@ type RunMetrics struct {
 	gate        *prometheus.CounterVec
 	handoff     *prometheus.CounterVec
 	dropped     *prometheus.CounterVec
+	persist     prometheus.Counter
 }
 
 var _ runctl.Observer = (*RunMetrics)(nil)
@@ -28,8 +29,10 @@ func NewRunMetrics(reg prometheus.Registerer, active func() float64) *RunMetrics
 			Help: "Handoffs humanos por fase."}, []string{"phase"}),
 		dropped: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "aqs_events_dropped_total",
 			Help: "Eventos de entrada descartados por llegar fuera de estado."}, []string{"type"}),
+		persist: prometheus.NewCounter(prometheus.CounterOpts{Name: "aqs_persist_errors_total",
+			Help: "Guardados del diario de corridas que fallaron."}),
 	}
-	reg.MustRegister(m.transitions, m.gate, m.handoff, m.dropped,
+	reg.MustRegister(m.transitions, m.gate, m.handoff, m.dropped, m.persist,
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "aqs_runs_active", Help: "Corridas no terminales."}, active))
 	// Series iniciales para que existan desde el arranque.
 	m.gate.WithLabelValues(runctl.ResAllow)
@@ -50,3 +53,6 @@ func (m *RunMetrics) Handoff(phase string) { m.handoff.WithLabelValues(phase).In
 
 // EventDropped implementa runctl.Observer.
 func (m *RunMetrics) EventDropped(t string) { m.dropped.WithLabelValues(t).Inc() }
+
+// PersistError implementa runctl.Observer.
+func (m *RunMetrics) PersistError() { m.persist.Inc() }
