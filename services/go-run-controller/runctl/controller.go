@@ -25,6 +25,7 @@ type Config struct {
 	Alerter   Alerter
 	Phases    PhaseLauncher
 	Results   RehearsalResults // opcional: lee el resultado del Job de ensayo (sin él, rehearsal.* llega por eventos)
+	Runners   RunnerResults    // opcional: avance de la fase run (runners, evidencia, run.done al terminar)
 	Observer  Observer
 	Log       *slog.Logger
 }
@@ -380,6 +381,12 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 			return err
 		}
 	}
+	if phase == PhaseRun && k.c.Runners != nil {
+		if done, err := k.runnersStep(ctx, r); err != nil || !done {
+			return err
+		}
+		r, _ = k.c.Store.Get(id)
+	}
 	if phase == PhaseRehearse {
 		if r.EnsayoPassed != True && r.EnsayoPassed != False && k.c.Results != nil {
 			out, err := k.c.Results.Result(ctx, r.clone())
@@ -448,8 +455,42 @@ func (k *Controller) phaseFailed(ctx context.Context, r Run, phase, reason strin
 	return k.exhaust(ctx, r, phase, reason)
 }
 
+// runnersStep avanza los runners. Devuelve done=true cuando la evidencia de TODOS los flujos está
+// guardada y run.done ya se publicó (solo con >=1 URI y sin FailReason). Un fallo de evidencia
+// saca la corrida por reset sin run.done.
+func (k *Controller) runnersStep(ctx context.Context, r Run) (bool, error) {
+	if r.DonePublish {
+		return true, nil
+	}
+	if len(r.Evidence) == 0 {
+		out, err := k.c.Runners.Progress(ctx, r.clone())
+		if err != nil {
+			return false, fmt.Errorf("avance de los runners: %w", err) // no se asume nada: se vuelve a leer
+		}
+		if !out.Done {
+			return false, nil
+		}
+		if out.FailReason != "" || len(out.URIs) == 0 {
+			reason := out.FailReason
+			if reason == "" {
+				reason = "los runners no dejaron evidencia"
+			}
+			return false, k.failRun(ctx, r.ID, reason)
+		}
+		r.Evidence = out.URIs
+		if err := k.save(r); err != nil {
+			return false, err
+		}
+	}
+	if err := k.c.Publisher.Publish(ctx, OutEvent{Type: "run.done", RunID: r.ID, TraceID: r.TraceID, EvidenceURIs: r.Evidence}); err != nil {
+		return false, fmt.Errorf("publicando run.done: %w", err)
+	}
+	r.DonePublish = true
+	return true, k.save(r)
+}
+
 func (k *Controller) publishDone(ctx context.Context, r Run) error {
-	if r.FailReason != "" {
+	if r.FailReason != "" || r.DonePublish { // run.done ya salió al terminar los runners
 		return nil
 	}
 	if err := k.c.Publisher.Publish(ctx, OutEvent{Type: "run.done", RunID: r.ID, TraceID: r.TraceID, EvidenceURIs: r.Evidence}); err != nil {

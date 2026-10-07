@@ -185,6 +185,20 @@ type RehearsalResults interface {
 	Result(ctx context.Context, run Run) (RehearsalOutcome, error)
 }
 
+// RunOutcome es el avance de la fase run. Done=false: aún hay runners vivos o por lanzar.
+// Done con FailReason (o sin URIs): la corrida sale por reset sin publicar run.done.
+type RunOutcome struct {
+	Done       bool
+	URIs       []string // evidencia leída de vuelta de TODOS los flujos
+	FailReason string
+}
+
+// RunnerResults avanza la fase run (lanza runners pendientes, recolecta evidencia, aplica timeouts).
+// Debe ser idempotente: se llama en cada paso mientras la fase corre.
+type RunnerResults interface {
+	Progress(ctx context.Context, run Run) (RunOutcome, error)
+}
+
 // Observer recibe métricas; todos los métodos deben ser seguros con nil en el controlador.
 type Observer interface {
 	Transition(from, to State, result string)

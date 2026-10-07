@@ -62,3 +62,37 @@ func (m *RunMetrics) PersistError() { m.persist.Inc() }
 
 // JournalTailDiscarded cuenta una cola de diario descartada al arrancar.
 func (m *RunMetrics) JournalTailDiscarded() { m.tail.Inc() }
+
+// RunnerMetrics implementa runner.Observer: aqs_runner_jobs_total{result},
+// aqs_evidence_objects_total{result} y aqs_run_duration_seconds.
+type RunnerMetrics struct {
+	jobs, objs *prometheus.CounterVec
+	dur        prometheus.Histogram
+}
+
+// NewRunnerMetrics registra las métricas de runners y evidencia.
+func NewRunnerMetrics(reg prometheus.Registerer) *RunnerMetrics {
+	m := &RunnerMetrics{
+		jobs: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "aqs_runner_jobs_total", Help: "Jobs runner resueltos por resultado."}, []string{"result"}),
+		objs: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "aqs_evidence_objects_total", Help: "Flujos con evidencia guardada o fallida."}, []string{"result"}),
+		dur: prometheus.NewHistogram(prometheus.HistogramOpts{Name: "aqs_run_duration_seconds", Help: "Duración de la fase run.",
+			Buckets: []float64{10, 30, 60, 120, 300, 600, 1200, 3600}}),
+	}
+	reg.MustRegister(m.jobs, m.objs, m.dur)
+	for _, r := range []string{"passed", "failed", "timeout"} {
+		m.jobs.WithLabelValues(r)
+	}
+	for _, r := range []string{"stored", "error"} {
+		m.objs.WithLabelValues(r)
+	}
+	return m
+}
+
+// RunnerJob cuenta un Job runner resuelto.
+func (m *RunnerMetrics) RunnerJob(result string) { m.jobs.WithLabelValues(result).Inc() }
+
+// EvidenceObject cuenta la evidencia de un flujo.
+func (m *RunnerMetrics) EvidenceObject(result string) { m.objs.WithLabelValues(result).Inc() }
+
+// RunDuration observa la duración de la fase run.
+func (m *RunnerMetrics) RunDuration(s float64) { m.dur.Observe(s) }
