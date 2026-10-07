@@ -27,7 +27,8 @@ const ConfirmationsFile = "confirmations.jsonl"
 // record es la linea persistida de una confirmacion.
 type record struct {
 	Receipt
-	Flows []string `json:"flows"`
+	Flows   []string `json:"flows"`
+	TraceID string   `json:"trace_id,omitempty"`
 }
 
 type entry struct {
@@ -45,6 +46,10 @@ type Store struct {
 	items   map[string]*entry
 	events  map[string]struct{}
 	receipt map[string]Receipt
+	flows   map[string][]string // flujos confirmados por notification_id
+	traces  map[string]string   // trace_id de la peticion que confirmo
+	pubDone map[string]struct{} // notification_id con run.confirmed ya publicado
+	pubPath string
 	seq     int
 	// Skipped cuenta lineas de recibos ilegibles ignoradas al abrir.
 	Skipped int
@@ -63,6 +68,8 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 	s := &Store{
 		now: now, path: filepath.Join(dir, ConfirmationsFile),
 		items: map[string]*entry{}, events: map[string]struct{}{}, receipt: map[string]Receipt{},
+		flows: map[string][]string{}, traces: map[string]string{}, pubDone: map[string]struct{}{},
+		pubPath: filepath.Join(dir, PublishedFile),
 	}
 	b, err := os.ReadFile(s.path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -81,6 +88,7 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 		}
 		if _, dup := s.receipt[r.NotificationID]; !dup {
 			s.receipt[r.NotificationID] = r.Receipt
+			s.flows[r.NotificationID], s.traces[r.NotificationID] = r.Flows, r.TraceID
 		}
 	}
 	if len(b) > 0 && b[len(b)-1] != '\n' {
@@ -88,6 +96,9 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 		if err := s.appendRaw([]byte("\n")); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.loadPublished(); err != nil {
+		return nil, err
 	}
 	return s, nil
 }
@@ -163,6 +174,12 @@ func (s *Store) Counts() map[string]int {
 // solo despues cambia el estado. La segunda confirmacion devuelve
 // ErrAlreadyConfirmed sin crear otro recibo.
 func (s *Store) Confirm(id, principalID string, flows []string) (Receipt, error) {
+	return s.ConfirmTraced(id, principalID, flows, "")
+}
+
+// ConfirmTraced es Confirm y ademas persiste el trace_id de la peticion, para que run.confirmed
+// republicado conserve la correlacion.
+func (s *Store) ConfirmTraced(id, principalID string, flows []string, traceID string) (Receipt, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.items[id]; !ok {
@@ -176,7 +193,7 @@ func (s *Store) Confirm(id, principalID string, flows []string) (Receipt, error)
 		return Receipt{}, err
 	}
 	r := Receipt{RunID: runID, NotificationID: id, ConfirmedBy: principalID, ConfirmedAt: s.now().UTC().Truncate(time.Second)}
-	line, err := json.Marshal(record{Receipt: r, Flows: flows})
+	line, err := json.Marshal(record{Receipt: r, Flows: flows, TraceID: traceID})
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -184,6 +201,7 @@ func (s *Store) Confirm(id, principalID string, flows []string) (Receipt, error)
 		return Receipt{}, fmt.Errorf("persistiendo confirmacion: %w", err)
 	}
 	s.receipt[id] = r
+	s.flows[id], s.traces[id] = append([]string(nil), flows...), traceID
 	return r, nil
 }
 

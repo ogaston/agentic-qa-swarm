@@ -1,0 +1,81 @@
+name: integration-u1-u4
+
+# Integración U1 (ui-api) <-> U4 (go-identity real): contrato de sesión, 401/503 y run.confirmed.
+# Sin secretos del repositorio: usuario y contraseña de prueba se generan dentro del job.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-u1-u4-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: services/ui-api/go.mod
+          cache-dependency-path: |
+            services/ui-api/go.sum
+            services/go-identity/go.sum
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Construir go-identity y ui-api
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          (cd services/go-identity && go build -o "$RUNNER_TEMP/bin/go-identity" ./cmd/go-identity)
+          (cd services/ui-api && go build -o "$RUNNER_TEMP/bin/ui-api" ./cmd/ui-api)
+
+      - name: Generar usuario de prueba y arrancar go-identity real
+        run: |
+          pass="Ci-$(openssl rand -hex 12)!"
+          hash=$(printf '%s' "$pass" | "$RUNNER_TEMP/bin/go-identity" hash-password)
+          jq -n --arg h "$hash" '[{username:"ci-user",password_hash:$h,role:"user"}]' > "$RUNNER_TEMP/users.json"
+          {
+            echo "IDENTITY_TEST_USER=ci-user"
+            echo "IDENTITY_TEST_PASSWORD=$pass"
+            echo "IDENTITY_URL=http://127.0.0.1:18200"
+          } >> "$GITHUB_ENV"
+          IDENTITY_USERS_FILE="$RUNNER_TEMP/users.json" LISTEN_ADDR=127.0.0.1:18200 \
+            nohup "$RUNNER_TEMP/bin/go-identity" > "$RUNNER_TEMP/identity.log" 2>&1 &
+          for _ in $(seq 1 50); do
+            curl -sf http://127.0.0.1:18200/healthz >/dev/null && exit 0
+            sleep 0.2
+          done
+          cat "$RUNNER_TEMP/identity.log"
+          exit 1
+
+      - name: Pruebas de contrato U1-U4
+        working-directory: services/ui-api
+        run: go test -count=1 -tags contract -run Contract -v ./...
+
+      - name: run.confirmed contra su esquema (ui-api real, ajv)
+        run: |
+          jq -c . contracts/events/examples/valid/notify.created.json > "$RUNNER_TEMP/events.jsonl"
+          UIAPI_AUTH=identity IDENTITY_URL="$IDENTITY_URL" UIAPI_EVENTS_FILE="$RUNNER_TEMP/events.jsonl" \
+            UIAPI_DATA_DIR="$RUNNER_TEMP/ui" UIAPI_OUTBOX_FILE="$RUNNER_TEMP/out.jsonl" LISTEN_ADDR=127.0.0.1:18201 \
+            nohup "$RUNNER_TEMP/bin/ui-api" > "$RUNNER_TEMP/ui.log" 2>&1 &
+          for _ in $(seq 1 50); do
+            curl -sf http://127.0.0.1:18201/healthz >/dev/null && break
+            sleep 0.2
+          done
+          tok=$(curl -sf -X POST "$IDENTITY_URL/auth/login" -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg u "$IDENTITY_TEST_USER" --arg p "$IDENTITY_TEST_PASSWORD" '{username:$u,password:$p}')" | jq -r .token)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' \
+            -d '{"flows":["checkout","refund"]}' http://127.0.0.1:18201/notifications/n-1/confirm)
+          test "$code" = 201
+          test "$(wc -l < "$RUNNER_TEMP/out.jsonl")" = 1
+          head -n1 "$RUNNER_TEMP/out.jsonl" > "$RUNNER_TEMP/ev.json"
+          npx --yes -p ajv-cli@5.0.0 -p ajv-formats@3.0.1 ajv validate --spec=draft2020 -c ajv-formats \
+            -s contracts/events/run.confirmed.schema.json -d "$RUNNER_TEMP/ev.json"

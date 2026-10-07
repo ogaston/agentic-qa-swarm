@@ -13,5 +13,6 @@ USER 65532:65532
 EXPOSE 8080
 ENV LISTEN_ADDR=:8080 \
     UIAPI_DATA_DIR=/var/lib/ui-api/data \
-    UIAPI_EVENTS_FILE=/var/lib/ui-api/events.jsonl
+    UIAPI_EVENTS_FILE=/var/lib/ui-api/events.jsonl \
+    UIAPI_OUTBOX_FILE=/var/lib/ui-api/outbox.jsonl
 ENTRYPOINT ["/usr/local/bin/ui-api"]
