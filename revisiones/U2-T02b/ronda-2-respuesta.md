@@ -1,0 +1,4 @@
+# Respuesta a la ronda 2 — U2-T02b
+
+F-01: Corregido en este commit (ronda 3, solo pruebas): (1) `TestFileSourcePartialLineCompletedLaterIsDelivered` (mutación `off += int64(len(line)); break` en Poll: roja); (2) `TestJournalTornTailThenPartialWriteStillReopens` (reabrir con cola descartada, Write parcial, Save posterior, reabrir; mutación `s.size = len(b)`: roja); (3) `TestJournalTornTailOneByteIsTruncated` (mutación `s.discarded > 1`: roja). Mutaciones corridas con `ulimit -v 4000000` y `go test -timeout 60s`.
+F-02: Corregido en este commit lo trivial: eliminada la variable `before` sin uso y su comentario. La aserción de `Discarded()` ya existe en `TestFileSourceUnackedIsRedeliveredAckedIsNot` y la añadí en la prueba de línea parcial (`Discarded()==0`). Fuera de alcance, no hecho (tarea candidata): chequeo `journal` de `readyChecks`, errores de `Truncate`/`ReadFile` en la apertura, `openJournal` devolviendo `(j, nil)` ante error.
