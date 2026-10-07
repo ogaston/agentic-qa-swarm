@@ -163,10 +163,10 @@ const (
 // PhaseLauncher ejecuta una fase que crea Jobs (adaptadores reales: T03 a T06).
 // Devuelve las URIs de evidencia (solo la fase report las llena).
 //
-// Launch DEBE ser idempotente por (corrida, fase, Started[fase]): la corrida llega con Started para
-// nombrar el Job de forma determinista, porque un crash entre Launch y el guardado de Launched
-// repite el lanzamiento (hasta 3 veces por fase) y un crash entre guardar Started y Launch gasta
-// un intento sin lanzar.
+// Launch DEBE ser idempotente por (corrida, fase): ante un reintento (un crash entre Launch y el
+// guardado de Launched repite el lanzamiento, hasta 3 veces por fase) el lanzador debe ADOPTAR el
+// trabajo vivo de esa (corrida, fase) en vez de crear otro. Run.Started[fase] es solo el número de
+// intento (tope 3) y NO sirve como clave de deduplicación: cambia en cada intento.
 type PhaseLauncher interface {
 	Launch(ctx context.Context, phase string, run Run) ([]string, error)
 }

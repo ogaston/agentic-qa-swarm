@@ -68,3 +68,71 @@ func TestOutboxSyncFailureThenRetryWritesOneLine(t *testing.T) {
 		t.Fatalf("%q", b)
 	}
 }
+
+// Un Publish fallido no borra los run.done anteriores (restaura a su tamaño previo, no a 0).
+func TestOutboxFailureKeepsPriorLines(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "o.jsonl")
+	if err := (&Outbox{Path: p}).Publish(t.Context(), runctl.OutEvent{Type: "run.done", RunID: "r-0", TraceID: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	prior, _ := os.ReadFile(p)
+	o := faultyOutbox(p, &faultFile{partial: 40})
+	if err := o.Publish(t.Context(), doneEv); err == nil {
+		t.Fatal("debía fallar")
+	}
+	if b, _ := os.ReadFile(p); !bytes.Equal(b, prior) {
+		t.Fatalf("el fallo alteró las líneas anteriores: %q", b)
+	}
+}
+
+// El objeto completo sin '\n' final (kill -9 justo antes del salto) solo recibe el '\n': una línea.
+func TestOutboxCompleteJSONWithoutNewlineIsNotDuplicated(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "o.jsonl")
+	o := &Outbox{Path: p}
+	if err := o.Publish(t.Context(), doneEv); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	_ = os.WriteFile(p, bytes.TrimSuffix(b, []byte("\n")), 0o600)
+	if err := o.Publish(t.Context(), doneEv); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(p)
+	if !bytes.Equal(got, b) {
+		t.Fatalf("esperaba la misma línea con su salto:\n%q\n%q", got, b)
+	}
+}
+
+// Una cola completa de OTRO evento no es este evento: se aísla y se escribe el nuestro.
+func TestOutboxForeignCompleteTailIsIsolated(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "o.jsonl")
+	_ = os.WriteFile(p, []byte(`{"event_id":"otro"}`), 0o600)
+	if err := (&Outbox{Path: p}).Publish(t.Context(), doneEv); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	if bytes.Count(b, []byte("\n")) != 2 || !published(b, OutEventID("run.done", "r-1")) {
+		t.Fatalf("%q", b)
+	}
+}
+
+// Doble fallo (Sync y truncado/Sync): la línea pudo quedar sin ser durable; el siguiente Publish no la
+// da por publicada hasta sincronizar con éxito.
+func TestOutboxDoubleFailureIsNotReportedPublishedUntilSynced(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "o.jsonl")
+	ff := &faultFile{syncFails: 2}
+	o := faultyOutbox(p, ff)
+	if err := o.Publish(t.Context(), doneEv); err == nil {
+		t.Fatal("debía fallar")
+	}
+	ff.syncFails = 1
+	if err := o.Publish(t.Context(), doneEv); err == nil {
+		t.Fatal("con el Sync aún fallando no puede darse por publicada")
+	}
+	if err := o.Publish(t.Context(), doneEv); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); bytes.Count(b, []byte("\n")) != 1 {
+		t.Fatalf("%q", b)
+	}
+}

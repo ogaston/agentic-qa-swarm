@@ -84,18 +84,17 @@ func run(log *slog.Logger, env func(string) string) error {
 	if err != nil {
 		return err
 	}
-	store, err := adapters.OpenJournalOpts(c.dataDir, adapters.JournalOptions{Log: log})
-	if err != nil {
-		return err
-	}
-	defer store.Close()
 	gate, err := adapters.NewHTTPGate(c.govURL, c.govToken)
 	if err != nil {
 		return err
 	}
 	reg := obs.NewRegistry()
+	var store *adapters.JournalStore
 	active := func() float64 {
 		n := 0
+		if store == nil {
+			return 0
+		}
 		for _, r := range store.List() {
 			if !r.State.Terminal() {
 				n++
@@ -104,7 +103,11 @@ func run(log *slog.Logger, env func(string) string) error {
 		return float64(n)
 	}
 	metrics := obs.NewRunMetrics(reg, active)
-	noteJournalTail(store, metrics)
+	store, err = openJournal(c.dataDir, log, metrics)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
 	ctl, err := runctl.New(runctl.Config{Namespace: c.namespace, Gate: gate, Store: store,
 		Publisher: &adapters.Outbox{Path: c.outboxFile}, Warm: &runctl.FakeWarm{Fact: runctl.True},
 		Alerter: logAlerter{log}, Phases: &runctl.FakePhases{}, Observer: metrics, Log: log})
@@ -139,6 +142,16 @@ func run(log *slog.Logger, env func(string) string) error {
 	}
 }
 
+// openJournal abre el diario registrando la cola descartada (log y aqs_journal_tail_discarded_total).
+func openJournal(dir string, log *slog.Logger, m interface{ JournalTailDiscarded() }) (*adapters.JournalStore, error) {
+	j, err := adapters.OpenJournalOpts(dir, adapters.JournalOptions{Log: log})
+	if err != nil {
+		return nil, err
+	}
+	noteJournalTail(j, m)
+	return j, nil
+}
+
 // noteJournalTail cuenta en aqs_journal_tail_discarded_total la cola incompleta descartada al abrir.
 func noteJournalTail(j interface{ TailDiscarded() int }, m interface{ JournalTailDiscarded() }) {
 	if j.TailDiscarded() > 0 {
@@ -154,8 +167,11 @@ func readyChecks(journal interface{ Healthy() error }, ctl interface{ PersistHea
 	}
 }
 
+// tickEvery es el periodo del lazo (variable solo para las pruebas).
+var tickEvery = 500 * time.Millisecond
+
 func loop(ctx context.Context, log *slog.Logger, ctl *runctl.Controller, src runctl.EventSource) {
-	t := time.NewTicker(500 * time.Millisecond)
+	t := time.NewTicker(tickEvery)
 	defer t.Stop()
 	for {
 		tick(ctx, log, ctl, src)

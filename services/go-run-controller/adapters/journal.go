@@ -161,7 +161,7 @@ func (s *JournalStore) Save(r runctl.Run) error {
 		return err
 	}
 	data := append(append([]byte(nil), line...), '\n')
-	if err, intact := appendDurable(s.f, s.size, data); err != nil {
+	if intact, err := appendDurable(s.f, s.size, data); err != nil {
 		if !intact {
 			s.broken = fmt.Errorf("%w: %v", ErrJournalBroken, err)
 		}

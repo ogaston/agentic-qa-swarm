@@ -20,16 +20,16 @@ func osOpenAppend(path string) (appendFile, error) {
 // appendDurable añade data (el archivo mide size) y lo sincroniza. Ante cualquier fallo de Write o
 // Sync devuelve el archivo a size bytes (y lo sincroniza): no quedan bytes huérfanos ni una línea
 // que el llamador cree ausente. intact=false si no pudo garantizarlo (el llamador debe darse por roto).
-func appendDurable(f appendFile, size int64, data []byte) (err error, intact bool) {
+func appendDurable(f appendFile, size int64, data []byte) (intact bool, err error) {
 	_, err = f.Write(data)
 	if err == nil {
 		err = f.Sync()
 	}
 	if err == nil {
-		return nil, true
+		return true, nil
 	}
 	if f.Truncate(size) != nil || f.Sync() != nil {
-		return err, false
+		return false, err
 	}
-	return err, true
+	return true, err
 }

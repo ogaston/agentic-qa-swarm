@@ -149,6 +149,9 @@ type Outbox struct {
 	Now  func() time.Time
 	mu   sync.Mutex
 	open openAppendFunc
+	// dirty: un Publish anterior no pudo restaurar el archivo (Write/Sync y truncado fallaron): su línea
+	// pudo quedar completa sin ser durable; antes de darla por publicada hay que sincronizar.
+	dirty bool
 }
 
 var _ runctl.EventPublisher = (*Outbox)(nil)
@@ -165,6 +168,14 @@ func published(b []byte, id string) bool {
 		}
 	}
 	return false
+}
+
+// completeTail dice si la cola sin '\n' es ya el objeto JSON completo del evento id.
+func completeTail(tail []byte, id string) bool {
+	var e struct {
+		EventID string `json:"event_id"`
+	}
+	return json.Unmarshal(tail, &e) == nil && e.EventID == id
 }
 
 // Publish implementa EventPublisher.
@@ -197,21 +208,41 @@ func (o *Outbox) Publish(_ context.Context, ev runctl.OutEvent) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if published(b, id) {
-		return nil
-	}
-	if len(b) > 0 && b[len(b)-1] != '\n' {
-		line = append([]byte("\n"), line...) // cola huérfana de un kill -9: se aísla en su propia línea
-	}
 	open := o.open
 	if open == nil {
 		open = osOpenAppend
+	}
+	if published(b, id) {
+		if !o.dirty {
+			return nil
+		}
+		f, err := open(o.Path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if err := f.Sync(); err != nil {
+			return err
+		}
+		o.dirty = false
+		return nil
+	}
+	data := append(line, '\n')
+	if tail := b[bytes.LastIndexByte(b, '\n')+1:]; len(tail) > 0 {
+		if completeTail(tail, id) {
+			data = []byte("\n") // el kill -9 cayó justo antes del '\n': la línea ya está entera
+		} else {
+			data = append([]byte("\n"), data...) // cola huérfana: se aísla en su propia línea
+		}
 	}
 	f, err := open(o.Path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	err, _ = appendDurable(f, int64(len(b)), append(line, '\n'))
+	intact, err := appendDurable(f, int64(len(b)), data)
+	if !intact {
+		o.dirty = true
+	}
 	return err
 }

@@ -237,7 +237,7 @@ func TestJournalPartialWriteSyncFailureProperty(t *testing.T) {
 			ff.truncFail = rapid.SampledFrom([]bool{false, false, false, true}).Draw(rt, "trunc")
 			if err := s.Save(runctl.Run{ID: id, State: st}); err == nil {
 				want[id] = st
-			} else if s.Healthy() != nil { // roto: la línea en vuelo pudo llegar a disco; no se aceptan más Save
+			} else if s.broken != nil { // roto: la línea en vuelo pudo llegar a disco; no se aceptan más Save
 				maybeID, maybe = id, st
 				if err := s.Save(runctl.Run{ID: "z", State: st}); !errors.Is(err, ErrJournalBroken) {
 					rt.Fatalf("un diario roto aceptó un Save: %v", err)

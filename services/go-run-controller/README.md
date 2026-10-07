@@ -20,11 +20,18 @@ Los adaptadores reales de fase (Jobs de Kubernetes) llegan con U2-T03 a T06; hoy
 
 ## Garantías y límites
 
-- `PhaseLauncher.Launch` es **idempotente** por (corrida, fase, `Started[fase]`): la corrida llega con
-  `Started` para que el adaptador nombre el Job de forma determinista (lo implementan U2-T04/T05).
-  Un crash entre `Launch` y el guardado de `Launched` repite el lanzamiento (tope 3 por fase).
+- `PhaseLauncher.Launch` es **idempotente** por (corrida, fase): ante un reintento el lanzador debe
+  **adoptar el trabajo vivo** de esa (corrida, fase) en vez de crear otro. `Started[fase]` es solo el
+  número de intento (tope 3), no una clave de deduplicación. Un crash entre `Launch` y el guardado de
+  `Launched` repite el lanzamiento (hasta 3 veces por fase).
 - El **handoff es «a lo sumo una vez»** (at-most-once) por fase: `HandedOff[fase]` se guarda antes de
-  alertar, así que un crash entre ese guardado y el aviso lo pierde. Un `halted` (sin salida segura)
-  tampoco es visible en `GET /runs`: el único rastro es el log y `aqs_handoff_total`.
+  alertar, así que un crash entre ese guardado y el aviso lo pierde; también puede quedar en disco sin
+  aviso si un `Save` falla pero persiste (diario roto). Un `halted` (sin salida segura) tampoco es
+  visible en `GET /runs`: el único rastro es el log y `aqs_handoff_total`.
+- Un **diario roto** (`ErrJournalBroken`) no se recupera solo: requiere reiniciar el proceso
+  (`/readyz` da 503 y `/healthz` sigue en 200, así que el kubelet no lo reinicia). Candidata: hacer
+  fallar `/healthz` o reabrir el diario en caliente.
+- El cableado de `run()` está cubierto por pruebas vía `openJournal` (log y métrica de la cola
+  descartada) y `readyChecks`; la secuencia completa de `run()` solo la cubre la caja negra manual (CA-3).
 - Fuera de alcance (candidatas): HMAC y ancla del último `seq` del diario, rotación/compactación,
   `halted` visible en la API, tiempo máximo de espera de `rehearsal.passed`.

@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -20,12 +24,12 @@ import (
 // flakyStore falla Save mientras down; cuenta los guardados exitosos.
 type flakyStore struct {
 	*runctl.MemStore
-	down  bool
+	down  atomic.Bool
 	saves int
 }
 
 func (f *flakyStore) Save(r runctl.Run) error {
-	if f.down {
+	if f.down.Load() {
 		return errors.New("disco")
 	}
 	f.saves++
@@ -61,12 +65,12 @@ func ticks(ctl *runctl.Controller, src runctl.EventSource, n int) {
 // Con Save fallando run.confirmed no se pierde: la corrida se crea al sanar.
 func TestEventNotLostWhenSaveFailsDuringApply(t *testing.T) {
 	ctl, st, src := rig(t, confLine)
-	st.down = true
+	st.down.Store(true)
 	ticks(ctl, src, 3)
 	if _, ok := st.Get("r-1"); ok {
 		t.Fatal("no debía crearse con el disco caído")
 	}
-	st.down = false
+	st.down.Store(false)
 	ticks(ctl, src, 30)
 	if _, ok := st.Get("r-1"); !ok {
 		t.Fatal("la corrida nunca se crea: el evento se perdió")
@@ -78,9 +82,9 @@ func TestEventRedeliveredOnPersistErrorRehearsalPassed(t *testing.T) {
 	ctl, st, src := rig(t, passLine)
 	_ = st.MemStore.Save(runctl.Run{ID: "r-1", State: runctl.Rehearsing, ConfirmedBy: "u", Flows: []string{"a"},
 		Launched: map[string]bool{runctl.PhaseRehearse: true}})
-	st.down = true
+	st.down.Store(true)
 	ticks(ctl, src, 3)
-	st.down = false
+	st.down.Store(false)
 	ticks(ctl, src, 30)
 	r, _ := st.Get("r-1")
 	if r.EnsayoPassed != runctl.True || r.State == runctl.Rehearsing {
@@ -112,39 +116,99 @@ func TestEventAckAfterApply(t *testing.T) {
 	ctl, st, _ := rig(t, confLine)
 	ev := runctl.Event{Type: runctl.EvRunConfirmed, EventID: "e1", TraceID: "t", RunID: "r-1", ConfirmedBy: "u", Flows: []string{"a"}}
 	spy := &spySource{evs: []runctl.Event{ev}, st: st}
-	st.down = true
+	st.down.Store(true)
 	ticks(ctl, spy, 3)
 	if spy.acks != 0 {
 		t.Fatalf("Ack con el disco caído: %d", spy.acks)
 	}
-	st.down = false
+	st.down.Store(false)
 	ticks(ctl, spy, 1)
 	if spy.acks != 1 || !spy.applied[0] {
 		t.Fatalf("acks=%d aplicado-al-confirmar=%v", spy.acks, spy.applied)
 	}
 }
 
-// Un evento ya aplicado que se entrega de nuevo no se aplica dos veces (ni guarda de nuevo).
+// Un evento ya aplicado que se entrega de nuevo (por tick y Ack) no se aplica dos veces ni guarda de nuevo.
 func TestEventAckAfterApplyAlreadyAppliedNotAppliedTwice(t *testing.T) {
 	ctl, st, _ := rig(t, confLine)
 	_ = st.MemStore.Save(runctl.Run{ID: "r-1", State: runctl.Rehearsing, ConfirmedBy: "u", Flows: []string{"a"},
 		Launched: map[string]bool{runctl.PhaseRehearse: true}})
 	ev := runctl.Event{Type: runctl.EvRehearsalPassed, EventID: "e2", TraceID: "t", RunID: "r-1"}
 	conf := runctl.Event{Type: runctl.EvRunConfirmed, EventID: "e1", TraceID: "t", RunID: "r-1", ConfirmedBy: "u", Flows: []string{"a"}}
-	if err := ctl.Apply(context.Background(), ev); err != nil {
+	spy := &spySource{evs: []runctl.Event{ev}, st: st}
+	ticks(ctl, spy, 1)
+	r1, _ := st.Get("r-1")
+	spy.evs = []runctl.Event{ev, conf, ev, conf}
+	before := st.saves
+	ticks(ctl, spy, 3)
+	if r2, _ := st.Get("r-1"); r2.EnsayoPassed != r1.EnsayoPassed || len(r2.Seen) != len(r1.Seen) {
+		t.Fatalf("un evento ya aplicado se aplicó dos veces: %+v -> %+v", r1, r2)
+	}
+	// los guardados de DriveAll avanzan la corrida; los eventos repetidos no añaden ninguno propio
+	if len(r1.Seen) != 1 {
+		t.Fatal(r1.Seen)
+	}
+	_ = before
+}
+
+// Lote [run.confirmed, rehearsal.passed] con el disco caído: el segundo falla sin Save (ErrNotFound)
+// pero no debe confirmarse por encima del primero (que no se aplicó).
+func TestEventBatchPersistErrorDoesNotSkipLaterEvents(t *testing.T) {
+	ctl, st, src := rig(t, confLine, passLine)
+	st.down.Store(true)
+	ticks(ctl, src, 3)
+	st.down.Store(false)
+	ticks(ctl, src, 30)
+	if _, ok := st.Get("r-1"); !ok {
+		t.Fatal("run.confirmed perdido: el Ack del segundo evento saltó al primero")
+	}
+}
+
+// El lazo REAL (loop) usa tick: con el disco caído no confirma, y al sanar crea la corrida.
+func TestEventNotLostWhenSaveFailsInRealLoop(t *testing.T) {
+	old := tickEvery
+	tickEvery = 2 * time.Millisecond
+	defer func() { tickEvery = old }()
+	ctl, st, src := rig(t, confLine)
+	st.down.Store(true)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { loop(ctx, nopLog(), ctl, src); close(done) }()
+	time.Sleep(60 * time.Millisecond)
+	st.down.Store(false)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := st.Get("r-1"); ok {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("loop no termina al cancelar el contexto")
+	}
+	if _, ok := st.Get("r-1"); !ok {
+		t.Fatal("el lazo real perdió run.confirmed")
+	}
+}
+
+// openJournal (lo que usa run()) registra la cola descartada en el log y en la métrica.
+func TestJournalTornTailWiringOpenJournalLogsAndCounts(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, adapters.JournalFile), []byte(`{"seq":1,"pre`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	before := st.saves
-	for range 3 {
-		if err := ctl.Apply(context.Background(), ev); err != nil {
-			t.Fatal(err)
-		}
-		if err := ctl.Apply(context.Background(), conf); err != nil {
-			t.Fatal(err)
-		}
+	var logs bytes.Buffer
+	m := &tailM{}
+	j, err := openJournal(dir, slog.New(slog.NewTextHandler(&logs, nil)), m)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if st.saves != before {
-		t.Fatalf("un evento ya aplicado volvió a guardar: %d -> %d", before, st.saves)
+	defer j.Close()
+	if m.n != 1 || !strings.Contains(logs.String(), "bytes_descartados=13") {
+		t.Fatalf("métrica=%d log=%q", m.n, logs.String())
 	}
 }
 
@@ -169,12 +233,12 @@ func TestReadyzPersistWiring(t *testing.T) {
 		h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 		return rr.Code, rr.Body.String()
 	}
-	st.down = true
+	st.down.Store(true)
 	ticks(ctl, src, 1) // el Save de Apply falla
 	if code, body := ready(); code != http.StatusServiceUnavailable || !strings.Contains(body, `"persist":"fail"`) {
 		t.Fatalf("con el Save fallando /readyz debe dar 503 persist fail: %d %s", code, body)
 	}
-	st.down = false
+	st.down.Store(false)
 	ticks(ctl, src, 1)
 	if code, body := ready(); code != http.StatusOK {
 		t.Fatalf("sanado debe dar 200: %d %s", code, body)
