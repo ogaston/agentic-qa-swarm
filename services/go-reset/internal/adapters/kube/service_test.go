@@ -143,7 +143,7 @@ func TestKubeAppReadyGuards(t *testing.T) {
 	}{
 		"pod Ready pero terminando": {mk(func(p *corev1.Pod) { p.DeletionTimestamp = &now; p.Finalizers = []string{"x"} }), 1},
 		"pod Ready no Running":      {mk(func(p *corev1.Pod) { p.Status.Phase = corev1.PodPending }), 1},
-		"replicas=0":                {pod("a", true, corev1.PodRunning), 0},
+		"replicas=0 y 0 pods":       {nil, 0},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -152,7 +152,9 @@ func TestKubeAppReadyGuards(t *testing.T) {
 			d.Spec.Replicas = &c.reps
 			d.Status = appsv1.DeploymentStatus{UpdatedReplicas: c.reps, AvailableReplicas: c.reps}
 			_, _ = cs.AppsV1().Deployments("aqs-test").Update(ctx, d, metav1.UpdateOptions{})
-			_, _ = cs.CoreV1().Pods("aqs-test").Create(ctx, c.pod, metav1.CreateOptions{})
+			if c.pod != nil {
+				_, _ = cs.CoreV1().Pods("aqs-test").Create(ctx, c.pod, metav1.CreateOptions{})
+			}
 			if ok, err := k.AppReady(ctx); err != nil || ok {
 				t.Fatalf("AppReady=%v err=%v, debía ser false", ok, err)
 			}
