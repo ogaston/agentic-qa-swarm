@@ -22,31 +22,19 @@ import (
 
 // Server expone el servicio.
 type Server struct {
-	Svc      *wm.Service
-	Token    string
-	Log      *slog.Logger
-	Registry *prometheus.Registry
+	Svc        *wm.Service
+	Token      string
+	Log        *slog.Logger
+	Registry   *prometheus.Registry
+	WriteSlack time.Duration // 0 = DefaultWriteSlack
 }
 
 var traceRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 func newTrace() string { b := make([]byte, 16); _, _ = rand.Read(b); return hex.EncodeToString(b) }
 
-func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		const p = "Bearer "
-		h := r.Header.Get("Authorization")
-		got := ""
-		if strings.HasPrefix(h, p) {
-			got = h[len(p):]
-		}
-		if s.Token == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) != 1 {
-			writeJSON(w, 401, map[string]string{"error": "unauthorized"})
-			return
-		}
-		next(w, r)
-	}
-}
+// auth es un no-op: la autenticacion se evalua antes del enrutado (ver Handler).
+func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc { return next }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -98,12 +86,13 @@ func (s *Server) Handler() http.Handler {
 			writeJSON(w, 400, map[string]string{"error": "body_not_allowed"})
 			return
 		}
-		st, ok, err := s.Svc.EnsureWarmReady(r.Context(), trace(r))
+		tr := trace(r)
+		st, ok, err := s.Svc.EnsureWarmReady(r.Context(), tr)
 		switch {
 		case errors.Is(err, wm.ErrWarmTimeout):
 			writeJSON(w, 409, st)
 		case err != nil:
-			s.Log.Error("ensure fallo", "error", err.Error())
+			s.Log.Error("ensure fallo", "trace_id", tr, "error", err.Error())
 			writeJSON(w, 503, map[string]string{"error": "ensure_failed"})
 		case ok:
 			writeJSON(w, 200, st)
@@ -120,13 +109,21 @@ func (s *Server) Handler() http.Handler {
 			writeJSON(w, 400, map[string]string{"error": "invalid_body"})
 			return
 		}
-		st, err := s.Svc.StartDeploy(req.RunID, req.Artifact, trace(r))
-		if err != nil {
+		tr := trace(r)
+		st, warm, err := s.Svc.StartDeploy(r.Context(), req.RunID, req.Artifact, tr)
+		switch {
+		case errors.Is(err, wm.ErrNotReady):
+			s.Log.Warn("deploy rechazado: el warm no esta listo", "run_id", req.RunID, "trace_id", tr, "state", warm.State)
+			writeJSON(w, 409, warm)
+		case err != nil && (errors.Is(err, wm.ErrInvalidRunID) || errors.Is(err, wm.ErrInvalidArtifact) || errors.Is(err, wm.ErrRegistryNotAllowed)):
 			writeJSON(w, 400, map[string]string{"error": "invalid_request"})
-			return
+		case err != nil:
+			s.Log.Error("deploy no aceptado", "run_id", req.RunID, "trace_id", tr, "error", err.Error())
+			writeJSON(w, 503, map[string]string{"error": "state_unavailable"})
+		default:
+			s.Log.Info("deploy aceptado", "run_id", req.RunID, "trace_id", tr)
+			writeJSON(w, 202, st)
 		}
-		s.Log.Info("deploy aceptado", "run_id", req.RunID, "trace_id", trace(r))
-		writeJSON(w, 202, st)
 	}))
 	mux.HandleFunc("GET /deploys/{run_id}", s.auth(func(w http.ResponseWriter, r *http.Request) {
 		if wm.ValidateRunID(r.PathValue("run_id")) != nil {
@@ -148,9 +145,10 @@ func (s *Server) Handler() http.Handler {
 			writeJSON(w, 400, map[string]string{"error": "invalid_body"})
 			return
 		}
-		sa, err := s.Svc.InferSurface(r.Context(), req.RunID, trace(r))
+		tr := trace(r)
+		sa, err := s.Svc.InferSurface(r.Context(), req.RunID, tr)
 		if err != nil {
-			s.Log.Error("superficie fallo", "run_id", req.RunID, "error", err.Error())
+			s.Log.Error("superficie fallo", "run_id", req.RunID, "trace_id", tr, "error", err.Error())
 			writeJSON(w, 502, map[string]string{"error": "surface_failed"})
 			return
 		}
@@ -171,16 +169,28 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) authorized(r *http.Request) bool {
-	const p = "Bearer "
+	// RFC 7235: el esquema no distingue mayusculas.
 	h := r.Header.Get("Authorization")
 	got := ""
-	if strings.HasPrefix(h, p) {
-		got = h[len(p):]
+	if len(h) > 7 && strings.EqualFold(h[:7], "Bearer ") {
+		got = h[7:]
 	}
 	return s.Token != "" && subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) == 1
 }
 
-// HTTPServer devuelve un http.Server con timeouts.
+// DefaultWriteSlack es el margen sobre la espera maxima de ensure para poder escribir la respuesta.
+const DefaultWriteSlack = 30 * time.Second
+
+// HTTPServer devuelve un http.Server con timeouts. WriteTimeout = espera maxima de ensure + margen,
+// de modo que un ensure desde idle-escalado pueda terminar y responder.
 func (s *Server) HTTPServer(addr string) *http.Server {
-	return &http.Server{Addr: addr, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 60 * time.Second}
+	ready := s.Svc.Cfg.WarmReadyTimeout
+	if ready <= 0 {
+		ready = wm.DefaultWarmReadyTimeout
+	}
+	slack := s.WriteSlack
+	if slack <= 0 {
+		slack = DefaultWriteSlack
+	}
+	return &http.Server{Addr: addr, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: ready + slack}
 }

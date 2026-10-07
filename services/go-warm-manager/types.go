@@ -42,6 +42,7 @@ type Artifact struct {
 var (
 	ErrIllegalTransition  = errors.New("transicion de estado del warm no permitida")
 	ErrNotReady           = errors.New("el warm no esta listo")
+	ErrStateConflict      = errors.New("el estado del warm cambio concurrentemente")
 	ErrWarmTimeout        = errors.New("el warm no llego a Ready a tiempo")
 	ErrInvalidRunID       = errors.New("run_id invalido")
 	ErrInvalidArtifact    = errors.New("artefacto invalido")
@@ -118,7 +119,7 @@ func ValidateArtifact(a Artifact, allowedRegistries []string) error {
 	host := ref[:slash]
 	ok := false
 	for _, r := range allowedRegistries {
-		if r != "" && strings.EqualFold(r, host) {
+		if r != "" && r == host { // comparacion exacta: ni mayusculas, ni sufijos, ni puerto
 			ok = true
 		}
 	}

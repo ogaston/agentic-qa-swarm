@@ -2,8 +2,20 @@ package warmmanager
 
 import "fmt"
 
-// DefaultDeployerImage es la imagen (tag fijado) que ejecuta el deploy sobre warm-app.
+// DefaultDeployerImage es un PLACEHOLDER: la imagen aqs-warm-deployer aun no existe (su construccion,
+// la SA warm-deployer y el RBAC quedan para U2-T07). Tag fijado para pasar las politicas.
 const DefaultDeployerImage = "ghcr.io/ogaston/aqs-warm-deployer:0.1.0"
+
+// Constantes del Job (una linea de razon cada una).
+const (
+	jobDeadlineSeconds = int64(600)  // tope duro de un intento de deploy
+	jobTTLSeconds      = int64(3600) // el Job terminado se limpia a la hora
+	jobCPURequest      = "100m"      // el deployer solo aplica un parche
+	jobMemRequest      = "128Mi"
+	jobCPULimit        = "500m"
+	jobMemLimit        = "512Mi"
+	jobUID             = int64(65532) // mismo usuario no root que el resto de imagenes
+)
 
 // JobConfig parametriza el constructor del Job.
 type JobConfig struct {
@@ -54,8 +66,8 @@ func BuildDeployJob(cfg JobConfig, runID string, attempt int, a Artifact) (Manif
 		},
 		"spec": map[string]any{
 			"backoffLimit":            int64(0), // los reintentos los decide go-warm-manager (V8)
-			"activeDeadlineSeconds":   int64(600),
-			"ttlSecondsAfterFinished": int64(3600),
+			"activeDeadlineSeconds":   jobDeadlineSeconds,
+			"ttlSecondsAfterFinished": jobTTLSeconds,
 			"template": map[string]any{
 				"metadata": map[string]any{"labels": labels},
 				"spec": map[string]any{
@@ -65,8 +77,8 @@ func BuildDeployJob(cfg JobConfig, runID string, attempt int, a Artifact) (Manif
 					"restartPolicy":                "Never",
 					"securityContext": map[string]any{
 						"runAsNonRoot":   true,
-						"runAsUser":      int64(65532),
-						"runAsGroup":     int64(65532),
+						"runAsUser":      jobUID,
+						"runAsGroup":     jobUID,
 						"seccompProfile": map[string]any{"type": "RuntimeDefault"},
 					},
 					"containers": []any{map[string]any{
@@ -80,8 +92,8 @@ func BuildDeployJob(cfg JobConfig, runID string, attempt int, a Artifact) (Manif
 							"capabilities":             map[string]any{"drop": []any{"ALL"}},
 						},
 						"resources": map[string]any{
-							"requests": map[string]any{"cpu": "100m", "memory": "128Mi"},
-							"limits":   map[string]any{"cpu": "500m", "memory": "512Mi"},
+							"requests": map[string]any{"cpu": jobCPURequest, "memory": jobMemRequest},
+							"limits":   map[string]any{"cpu": jobCPULimit, "memory": jobMemLimit},
 						},
 						"volumeMounts": []any{map[string]any{"name": "tmp", "mountPath": "/tmp"}},
 					}},

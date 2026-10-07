@@ -2,23 +2,31 @@ package kube_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
 	wm "github.com/ogaston/agentic-qa-swarm/services/go-warm-manager"
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/adapters/kube"
+	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/internal/fakes"
 )
 
-var seed = wm.WarmState{WarmID: "warm-1", State: "ready", ResetVerified: true, BaselineVersion: "b1"}
+// La semilla (estado si falta el ConfigMap) es siempre no-listo: nunca ready+reset_verified.
+var seed = wm.WarmState{WarmID: "warm-1", State: "dirty", ResetVerified: false, BaselineVersion: "b1"}
+var ready = wm.WarmState{WarmID: "warm-1", State: "ready", ResetVerified: true, BaselineVersion: "b1"}
 
 // jobOutcome hace que el clientset falso marque cada Job creado como Failed o Complete.
 func jobOutcome(cs *fake.Clientset, fail func(n int) bool) {
@@ -35,12 +43,16 @@ func jobOutcome(cs *fake.Clientset, fail func(n int) bool) {
 	})
 }
 
-func service(cs *fake.Clientset) (*wm.Service, *wm.MemPublisher, *wm.FakeAlerter) {
-	pub, al := &wm.MemPublisher{}, &wm.FakeAlerter{}
+func service(cs *fake.Clientset) (*wm.Service, *fakes.MemPublisher, *fakes.FakeAlerter) {
+	pub, al := &fakes.MemPublisher{}, &fakes.FakeAlerter{}
+	st := &kube.StateStore{C: cs, Seed: seed}
+	if err := st.Put(context.Background(), ready); err != nil { // go-reset dejo el warm verificado
+		panic(err)
+	}
 	return &wm.Service{
 		Cfg:   wm.Config{Job: wm.JobConfig{AllowedRegistries: wm.DefaultAllowedRegistries}, PollInterval: time.Second},
-		State: &kube.StateStore{C: cs, Seed: seed}, Probe: &wm.FakeProbe{}, Runtime: &kube.Runtime{C: cs}, Jobs: &kube.Jobs{C: cs},
-		Surface: &wm.FakeProber{}, Objects: &wm.MemObjects{}, Alerts: al, Pub: pub, Clock: &wm.FakeClock{T: time.Unix(0, 0)},
+		State: st, Probe: &fakes.FakeProbe{}, Runtime: &kube.Runtime{C: cs}, Jobs: &kube.Jobs{C: cs},
+		Surface: &fakes.FakeProber{}, Objects: &fakes.MemObjects{}, Alerts: al, Pub: pub, Clock: &fakes.FakeClock{T: time.Unix(0, 0)},
 	}, pub, al
 }
 
@@ -110,27 +122,80 @@ func TestDeployFailedJobsPassSecurityShape(t *testing.T) {
 	}
 }
 
-func TestStateStoreRoundTripAndSeed(t *testing.T) {
+func TestStateStoreSeedIsNotReadyAndRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	s := &kube.StateStore{C: fake.NewClientset(), Seed: seed}
-	if got, err := s.Get(ctx); err != nil || got != seed {
-		t.Fatalf("semilla: %+v %v", got, err)
+	got, err := s.Get(ctx)
+	if err != nil || got != seed || got.State == "ready" || got.ResetVerified {
+		t.Fatalf("sin ConfigMap el warm no puede estar listo: %+v %v", got, err)
 	}
-	d := wm.WarmState{WarmID: "warm-1", State: "dirty", BaselineVersion: "b1"}
-	if err := s.Put(ctx, d); err != nil {
+	if err := s.Put(ctx, ready); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Put(ctx, seed); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Put(ctx, d); err != nil {
+	if err := s.Put(ctx, ready); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := s.Get(ctx); err != nil || got != d {
+	if got, err := s.Get(ctx); err != nil || got != ready {
 		t.Fatalf("lectura: %+v %v", got, err)
 	}
 	if err := s.Put(ctx, wm.WarmState{State: "raro"}); err == nil {
 		t.Fatal("estado invalido aceptado")
+	}
+}
+
+func TestStateStoreCompareAndSwap(t *testing.T) {
+	ctx := context.Background()
+	dirty := wm.WarmState{WarmID: "warm-1", State: "dirty", BaselineVersion: "b1"}
+	s := &kube.StateStore{C: fake.NewClientset(), Seed: seed}
+	// Sin ConfigMap: solo vale el CAS contra la semilla.
+	if err := s.CompareAndSwap(ctx, ready, dirty); !errors.Is(err, wm.ErrStateConflict) {
+		t.Fatalf("CAS contra un estado que no es la semilla debia ser conflicto: %v", err)
+	}
+	if err := s.Put(ctx, ready); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompareAndSwap(ctx, ready, dirty); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompareAndSwap(ctx, ready, dirty); !errors.Is(err, wm.ErrStateConflict) {
+		t.Fatalf("segundo CAS con expect obsoleto debia ser conflicto: %v", err)
+	}
+	if got, _ := s.Get(ctx); got != dirty {
+		t.Fatalf("el estado no debia cambiar: %+v", got)
+	}
+}
+
+func TestStateStoreCompareAndSwapConflictFromAPIServer(t *testing.T) {
+	cs := fake.NewClientset()
+	s := &kube.StateStore{C: cs, Seed: seed}
+	if err := s.Put(context.Background(), ready); err != nil {
+		t.Fatal(err)
+	}
+	cs.PrependReactor("update", "configmaps", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "configmaps"}, "warm-state", errors.New("resourceVersion obsoleto"))
+	})
+	dirty := wm.WarmState{WarmID: "warm-1", State: "dirty", BaselineVersion: "b1"}
+	if err := s.CompareAndSwap(context.Background(), ready, dirty); !errors.Is(err, wm.ErrStateConflict) {
+		t.Fatalf("409 del apiserver debia mapearse a ErrStateConflict: %v", err)
+	}
+}
+
+func TestDeployConcurrentOnKubeStoreCreatesOneJob(t *testing.T) {
+	cs := fake.NewClientset()
+	jobOutcome(cs, func(int) bool { return false })
+	svc, _, _ := service(cs)
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) { defer wg.Done(); _ = svc.Deploy(context.Background(), fmt.Sprintf("r-%d", i), art, "t") }(i)
+	}
+	wg.Wait()
+	l, _ := cs.BatchV1().Jobs("aqs-test").List(context.Background(), metav1.ListOptions{})
+	if len(l.Items) != 1 {
+		t.Fatalf("Jobs=%d", len(l.Items))
 	}
 }
 

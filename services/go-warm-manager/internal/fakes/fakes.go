@@ -1,10 +1,14 @@
-package warmmanager
+// Package fakes: dobles en memoria de los puertos de go-warm-manager (solo pruebas).
+package fakes
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync"
 	"time"
+
+	wm "github.com/ogaston/agentic-qa-swarm/services/go-warm-manager"
 )
 
 // Fakes en memoria de todos los puertos (pruebas y modo WARM_KUBE=fake).
@@ -12,15 +16,24 @@ import (
 // MemState es un StateStore en memoria.
 type MemState struct {
 	mu sync.Mutex
-	S  WarmState
+	S  wm.WarmState
 }
 
-func (m *MemState) Get(context.Context) (WarmState, error) {
+func (m *MemState) Get(context.Context) (wm.WarmState, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.S, nil
 }
-func (m *MemState) Put(_ context.Context, s WarmState) error {
+func (m *MemState) CompareAndSwap(_ context.Context, expect, next wm.WarmState) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.S != expect {
+		return wm.ErrStateConflict
+	}
+	m.S = next
+	return nil
+}
+func (m *MemState) Put(_ context.Context, s wm.WarmState) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.S = s
@@ -57,19 +70,38 @@ func (f *FakeRuntime) ScaleUp(context.Context) error {
 // FakeJobs crea Jobs que terminan según Outcome(n) (n = Jobs ya creados antes de este).
 type FakeJobs struct {
 	mu      sync.Mutex
-	Created []Manifest
-	Outcome func(n int) JobPhase
-	status  map[string]JobPhase
+	Created []wm.Manifest
+	Outcome func(n int) wm.JobPhase
+	// StatusErr decide el error de la k-esima consulta de Status (1-based); CreateErr el de la k-esima creacion.
+	StatusErr func(call int) error
+	CreateErr func(call int) error
+	// Latency simula una API lenta en Create (amplia las ventanas de carrera).
+	Latency time.Duration
+	status  map[string]wm.JobPhase
+	sCalls  int
+	cCalls  int
 }
 
-func (f *FakeJobs) Create(_ context.Context, m Manifest) error {
+// Count devuelve los Jobs creados.
+func (f *FakeJobs) Count() int { f.mu.Lock(); defer f.mu.Unlock(); return len(f.Created) }
+
+func (f *FakeJobs) Create(_ context.Context, m wm.Manifest) error {
+	if f.Latency > 0 {
+		time.Sleep(f.Latency)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.cCalls++
+	if f.CreateErr != nil {
+		if err := f.CreateErr(f.cCalls); err != nil {
+			return err
+		}
+	}
 	if f.status == nil {
-		f.status = map[string]JobPhase{}
+		f.status = map[string]wm.JobPhase{}
 	}
 	name := m["metadata"].(map[string]any)["name"].(string)
-	p := JobSucceeded
+	p := wm.JobSucceeded
 	if f.Outcome != nil {
 		p = f.Outcome(len(f.Created))
 	}
@@ -78,9 +110,15 @@ func (f *FakeJobs) Create(_ context.Context, m Manifest) error {
 	return nil
 }
 
-func (f *FakeJobs) Status(_ context.Context, name string) (JobPhase, string, error) {
+func (f *FakeJobs) Status(_ context.Context, name string) (wm.JobPhase, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.sCalls++
+	if f.StatusErr != nil {
+		if err := f.StatusErr(f.sCalls); err != nil {
+			return "", "", err
+		}
+	}
 	p, ok := f.status[name]
 	if !ok {
 		return "", "", errors.New("job inexistente")
@@ -151,10 +189,32 @@ func (f *FakeAlerter) Handoff(_ context.Context, phase, runID, reason string) er
 // MemPublisher acumula eventos.
 type MemPublisher struct {
 	mu     sync.Mutex
-	Events []Event
+	Events []wm.Event
 }
 
-func (p *MemPublisher) Publish(_ context.Context, e Event) error {
+// Snapshot devuelve una copia de los eventos publicados.
+func (p *MemPublisher) Snapshot() []wm.Event {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]wm.Event(nil), p.Events...)
+}
+
+// SyncBuffer es un bytes.Buffer seguro para uso concurrente (logs en pruebas).
+type SyncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *SyncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+// String devuelve lo escrito.
+func (s *SyncBuffer) String() string { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
+
+func (p *MemPublisher) Publish(_ context.Context, e wm.Event) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.Events = append(p.Events, e)

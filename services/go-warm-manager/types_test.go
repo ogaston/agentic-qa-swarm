@@ -81,6 +81,12 @@ func TestValidateArtifact(t *testing.T) {
 		{"registro no permitido", wm.Artifact{Kind: "published-image", Ref: "docker.io/evil/x:1"}, wm.ErrRegistryNotAllowed},
 		{"sin registro", wm.Artifact{Kind: "published-image", Ref: "shop:1"}, wm.ErrInvalidArtifact},
 		{"kind desconocido", wm.Artifact{Kind: "x", Ref: "a"}, wm.ErrInvalidArtifact},
+		{"registro por sufijo evilghcr.io", wm.Artifact{Kind: "published-image", Ref: "evilghcr.io/a/b:1"}, wm.ErrRegistryNotAllowed},
+		{"registro con subdominio", wm.Artifact{Kind: "published-image", Ref: "x.ghcr.io/a/b:1"}, wm.ErrRegistryNotAllowed},
+		{"registro con puerto", wm.Artifact{Kind: "published-image", Ref: "ghcr.io:5000/a/b:1"}, wm.ErrRegistryNotAllowed},
+		{"registro con userinfo", wm.Artifact{Kind: "published-image", Ref: "ghcr.io@evil.com/a/b:1"}, wm.ErrRegistryNotAllowed},
+		{"registro con userinfo 2", wm.Artifact{Kind: "published-image", Ref: "evil.com@ghcr.io/a/b:1"}, wm.ErrRegistryNotAllowed},
+		{"registro en mayusculas", wm.Artifact{Kind: "published-image", Ref: "GHCR.IO/a/b:1"}, wm.ErrRegistryNotAllowed},
 		{"repo sin sha", wm.Artifact{Kind: "build-from-repo", Ref: "acme/shop"}, wm.ErrInvalidArtifact},
 	}
 	for _, c := range cases {

@@ -43,6 +43,43 @@ func (s *StateStore) Get(ctx context.Context) (wm.WarmState, error) {
 	return w, nil
 }
 
+// CompareAndSwap escribe next solo si el estado persistido es expect. Usa el resourceVersion del
+// ConfigMap leido (Update condicional): un cambio concurrente da ErrStateConflict, nunca se pisa.
+func (s *StateStore) CompareAndSwap(ctx context.Context, expect, next wm.WarmState) error {
+	if !next.Valid() {
+		return errors.New("WarmState invalido")
+	}
+	raw, _ := json.Marshal(next)
+	api := s.C.CoreV1().ConfigMaps(wm.Namespace)
+	cm, err := api.Get(ctx, StateConfigMap, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		if s.Seed != expect {
+			return wm.ErrStateConflict
+		}
+		_, err = api.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: StateConfigMap, Namespace: wm.Namespace},
+			Data: map[string]string{"state": string(raw)}}, metav1.CreateOptions{})
+		if apierrors.IsAlreadyExists(err) {
+			return wm.ErrStateConflict
+		}
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	var cur wm.WarmState
+	if err := json.Unmarshal([]byte(cm.Data["state"]), &cur); err != nil || cur != expect {
+		return wm.ErrStateConflict
+	}
+	cm.Data["state"] = string(raw)
+	if _, err := api.Update(ctx, cm, metav1.UpdateOptions{}); err != nil {
+		if apierrors.IsConflict(err) {
+			return wm.ErrStateConflict
+		}
+		return err
+	}
+	return nil
+}
+
 // Put escribe (crea o actualiza) el ConfigMap.
 func (s *StateStore) Put(ctx context.Context, w wm.WarmState) error {
 	if !w.Valid() {

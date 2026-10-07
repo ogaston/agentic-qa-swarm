@@ -102,10 +102,26 @@ func run(getenv func(string) string, log *slog.Logger) error {
 		addr = ":8080"
 	}
 
+	readyTO, err := durationEnv(getenv, "WARM_READY_TIMEOUT", wm.DefaultWarmReadyTimeout)
+	if err != nil {
+		return err
+	}
+	jobTO, err := durationEnv(getenv, "WARM_JOB_TIMEOUT", 10*time.Minute)
+	if err != nil {
+		return err
+	}
+	pollIv, err := durationEnv(getenv, "WARM_POLL_INTERVAL", 2*time.Second)
+	if err != nil {
+		return err
+	}
+
 	var cs kubernetes.Interface
-	seed := wm.WarmState{WarmID: "warm-1", State: wm.StateReady, ResetVerified: true, BaselineVersion: "baseline-1"}
+	seed := safeSeed()
 	switch getenv("WARM_KUBE") {
 	case "fake":
+		if err := checkFakeAllowed(getenv); err != nil {
+			return err
+		}
 		cs = fake.NewClientset()
 		if s := getenv("WARM_FAKE_STATE"); s != "" {
 			seed.State, seed.ResetVerified = s, s == wm.StateReady
@@ -157,7 +173,9 @@ func run(getenv func(string) string, log *slog.Logger) error {
 	}
 	metrics := obs.NewMetrics()
 	svc := &wm.Service{
-		Cfg:     wm.Config{Job: wm.JobConfig{AllowedRegistries: registries(getenv), DeployerImage: getenv("WARM_DEPLOYER_IMAGE")}},
+		Cfg: wm.Config{Job: wm.JobConfig{AllowedRegistries: registries(getenv), DeployerImage: getenv("WARM_DEPLOYER_IMAGE")},
+			WarmReadyTimeout: readyTO, JobTimeout: jobTO, PollInterval: pollIv},
+		Log:     log,
 		State:   &kube.StateStore{C: cs, Seed: seed},
 		Probe:   &kube.Health{C: cs},
 		Runtime: &kube.Runtime{C: cs},
@@ -183,6 +201,41 @@ func run(getenv func(string) string, log *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// safeSeed es el estado si falta el ConfigMap warm-state: el warm NO se declara listo; solo go-reset
+// (reset verificado) puede llevarlo a ready. Nunca hay valores optimistas por defecto.
+func safeSeed() wm.WarmState {
+	return wm.WarmState{WarmID: "warm-1", State: wm.StateDirty, ResetVerified: false, BaselineVersion: "baseline-1"}
+}
+
+// checkFakeAllowed acota WARM_KUBE=fake: exige WARM_ALLOW_FAKE_KUBE=true y lo rechaza dentro de un
+// clúster (KUBERNETES_SERVICE_HOST) o con WARM_ENV prod/production (sin distinguir mayúsculas ni espacios).
+func checkFakeAllowed(getenv func(string) string) error {
+	if getenv("WARM_ALLOW_FAKE_KUBE") != "true" {
+		return errors.New("WARM_KUBE=fake exige WARM_ALLOW_FAKE_KUBE=true")
+	}
+	if getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return errors.New("WARM_KUBE=fake prohibido dentro de un clúster (KUBERNETES_SERVICE_HOST)")
+	}
+	switch strings.ToLower(strings.TrimSpace(getenv("WARM_ENV"))) {
+	case "prod", "production":
+		return errors.New("WARM_KUBE=fake prohibido con WARM_ENV=prod")
+	}
+	return nil
+}
+
+// durationEnv lee una duración; vacía = def; inválida, cero o negativa = error (no arranca).
+func durationEnv(getenv func(string) string, key string, def time.Duration) (time.Duration, error) {
+	v := strings.TrimSpace(getenv(key))
+	if v == "" {
+		return def, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("%s debe ser una duración positiva (recibido %q)", key, v)
+	}
+	return d, nil
 }
 
 // logAlerter registra el handoff (el aviso real a un humano llega con U4-T07).

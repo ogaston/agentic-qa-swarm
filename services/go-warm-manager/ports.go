@@ -9,6 +9,9 @@ import (
 type StateStore interface {
 	Get(ctx context.Context) (WarmState, error)
 	Put(ctx context.Context, s WarmState) error
+	// CompareAndSwap escribe next solo si el estado persistido sigue siendo expect;
+	// si otro lo cambió devuelve ErrStateConflict (nunca pisa).
+	CompareAndSwap(ctx context.Context, expect, next WarmState) error
 }
 
 // HealthProbe comprueba app, DB y Redis del warm. nil = todo en verde.
@@ -39,10 +42,8 @@ type Jobs interface {
 	Status(ctx context.Context, name string) (JobPhase, string, error)
 }
 
-// ContainerRuntime resuelve el artefacto a una imagen/ref desplegable (build o pull).
-type ContainerRuntime interface {
-	Prepare(ctx context.Context, a Artifact) (string, error)
-}
+// Nota: el puerto ContainerRuntime (build/pull) de la tarea no existe: el artefacto viaja por
+// argumentos del Job y la construccion/descarga la hace la imagen del deployer (U2-T07).
 
 // SurfaceProber consulta SOLO el exterior del Service del warm (nunca el código fuente).
 type SurfaceProber interface {

@@ -16,6 +16,7 @@ import (
 
 	wm "github.com/ogaston/agentic-qa-swarm/services/go-warm-manager"
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/adapters/objstore"
+	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/internal/fakes"
 )
 
 // Misma imagen (por digest) que scripts/test/minio-local.sh.
@@ -56,8 +57,8 @@ func TestObjectStoreS3(t *testing.T) {
 	}
 
 	// Superficie real generada por el servicio y subida a MinIO.
-	pub := &wm.MemPublisher{}
-	svc := &wm.Service{Surface: &wm.FakeProber{Base: "http://warm-app.aqs-test.svc", Routes: map[string]wm.FakeResponse{
+	pub := &fakes.MemPublisher{}
+	svc := &wm.Service{Surface: &fakes.FakeProber{Base: "http://warm-app.aqs-test.svc", Routes: map[string]fakes.FakeResponse{
 		"/openapi.json": {Status: 200, Body: `{"paths":{"/orders":{"get":{},"post":{}}}}`}}},
 		Objects: s, Pub: pub, Clock: wm.RealClock{}}
 	sa, err := svc.InferSurface(ctx, "r-1", "t")
