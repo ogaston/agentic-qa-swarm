@@ -57,6 +57,7 @@ func TestWarmEnsureFailsClosed(t *testing.T) {
 		{"200 listo", func(w http.ResponseWriter, _ *http.Request) { js(w, 200, warmReady) }, false},
 		{"200 pero dirty", func(w http.ResponseWriter, _ *http.Request) { js(w, 200, warmDirty) }, true},
 		{"409", func(w http.ResponseWriter, _ *http.Request) { js(w, 409, warmDirty) }, true},
+		{"409 con cuerpo ready", func(w http.ResponseWriter, _ *http.Request) { js(w, 409, warmReady) }, true},
 		{"500", func(w http.ResponseWriter, _ *http.Request) { js(w, 500, `{}`) }, true},
 		{"401", func(w http.ResponseWriter, _ *http.Request) { js(w, 401, `{}`) }, true},
 		{"cuerpo roto", func(w http.ResponseWriter, _ *http.Request) { js(w, 200, `{`) }, true},

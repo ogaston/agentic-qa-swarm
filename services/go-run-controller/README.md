@@ -2,7 +2,7 @@
 
 Controlador de corridas (C9): máquina de estados persistida en un diario JSONL con hash encadenado,
 con un gate de go-governance (U4) en cada transición, `GET /runs/{id}`, `/healthz`, `/readyz` y `/metrics`.
-Los adaptadores reales de fase (Jobs de Kubernetes) llegan con U2-T03 a T06; hoy solo `RUN_PHASES=fake`.
+`RUN_PHASES=real` usa los adaptadores reales (U2-T04); `fake` sigue exigiendo `RUN_ALLOW_FAKE_PHASES=true` y se rechaza con `RUN_ENV=prod`.
 
 ## Persistencia y fallos de disco
 
@@ -35,3 +35,19 @@ Los adaptadores reales de fase (Jobs de Kubernetes) llegan con U2-T03 a T06; hoy
   descartada) y `readyChecks`; la secuencia completa de `run()` solo la cubre la caja negra manual (CA-3).
 - Fuera de alcance (candidatas): HMAC y ancla del último `seq` del diario, rotación/compactación,
   `halted` visible en la API, tiempo máximo de espera de `rehearsal.passed`.
+
+## Ensayo y adaptadores reales (U2-T04)
+
+- `RUN_PHASES=real` exige `WARM_URL`, `WARM_SERVICE_TOKEN`, `RESET_URL`, `RESET_SERVICE_TOKEN`, `RUN_ARTIFACT_REF`
+  (imagen publicada con tag fijado; hoy un solo artefacto para todas las corridas), `REHEARSAL_IMAGE` (tag fijado, nunca
+  `latest`), `REHEARSAL_TARGET_URL` y, opcional, `REHEARSAL_SERVICE_ACCOUNT` (`aqs-runner`). Solo URL http(s); cliente
+  con timeout de 5 s, sin redirecciones; todo error, `409`, cuerpo inválido o timeout es fallo de la fase.
+- Fases reales: `deploy` (idempotente por corrida: adopta el deploy existente, si no `POST /warm/ensure` + `POST /deploys`
+  y espera `GET /deploys/{run_id}` hasta `done`), `infer` (`POST /surface`), `rehearse` (Job `rehearsal-<run>-<n>`),
+  `reset` (`POST /resets`, exige `reset_verified=true`). `run` y `report` fallan cerrado hasta U2-T05.
+- Ensayo: `Launch` valida el FlowPlan (un plan roto no crea Jobs), adopta el Job vivo por etiquetas
+  (`aqs.io/run-id`, `aqs.io/phase`) y solo si no hay uno crea el siguiente (tope 3 en el clúster). El resultado se lee del
+  estado del Job; `rehearsing -> running` exige `ensayo_passed=true` registrado en el almacén y nada lo salta.
+- `go-run-controller render-rehearsal-job --run <id> --flow <id>` imprime el Job sin tocar un clúster.
+- Límites conocidos (candidatas): sin fuente real de `FlowPlan` (U3): en real falla cerrado y el ensayo no pasa; el deploy
+  espera dentro de `Launch` (bloquea el lazo hasta 12 min); `ensure` con timeout de 5 s no espera salir de `idle-escalado`.

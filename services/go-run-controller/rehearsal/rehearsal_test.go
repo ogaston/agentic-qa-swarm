@@ -243,6 +243,21 @@ func TestLaunchNeverCreatesFourthJob(t *testing.T) {
 	}
 }
 
+// El tope se cuenta en Kubernetes, no solo con el contador del controlador (que podría estar atrasado).
+func TestLaunchCapCountsJobsInClusterNotJustAttemptNumber(t *testing.T) {
+	l, cs := newLauncher(goodPlan())
+	for i := 1; i <= 3; i++ {
+		_, _ = l.Launch(context.Background(), runctl.PhaseRehearse, runctl.Run{ID: "r-1", Started: map[string]int{"rehearse": i}})
+		finish(t, cs, JobName("r-1", i), false)
+	}
+	if _, err := l.Launch(context.Background(), runctl.PhaseRehearse, runctl.Run{ID: "r-1", Started: map[string]int{"rehearse": 1}}); err == nil {
+		t.Fatal("con 3 Jobs terminados en el clúster no se crea otro aunque el contador diga 1")
+	}
+	if n := len(jobs(t, cs)); n != 3 {
+		t.Fatalf("%d Jobs", n)
+	}
+}
+
 // --- resultado ---
 
 func TestResultFromJobStatus(t *testing.T) {
