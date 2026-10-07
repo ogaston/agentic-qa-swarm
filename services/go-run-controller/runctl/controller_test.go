@@ -141,8 +141,11 @@ func TestGateWithoutResetDenied(t *testing.T) {
 func TestGateWithoutEnsayoDenied(t *testing.T) {
 	r := newRig(t, factsGate())
 	_ = r.store.Save(Run{ID: "r", State: Rehearsing, ConfirmedBy: "u"})
-	if err := r.k.Transition(t.Context(), "r", Running); !errors.Is(err, ErrDenied) || r.state("r") != Rehearsing {
+	if err := r.k.Transition(t.Context(), "r", Running); !errors.Is(err, ErrIllegal) || r.state("r") != Rehearsing {
 		t.Fatal(err)
+	}
+	if len(r.gate.Calls) != 0 {
+		t.Fatalf("el controlador debe rechazarlo sin preguntar al gate: %v", r.gate.Calls)
 	}
 }
 

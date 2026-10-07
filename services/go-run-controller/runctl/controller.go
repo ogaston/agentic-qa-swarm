@@ -24,6 +24,7 @@ type Config struct {
 	Warm      WarmStateReader
 	Alerter   Alerter
 	Phases    PhaseLauncher
+	Results   RehearsalResults // opcional: lee el resultado del Job de ensayo (sin él, rehearsal.* llega por eventos)
 	Observer  Observer
 	Log       *slog.Logger
 }
@@ -94,9 +95,7 @@ func (k *Controller) Apply(ctx context.Context, ev Event) error {
 		if ev.EventID != "" && slices.Contains(r.Seen, ev.EventID) {
 			return nil
 		}
-		if ev.EventID != "" {
-			r.Seen = append(r.Seen, ev.EventID)
-		}
+		r = markSeen(r, ev.EventID)
 		if r.State != Rehearsing || !r.Launched[PhaseRehearse] {
 			// Fuera de la fase de ensayo el hecho no se observó: se descarta (y no se aplicará en un replay).
 			k.c.Log.WarnContext(withTrace(ctx, r.TraceID), "evento de ensayo fuera de estado o antes del lanzamiento descartado",
@@ -110,6 +109,13 @@ func (k *Controller) Apply(ctx context.Context, ev Event) error {
 		return k.save(r)
 	}
 	return fmt.Errorf("tipo de evento no soportado %q", ev.Type)
+}
+
+func markSeen(r Run, eventID string) Run {
+	if eventID != "" && !slices.Contains(r.Seen, eventID) {
+		r.Seen = append(r.Seen, eventID)
+	}
+	return r
 }
 
 // request arma el GateRequest con los hechos que el controlador conoce; el resto va unknown.
@@ -154,6 +160,11 @@ func (k *Controller) transition(ctx context.Context, id string, to State) error 
 	if !Legal(from, to) {
 		k.obsTransition(from, to, ResIllegal)
 		return fmt.Errorf("%w: %s -> %s", ErrIllegal, from, to)
+	}
+	if from == Rehearsing && to == Running && r.EnsayoPassed != True {
+		// Gate duro y no omitible: sin ensayo_passed=true registrado en el almacén no hay runner.
+		k.obsTransition(from, to, ResIllegal)
+		return fmt.Errorf("%w: %s -> %s sin ensayo_passed registrado", ErrIllegal, from, to)
 	}
 	dec, err := k.c.Gate.Authorize(ctx, k.request(ctx, r, to))
 	switch {
@@ -335,6 +346,9 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 	if r.State == Confirmed || r.State == WarmReady {
 		return k.advance(ctx, r, chain[r.State])
 	}
+	if r.State == Running && r.EnsayoPassed != True {
+		return k.failRun(ctx, id, "corrida en running sin ensayo_passed registrado")
+	}
 	phase, next := phaseOf(r.State)
 	if phase == PhaseReset && r.FailReason != "" {
 		next = Failed // la corrida fallida cierra en failed tras el reset verificado
@@ -367,6 +381,19 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 		}
 	}
 	if phase == PhaseRehearse {
+		if r.EnsayoPassed != True && r.EnsayoPassed != False && k.c.Results != nil {
+			out, err := k.c.Results.Result(ctx, r.clone())
+			if err != nil {
+				return fmt.Errorf("leyendo el resultado del ensayo: %w", err) // no se asume nada: se vuelve a leer
+			}
+			if out.Done {
+				r = markSeen(r, out.EventID)
+				r.EnsayoPassed = FactOf(out.Passed)
+				if err := k.save(r); err != nil {
+					return err
+				}
+			}
+		}
 		switch r.EnsayoPassed {
 		case False:
 			return k.phaseFailed(ctx, r, phase, "rehearsal.failed")

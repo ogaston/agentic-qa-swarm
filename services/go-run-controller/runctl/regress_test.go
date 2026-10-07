@@ -52,7 +52,11 @@ func TestEveryPhaseExhaustedWithGateDownLaunchesExactlyThree(t *testing.T) {
 		down := false
 		r := newRig(t, downFrom(c.state, &down))
 		r.ph.FailFirst = map[string]int{c.phase: 99}
-		_ = r.store.Save(Run{ID: "r", State: c.state, ConfirmedBy: "u", Flows: []string{"f"}})
+		seedRun := Run{ID: "r", State: c.state, ConfirmedBy: "u", Flows: []string{"f"}}
+		if c.state == Running {
+			seedRun.EnsayoPassed = True
+		}
+		_ = r.store.Save(seedRun)
 		down = true
 		for i := 0; i < 30; i++ {
 			r.k.DriveAll(t.Context())

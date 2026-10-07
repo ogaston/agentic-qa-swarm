@@ -33,7 +33,11 @@ func newSched(t testing.TB, gate GateClient, fail func(Run) bool) (*Controller, 
 }
 
 func seed(st *schedStore, s State) {
-	_ = st.MemStore.Save(Run{ID: "r", State: s, ConfirmedBy: "u", Flows: []string{"f"}})
+	r := Run{ID: "r", State: s, ConfirmedBy: "u", Flows: []string{"f"}}
+	if s == Running {
+		r.EnsayoPassed = True // running solo se alcanza con el ensayo registrado
+	}
+	_ = st.MemStore.Save(r)
 }
 
 func ticks(k *Controller, n int) {
