@@ -261,6 +261,9 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 		return nil
 	}
 	phase, next := phaseOf(r.State)
+	if phase == PhaseReset && r.FailReason != "" {
+		next = Failed // la corrida fallida cierra en failed tras el reset verificado
+	}
 	if !r.Launched[phase] {
 		uris, err := k.c.Phases.Launch(ctx, phase, r.clone())
 		if err != nil {
@@ -295,9 +298,6 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 	if next == Done {
 		r, _ = k.c.Store.Get(id)
 		return k.publishDone(ctx, r)
-	}
-	if next == Resetting && r.State == Running {
-		return nil
 	}
 	return nil
 }

@@ -1,0 +1,166 @@
+package adapters
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
+)
+
+func TestJournalResumeLastStateWins(t *testing.T) {
+	dir := t.TempDir()
+	s, err := OpenJournal(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Save(runctl.Run{ID: "r", State: runctl.Confirmed})
+	_ = s.Save(runctl.Run{ID: "r", State: runctl.Deploying, Attempts: map[string]int{"deploy": 1}})
+	s.Close()
+	s2, err := OpenJournal(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	r, _ := s2.Get("r")
+	if r.State != runctl.Deploying || r.Attempts["deploy"] != 1 {
+		t.Fatalf("%+v", r)
+	}
+	_ = s2.Save(runctl.Run{ID: "r", State: runctl.Inferring}) // la cadena continúa tras reanudar
+	s2.Close()
+	if s3, err := OpenJournal(dir); err != nil {
+		t.Fatal(err)
+	} else {
+		s3.Close()
+	}
+}
+
+func TestJournalBrokenHashRefusesToStart(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := OpenJournal(dir)
+	_ = s.Save(runctl.Run{ID: "r", State: runctl.Confirmed})
+	_ = s.Save(runctl.Run{ID: "r", State: runctl.WarmReady})
+	s.Close()
+	p := filepath.Join(dir, JournalFile)
+	b, _ := os.ReadFile(p)
+	b = []byte(strings.Replace(string(b), `"confirmed"`, `"deploying"`, 1)) // alterar la línea 1
+	_ = os.WriteFile(p, b, 0o600)
+	if _, err := OpenJournal(dir); err == nil {
+		t.Fatal("debía rechazar el diario con hash roto")
+	}
+}
+
+func TestJournalTornLineRefuses(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, JournalFile), []byte(`{"seq":1`), 0o600)
+	if _, err := OpenJournal(dir); err == nil {
+		t.Fatal("debía rechazar")
+	}
+}
+
+func gateSrv(t *testing.T, h http.HandlerFunc) *HTTPGate {
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	g, err := NewHTTPGate(srv.URL, "tok-de-servicio")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return g
+}
+
+func TestHTTPGateAllowDenyAndAuthHeader(t *testing.T) {
+	var gotAuth, gotBody string
+	g := gateSrv(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		var m map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&m)
+		b, _ := json.Marshal(m)
+		gotBody = string(b)
+		_, _ = w.Write([]byte(`{"allow":false,"reason":"no","audit_ref":"a"}`))
+	})
+	d, err := g.Authorize(t.Context(), runctl.GateRequest{RunID: "r", From: runctl.Confirmed, To: runctl.WarmReady, TargetNamespace: "aqs-test", Confirmed: runctl.True})
+	if err != nil || d.Allow || gotAuth != "Bearer tok-de-servicio" || !strings.Contains(gotBody, `"confirmed":"true"`) {
+		t.Fatal(d, err, gotAuth, gotBody)
+	}
+}
+
+func TestHTTPGateInvalidResponsesAreErrors(t *testing.T) {
+	for name, h := range map[string]http.HandlerFunc{
+		"503":       func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(503) },
+		"401":       func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(401) },
+		"basura":    func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`nope`)) },
+		"sin allow": func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"reason":"x","audit_ref":"a"}`)) },
+		"deny mudo": func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"allow":false,"reason":"","audit_ref":"a"}`))
+		},
+		"redirect": func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/x", 302) },
+	} {
+		g := gateSrv(t, h)
+		if d, err := g.Authorize(t.Context(), runctl.GateRequest{RunID: "r"}); err == nil || d.Allow {
+			t.Errorf("%s: debía ser error", name)
+		}
+	}
+}
+
+func TestHTTPGateTimeout(t *testing.T) {
+	g := gateSrv(t, func(w http.ResponseWriter, r *http.Request) { time.Sleep(300 * time.Millisecond) })
+	g.SetTimeout(50 * time.Millisecond)
+	if _, err := g.Authorize(t.Context(), runctl.GateRequest{RunID: "r"}); err == nil {
+		t.Fatal("debía expirar")
+	}
+}
+
+func TestNewHTTPGateRejectsBadConfig(t *testing.T) {
+	for _, u := range []string{"ftp://x", "", "http://", "http://u:p@h"} {
+		if _, err := NewHTTPGate(u, "t"); err == nil {
+			t.Errorf("%q aceptada", u)
+		}
+	}
+	if _, err := NewHTTPGate("http://h", ""); err == nil {
+		t.Error("token vacío aceptado")
+	}
+}
+
+func TestFileSourceFullLinesOnlyAndFilters(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "e.jsonl")
+	conf := `{"event_id":"e1","type":"run.confirmed","version":1,"trace_id":"t","data":{"run_id":"r-1","confirmed_by":"u","flows":["a"]}}`
+	other := `{"event_id":"e2","type":"notify.created","version":1,"trace_id":"t","data":{}}`
+	bad := `{"event_id":"e3","type":"run.confirmed","version":1,"trace_id":"t","data":{"run_id":"r-2"}}`
+	_ = os.WriteFile(p, []byte(conf+"\n"+other+"\n"+bad+"\n"+conf[:20]), 0o600)
+	f := &FileSource{Path: p}
+	evs, err := f.Poll(t.Context())
+	if err != nil || len(evs) != 1 || evs[0].RunID != "r-1" || f.Discarded() != 1 {
+		t.Fatal(evs, err, f.Discarded())
+	}
+	again, _ := f.Poll(t.Context())
+	if len(again) != 0 {
+		t.Fatal("reentregó")
+	}
+	if e, err := (&FileSource{Path: p + ".no"}).Poll(t.Context()); err != nil || e != nil {
+		t.Fatal("archivo inexistente no es error")
+	}
+}
+
+func TestOutboxIdempotentDeterministicID(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "o.jsonl")
+	o := &Outbox{Path: p}
+	ev := runctl.OutEvent{Type: "run.done", RunID: "r-1", TraceID: "t", EvidenceURIs: []string{"s3://x"}}
+	for i := 0; i < 2; i++ {
+		if err := o.Publish(context.Background(), ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b, _ := os.ReadFile(p)
+	if strings.Count(string(b), "\n") != 1 || !strings.Contains(string(b), OutEventID("run.done", "r-1")) {
+		t.Fatal(string(b))
+	}
+	if OutEventID("run.done", "r-1") == OutEventID("run.done", "r-2") {
+		t.Fatal("ids iguales")
+	}
+}

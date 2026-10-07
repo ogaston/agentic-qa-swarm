@@ -24,7 +24,7 @@ const serviceName = "go-run-controller"
 
 type config struct {
 	namespace, dataDir, eventsFile, outboxFile string
-	govURL, govToken, identityURL, addr         string
+	govURL, govToken, identityURL, addr        string
 }
 
 func loadConfig(env func(string) string) (config, error) {
