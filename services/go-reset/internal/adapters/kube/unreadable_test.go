@@ -145,3 +145,27 @@ func (f *failingGetState) Get(c context.Context) (core.Snapshot, bool, error) {
 func (f *failingGetState) Put(context.Context, core.WarmState, time.Time) error {
 	return errors.New("no debe escribir")
 }
+
+// F-12 (b): la política con idleScaleDownAfter <= 0 se rechaza y IdleCheck no escala un warm recién verificado.
+func TestWarmPolicyNonPositiveKubeRejectedAndNoScale(t *testing.T) {
+	for _, v := range []string{"0s", "-1h"} {
+		t.Run(v, func(t *testing.T) {
+			svc, b, cs := stack(t, core.StateReady, 1)
+			k := svc.Kube.(*kube.Client)
+			pol, _ := cs.CoreV1().ConfigMaps("aqs-test").Get(ctx, "warm-policy", metav1.GetOptions{})
+			pol.Data["idleScaleDownAfter"] = v
+			_, _ = cs.CoreV1().ConfigMaps("aqs-test").Update(ctx, pol, metav1.UpdateOptions{})
+			if _, err := k.WarmPolicy(ctx); err == nil {
+				t.Fatal("WarmPolicy aceptó un valor <= 0")
+			}
+			b.State.Snap.UpdatedAt = b.Clock.Now()
+			b.Clock.Advance(time.Minute)
+			if ok, _ := svc.IdleCheck(ctx); ok {
+				t.Fatal("escaló")
+			}
+			if n, _ := k.Replicas(ctx); n != 1 {
+				t.Fatalf("réplicas=%d", n)
+			}
+		})
+	}
+}

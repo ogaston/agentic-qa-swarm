@@ -163,3 +163,37 @@ func TestIdleCheckCompensatesWhenScaleFails(t *testing.T) {
 		}
 	})
 }
+
+// F-12 (b): idleScaleDownAfter <= 0 no escala (fail-closed), con la política en el puerto.
+func TestWarmPolicyNonPositiveCoreDoesNotScale(t *testing.T) {
+	for _, d := range []time.Duration{0, -time.Hour} {
+		t.Run(d.String(), func(t *testing.T) {
+			r := newIdleRig(t, -1)
+			r.b.Kube.Policy.IdleScaleDownAfter = d
+			ok, err, _ := r.run()
+			if ok || err == nil || r.b.Kube.Reps != 1 || state(t, r.b).State != core.StateReady {
+				t.Fatalf("ok=%v err=%v reps=%d st=%+v", ok, err, r.b.Kube.Reps, state(t, r.b))
+			}
+		})
+	}
+}
+
+// F-12 (g): con el Put de cuarentena fallando, el Alerter igualmente recibe el aviso.
+func TestQuarantinePutFailsStillAlerts(t *testing.T) {
+	b := fakes.NewBundle()
+	b.DB.CleanErr = fakes.ErrBoom
+	b.State.FailPutN = 2 // el Put dirty inicial pasa; el de cuarentena falla
+	res, err := b.Svc.Reset(ctx, "r-1", "")
+	if err == nil {
+		t.Fatalf("debía devolver el error del Put: res=%+v", res)
+	}
+	if b.Alert.Count != 1 {
+		t.Fatalf("avisos=%d", b.Alert.Count)
+	}
+	if st := state(t, b); st.State != core.StateDirty || st.ResetVerified {
+		t.Fatalf("estado %+v", st)
+	}
+	if len(b.Events.Types()) != 0 {
+		t.Fatal("evento publicado")
+	}
+}
