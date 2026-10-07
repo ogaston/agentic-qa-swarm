@@ -108,6 +108,8 @@
 
 > **Ola 2 (2026-10-07) cerrada por decisión del humano, sin VERDE del revisor**: U2-T02, U2-T03 y U2-T06 agotaron el tope de 3 rondas con hallazgos abiertos y se fusionan «tal cual» (PR #40, #41, #42), con los hallazgos pasando a tareas de seguimiento propias, cada una con sus 3 rondas: `tareas/U2-T02b-diario-y-eventos-en-disco.md`, `tareas/U2-T03b-deploy-en-proceso.md`, `tareas/U2-T06b-estado-ilegible-e-idle.md`. **No desplegar en un entorno compartido antes de U2-T02b** (un disco lleno puede impedir el reinicio del controlador). **Decisión del humano (2026-10-07), opción A**: el deploy y el reset se ejecutan **en proceso** con la ServiceAccount del servicio (sin Jobs sin token, sin relajar `isolation.rego`); U2-T03b se re-especifica como «deploy en proceso» y U2-T07 cablea el RBAC existente. Marcar `[x]` en la tabla de U2 cuando cada PR esté fusionado.
 
+> **Ola 3 (2026-10-08)**: U2-T02b, T03b, T04 y T06b fusionadas con VERDE del revisor. **U2-T05 cerrada por decisión del humano, sin VERDE** (ronda 1 NO-VERDE, ronda 2 interrumpida por tiempo): se fusiona «tal cual» (PR #50) y sus hallazgos abiertos pasan a `tareas/U2-T05b-plazos-y-lanzamiento-parcial.md`. Es seguro fusionar porque en modo `real` la fase `run` falla cerrada («sin flujos») hasta que U3 aporte `FlowPlan`; **U2-T05b debe estar fusionada antes de U2-T08 / integración con U3**. Marcar `[x]` U2-T4 y U2-T5 al fusionar sus PR.
+
 ## U3 — Agentes LLM
 
 - **Responsabilidad**: inferencia de superficie → flujos deterministas; post-mortem con causa de negocio; redacción de secretos. Componentes: `agent-planner` + `agent-reporter` (C3-infer/gen + C6).
