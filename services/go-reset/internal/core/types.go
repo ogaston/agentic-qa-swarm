@@ -42,6 +42,9 @@ type WarmState struct {
 type Snapshot struct {
 	WarmState
 	UpdatedAt time.Time
+	// Unreadable: el almacén existe pero su contenido no se puede interpretar (F-10). El estado se
+	// trata como desconocido: dirty y no verificado; nunca como ready.
+	Unreadable bool
 }
 
 // Policy es la warm-policy (ConfigMap).
@@ -117,6 +120,7 @@ type (
 		Reset(result string)
 		IdleScaled()
 		SessionsClosed(n int)
+		StateUnreadable()
 	}
 )
 
@@ -126,3 +130,4 @@ type NopMetrics struct{}
 func (NopMetrics) Reset(string)       {}
 func (NopMetrics) IdleScaled()        {}
 func (NopMetrics) SessionsClosed(int) {}
+func (NopMetrics) StateUnreadable()   {}

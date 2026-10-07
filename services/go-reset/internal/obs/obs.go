@@ -15,6 +15,7 @@ type Metrics struct {
 	resets *prometheus.CounterVec
 	idle   prometheus.Counter
 	closed prometheus.Counter
+	unread prometheus.Counter
 }
 
 // New registra las métricas; quarantined se evalúa en cada scrape.
@@ -23,8 +24,9 @@ func New(reg prometheus.Registerer, quarantined func() float64) *Metrics {
 		resets: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "aqs_reset_total", Help: "Resets por resultado."}, []string{"result"}),
 		idle:   prometheus.NewCounter(prometheus.CounterOpts{Name: "aqs_warm_idle_scaled_total", Help: "Escalados a idle."}),
 		closed: prometheus.NewCounter(prometheus.CounterOpts{Name: "aqs_housekeeping_sessions_closed_total", Help: "Sesiones cerradas por higiene."}),
+		unread: prometheus.NewCounter(prometheus.CounterOpts{Name: "aqs_warm_state_unreadable_total", Help: "Lecturas de warm-state con contenido ilegible (tratado como dirty)."}),
 	}
-	reg.MustRegister(m.resets, m.idle, m.closed)
+	reg.MustRegister(m.resets, m.idle, m.closed, m.unread)
 	if quarantined != nil {
 		reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "aqs_warm_quarantined", Help: "1 si el warm está en cuarentena."}, quarantined))
 	}
@@ -36,6 +38,7 @@ func New(reg prometheus.Registerer, quarantined func() float64) *Metrics {
 func (m *Metrics) Reset(r string)       { m.resets.WithLabelValues(r).Inc() }
 func (m *Metrics) IdleScaled()          { m.idle.Inc() }
 func (m *Metrics) SessionsClosed(n int) { m.closed.Add(float64(n)) }
+func (m *Metrics) StateUnreadable()     { m.unread.Inc() }
 
 // NewLogger crea un logger JSON.
 func NewLogger(w io.Writer) *slog.Logger {

@@ -3,6 +3,8 @@ package kube_test
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
+	k8stesting "k8s.io/client-go/testing"
 	"testing"
 	"time"
 
@@ -18,11 +20,13 @@ import (
 // el estado deseado (pods == réplicas, todos Ready, status al día). kubernetes/fake no lo hace solo.
 type controllerClock struct {
 	*fakes.Clock
-	cs   *fake.Clientset
-	slow int // Sleeps que el controlador tarda en reaccionar
+	cs     *fake.Clientset
+	slow   int // Sleeps que el controlador tarda en reaccionar
+	sleeps int // Sleeps totales (sondeos fallidos de AppReady)
 }
 
 func (c *controllerClock) Sleep(ctx context.Context, d time.Duration) error {
+	c.sleeps++
 	if c.slow > 0 {
 		c.slow--
 		return c.Clock.Sleep(ctx, d)
@@ -159,5 +163,58 @@ func TestKubeAppReadyGuards(t *testing.T) {
 				t.Fatalf("AppReady=%v err=%v, debía ser false", ok, err)
 			}
 		})
+	}
+}
+
+// F-12 (c): transición. Tras el restart el pod viejo sigue Ready y el status del Deployment sigue viejo
+// durante `slow` sondeos; Verify debe exigir >= slow sondeos fallidos antes de dar app-ready.
+func slowRolloutStack(t *testing.T, slow int) (*core.Service, *fakes.Bundle, *controllerClock) {
+	t.Helper()
+	svc, b, cs := stack(t, core.StateReady, 1)
+	// El Deployment tenía su rollout completo antes del restart.
+	d, _ := cs.AppsV1().Deployments("aqs-test").Get(ctx, "warm-app", metav1.GetOptions{})
+	d.Generation = 1
+	d.Status = appsv1.DeploymentStatus{ObservedGeneration: 1, Replicas: 1, UpdatedReplicas: 1, AvailableReplicas: 1}
+	_, _ = cs.AppsV1().Deployments("aqs-test").Update(ctx, d, metav1.UpdateOptions{})
+	// Como el API server real: cada cambio de spec/template sube generation; el controlador va por detrás.
+	cs.PrependReactor("patch", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		cur, _ := cs.Tracker().Get(appsv1.SchemeGroupVersion.WithResource("deployments"), "aqs-test", "warm-app")
+		dd := cur.(*appsv1.Deployment).DeepCopy()
+		dd.Generation++
+		_ = cs.Tracker().Update(appsv1.SchemeGroupVersion.WithResource("deployments"), dd, "aqs-test")
+		return false, nil, nil
+	})
+	clk := svc.Clock.(*controllerClock)
+	clk.slow = slow
+	return svc, b, clk
+}
+
+func TestResetSlowRolloutRequiresPollingBeforeAppReady(t *testing.T) {
+	for _, slow := range []int{1, 3, 8} {
+		t.Run(fmt.Sprint("slow", slow), func(t *testing.T) {
+			svc, b, clk := slowRolloutStack(t, slow)
+			res, err := svc.Reset(ctx, "r-1", "")
+			if err != nil || !res.Verified {
+				t.Fatalf("res=%+v err=%v", res, err)
+			}
+			if clk.sleeps < slow {
+				t.Fatalf("app-ready tras %d sondeos fallidos; el controlador tardó %d: dio Ready con el rollout sin completar", clk.sleeps, slow)
+			}
+			if got := b.Events.Types(); len(got) != 1 {
+				t.Fatalf("eventos %v", got)
+			}
+		})
+	}
+}
+
+// Si el rollout no termina dentro de ReadyTimeout: cuarentena y ningún evento.
+func TestResetSlowRolloutBeyondTimeoutQuarantines(t *testing.T) {
+	svc, b, _ := slowRolloutStack(t, 1000)
+	res, err := svc.Reset(ctx, "r-1", "")
+	if err != nil || res.Verified || len(b.Events.Types()) != 0 {
+		t.Fatalf("res=%+v err=%v eventos=%v", res, err, b.Events.Types())
+	}
+	if st, _, _ := b.State.Get(ctx); st.State != core.StateQuarantine {
+		t.Fatalf("estado %+v", st.WarmState)
 	}
 }

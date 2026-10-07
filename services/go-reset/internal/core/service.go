@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -29,6 +31,7 @@ type Service struct {
 	Alert    Alerter
 	Clock    Clock
 	Metrics  Metrics
+	Log      *slog.Logger // opcional
 	Cfg      Config
 	mu       sync.Mutex
 	baseline string // versión del baseline del último intento verificado
@@ -55,10 +58,29 @@ func (s *Service) metrics() Metrics {
 	return s.Metrics
 }
 
+func (s *Service) log() *slog.Logger {
+	if s.Log == nil {
+		return slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	return s.Log
+}
+
+// unreadable registra un warm-state ilegible (log + aqs_warm_state_unreadable_total).
+func (s *Service) unreadable(where string) {
+	s.log().Error("warm-state ilegible: se trata como desconocido (dirty, no verificado)", "where", where)
+	s.metrics().StateUnreadable()
+}
+
+// current devuelve el estado del warm. Un error transitorio de la API se devuelve como error (no se
+// asume nada); un contenido ilegible o un almacén ausente se interpretan como desconocido => dirty.
 func (s *Service) current(ctx context.Context) (WarmState, error) {
 	snap, ok, err := s.State.Get(ctx)
 	if err != nil {
 		return WarmState{}, err
+	}
+	if ok && snap.Unreadable {
+		s.unreadable("current")
+		ok = false
 	}
 	if !ok {
 		bv := s.Cfg.BaselineVersion
@@ -133,12 +155,18 @@ func (s *Service) run(ctx context.Context, kind, runID, traceID string, first fu
 	}
 	if lastErr != nil {
 		st.State, st.ResetVerified = StateQuarantine, false
-		if err := s.State.Put(ctx, st, s.Clock.Now()); err != nil {
-			return res, err
+		putErr := s.State.Put(ctx, st, s.Clock.Now())
+		reason := lastErr.Error()
+		if putErr != nil { // el estado queda dirty (seguro), pero el aviso no se pierde
+			s.log().Error("no se pudo escribir la cuarentena", "err", putErr)
+			reason += " (además no se pudo escribir la cuarentena: " + putErr.Error() + ")"
 		}
-		s.Alert.Quarantine(ctx, st.WarmID, runID, lastErr.Error())
+		s.Alert.Quarantine(ctx, st.WarmID, runID, reason)
 		s.metrics().Reset("quarantined")
-		res.State, res.Reason = st, lastErr.Error()
+		res.State, res.Reason = st, reason
+		if putErr != nil {
+			return res, putErr
+		}
 		return res, nil
 	}
 	st.State, st.ResetVerified, st.BaselineVersion = StateReady, true, s.baseline
@@ -238,15 +266,30 @@ func (s *Service) Verify(ctx context.Context) ([]string, error) {
 
 // IdleCheck escala el warm a minReplicasIdle si lleva idleScaleDownAfter sin corrida activa.
 // Devuelve true si escaló. Nunca escala un warm que no esté ready ni uno con corrida activa.
+//
+// Orden (F-11): primero se escribe idle-escalado y luego se escala, de modo que en ningún instante el
+// almacén diga ready con 0 réplicas. Si el escalado falla se compensa (ver compensate).
 func (s *Service) IdleCheck(ctx context.Context) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snap, ok, err := s.State.Get(ctx)
-	if err != nil || !ok || snap.State != StateReady {
+	if err != nil || !ok {
 		return false, err
+	}
+	if snap.Unreadable {
+		s.unreadable("IdleCheck")
+		return false, nil // fail-closed: no se escala con un estado que no se entiende
+	}
+	if snap.State != StateReady {
+		return false, nil
 	}
 	pol, err := s.Kube.WarmPolicy(ctx)
 	if err != nil {
+		return false, err
+	}
+	if pol.IdleScaleDownAfter <= 0 {
+		err := fmt.Errorf("idleScaleDownAfter %v inválido (debe ser > 0): no se escala", pol.IdleScaleDownAfter)
+		s.log().Error("warm-policy inválida", "err", err)
 		return false, err
 	}
 	sessions, err := s.Sessions.List(ctx)
@@ -268,15 +311,37 @@ func (s *Service) IdleCheck(ctx context.Context) (bool, error) {
 	if s.Clock.Now().Sub(last) < pol.IdleScaleDownAfter {
 		return false, nil
 	}
-	if err := s.Kube.ScaleApp(ctx, pol.MinReplicasIdle); err != nil {
-		return false, err
+	ready := snap.WarmState
+	idle := ready
+	idle.State = StateIdle
+	if err := s.State.Put(ctx, idle, s.Clock.Now()); err != nil {
+		return false, err // nada se escaló: el almacén sigue diciendo ready con las réplicas intactas
 	}
-	snap.State = StateIdle
-	if err := s.State.Put(ctx, snap.WarmState, s.Clock.Now()); err != nil {
-		return false, err
+	if err := s.Kube.ScaleApp(ctx, pol.MinReplicasIdle); err != nil {
+		return false, s.compensate(ctx, ready, err)
 	}
 	s.metrics().IdleScaled()
 	return true, nil
+}
+
+// compensate deshace el estado idle-escalado cuando el escalado falló: vuelve a ready solo si el warm
+// sigue con >= 1 réplica verificada (Replicas y AppReady leídos de vuelta); si no, lo deja dirty.
+// Si ni siquiera puede escribir, el almacén queda en idle-escalado, que nunca es un ready falso.
+func (s *Service) compensate(ctx context.Context, ready WarmState, scaleErr error) error {
+	back := ready
+	n, err := s.Kube.Replicas(ctx)
+	ok := false
+	if err == nil && n >= 1 {
+		ok, err = s.Kube.AppReady(ctx)
+	}
+	if err != nil || !ok {
+		back.State, back.ResetVerified = StateDirty, false
+	}
+	if perr := s.State.Put(ctx, back, s.Clock.Now()); perr != nil {
+		s.log().Error("IdleCheck: no se pudo compensar el estado", "err", perr)
+		return fmt.Errorf("escalar: %w; compensar: %v", scaleErr, perr)
+	}
+	return scaleErr
 }
 
 // HousekeepingReport resume una pasada de higiene.
