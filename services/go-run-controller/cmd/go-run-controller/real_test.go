@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"k8s.io/client-go/kubernetes"
@@ -25,7 +28,8 @@ func realEnv() map[string]string {
 	m["REHEARSAL_TARGET_URL"] = "http://warm-app.aqs-test.svc:8080"
 	m["RUNNER_IMAGE"] = "ghcr.io/ogaston/aqs-runner:0.1.0"
 	m["EVIDENCE_ENDPOINT"], m["EVIDENCE_BUCKET"] = "http://minio.aqs-system.svc:9000", "evidence"
-	m["EVIDENCE_ACCESS_KEY_FILE"], m["EVIDENCE_SECRET_KEY_FILE"] = "/nope/ak", "/nope/sk"
+	ak, sk := keyFiles()
+	m["EVIDENCE_ACCESS_KEY_FILE"], m["EVIDENCE_SECRET_KEY_FILE"] = ak, sk
 	return m
 }
 
@@ -164,4 +168,22 @@ func TestLoadConfigRunEnvVariantsRejectFake(t *testing.T) {
 			t.Errorf("RUN_ENV=%q aceptado con fake", v)
 		}
 	}
+}
+
+const testAK, testSK = "AKIATESTACCESS0001", "sk-test-secret-key-0002"
+
+var (
+	keyOnce  sync.Once
+	akf, skf string
+)
+
+// keyFiles escribe credenciales de prueba generadas aquí (nunca en el repo).
+func keyFiles() (string, string) {
+	keyOnce.Do(func() {
+		d, _ := os.MkdirTemp("", "evkeys")
+		akf, skf = filepath.Join(d, "ak"), filepath.Join(d, "sk")
+		_ = os.WriteFile(akf, []byte(testAK+"\n"), 0o600)
+		_ = os.WriteFile(skf, []byte(testSK+"\n"), 0o600)
+	})
+	return akf, skf
 }
