@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -116,10 +117,12 @@ func TestRunRejectsBadTimeouts(t *testing.T) {
 
 func TestServeWaitsForInFlightRequestOnShutdown(t *testing.T) {
 	started := make(chan struct{})
+	var finished atomic.Bool
 	hs := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		close(started)
 		time.Sleep(700 * time.Millisecond)
 		w.Write([]byte("respuesta completa"))
+		finished.Store(true)
 	})}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -144,6 +147,9 @@ func TestServeWaitsForInFlightRequestOnShutdown(t *testing.T) {
 	case err := <-done:
 		if err != nil {
 			t.Fatal(err)
+		}
+		if !finished.Load() { // si serve vuelve antes, run retorna y el proceso sale cortando la respuesta
+			t.Fatal("serve volvio con la peticion en vuelo sin terminar")
 		}
 		select {
 		case body := <-got:
@@ -216,7 +222,7 @@ func TestFileStoreFencesAndExplicitStore(t *testing.T) {
 		}
 	}
 	base := fakeEnv(nil)
-	if err := run(env(base), nil); err == nil || !strings.Contains(err.Error(), "WARM_OBJECT_STORE") {
+	if err := run(env(base), nil); err == nil || !strings.Contains(err.Error(), "obligatorio") || !strings.Contains(err.Error(), "WARM_OBJECT_STORE") {
 		t.Fatalf("sin WARM_OBJECT_STORE debe fallar: %v", err)
 	}
 	e := fakeEnv(map[string]string{"WARM_OBJECT_STORE": "file"})
