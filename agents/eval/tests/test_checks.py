@@ -60,7 +60,7 @@ def test_a4_only_received_uris():
     assert not C.a4_cited_uris(None, [])["ok"]
 
 
-@pytest.mark.parametrize("s", ["password=hunter2hunter2", "Authorization: Bearer abcdef123456", "AKIAABCDEFGHIJKLMNOP",
+@pytest.mark.parametrize("s", ["password=hunter2hunter2", "Authorization: Bearer abcdef123456", "AKIA" + "ABCDEFGHIJKLMNOP",
                                "postgres://u:pw@host/db", "ghp_" + "a" * 30, "x" * 100 + "\ntoken: abc123xyz"])
 def test_a5_detects_secrets_in_prompt_and_report(s):
     assert not C.a5_no_secrets([s], [])["ok"]
