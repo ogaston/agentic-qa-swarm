@@ -1,0 +1,1 @@
+{"run_id":"run-1","verdict":"sin-hallazgos","summary":"s","findings":[{"finding_id":"flow-1","root_cause":"c","invariant":"i","method":"POST","path":"/orders","evidence_uris":["s3://aqs-evidence/runs/run-1/flow-1/result.json"]}]}

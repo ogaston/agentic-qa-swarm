@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-qa-swarm.example/contracts/plans/v1/report.schema.json",
+  "title": "Report",
+  "type": "object",
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "verdict": {"enum": ["bug", "sin-hallazgos", "inconcluso"]},
+    "summary": {"type": "string"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding_id": {"type": "string", "minLength": 1},
+          "root_cause": {"type": "string", "minLength": 1},
+          "invariant": {"type": "string", "minLength": 1},
+          "method": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
+          "path": {"type": "string", "pattern": "^/"},
+          "evidence_uris": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "format": "uri", "pattern": "^(s3|https)://"}
+          }
+        },
+        "required": ["finding_id", "root_cause", "invariant", "method", "path", "evidence_uris"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["run_id", "verdict", "summary", "findings"],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"verdict": {"const": "bug"}}, "required": ["verdict"]},
+      "then": {"properties": {"findings": {"minItems": 1}}},
+      "else": {"properties": {"findings": {"maxItems": 0}}}
+    }
+  ]
+}
