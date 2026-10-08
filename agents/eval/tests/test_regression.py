@@ -35,6 +35,7 @@ def test_add_regression_creates_layout_and_run_counts_it(tmp_path, capsys):
     assert (rc, rep["dataset"]["artifacts"], rep["dataset"]["regressions"], rep["metrics"]["ruido"]) == (1, 12, 1, 0.2)
     assert rep["thresholds_met"]["ruido"] is False
     assert by_id(rep, "bug-ecom-01-fp-1")["reporter"]["findings"][0]["false_positive"] is True
+    assert rep["dataset"]["labelled"] == 11 and rep["metrics"]["precision"] == 10 / 11
     assert tree_hash(DS) == before  # el dataset original no se toca
 
 
@@ -46,7 +47,7 @@ def test_regression_without_it_the_same_dataset_is_green(tmp_path):
 def test_regression_numbering_increments(tmp_path):
     ds = copy_ds(tmp_path)
     a = add_regression(ds, "bug-ecom-01", "flow-1", "inconcluso")
-    b = add_regression(ds, "bug-ecom-01", "flow-1", "sin-hallazgos")
+    b = add_regression(ds, "bug-ecom-01", "flow-2", "sin-hallazgos")
     assert (a.name, b.name) == ("bug-ecom-01-fp-1", "bug-ecom-01-fp-2")
     assert not [p for p in (ds / "regressions").iterdir() if p.name.startswith(".")]
 
@@ -97,3 +98,11 @@ def test_regression_corrupt_meta_is_rejected_on_run(tmp_path):
     d = add_regression(ds, "bug-ecom-01", "flow-1", "inconcluso")
     edit(d / "meta.json", lambda m: m.update(kind="golden"))
     assert cli.main(["run", "--dataset", str(ds), "--out", str(tmp_path / "o")]) == 2
+
+
+def test_regression_duplicate_artifact_and_finding_is_rejected_clearly(tmp_path):
+    ds = copy_ds(tmp_path)
+    add_regression(ds, "bug-ecom-01", "flow-1", "inconcluso")
+    with pytest.raises(DatasetError, match="ya existe la regresion bug-ecom-01-fp-1"):
+        add_regression(ds, "bug-ecom-01", "flow-1", "sin-hallazgos")
+    assert sorted(p.name for p in (ds / "regressions").iterdir()) == ["bug-ecom-01-fp-1"]

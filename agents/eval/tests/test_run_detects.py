@@ -150,3 +150,21 @@ def test_threshold_lines_one_per_metric(tmp_path, capsys):
     out = capsys.readouterr().out.splitlines()
     assert [l.split()[:2] for l in out[:4]] == [["OK", m] for m in ("factualidad", "precision", "ruido", "adherencia")]
     assert "valid_for=pipeline" in out[4] and "llm=fake" in out[4]
+
+
+def test_threshold_factualidad_alone_gates_exit_code(tmp_path):
+    ds = copy_ds(tmp_path)
+    edit(ds / "artifacts/bug-ecom-01/reporter.response.json", lambda d: d.update(verdict="inconcluso", findings=[]))
+    rep = report.evaluate(ds)
+    assert rep["metrics"]["factualidad"] == 0.75 and rep["metrics"]["precision"] == 0.9
+    assert rep["thresholds_met"] == {"factualidad": False, "precision": True, "ruido": True, "adherencia": True}
+    assert cli.main(["run", "--dataset", str(ds), "--out", str(tmp_path / "o")]) == 1
+
+
+def test_detects_bug_verdict_with_wrong_root_cause_lowers_factualidad(tmp_path):
+    ds = copy_ds(tmp_path)
+    edit(ds / "artifacts/bug-ecom-01/reporter.response.json",
+         lambda d: d["root_cause"].update(path="/orders/{id}"))
+    rep = report.evaluate(ds)
+    assert rep["metrics"]["factualidad"] == 0.75 and rep["thresholds_met"]["factualidad"] is False
+    assert by_id(rep, "bug-ecom-01")["reporter"]["findings"][0]["false_positive"] is True

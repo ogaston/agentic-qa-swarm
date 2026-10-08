@@ -59,10 +59,13 @@ def test_precision_bug_requires_matching_root_cause():
 
 
 def test_precision_ignores_unlabelled_kind_and_counts_regression():
-    na = rec("no-arranca", "error", "error")
-    assert M.precision([na]) == 0
+    ok = rec("golden", "sin-hallazgos", "sin-hallazgos")
+    na = rec("no-arranca", "error", "bug", [fnd()])  # si se contara, bajaria la precision
+    assert M.precision([ok, na]) == 1
     reg = rec("regresion-fp", "sin-hallazgos", "bug", [fnd()])
-    assert M.precision([reg]) == 0
+    assert M.precision([ok, reg]) == Fraction(1, 2)  # fuera de LABELLED_KINDS daria 1
+    reg_ok = rec("regresion-fp", "sin-hallazgos", "sin-hallazgos")
+    assert M.precision([reg, reg_ok, ok]) == Fraction(2, 3)
 
 
 def test_factualidad_counts_seeded_bugs_only():
@@ -89,3 +92,11 @@ def test_threshold_boundaries_are_strict():
     assert T.is_met("adherencia", Fraction(1))
     assert not T.is_met("adherencia", Fraction(99, 100))
     assert not T.is_met("factualidad", Fraction(4, 5))
+
+
+def test_factualidad_bug_verdict_with_wrong_root_cause_is_zero():
+    wrong = rec("bug-sembrado", "bug", "bug", [fnd(path="/otro")], RC)
+    assert M.factualidad([wrong]) == 0
+    assert M.factualidad([wrong, rec("bug-sembrado", "bug", "bug", [fnd()], RC)]) == Fraction(1, 2)
+    for bad in (fnd(method="GET"), fnd(invariant="otra")):
+        assert M.factualidad([rec("bug-sembrado", "bug", "bug", [bad], RC)]) == 0

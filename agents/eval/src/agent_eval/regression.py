@@ -45,6 +45,11 @@ def add_regression(dataset: Path | str, artifact_id: str, finding_id: str, label
         raise DatasetError("artifact inexistente en el dataset")
     if not (src.dir / "evidence-uris.json").is_file() or not (src.dir / "reporter.response.json").is_file():
         raise DatasetError("el artefacto no tiene evidencia ni respuesta de reporter que regresionar")
+    for a in arts.values():
+        if a.is_regression:
+            m = read_json(a.dir / "meta.json")
+            if m.get("source_artifact") == artifact_id and m.get("source_finding") == finding_id:
+                raise DatasetError(f"ya existe la regresion {a.id} para {artifact_id} / {finding_id}")
     exp = load_expected(src, expected_validator(ds))
     resp = read_json(src.dir / "reporter.response.json")
     known = {f.get("flow_id") for f in resp.get("findings", []) if isinstance(f, dict)}
