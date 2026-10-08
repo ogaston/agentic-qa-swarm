@@ -31,18 +31,26 @@ def publish_flows(plan, store, *, k6=inspect_with_k6) -> list[PublishedFlow]:
             except K6InspectError as e:
                 raise FlowValidationError(fid, "k6", str(e)) from e
             rendered.append((fid, flow_key(plan["run_id"], fid), script.encode("utf-8")))
+    # previos: si algo falla se restauran los bytes anteriores (o se borra lo que era nuevo)
     written, out = [], []
     try:
         for fid, key, data in rendered:
-            written.append(key)
+            try:
+                prev = store.get(key)
+            except (KeyError, FileNotFoundError):
+                prev = None
+            written.append((key, prev))
             store.put(key, data)
             if sha256(store.get(key)) != sha256(data):
                 raise OSError(f"lectura de vuelta no coincide: {key}")
             out.append(PublishedFlow(fid, key, sha256(data)))
     except BaseException:
-        for key in written:
+        for key, prev in written:
             try:
-                store.delete(key)
+                if prev is None:
+                    store.delete(key)
+                else:
+                    store.put(key, prev)
             except Exception:
                 pass
         raise

@@ -5,8 +5,8 @@ import tempfile
 from pathlib import Path
 from typing import Protocol
 
-ID_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?$")
-KEY_RE = re.compile(r"^flows/([a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?)/([a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?)\.k6\.js$")
+ID_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?")
+KEY_RE = re.compile(r"flows/([a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?)/([a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?)\.k6\.js")
 
 
 class FlowStore(Protocol):
@@ -16,7 +16,7 @@ class FlowStore(Protocol):
 
 
 def flow_key(run_id: str, flow_id: str) -> str:
-    if not ID_RE.match(run_id) or not ID_RE.match(flow_id):
+    if not ID_RE.fullmatch(run_id) or not ID_RE.fullmatch(flow_id):
         raise ValueError("run_id/flow_id fuera del patron permitido")
     return f"flows/{run_id}/{flow_id}.k6.js"
 
@@ -30,7 +30,7 @@ class DirFlowStore:
         self.root = Path(root)
 
     def _path(self, key: str) -> Path:
-        if not KEY_RE.match(key):
+        if not KEY_RE.fullmatch(key):
             raise ValueError(f"clave invalida: {key!r}")
         return self.root / key
 

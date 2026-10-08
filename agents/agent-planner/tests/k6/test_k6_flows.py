@@ -177,6 +177,54 @@ def test_publish_dir_store_rejects_traversal(tmp_path):
         DirFlowStore(tmp_path).put("flows/Run/a.k6.js", b"x")
 
 
+@pytest.mark.parametrize("bad", ["f1\n", "f1\r\n"])
+@pytest.mark.parametrize("store_cls", [FakeFlowStore, "dir"])
+def test_publish_newline_flow_id_rejected(bad, store_cls, tmp_path):
+    store = DirFlowStore(tmp_path) if store_cls == "dir" else store_cls()
+    plan = copy.deepcopy(TRES)
+    plan["flows"][0]["flow_id"] = bad
+    with pytest.raises(FlowValidationError) as e:
+        publish_flows(plan, store, k6=ok_k6)
+    assert e.value.capa == "plan"
+    assert not (isinstance(store, FakeFlowStore) and store.objects)
+
+
+@pytest.mark.parametrize("store_cls", [FakeFlowStore, "dir"])
+def test_publish_newline_run_id_rejected(store_cls, tmp_path):
+    store = DirFlowStore(tmp_path) if store_cls == "dir" else store_cls()
+    plan = copy.deepcopy(TRES)
+    plan["run_id"] = "run\n"
+    with pytest.raises(FlowValidationError) as e:
+        publish_flows(plan, store, k6=ok_k6)
+    assert e.value.capa == "plan"
+    assert not (isinstance(store, FakeFlowStore) and store.objects)
+
+
+def test_publish_republish_failure_keeps_previous_version():
+    store = FakeFlowStore()
+    publish_flows(TRES, store, k6=ok_k6)
+    before = dict(store.objects)
+    newer = copy.deepcopy(TRES)
+    for f in newer["flows"]:
+        f["invariant"] = "otra invariante"
+    store.puts, store.fail_put_on = 0, 2
+    with pytest.raises(OSError):
+        publish_flows(newer, store, k6=ok_k6)
+    assert store.objects == before
+
+
+def test_k6_forbidden_filter_isolated(monkeypatch):
+    from agent_planner.k6 import validate as val
+    t = render_mod.load_template() + "\neval(1);\n"
+    monkeypatch.setattr(render_mod, "load_template", lambda: t)
+    monkeypatch.setattr(val, "load_template", lambda: t)
+    monkeypatch.setattr(val, "template_sha256", lambda: val.TEMPLATE_SHA256)
+    flow = TRES["flows"][0]
+    with pytest.raises(FlowValidationError) as e:
+        validate_script(render_flow(TRES, flow), TRES, flow)
+    assert "prohibida" in e.value.detalle
+
+
 # ---------- herramienta real ----------
 
 @pytest.mark.k6
@@ -237,10 +285,10 @@ def test_k6_run_passes_when_status_matches(tmp_path, server):
 def test_k6_run_fails_when_status_differs(tmp_path, server):
     plan = plan_with(steps=[{"method": "GET", "path": "/x", "expect_status": 404}])
     (tmp_path / "ko.k6.js").write_text(render_flow(plan, plan["flows"][0]))
-    assert _k6_run(tmp_path, "ko.k6.js", server) != 0
+    assert _k6_run(tmp_path, "ko.k6.js", server) == 99
 
 
 @pytest.mark.k6
 def test_k6_run_fails_without_base_url(tmp_path):
     (tmp_path / "nb.k6.js").write_text(render_flow(TRES, TRES["flows"][0]))
-    assert _k6_run(tmp_path, "nb.k6.js", None) != 0
+    assert _k6_run(tmp_path, "nb.k6.js", None) == 99

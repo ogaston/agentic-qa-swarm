@@ -2,7 +2,6 @@ import json
 import os
 import re
 import subprocess
-import tempfile
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -26,11 +25,11 @@ def validate_plan(plan: dict) -> None:
     errs = sorted(Draft202012Validator(schema).iter_errors(plan), key=lambda e: list(e.path))
     if errs:
         raise FlowValidationError("-", "plan", errs[0].message)
-    if not ID_RE.match(plan["run_id"]):
+    if not ID_RE.fullmatch(plan["run_id"]):
         raise FlowValidationError("-", "plan", "run_id fuera del patron")
     seen = set()
     for f in plan["flows"]:
-        if not ID_RE.match(f["flow_id"]) or f["flow_id"] in seen:
+        if not ID_RE.fullmatch(f["flow_id"]) or f["flow_id"] in seen:
             raise FlowValidationError(f["flow_id"], "plan", "flow_id invalido o duplicado")
         seen.add(f["flow_id"])
 
