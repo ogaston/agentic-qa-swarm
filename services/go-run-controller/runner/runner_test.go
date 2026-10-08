@@ -92,6 +92,18 @@ func (r *rig) active(t testing.TB) (n int) {
 	return
 }
 
+// aliveWithinDeadline cuenta los Jobs sin terminar que aún no pasaron su activeDeadlineSeconds: Kubernetes
+// mata el pod de un Job vencido aunque el controlador conserve el objeto hasta resolver su evidencia.
+func (r *rig) aliveWithinDeadline(t testing.TB) (n int) {
+	for _, j := range r.jobs(t) {
+		created, _ := time.Parse(time.RFC3339, j.Annotations[AnnotCreated])
+		if d, _ := jobState(j); !d && r.clk.t.Sub(created) <= time.Duration(*j.Spec.ActiveDeadlineSeconds)*time.Second {
+			n++
+		}
+	}
+	return
+}
+
 func (r *rig) finish(t testing.TB, name string, ok bool) {
 	t.Helper()
 	j, err := r.cs.BatchV1().Jobs(ns).Get(context.Background(), name, metav1.GetOptions{})
@@ -364,7 +376,14 @@ func TestRunnerRunTimeoutBoundsPendingFlows(t *testing.T) {
 
 func TestEvidenceWriteFailureMakesFlowFailedAndNeverClaimsIt(t *testing.T) {
 	for name, mut := range map[string]func(*MemEvidence){
-		"put falla": func(e *MemEvidence) { e.FailPut = func(k string) error { return errors.New("bucket inexistente") } },
+		"put falla": func(e *MemEvidence) {
+			e.FailPut = func(k string) error {
+				if isFlowEvidenceKey(k) { // el marcador de inicio ya se escribió al lanzar
+					return errors.New("bucket inexistente")
+				}
+				return nil
+			}
+		},
 		"hash distinto": func(e *MemEvidence) {
 			e.Corrupt = func(k string) []byte {
 				if strings.HasSuffix(k, "logs.txt") {
@@ -391,7 +410,7 @@ func TestEvidenceWriteFailureMakesFlowFailedAndNeverClaimsIt(t *testing.T) {
 		if err != nil || !out.Done || out.FailReason == "" || len(out.URIs) != 0 {
 			t.Errorf("%s: %+v %v", name, out, err)
 		}
-		if _, err := r.ev.Get(context.Background(), "runs/r-1/a/result.json"); err == nil && name != "hash distinto" {
+		if _, err := r.ev.Get(context.Background(), "runs/r-1/a/result.json"); err == nil {
 			t.Errorf("%s: result.json existe", name)
 		}
 	}
@@ -766,7 +785,7 @@ func TestRunnerProperty(t *testing.T) {
 			if err != nil {
 				rt.Fatal(err)
 			}
-			if a := r.active(t); a > max {
+			if a := r.aliveWithinDeadline(t); a > max {
 				rt.Fatalf("%d activos con máximo %d", a, max)
 			}
 			if out.Done {

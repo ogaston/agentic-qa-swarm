@@ -51,3 +51,19 @@ con un gate de go-governance (U4) en cada transición, `GET /runs/{id}`, `/healt
 - `go-run-controller render-rehearsal-job --run <id> --flow <id>` imprime el Job sin tocar un clúster.
 - Límites conocidos (candidatas): sin fuente real de `FlowPlan` (U3): en real falla cerrado y el ensayo no pasa; el deploy
   espera dentro de `Launch` (bloquea el lazo hasta 12 min).
+
+## Runners y evidencia (U2-T05 / U2-T05b)
+
+- Fase `run`: un Job `runner-<run>-<flujo>` por flujo (tope `RUN_MAX_PARALLEL_RUNNERS`), evidencia en MinIO leída de vuelta
+  y comparada por hash: `logs.txt` primero y `result.json` (marcador) al final. Si `pods/log` falla, `result.json` lleva
+  `logs_unavailable: true`.
+- **Para U3: `run.done` NO implica corrida exitosa.** Significa que la evidencia de todos los flujos está guardada; el
+  resultado de cada flujo (`passed`, `failed` o `timeout`) está en `result.json.status`: léelo siempre.
+- Plazos: el del flujo es el `activeDeadlineSeconds` del Job; el de la corrida se mide desde `runs/<run>/started-at`
+  (escrito una sola vez en el almacén antes del primer Job, no depende de Jobs que se borran). Un Job vencido no se borra
+  hasta que su evidencia queda escrita. La ola de Jobs se valida entera antes de crear ninguno; si una creación falla, se
+  borran los creados en esa llamada.
+- Salvedad conocida: un Job vencido por el plazo de la CORRIDA cuya evidencia no se pudo escribir se conserva (no se borra) hasta el
+  reset de la corrida, y su pod puede vivir hasta su `activeDeadlineSeconds`; no se lanza nada nuevo y la corrida sale con
+  `FailReason`. Candidata: verificar que el reset borre esos Jobs. Si el marcador `started-at` no se puede escribir/leer, no se
+  lanza nada; la cuota ya consultada puede consultarse otra vez en el reintento.

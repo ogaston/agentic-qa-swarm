@@ -128,7 +128,13 @@ type flowResult struct {
 	FlowID     string `json:"flow_id"`
 	Status     string `json:"status"` // passed | failed | timeout
 	LogsSHA256 string `json:"logs_sha256,omitempty"`
+	// LogsUnavailable: pods/log falló; logs.txt va vacío por eso y no porque el runner no escribiera nada.
+	LogsUnavailable bool `json:"logs_unavailable,omitempty"`
 }
+
+// startKey es el origen persistente del plazo de la corrida: se escribe UNA vez, antes de crear el
+// primer Job, y no depende de ningún Job (los Jobs vencidos se borran, el origen no se mueve).
+func startKey(runID string) string { return "runs/" + runID + "/started-at" }
 
 // Launch implementa runctl.PhaseLauncher: solo la fase run, solo con ensayo_passed registrado.
 // Es idempotente por (corrida, flujo): el Job vivo se adopta (por nombre determinista y etiquetas)
@@ -175,15 +181,15 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 		return runctl.RunOutcome{}, fmt.Errorf("listando Jobs runner: %w", err)
 	}
 	byFlow := map[string]batchv1.Job{}
-	var first time.Time
 	for _, j := range jobs {
 		byFlow[j.Labels[LabelFlow]] = j
-		if t, err := time.Parse(time.RFC3339, j.Annotations[AnnotCreated]); err == nil && (first.IsZero() || t.Before(first)) {
-			first = t
-		}
+	}
+	first, started, err := l.readStart(ctx, run.ID)
+	if err != nil {
+		return runctl.RunOutcome{}, err
 	}
 	now := l.now()
-	runExpired := !first.IsZero() && now.Sub(first) > lim.RunTimeout
+	runExpired := started && now.Sub(first) > lim.RunTimeout
 
 	resolved := map[string]bool{} // flujo con evidencia leída de vuelta (cualquier estado del runner)
 	failed := map[string]string{} // flujo sin evidencia
@@ -203,7 +209,7 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 		j, has := byFlow[f.FlowID]
 		if !has {
 			if runExpired { // el plazo de la corrida venció antes de lanzarlo
-				l.settle(ctx, run, f.FlowID, ResTimeout, nil, resolved, failed)
+				l.settle(ctx, run, f.FlowID, ResTimeout, nil, false, resolved, failed)
 				continue
 			}
 			pending = append(pending, f)
@@ -226,9 +232,9 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 		case passed:
 			status = ResPassed
 		}
-		logs, _ := l.Kube.JobLogs(ctx, j.Name) // sin logs legibles: el resultado se guarda igual
-		l.settle(ctx, run, f.FlowID, status, logs, resolved, failed)
-		if expired { // nunca queda un Job colgado
+		logs, lerr := l.Kube.JobLogs(ctx, j.Name) // sin logs legibles: el resultado se guarda igual, marcado
+		ok := l.settle(ctx, run, f.FlowID, status, logs, lerr != nil, resolved, failed)
+		if expired && ok { // nunca queda un Job colgado, pero no se borra hasta que su flujo esté resuelto
 			if err := l.Kube.DeleteJob(ctx, j.Name); err != nil {
 				return runctl.RunOutcome{}, fmt.Errorf("eliminando el Job vencido: %w", err)
 			}
@@ -236,17 +242,11 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 	}
 
 	if len(pending) > 0 && active < max {
-		if len(jobs) == 0 { // primera ola: cuota y aprobación del workflow (gate de U4)
-			if err := l.authorize(ctx, run, fp.Workflow); err != nil {
-				return runctl.RunOutcome{}, err
-			}
-		}
 		cfg := l.Cfg
 		cfg.DeadlineSeconds = int64(lim.FlowTimeout / time.Second)
-		for _, f := range pending {
-			if active >= max {
-				break
-			}
+		// Toda la ola se construye y valida (funciones puras) ANTES de crear ningún Job.
+		var wave []*batchv1.Job
+		for _, f := range pending[:min(len(pending), max-active)] {
 			spec, err := l.Exec.Plan(f)
 			if err != nil {
 				return runctl.RunOutcome{}, fmt.Errorf("motor: %w", err)
@@ -255,10 +255,29 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 			if err != nil {
 				return runctl.RunOutcome{}, err
 			}
-			if err := l.Kube.CreateJob(ctx, job); err != nil && !apierrors.IsAlreadyExists(err) {
+			wave = append(wave, job)
+		}
+		if !started { // primera ola: cuota y aprobación del workflow (gate de U4), una vez por corrida
+			if err := l.authorize(ctx, run, fp.Workflow); err != nil {
+				return runctl.RunOutcome{}, err
+			}
+			if _, err := PutVerified(ctx, l.Evidence, startKey(run.ID), []byte(now.UTC().Format(time.RFC3339))); err != nil {
+				return runctl.RunOutcome{}, errors.New("no se pudo registrar el inicio de la corrida; no se lanza nada")
+			}
+			first = now
+		}
+		var created []string
+		for _, job := range wave {
+			err := l.Kube.CreateJob(ctx, job)
+			if err != nil && !apierrors.IsAlreadyExists(err) {
+				for _, name := range created { // sin lanzamientos parciales (best-effort)
+					_ = l.Kube.DeleteJob(ctx, name)
+				}
 				return runctl.RunOutcome{}, fmt.Errorf("creando el Job runner: %w", err)
 			}
-			active++
+			if err == nil {
+				created = append(created, job.Name)
+			}
 		}
 		return runctl.RunOutcome{}, nil
 	}
@@ -274,7 +293,7 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 		}
 		out.URIs = append(out.URIs, l.Evidence.URI(key(run.ID, f.FlowID, "logs.txt")), l.Evidence.URI(key(run.ID, f.FlowID, "result.json")))
 	}
-	if !first.IsZero() {
+	if started {
 		l.metric(func(o Observer) { o.RunDuration(now.Sub(first).Seconds()) })
 	}
 	return out, nil
@@ -295,6 +314,22 @@ func (l *Launcher) authorize(ctx context.Context, run runctl.Run, workflow strin
 		return fmt.Errorf("cuota o aprobación del workflow denegada: %s", dec.Reason)
 	}
 	return nil
+}
+
+// readStart lee el origen del plazo de la corrida. Solo ErrNotFound significa «aún no empezó».
+func (l *Launcher) readStart(ctx context.Context, runID string) (time.Time, bool, error) {
+	b, err := l.Evidence.Get(ctx, startKey(runID))
+	if errors.Is(err, ErrNotFound) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("leyendo el inicio de la corrida: %w", err)
+	}
+	t, perr := time.Parse(time.RFC3339, string(b))
+	if perr != nil {
+		return time.Time{}, false, errors.New("inicio de la corrida ilegible")
+	}
+	return t, true, nil
 }
 
 func (l *Launcher) hasEvFail(runID, flowID string) bool {
@@ -319,12 +354,13 @@ func (l *Launcher) readResult(ctx context.Context, runID, flowID string) (flowRe
 	return r, true, nil
 }
 
-// settle guarda logs y luego result.json (el marcador), cada uno leído de vuelta y comparado por hash.
-// Si cualquier escritura falla, el flujo cuenta como fallido y no se declara evidencia.
-func (l *Launcher) settle(ctx context.Context, run runctl.Run, flowID, status string, logs []byte, resolved map[string]bool, failed map[string]string) {
+// settle guarda logs y luego result.json (el marcador, siempre al final), cada uno leído de vuelta y
+// comparado por hash. Si cualquier escritura falla, el flujo cuenta como fallido, no se declara
+// evidencia y devuelve false (el llamador no borra el Job).
+func (l *Launcher) settle(ctx context.Context, run runctl.Run, flowID, status string, logs []byte, logsUnavailable bool, resolved map[string]bool, failed map[string]string) bool {
 	lg := l.log().With("run_id", run.ID, "flow_id", flowID, "trace_id", run.TraceID)
 	h := sha256Hex(logs)
-	res, _ := json.Marshal(flowResult{FlowID: flowID, Status: status, LogsSHA256: h})
+	res, _ := json.Marshal(flowResult{FlowID: flowID, Status: status, LogsSHA256: h, LogsUnavailable: logsUnavailable})
 	_, err := PutVerified(ctx, l.Evidence, key(run.ID, flowID, "logs.txt"), logs)
 	if err == nil {
 		_, err = PutVerified(ctx, l.Evidence, key(run.ID, flowID, "result.json"), res)
@@ -340,9 +376,10 @@ func (l *Launcher) settle(ctx context.Context, run runctl.Run, flowID, status st
 		failed[flowID] = "evidencia no escrita"
 		l.metric(func(o Observer) { o.EvidenceObject(ResError) })
 		lg.Warn("evidencia no escrita; el flujo cuenta como fallido")
-		return
+		return false
 	}
 	resolved[flowID] = true
 	l.metric(func(o Observer) { o.EvidenceObject(ResStored) })
 	lg.Info("flujo resuelto", "status", status)
+	return true
 }

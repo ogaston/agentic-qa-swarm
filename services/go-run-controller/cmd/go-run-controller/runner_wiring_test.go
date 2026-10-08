@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log/slog"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -170,7 +171,12 @@ func TestEvidenceSecretsNotLogged(t *testing.T) {
 	run := runctl.Run{ID: "r-1", EnsayoPassed: runctl.True, TraceID: "t"}
 	_, e1 := rl.Launch(ctx, runctl.PhaseRun, run) // el almacén inalcanzable corta antes de crear nada
 	// Mismo recorrido con evidencia en memoria: el contenido llega a settle y no debe salir en logs ni métricas.
-	rl.Evidence = &runner.MemEvidence{FailPut: func(string) error { return errString("falló " + content) }}
+	rl.Evidence = &runner.MemEvidence{FailPut: func(k string) error {
+		if strings.HasSuffix(k, "started-at") { // el marcador de inicio sí se escribe
+			return nil
+		}
+		return errString("falló " + content)
+	}}
 	rl.Kube = logKube{KubeAPI: runner.ClientGo{CS: cs, NS: "aqs-test"}, logs: []byte(content)}
 	_, e2 := rl.Launch(ctx, runctl.PhaseRun, run)
 	j, _ := cs.BatchV1().Jobs("aqs-test").Get(ctx, "runner-r-1-f1", metav1.GetOptions{})
@@ -206,4 +212,45 @@ type oneFlow struct{}
 func (oneFlow) Flows(run string) (plan.FlowPlan, error) {
 	return plan.FlowPlan{RunID: run, Workflow: "w", Flows: []plan.Flow{{FlowID: "f1", Name: "f1", Invariant: "i",
 		Steps: []plan.Step{{Method: "GET", Path: "/x", ExpectStatus: 200}}}}}, nil
+}
+
+func realLauncher(t *testing.T, m map[string]string, cs *fake.Clientset, log *slog.Logger) *runner.Launcher {
+	t.Helper()
+	c, err := loadConfig(envOf(m))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := buildConfig(c, cs, runctl.AllowAll(), runctl.NewMemStore(), &runctl.FakePublisher{}, &runctl.FakeAlerter{}, nil, nil, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg.Runners.(*runner.Launcher)
+}
+
+// El lanzador real recibe el logger del servicio (sin él, los fallos de evidencia no dejan rastro).
+func TestRealWiringLog(t *testing.T) {
+	log := slog.New(slog.DiscardHandler)
+	if rl := realLauncher(t, realEnv(), fake.NewSimpleClientset(), log); rl.Log != log {
+		t.Fatalf("Log = %v", rl.Log)
+	}
+}
+
+// El lanzador real crea sus Jobs en el namespace configurado (no en otro).
+func TestRealWiringNS(t *testing.T) {
+	m := realEnv()
+	m["RUN_TEST_NAMESPACE"] = "aqs-test-otro"
+	cs := fake.NewSimpleClientset()
+	rl := realLauncher(t, m, cs, nil)
+	if kc, ok := rl.Kube.(runner.ClientGo); !ok || kc.NS != "aqs-test-otro" || rl.Cfg.Namespace != "aqs-test-otro" {
+		t.Fatalf("Kube = %+v, Cfg.Namespace = %q", rl.Kube, rl.Cfg.Namespace)
+	}
+	rl.Plans = oneFlow{}
+	rl.Evidence = &runner.MemEvidence{}
+	if _, err := rl.Launch(context.Background(), runctl.PhaseRun, runctl.Run{ID: "r-1", EnsayoPassed: runctl.True, TraceID: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	js, _ := cs.BatchV1().Jobs("aqs-test-otro").List(context.Background(), metav1.ListOptions{})
+	if len(js.Items) != 1 {
+		t.Fatalf("Jobs en el namespace configurado: %d", len(js.Items))
+	}
 }
