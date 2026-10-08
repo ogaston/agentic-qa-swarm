@@ -4,14 +4,17 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from agent_reporter.errors import EvidenceUnavailable
+from agent_reporter.errors import EvidenceUnavailable, InvalidEvidenceUri
 
 
 def _rel(uri: str) -> str:
-    p = urlsplit(uri)
+    try:
+        p = urlsplit(uri)
+    except ValueError as e:  # p. ej. "s3://[/x": IPv6 mal formada
+        raise InvalidEvidenceUri("uri invalida") from e
     parts = [x for x in p.path.split("/") if x]
     if any(x in (".", "..") for x in parts):
-        raise EvidenceUnavailable("uri invalida")
+        raise InvalidEvidenceUri("uri invalida")
     return "/".join(parts)
 
 

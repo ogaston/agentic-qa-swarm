@@ -218,3 +218,36 @@ def test_uri_parity_with_jsonschema_format_checker():
         assert hand_ok is URI_CASES[uri], repr(uri)
         assert (py_ok is hand_ok) or uri.endswith("\n"), repr(uri)
         assert not (hand_ok and not py_ok), repr(uri)
+
+
+def _corpus():
+    from support import ROOT  # noqa: F401
+    import pathlib
+    return json.loads((pathlib.Path(__file__).parent / "fixtures" / "uri_ajv_corpus.json").read_text())
+
+
+def test_uri_corpus_never_laxer_than_ajv_formats_frozen():
+    """Corpus fijo (2948 URIs; resultados congelados de ajv-cli 5 / ajv-formats 3.0.1: 154 que el contrato rechaza)."""
+    from agent_reporter.report_model import validate_evidence_uris
+    corpus = _corpus()
+    assert len(corpus) > 2900 and sum(1 for ok in corpus.values() if not ok) > 2000
+    laxer = [u for u, ok in corpus.items() if not validate_evidence_uris({"run_id": "r", "uris": [u]}) and not ok]
+    assert laxer == []
+    for u in ("s3://x%zz", "s3://%", "s3://[", "s3://x[y", "https://x%4y", "s3://a#b#c"):
+        assert validate_evidence_uris({"run_id": "r", "uris": [u]}), u
+
+
+def test_uri_corpus_never_laxer_than_jsonschema_format_checker():
+    from jsonschema import Draft202012Validator, FormatChecker
+    from support import ROOT
+    from agent_reporter.report_model import validate_evidence_uris
+    schema = json.loads((ROOT / "contracts/plans/evidence-uris.schema.json").read_text())
+    v = Draft202012Validator(schema, format_checker=FormatChecker())
+    laxer = [u for u in _corpus() if not validate_evidence_uris({"run_id": "r", "uris": [u]}) and list(v.iter_errors({"run_id": "r", "uris": [u]}))]
+    assert laxer == []
+
+
+def test_uri_valid_platform_shapes_accepted():
+    from agent_reporter.report_model import validate_evidence_uris
+    for u in ("s3://aqs-evidence/runs/run-1/flow-1/logs.txt", "https://h:8080/a%20b?q=1&r=2#frag"):
+        assert validate_evidence_uris({"run_id": "r", "uris": [u]}) == [], u

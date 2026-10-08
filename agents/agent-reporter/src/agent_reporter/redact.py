@@ -17,7 +17,7 @@ _PRIVATE_KEY = re.compile(
 _URL_CRED = re.compile(
     r"(?<![A-Za-z0-9+.-])(?P<scheme>[A-Za-z][A-Za-z0-9+.-]{0,31}://)[^/\s@:]*:[^/\s]*@"
 )
-_VALUE = r"""(?:"(?P<dq>(?:[^"\\\r\n]|\\.)*)"|'(?P<sq>(?:[^'\\\r\n]|\\.)*)'|(?P<raw>%s))"""
+_VALUE = r"""(?:"(?P<dq>(?:[^"\\\r\n]|\\.)*)"|'(?P<sq>(?:[^'\\\r\n]|\\.)*)'|(?P<uq>["'][^\r\n]+)|(?P<raw>%s))"""
 _AUTH_HEADER = re.compile(
     r"""(?i)(?P<k>authorization["']?[ \t]*[=:][ \t]*)""" + _VALUE % r"[^\r\n]+"
 )
@@ -38,6 +38,12 @@ def _tag(kind: str) -> str:
 
 
 def _repl_value(m, head: str, kind: str, counts: Counter) -> str:
+    if m.group("uq") is not None:  # comilla sin cerrar (log truncado): se redacta hasta el fin de linea
+        uq = m.group("uq")
+        if uq[1:].startswith("[REDACTED:"):
+            return m.group(0)
+        counts[kind] += 1
+        return f"{head}{uq[0]}{_tag(kind)}"
     q = "\"" if m.group("dq") is not None else ("'" if m.group("sq") is not None else "")
     val = next(v for v in (m.group("dq"), m.group("sq"), m.group("raw")) if v is not None)
     if val.startswith("[REDACTED:") or val == "":

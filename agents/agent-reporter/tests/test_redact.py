@@ -109,7 +109,7 @@ def test_redact_secret_in_result_json_is_redacted(tmp_path):
 FORMS = {
     "authorization": ['{"Authorization": "Basic dXNlcjpwYXNzd29yZA=="}', "Authorization: Basic dXNlcjpwYXNzd29yZA==", "'authorization'='Digest zzTailQ9'"],
     "bearer": ["Bea" + "rer abcDEF123456", "x-h: bea" + "rer Zz9.yy8-tail_01", "{\"h\":\"Bea" + "rer abcDEF123456\"}"],
-    "password": ['{"password":"pa\\"ss-tail-secret"}', "password='pa ss tail'", "passwd: tailsecret1", "db_password = tailsecret1"],
+    "password": ['{"password":"pa\\"ss-tail-secret"}', "password='pa ss tail'", "password='it\\'s-tail'", 'password="unterminated-secret-tail', "password='unterminated-tail", "passwd: tailsecret1", "db_password = tailsecret1"],
     "url": ["postgres" + "://user:p@ss@host/db", "https" + "://u:pw@h/x", "redis" + "://:pw@h:6379"],
     "token": ['{"access_token": "tailsecret1"}', "TOKEN=tailsecret1", "api-key: tailsecret1"],
     "private_key": ["-----BEGIN EC PRIV" + "ATE KEY-----\nTAILKEY\n-----END EC PRIV" + "ATE KEY-----", "-----BEGIN PRIV" + "ATE KEY-----\nTAILKEY"],

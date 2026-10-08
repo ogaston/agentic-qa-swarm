@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from agent_reporter.errors import (
     BudgetExceeded,
+    InvalidEvidenceUri,
     NoEvidence,
     ReportRejected,
     StoreUnavailable,
@@ -105,7 +106,10 @@ def prepare(run_id: str, uris, reader: EvidenceReader, limits: Limits) -> Prepar
     truncated = 0
     redactions: Counter = Counter()
     for u in uris:
-        raw = reader.get(u)
+        try:
+            raw = reader.get(u)
+        except InvalidEvidenceUri as e:  # la URI no cumple el contrato: sin evidencia valida (422), no 500/502
+            raise NoEvidence("uri invalida") from e
         fl = _flow_of(u)
         if fl is not None:
             flows.setdefault(fl, "unknown")

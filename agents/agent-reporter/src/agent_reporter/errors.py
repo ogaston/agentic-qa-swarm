@@ -10,6 +10,10 @@ class EvidenceUnavailable(ReporterError):
     pass
 
 
+class InvalidEvidenceUri(EvidenceUnavailable):
+    """El lector no pudo interpretar la URI: no cumple el contrato (se trata como NoEvidence, 422)."""
+
+
 class BudgetExceeded(ReporterError):
     pass
 

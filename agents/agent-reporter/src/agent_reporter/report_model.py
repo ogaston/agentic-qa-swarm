@@ -6,8 +6,14 @@ from __future__ import annotations
 
 import re
 
-# Espejo de pattern ^(s3|https):// + format uri (RFC 3986, ASCII); fullmatch: `$` admitiria un "\n" final.
-_URI_RE = re.compile(r"(s3|https)://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]*")
+# Espejo ESTRICTO de pattern ^(s3|https):// + format uri (RFC 3986): lista cerrada de caracteres, `%` solo como
+# %HH, sin corchetes (IPv6 no se necesita), un unico `?` y un unico `#`. Nunca mas laxo que ajv-formats (corpus
+# congelado en tests/fixtures). fullmatch: `$` admitiria un "\n" final.
+_PC = r"(?:[A-Za-z0-9\-._~:/@!$&'()*+,;=]|%[0-9A-Fa-f]{2})"
+_AUTH = r"(?:[A-Za-z0-9\-._~!$&'()*+,;=]|%[0-9A-Fa-f]{2})*(?::[0-9]*)?"  # sin '@' ni userinfo; puerto numerico
+_URI_RE = re.compile(
+    r"(s3|https)://" + _AUTH + r"(?:/" + _PC + r"*)?(?:\?(?:" + _PC + r"|\?)*)?(?:#(?:" + _PC + r"|\?)*)?"
+)
 
 
 def _is_uri(x) -> bool:

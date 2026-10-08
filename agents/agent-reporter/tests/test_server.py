@@ -102,3 +102,23 @@ def test_server_event_published_after_store_via_http(srv):
     llm.register(prepare(RUN, uris, svc.reader, svc.limits).prompt, resp("bug", [bug_finding()]))
     call(s, "POST", "/v1/report", {"run_id": RUN, "evidence_uris": uris})
     assert len(svc.publisher.events) == 1 and svc.publisher.events[0]["type"] == "report.ready"
+
+
+def test_server_malformed_uri_is_422_no_evidence_not_500(srv):
+    s, svc, llm, uris = srv
+    code, body = call(s, "POST", "/v1/report", {"run_id": RUN, "evidence_uris": ["s3://[/x/y/result.json"]})
+    assert code == 422 and json.loads(body)["error"] == "no_evidence"
+
+
+def test_reader_invalid_uri_maps_to_no_evidence_even_if_validator_accepts(tmp_path, monkeypatch):
+    """Defensa en profundidad: aunque el validador deje pasar una URI, el lector que no la interpreta da 422."""
+    from agent_reporter import reporter
+    from agent_reporter.errors import InvalidEvidenceUri
+    from agent_reporter.fakes.evidence import _rel
+    from agent_reporter.server import handle_report
+    with pytest.raises(InvalidEvidenceUri):
+        _rel("s3://[/x")
+    monkeypatch.setattr(reporter, "validate_evidence_uris", lambda d: [])
+    svc = Service(DirEvidenceReader(tmp_path), FakeLLM(), MemoryReportStore(), RecordingPublisher(), Limits())
+    code, body = handle_report(svc, json.dumps({"run_id": RUN, "evidence_uris": ["s3://[/x/y/result.json"]}).encode())
+    assert (code, body["error"]) == (422, "no_evidence")
