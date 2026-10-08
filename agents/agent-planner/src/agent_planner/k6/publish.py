@@ -44,14 +44,14 @@ def publish_flows(plan, store, *, k6=inspect_with_k6) -> list[PublishedFlow]:
             if sha256(store.get(key)) != sha256(data):
                 raise OSError(f"lectura de vuelta no coincide: {key}")
             out.append(PublishedFlow(fid, key, sha256(data)))
-    except BaseException:
+    except BaseException as err:
         for key, prev in written:
             try:
                 if prev is None:
                     store.delete(key)
                 else:
                     store.put(key, prev)
-            except Exception:
-                pass
+            except Exception as rb:
+                err.add_note(f"rollback fallo para {key}: {rb!r}")
         raise
     return out

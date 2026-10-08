@@ -10,6 +10,9 @@ KEY_RE = re.compile(r"flows/([a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?)/([a-z0-9]([a-z0
 
 
 class FlowStore(Protocol):
+    """Puerto de almacen. get de una clave ausente DEBE lanzar KeyError o FileNotFoundError
+    (publish_flows lo usa para distinguir claves nuevas de sobrescrituras)."""
+
     def put(self, key: str, data: bytes) -> None: ...
     def get(self, key: str) -> bytes: ...
     def delete(self, key: str) -> None: ...

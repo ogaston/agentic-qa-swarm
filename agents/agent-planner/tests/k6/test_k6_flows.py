@@ -170,6 +170,44 @@ def test_publish_dir_exact_files_and_idempotent(tmp_path):
     assert r1 == r2 and before == after
 
 
+HOSTILE_KEYS = ["flows/../x/a.k6.js", "flows/Run/a.k6.js", "flows/a/b.k6.js/../../x",
+                "flows/a/b.k6.js\n", "flows/a\n/b.k6.js", "flows/a/b.k6.js/", "/flows/a/b.k6.js",
+                "x/flows/a/b.k6.js"]
+
+
+@pytest.mark.parametrize("key", HOSTILE_KEYS)
+def test_publish_dir_store_hostile_keys_all_ops(tmp_path, key):
+    s = DirFlowStore(tmp_path)
+    for op in (lambda: s.put(key, b"x"), lambda: s.get(key), lambda: s.delete(key)):
+        with pytest.raises(ValueError):
+            op()
+    assert list(tmp_path.rglob("*")) == []
+
+
+@pytest.mark.parametrize("run,flow", [("run\n", "f1"), ("run", "f1\n"), ("Run", "f1"), ("run", "../f"),
+                                      ("", "f1"), ("run", "a/b")])
+def test_flow_key_rejects_hostile_ids(run, flow):
+    from agent_planner.k6.store import flow_key
+    with pytest.raises(ValueError):
+        flow_key(run, flow)
+
+
+def test_publish_rollback_failure_is_noted():
+    class Dead(FakeFlowStore):
+        def put(self, key, data):
+            if self.puts >= 1:
+                self.puts += 1
+                raise OSError("muerto")
+            super().put(key, data)
+
+        def delete(self, key):
+            raise OSError("delete muerto")
+
+    with pytest.raises(OSError) as e:
+        publish_flows(TRES, Dead(), k6=ok_k6)
+    assert any("rollback fallo" in n for n in e.value.__notes__)
+
+
 def test_publish_dir_store_rejects_traversal(tmp_path):
     with pytest.raises(ValueError):
         DirFlowStore(tmp_path).put("flows/../x/a.k6.js", b"x")
