@@ -56,7 +56,7 @@ Desde la raíz del worktree.
   ```bash
   cd services/go-run-controller && go test -run 'Rehearsal(BrokenPlan|Exhausted|NeverSkipped)' -v ./... | grep -E '^(--- |ok|FAIL)'
   ```
-  Esperado: `--- PASS`; las pruebas **leen de vuelta** del clientset falso la lista de Jobs: con un plan roto o un ensayo que siempre falla hay **3** Jobs `rehearsal-<run>-*`, **0** Jobs `runner-*`, la corrida termina en `failed` pasando por `resetting`, y `Alerter` recibió 1 handoff.
+  Esperado: `--- PASS`; las pruebas **leen de vuelta** del clientset falso la lista de Jobs: con un ensayo que siempre falla hay **3** Jobs `rehearsal-<run>-*`; con un plan roto o vacío hay **0** Jobs de ensayo (el plan se valida antes de tocar Kubernetes), 3 intentos fallidos y 1 handoff, **0** Jobs `runner-*`, la corrida termina en `failed` pasando por `resetting`, y `Alerter` recibió 1 handoff.
 
 - [ ] **CA-3** — El gate no se puede omitir ni siquiera configurándolo.
   ```bash
@@ -68,7 +68,7 @@ Desde la raíz del worktree.
   ```bash
   t=$(mktemp -d); (cd services/go-run-controller && go build -o "$t/rc" ./cmd/go-run-controller)
   "$t/rc" render-rehearsal-job --run r-1 --flow checkout > "$t/job.yaml"
-  grep -c -i -E 'LLM|API_KEY|TOKEN|secretKeyRef|envFrom' "$t/job.yaml"
+  grep -v automountServiceAccountToken "$t/job.yaml" | grep -c -i -E 'LLM|API_KEY|TOKEN|secretKeyRef|envFrom'
   docker run --rm -i --security-opt label=disable ghcr.io/yannh/kubeconform:v0.6.7 -strict -summary - < "$t/job.yaml"
   docker run --rm --security-opt label=disable -v "$PWD":/project:z -v "$t":/in:z -w /project openpolicyagent/conftest:v0.56.0 test /in/job.yaml --policy policy --all-namespaces
   rm -rf "$t"

@@ -58,7 +58,7 @@ Desde la raíz del worktree.
   ```bash
   t=$(mktemp -d); (cd services/go-run-controller && go build -o "$t/rc" ./cmd/go-run-controller)
   "$t/rc" render-runner-job --run r-1 --flow checkout > "$t/job.yaml"
-  grep -c -i -E 'LLM|API_KEY|TOKEN|SECRET|PASSWORD|secretKeyRef|envFrom' "$t/job.yaml"
+  grep -v automountServiceAccountToken "$t/job.yaml" | grep -c -i -E 'LLM|API_KEY|TOKEN|SECRET|PASSWORD|secretKeyRef|envFrom'
   yq -N '.spec.template.metadata.labels' "$t/job.yaml" 2>/dev/null || docker run --rm -i mikefarah/yq:4.44.3 -N '.spec.template.metadata.labels' < "$t/job.yaml"
   docker run --rm -i --security-opt label=disable ghcr.io/yannh/kubeconform:v0.6.7 -strict -summary - < "$t/job.yaml"
   docker run --rm --security-opt label=disable -v "$PWD":/project:z -v "$t":/in:z -w /project openpolicyagent/conftest:v0.56.0 test /in/job.yaml --policy policy --all-namespaces
