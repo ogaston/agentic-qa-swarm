@@ -141,6 +141,8 @@ spec:
           env:
             - name: TZ
               value: UTC
+            - name: SSL_CERT_FILE
+              value: /etc/aqs/minio-ca/ca.crt
             - name: RUN_PHASES
               value: real
             - name: RUN_TEST_NAMESPACE
@@ -220,6 +222,9 @@ spec:
             - name: evidence
               mountPath: /etc/aqs/evidence
               readOnly: true
+            - name: minio-ca
+              mountPath: /etc/aqs/minio-ca
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -237,6 +242,13 @@ spec:
           secret:
             secretName: aqs-evidence-s3
             defaultMode: 0440
+        - name: minio-ca
+          secret:
+            secretName: minio-tls
+            defaultMode: 0444
+            items:
+              - key: ca.crt
+                path: ca.crt
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -298,6 +310,8 @@ spec:
           env:
             - name: TZ
               value: UTC
+            - name: SSL_CERT_FILE
+              value: /etc/aqs/minio-ca/ca.crt
             - name: WARM_NAMESPACE
               value: aqs-test
             - name: LISTEN_ADDR
@@ -352,6 +366,9 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+            - name: minio-ca
+              mountPath: /etc/aqs/minio-ca
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -365,6 +382,13 @@ spec:
             claimName: go-warm-manager-data
         - name: tmp
           emptyDir: {}
+        - name: minio-ca
+          secret:
+            secretName: minio-tls
+            defaultMode: 0444
+            items:
+              - key: ca.crt
+                path: ca.crt
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

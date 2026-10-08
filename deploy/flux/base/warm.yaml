@@ -189,7 +189,6 @@ spec:
       port: 6379
       targetPort: redis
 ---
----
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -198,8 +197,11 @@ metadata:
 spec:
   schedule: "0 * * * *"
   concurrencyPolicy: Forbid
+  # Un Job Pending (podAffinity sin pod go-reset) no debe bloquear los siguientes con Forbid.
+  startingDeadlineSeconds: 300
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 1800
       template:
         spec:
           restartPolicy: Never
@@ -268,7 +270,7 @@ spec:
             - name: tmp
               emptyDir: {}
 ---
-# Domingo 03:30, desfasado de housekeeping (03:00) e idle-check (:x5): sin Lease aun, no hay exclusion entre procesos (candidata).
+# Domingo 03:30, desfasado de housekeeping (cada hora en :00) e idle-check (:x5): sin Lease aun, no hay exclusion entre procesos (candidata).
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -277,8 +279,11 @@ metadata:
 spec:
   schedule: "30 3 * * 0"
   concurrencyPolicy: Forbid
+  # Un Job Pending (podAffinity sin pod go-reset) no debe bloquear los siguientes con Forbid.
+  startingDeadlineSeconds: 300
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 1800
       template:
         spec:
           restartPolicy: Never
@@ -356,8 +361,11 @@ metadata:
 spec:
   schedule: "5,15,25,35,45,55 * * * *"
   concurrencyPolicy: Forbid
+  # Un Job Pending (podAffinity sin pod go-reset) no debe bloquear los siguientes con Forbid.
+  startingDeadlineSeconds: 300
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 1800
       template:
         spec:
           restartPolicy: Never
@@ -426,8 +434,8 @@ spec:
             - name: tmp
               emptyDir: {}
 ---
-# Burst de una corrida: 1 ensayo + 3 runners (RUN_MAX_PARALLEL_RUNNERS) = 4 Jobs; warm base = 3 pods + 2 de surge en rollouts.
-# 15 pods, 10 Jobs (reintentos), limits 6 CPU / 6Gi (4 x 500m/512Mi + warm 1.75/1.1Gi + margen), requests 2 CPU / 3Gi.
+# Burst de una corrida: 1 ensayo (250m/128Mi) + 3 runners (500m/256Mi, RUN_MAX_PARALLEL_RUNNERS) = 4 Jobs; warm base = 3 pods + 2 de surge.
+# limits: Jobs 1,75 CPU/896Mi + warm 1,75 CPU/1,1Gi = 3,5 CPU/2Gi -> 6 CPU/6Gi deja margen; requests 2 CPU/3Gi.
 apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -436,7 +444,8 @@ metadata:
 spec:
   hard:
     pods: "15"
-    count/jobs.batch: "10"
+    # Los Jobs de ensayo y runner no llevan ttlSecondsAfterFinished ni se limpian (candidata de codigo): la cuota cuenta Jobs retenidos.
+    count/jobs.batch: "100"
     requests.cpu: "2"
     requests.memory: 3Gi
     limits.cpu: "6"

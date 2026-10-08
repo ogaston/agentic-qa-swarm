@@ -33,7 +33,13 @@ tests:
         alertname: AqsUpstreamCircuitOpen
         exp_alerts:
           - exp_labels: {severity: critical, upstream: go-reset}
-            exp_annotations: {summary: "Circuito abierto hacia go-reset"}
+            exp_annotations: {summary: "Circuito abierto hacia go-reset", description: "INACTIVA: depende de aqs_upstream_circuit_open, que aun no existe (circuito del controlador pendiente)."}
+      - eval_time: 3m
+        alertname: AqsTestJobFailed
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: AqsWarmQuarantined
+        exp_alerts: []
       - eval_time: 6m
         alertname: AqsTestJobFailed
         exp_alerts:
