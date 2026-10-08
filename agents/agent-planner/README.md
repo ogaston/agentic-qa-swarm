@@ -28,6 +28,9 @@ Convierte un `SurfaceArtifact` y un workflow en un `FlowPlan` valido contra
 | `PLANNER_MAX_INPUT_TOKENS` | `8000` | si `ceil(len(prompt)/4)` lo supera: `BudgetExceeded("input")` sin llamar al modelo |
 | `PLANNER_MAX_OUTPUT_TOKENS` | `4000` | se pasa como `max_tokens`; si la salida declara mas: `BudgetExceeded("output")` |
 | `PLANNER_MAX_FLOWS` / `PLANNER_MAX_STEPS` | `10` / `20` | topes de forma del plan |
+| (constante) `MAX_WORKFLOW_LEN` | `128` | largo maximo de `workflow`; mayor: `422 invalid_request` |
+| (constante) `MAX_BODY` | `256 KiB` | cuerpo maximo de `POST /v1/plan`; mayor: `413` |
+| (constante) `HANDLER_TIMEOUT_S` | `10` | timeout de lectura de socket por peticion |
 | `PLANNER_PORT` / `PLANNER_HOST` | `8080` / `0.0.0.0` | escucha |
 | `LLM_PROVIDER` | (obligatorio) | solo `fake`; otro valor: «proveedor no implementado» (el real es U3-T07) |
 | `PLANNER_ALLOW_FAKE` | | debe ser `true` para `fake`; con `PLANNER_ENV=prod` el arranque se rechaza |

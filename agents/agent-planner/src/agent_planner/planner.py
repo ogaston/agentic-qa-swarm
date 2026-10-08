@@ -10,6 +10,7 @@ from .schemas_loader import validator
 from .validate import parse_and_validate
 
 FlowPlan = dict
+MAX_WORKFLOW_LEN = 128  # caracteres; mas largo es invalid_request (422)
 
 
 def est_tokens(text: str) -> int:
@@ -17,7 +18,7 @@ def est_tokens(text: str) -> int:
 
 
 def plan(surface, workflow, llm: LLMClient, limits: Limits, usage: dict | None = None) -> FlowPlan:
-    if not isinstance(workflow, str) or not workflow or len(workflow) > 128:
+    if not isinstance(workflow, str) or not workflow or len(workflow) > MAX_WORKFLOW_LEN:
         raise InvalidRequest("workflow_invalido")
     if not isinstance(surface, dict) or next(validator("surface-artifact.schema.json").iter_errors(surface), None):
         raise NoSurface("superficie_invalida")

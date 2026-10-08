@@ -156,3 +156,9 @@ def test_server_no_leak_marker_in_response_logs_and_metrics(make, caplog):
     odd = dict(surf, run_id="run con espacios " + marker)
     s.req("POST", "/v1/plan", {"surface": odd, "workflow": "wf-1"})
     assert caplog.records and marker not in caplog.text and "desconocido" in caplog.text
+
+
+def test_server_safe_run_id_rejects_trailing_newline():
+    from agent_planner.server import _safe_run_id
+    assert _safe_run_id({"surface": {"run_id": "run-1"}}) == "run-1"
+    assert _safe_run_id({"surface": {"run_id": "run-1\n"}}) == "desconocido"

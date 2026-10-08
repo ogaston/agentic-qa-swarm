@@ -12,8 +12,9 @@ from .llm import LLMClient, LLMError
 from .planner import plan
 
 MAX_BODY = 256 * 1024
+HANDLER_TIMEOUT_S = 10  # lectura de socket por peticion (anti conexion lenta)
 RESULTS = ("ok", "no_surface", "plan_rejected", "invalid_request", "budget_exceeded", "llm_unavailable")
-_SAFE_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_SAFE_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
 log = logging.getLogger("agent_planner")
 
 
@@ -43,7 +44,7 @@ def _safe_run_id(body) -> str:
         rid = body["surface"]["run_id"]
     except (KeyError, TypeError):
         return "desconocido"
-    return rid if isinstance(rid, str) and _SAFE_ID.match(rid) else "desconocido"
+    return rid if isinstance(rid, str) and _SAFE_ID.fullmatch(rid) else "desconocido"
 
 
 def _log(run_id: str, result: str, reason: str) -> None:
@@ -54,7 +55,7 @@ def make_server(host: str, port: int, llm: LLMClient, limits: Limits) -> Threadi
     metrics = Metrics()
 
     class Handler(BaseHTTPRequestHandler):
-        timeout = 10
+        timeout = HANDLER_TIMEOUT_S
         protocol_version = "HTTP/1.1"
 
         def log_message(self, *a):  # sin log de acceso: puede contener rutas

@@ -7,7 +7,7 @@ import re
 from .errors import Limits, PlanRejected
 from .schemas_loader import validator
 
-FLOW_ID_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?$")
+FLOW_ID_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?")
 
 
 def _bad_const(_):
@@ -37,7 +37,7 @@ def parse_and_validate(text: str, surface: dict, workflow: str, limits: Limits) 
     seen = set()
     for i, fl in enumerate(flows):
         fid = fl["flow_id"]
-        if not FLOW_ID_RE.match(fid):
+        if not FLOW_ID_RE.fullmatch(fid):
             raise PlanRejected(f"flow_id_invalido:{i}")
         if fid in seen:
             raise PlanRejected(f"flow_id_duplicado:{i}")

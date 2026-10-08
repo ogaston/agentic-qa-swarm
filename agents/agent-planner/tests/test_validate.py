@@ -61,7 +61,7 @@ def test_validate_runid_and_workflow_mismatch():
             run(p)
 
 
-@pytest.mark.parametrize("fid", ["Flow", "-a", "a-", "a_b", "a" * 43, "", "a b"])
+@pytest.mark.parametrize("fid", ["Flow", "-a", "a-", "a_b", "a" * 43, "", "a b", "f1\n", "\nf1", "a\n"])
 def test_validate_flow_id_invalid(fid):
     p = good_plan(); p["flows"][0]["flow_id"] = fid
     with pytest.raises(PlanRejected):
@@ -94,3 +94,11 @@ def test_validate_too_many_steps():
     with pytest.raises(PlanRejected) as e:
         run(p)
     assert e.value.reason.startswith("demasiados_pasos")
+
+
+def test_validate_workflow_too_long_is_invalid_request():
+    from agent_planner.errors import InvalidRequest
+    from agent_planner.fakes.fake_llm import FakeLLM
+    from agent_planner.planner import MAX_WORKFLOW_LEN, plan
+    with pytest.raises(InvalidRequest):
+        plan(SURFACE, "w" * (MAX_WORKFLOW_LEN + 1), FakeLLM(), Limits())
