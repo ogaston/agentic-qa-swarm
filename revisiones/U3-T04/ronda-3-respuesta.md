@@ -1,0 +1,2 @@
+F-04: Corregido en la ronda 3: regex de URI estricta por construccion (sin %mal, sin corchetes, un solo ? y #, puerto numerico); corpus de 2948 URIs congelado de ajv-formats corrido contra el manual (0 laxas) y contra jsonschema+FormatChecker (0 laxas), mutaciones rojas; URI invalida en el lector -> InvalidEvidenceUri -> NoEvidence (422), "s3://[/x/y/result.json" ya no da 500, con mutaciones.
+F-06: Corregido: password='it\'s-tail' en FORMS y comilla sin cerrar redactada. Fuera de alcance (candidatas): lookbehind de _JWT con prefijo pegado; contrasena de URL con "/".
