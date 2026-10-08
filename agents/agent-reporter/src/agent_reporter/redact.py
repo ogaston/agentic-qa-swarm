@@ -17,18 +17,20 @@ _PRIVATE_KEY = re.compile(
 _URL_CRED = re.compile(
     r"(?<![A-Za-z0-9+.-])(?P<scheme>[A-Za-z][A-Za-z0-9+.-]{0,31}://)[^/\s@:]*:[^/\s]*@"
 )
-_VALUE = r"""(?:"(?P<dq>(?:[^"\\\r\n]|\\.)*)"|'(?P<sq>(?:[^'\\\r\n]|\\.)*)'|(?P<uq>["'][^\r\n]+)|(?P<raw>%s))"""
+# `bq`: valor entre comillas ESCAPADAS (\"v\"), el JSON serializado dentro de un campo de cadena de otro JSON.
+_VALUE = r"""(?:\\"(?P<bq>[^"\\\r\n]*)\\"|"(?P<dq>(?:[^"\\\r\n]|\\.)*)"|'(?P<sq>(?:[^'\\\r\n]|\\.)*)'|(?P<uq>["'][^\r\n]+)|(?P<raw>%s))"""
 _AUTH_HEADER = re.compile(
-    r"""(?i)(?P<k>authorization["']?[ \t]*[=:][ \t]*)""" + _VALUE % r"[^\r\n]+"
+    r"""(?i)(?P<k>authorization(?:\\?["'])?[ \t]*[=:][ \t]*)""" + _VALUE % r"[^\r\n]+"
 )
-_BEARER = re.compile(r"(?i)\b(?P<k>bearer)[ \t]+[A-Za-z0-9._~+/=-]{4,}")
+# Limite izquierdo: no alfanumerico, o un escape JSON (\n, \t...) que deja la `n`/`t` pegada a la palabra.
+_BEARER = re.compile(r"(?i)(?:(?<![A-Za-z0-9_])|(?<=\\[nrtbf]))(?P<k>bearer)[ \t]+[A-Za-z0-9._~+/=-]{4,}")
 _JWT = re.compile(
-    r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
+    r"(?:(?<![A-Za-z0-9_-])|(?<=\\[nrtbf]))eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
 )
 _AWS = re.compile(r"AKIA[0-9A-Z]{16}")
 _GH = re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")
 _ASSIGN = re.compile(
-    r"(?i)(?P<key>" + _KEYWORDS + r"""[\w-]{0,32}["']?)(?P<sep>[ \t]*[=:][ \t]*)"""
+    r"(?i)(?P<key>" + _KEYWORDS + r"""[\w-]{0,32}(?:\\?["'])?)(?P<sep>[ \t]*[=:][ \t]*)"""
     + _VALUE % r"[^\s\"',;&]+"
 )
 
@@ -44,6 +46,11 @@ def _repl_value(m, head: str, kind: str, counts: Counter) -> str:
             return m.group(0)
         counts[kind] += 1
         return f"{head}{uq[0]}{_tag(kind)}"
+    if m.group("bq") is not None:  # comillas escapadas: se conserva la forma \"<etiqueta>\"
+        if m.group("bq").startswith("[REDACTED:") or m.group("bq") == "":
+            return m.group(0)
+        counts[kind] += 1
+        return f'{head}\\"{_tag(kind)}\\"'
     q = "\"" if m.group("dq") is not None else ("'" if m.group("sq") is not None else "")
     val = next(v for v in (m.group("dq"), m.group("sq"), m.group("raw")) if v is not None)
     if val.startswith("[REDACTED:") or val == "":
