@@ -6,7 +6,13 @@ from __future__ import annotations
 
 import re
 
-_URI = re.compile(r"^(s3|https)://[^\s]+$")
+# Espejo de pattern ^(s3|https):// + format uri (RFC 3986, ASCII); fullmatch: `$` admitiria un "\n" final.
+_URI_RE = re.compile(r"(s3|https)://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]*")
+
+
+def _is_uri(x) -> bool:
+    return isinstance(x, str) and _URI_RE.fullmatch(x) is not None
+
 METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
 VERDICTS = ("bug", "sin-hallazgos", "inconcluso")
 _FINDING_KEYS = {"finding_id", "root_cause", "invariant", "method", "path", "evidence_uris"}
@@ -25,7 +31,7 @@ def validate_evidence_uris(doc) -> list[str]:
     u = doc["uris"]
     if not isinstance(u, list) or not u:
         errs.append("uris vacio")
-    elif not all(isinstance(x, str) and _URI.match(x) for x in u):
+    elif not all(_is_uri(x) for x in u):
         errs.append("uri invalida")
     return errs
 
@@ -59,6 +65,6 @@ def validate_report(r) -> list[str]:
         if not (isinstance(x["path"], str) and x["path"].startswith("/")):
             errs.append("hallazgo: path")
         u = x["evidence_uris"]
-        if not isinstance(u, list) or not u or not all(isinstance(i, str) and _URI.match(i) for i in u):
+        if not isinstance(u, list) or not u or not all(_is_uri(i) for i in u):
             errs.append("hallazgo: evidence_uris")
     return errs

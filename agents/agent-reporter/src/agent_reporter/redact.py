@@ -12,23 +12,38 @@ _KEYWORDS = r"(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)"
 _PRIVATE_KEY = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
 )
-_URL_CRED = re.compile(r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*://)[^/\s@:]+:[^/\s@]*@")
-_AUTH_HEADER = re.compile(r"(?i)(?P<k>authorization[ \t]*:)[ \t]*[^\r\n]*")
+# Todos los patrones arrancan en un limite (lookbehind) o llevan cotas {0,N}: el costo es lineal
+# (una cadena de 64 KiB de letras, "token", "eyJ"... no dispara backtracking cuadratico).
+_URL_CRED = re.compile(
+    r"(?<![A-Za-z0-9+.-])(?P<scheme>[A-Za-z][A-Za-z0-9+.-]{0,31}://)[^/\s@:]*:[^/\s]*@"
+)
+_VALUE = r"""(?:"(?P<dq>(?:[^"\\\r\n]|\\.)*)"|'(?P<sq>(?:[^'\\\r\n]|\\.)*)'|(?P<raw>%s))"""
+_AUTH_HEADER = re.compile(
+    r"""(?i)(?P<k>authorization["']?[ \t]*[=:][ \t]*)""" + _VALUE % r"[^\r\n]+"
+)
 _BEARER = re.compile(r"(?i)\b(?P<k>bearer)[ \t]+[A-Za-z0-9._~+/=-]{4,}")
-_JWT = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+_JWT = re.compile(
+    r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
+)
 _AWS = re.compile(r"AKIA[0-9A-Z]{16}")
 _GH = re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")
 _ASSIGN = re.compile(
-    r"""(?ix)
-    (?P<key>["']?[\w.-]{0,32}""" + _KEYWORDS + r"""[\w-]{0,32}["']?)
-    (?P<sep>[ \t]*[=:][ \t]*)
-    (?:"(?P<dq>[^"\r\n]*)"|'(?P<sq>[^'\r\n]*)'|(?P<raw>[^\s"',;&]+))
-    """
+    r"(?i)(?P<key>" + _KEYWORDS + r"""[\w-]{0,32}["']?)(?P<sep>[ \t]*[=:][ \t]*)"""
+    + _VALUE % r"[^\s\"',;&]+"
 )
 
 
 def _tag(kind: str) -> str:
     return f"[REDACTED:{kind}]"
+
+
+def _repl_value(m, head: str, kind: str, counts: Counter) -> str:
+    q = "\"" if m.group("dq") is not None else ("'" if m.group("sq") is not None else "")
+    val = next(v for v in (m.group("dq"), m.group("sq"), m.group("raw")) if v is not None)
+    if val.startswith("[REDACTED:") or val == "":
+        return m.group(0)
+    counts[kind] += 1
+    return f"{head}{q}{_tag(kind)}{q}"
 
 
 def _redact_str(s: str, counts: Counter) -> str:
@@ -48,8 +63,8 @@ def _redact_str(s: str, counts: Counter) -> str:
     s = _URL_CRED.sub(url, s)
 
     def auth(m):
-        counts["authorization"] += 1
-        return f"{m.group('k')} {_tag('authorization')}"
+        r = _repl_value(m, m.group("k"), "authorization", counts)
+        return r
 
     s = _AUTH_HEADER.sub(auth, s)
 
@@ -63,17 +78,7 @@ def _redact_str(s: str, counts: Counter) -> str:
     s = sub_simple(_GH, "github_token", s)
 
     def assign(m):
-        val = m.group("dq") if m.group("dq") is not None else (
-            m.group("sq") if m.group("sq") is not None else m.group("raw")
-        )
-        if val.startswith("[REDACTED:") or val == "":
-            return m.group(0)
-        counts["secret_assignment"] += 1
-        if m.group("dq") is not None:
-            return f'{m.group("key")}{m.group("sep")}"{_tag("secret_assignment")}"'
-        if m.group("sq") is not None:
-            return f"{m.group('key')}{m.group('sep')}'{_tag('secret_assignment')}'"
-        return f"{m.group('key')}{m.group('sep')}{_tag('secret_assignment')}"
+        return _repl_value(m, m.group("key") + m.group("sep"), "secret_assignment", counts)
 
     return _ASSIGN.sub(assign, s)
 

@@ -60,17 +60,39 @@ def test_redact_binary_input_no_exception():
     assert redact_secrets(bytes(range(256))) == bytes(range(256))
 
 
-def test_redact_secret_split_by_truncation_never_survives(tmp_path):
-    from agent_reporter.reporter import Limits
-    from support import bug_finding, resp, run
-    for pad in range(0, 40, 7):
-        logs = "x" * (500 + pad) + S["aws"] + "y" * 500
-        rep, *_ = run(tmp_path / str(pad), {"flow-1": ("failed", logs)}, resp("bug", [bug_finding()]),
-                      limits=Limits(max_object_bytes=520))
-        from agent_reporter.reporter import prepare
-        from agent_reporter.fakes.evidence import DirEvidenceReader
-        p = prepare("run-t", [f"s3://aqs-evidence/runs/run-t/flow-1/logs.txt"], DirEvidenceReader(tmp_path / str(pad)), Limits(max_object_bytes=520))
-        assert "AKIA" not in p.prompt and S["aws"][4:12] not in p.prompt
+class _MemReader:
+    def __init__(self, data):
+        self.data = data
+
+    def get(self, uri):
+        return self.data
+
+
+def _prompt_for(text, limit):
+    from agent_reporter.reporter import Limits, prepare
+    return prepare("r", ["s3://b/runs/r/flow-1/logs.txt"], _MemReader(text.encode()), Limits(max_object_bytes=limit)).prompt
+
+
+def test_redact_secret_split_by_truncation_never_survives():
+    """Barre el desplazamiento hasta cruzar la frontera cabeza y la de cola. Una sola pasada: ANTES de recortar."""
+    sec, lim, crossed = S["aws"], 520, 0
+    for k in range(0, 1300):  # el secreto cruza el final de la cabeza
+        p = _prompt_for("x" * k + sec + "y" * 2000, lim)
+        assert "AKIA" not in p and "ABCDEF" not in p, k
+    for k in range(0, 700):  # el secreto cruza el inicio de la cola
+        p = _prompt_for("x" * 2000 + sec + "y" * k, lim)
+        assert "AKIA" not in p and "ABCDEF" not in p, k
+        crossed += "recortado" in p
+    assert crossed > 0
+
+
+@pytest.mark.parametrize("shape", ["a", "token", "password", "eyJ", "://", "a:", "Authorization", "AKIA", "ghp_", "secret=", "Bearer ", "a://b:"])
+def test_redact_performance_linear_on_64kib(shape):
+    import time
+    blob = (shape * (65536 // len(shape) + 1))[:65536].encode()
+    t = time.perf_counter()
+    redact_secrets(blob)
+    assert time.perf_counter() - t < 1.5, shape
 
 
 def test_redact_secret_in_result_json_is_redacted(tmp_path):
@@ -82,3 +104,29 @@ def test_redact_secret_in_result_json_is_redacted(tmp_path):
     rj.write_text('{"flow_id":"flow-1","status":"failed","password":"zzSeeded99"}')
     p = prepare(RUN, uris, DirEvidenceReader(tmp_path), Limits())
     assert "zzSeeded99" not in p.prompt and p.flows["flow-1"] == "failed"
+
+
+FORMS = {
+    "authorization": ['{"Authorization": "Basic dXNlcjpwYXNzd29yZA=="}', "Authorization: Basic dXNlcjpwYXNzd29yZA==", "'authorization'='Digest zzTailQ9'"],
+    "bearer": ["Bea" + "rer abcDEF123456", "x-h: bea" + "rer Zz9.yy8-tail_01", "{\"h\":\"Bea" + "rer abcDEF123456\"}"],
+    "password": ['{"password":"pa\\"ss-tail-secret"}', "password='pa ss tail'", "passwd: tailsecret1", "db_password = tailsecret1"],
+    "url": ["postgres" + "://user:p@ss@host/db", "https" + "://u:pw@h/x", "redis" + "://:pw@h:6379"],
+    "token": ['{"access_token": "tailsecret1"}', "TOKEN=tailsecret1", "api-key: tailsecret1"],
+    "private_key": ["-----BEGIN EC PRIV" + "ATE KEY-----\nTAILKEY\n-----END EC PRIV" + "ATE KEY-----", "-----BEGIN PRIV" + "ATE KEY-----\nTAILKEY"],
+    "jwt": ["ey" + "Jhb.eyJz.sig_-1", "t=ey" + "JhbGciOi.eyJzdWIi.abc-_"],
+    "aws": [S["aws"], "id=" + S["aws"] + ","],
+    "github": [S["github"], "gh" + "s_" + "A" * 25, "gh" + "o_" + "b" * 40],
+}
+TAILS = ("tail", "TAIL", "dXNlcjpwYXNz", "Zz9.yy8", "abcDEF", "zzTail", "MIIE", "sig_", "ABCDEF", "A1b2", "AAAAAAAAAAAAAAAAAAAAAAAAA", "bbbbbbbbbbbbbbbbbbbb", "pw@", "p@ss", "ss-", "ss@", ":pw", "u:pw", "Jhb", "eyJz", "A1b2C3")
+
+
+@pytest.mark.parametrize("kind", list(FORMS))
+def test_redact_forms_leave_no_tail(kind):
+    for text in FORMS[kind]:
+        out = redact_secrets(text.encode()).decode()
+        assert "[REDACTED:" in out, text
+        low = out.lower()
+        for t in TAILS:
+            if t.lower() in text.lower():
+                assert t.lower() not in low.replace("[redacted:", ""), (text, out)
+        assert redact_secrets(out.encode()).decode() == out, text

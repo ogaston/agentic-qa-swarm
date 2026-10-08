@@ -42,3 +42,11 @@ se redactan aqui.
 ## Pruebas
 `.venv/bin/python -m pytest -q`; `python -m agent_reporter.precision` (umbral 0.8);
 `python -m agent_reporter.demo_redaction --out DIR`.
+
+## Decisiones de redaccion (ronda 2)
+- Una sola pasada de `redact_secrets`, sobre el objeto completo y ANTES de recortar: un secreto partido por el recorte
+  no sobrevive (la prueba barre el desplazamiento por ambas fronteras y falla si se redacta despues de recortar).
+- Costo lineal: patrones con lookbehind y cotas; hay pruebas de rendimiento con cota de tiempo (64 KiB).
+- El tope de LECTURA (bytes traidos del almacen antes de redactar) lo impone el adaptador del lector: es de U3-T07.
+  `EvidenceReader.get` es un puerto y devuelve el objeto completo; aqui solo se acota el costo de redactar.
+- Las URIs de entrada vienen de la plataforma (U2) y van tal cual al prompt (candidata: redactar su query/credenciales).

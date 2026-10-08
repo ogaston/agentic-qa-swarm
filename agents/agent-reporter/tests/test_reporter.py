@@ -185,3 +185,36 @@ def test_report_schema_parity_hand_validator_vs_jsonschema():
             doc = json.loads(f.read_text())
             assert (not list(v.iter_errors(doc))) is ok, f
             assert (not validate_report(doc)) is ok, f
+
+
+URI_CASES = {  # resultados de ajv-cli 5 + ajv-formats 3 (herramienta real) sobre evidence-uris.schema.json
+    "s3://a/b\n": False, "s3://a b": False, "s3://a/b\t": False, "s3://a/\u00e9": False, "s3://a/b\r": False,
+    "s3://a/b": True, "https://h/p?q=1": True, "https://": True, "s3://": True,
+    "file:///x": False, "http://h/x": False, "": False,
+}
+
+
+@pytest.mark.parametrize("uri", list(URI_CASES))
+def test_uri_parity_hand_validator_vs_ajv(uri):
+    from agent_reporter.report_model import validate_evidence_uris, validate_report
+    f = {"finding_id": "a", "root_cause": "c", "invariant": "i", "method": "GET", "path": "/x", "evidence_uris": [uri]}
+    rep = {"run_id": "r", "verdict": "bug", "summary": "", "findings": [f]}
+    assert (not validate_evidence_uris({"run_id": "r", "uris": [uri]})) is URI_CASES[uri]
+    assert (not validate_report(rep)) is URI_CASES[uri]
+
+
+def test_uri_parity_with_jsonschema_format_checker():
+    """Paridad con formatos activados (format: uri via rfc3986-validator), no solo con ejemplos fijos."""
+    from jsonschema import Draft202012Validator, FormatChecker
+    from support import ROOT
+    from agent_reporter.report_model import validate_evidence_uris
+    schema = json.loads((ROOT / "contracts/plans/evidence-uris.schema.json").read_text())
+    v = Draft202012Validator(schema, format_checker=FormatChecker())
+    for uri in URI_CASES:
+        doc = {"run_id": "r", "uris": [uri]}
+        py_ok, hand_ok = not list(v.iter_errors(doc)), not validate_evidence_uris(doc)
+        # rfc3986-validator (Python) acepta un "\n" final por su propio `$`; ajv-formats (la verdad del contrato) no.
+        # El validador manual sigue a ajv: nunca es mas laxo que jsonschema+FormatChecker, e iguala salvo ese caso.
+        assert hand_ok is URI_CASES[uri], repr(uri)
+        assert (py_ok is hand_ok) or uri.endswith("\n"), repr(uri)
+        assert not (hand_ok and not py_ok), repr(uri)

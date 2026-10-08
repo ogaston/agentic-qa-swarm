@@ -111,10 +111,9 @@ def prepare(run_id: str, uris, reader: EvidenceReader, limits: Limits) -> Prepar
             flows.setdefault(fl, "unknown")
             if u.endswith("/result.json"):
                 flows[fl] = _status(raw)
-        red, counts = redact_secrets_counted(raw)  # el objeto completo se redacta ANTES de recortar
+        red, counts = redact_secrets_counted(raw)  # UNICA pasada: el objeto completo se redacta ANTES de recortar (un secreto partido por el recorte no sobrevive)
         redactions.update(counts)
         cut, was = _truncate(red, min(limits.max_object_bytes, max(remaining, 0)))
-        cut, _ = redact_secrets_counted(cut)
         remaining -= len(cut)
         truncated += was
         objects.append({"uri": u, "truncated": was, "content": cut.decode("utf-8", errors="replace")})
