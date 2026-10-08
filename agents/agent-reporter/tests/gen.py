@@ -268,6 +268,10 @@ def clean_text(max_size=40):
 # Lo que puede quedar pegado a un secreto: Unicode, control, ANSI crudo (cualquier ASCII alfanumerico lo dejaria
 # fuera de la definicion de "secreto": `xBearer` no es un bearer).
 GLUE = ("", "\x1b[31m", "\x1b[1;31;4m", "\x1b", "\x00", "\x7f", "\u00e9", "\u65e5", "\U0001f600", "\u2028")
+_NO_GLUE = set(string.ascii_letters + string.digits + "_-+.")  # esos si forman parte de la palabra anterior
+# GLUE_ST: ademas de los casos fijos, CUALQUIER caracter Unicode (ª, µ, ², U+2460...): el barrido determinista esta en test_redact_sweep.py
+GLUE_ST = st.one_of(st.sampled_from(GLUE),
+                    st.characters(blacklist_categories=("Cs",)).filter(lambda c: c not in _NO_GLUE))
 SEPARATORS = (" ", "\n", "\t", ", ", "; ", " (", "\n\n")
 CONTEXTS = ("plain", "json", "header", "log")
 
@@ -279,7 +283,7 @@ def secret_text(draw, max_secrets=3):
     secs = [draw(secret()) for _ in range(n)]
     parts = [draw(clean_text(20))]
     for s in secs:
-        parts += [draw(st.sampled_from(SEPARATORS)) + draw(st.sampled_from(GLUE)), s.text, draw(st.sampled_from(SEPARATORS)), draw(clean_text(20))]
+        parts += [draw(st.sampled_from(SEPARATORS)) + draw(GLUE_ST), s.text, draw(st.sampled_from(SEPARATORS)), draw(clean_text(20))]
     body = "".join(parts)
     ctx = draw(st.sampled_from(CONTEXTS))
     if ctx == "json":

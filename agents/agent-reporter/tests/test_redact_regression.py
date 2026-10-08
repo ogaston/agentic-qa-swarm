@@ -62,3 +62,25 @@ def test_url_credentials_after_ansi_color_are_redacted():
     url = "postgres" + "://0:00000000@db.internal:5432/app"
     for pre in ["\x1b[31m", "\x1b[1;31;4m", "\\n", "\\u00e9"]:
         assert "00000000" not in _out("x " + pre + url + " y"), pre
+
+
+def test_bearer_after_non_ascii_letter_like_characters_is_redacted():
+    # ronda 3 F-01: `\b` Unicode trataba ª µ ² ³ ¹ º ¼ ½ ¾ como palabra y `ªBearer 0000...` filtraba
+    for ch in "\u00aa\u00b5\u00b2\u00b3\u00b9\u00ba\u00bc\u00bd\u00be\u2460\u017f":
+        assert "00000000" not in _out(f"{ch}{BEAR} 00000000")
+
+
+def test_assignment_values_with_uppercase_or_double_backslash_are_redacted():
+    # ronda 3 F-02: `[nrtbf]` bajo (?i) cortaba el valor en \B \T \N \\ : password=AAAA\BBBB1111 filtraba la cola
+    pw = "pass" + "word"
+    for v in ("AAAA\\BBBB1111", "C:\\Users\\Tom\\pw1111", "AAAA\\NBBBB1111", "AAAA\\\\BBBB1111"):
+        assert _out(f"{pw}={v}\n") == f"{pw}=[REDACTED:secret_assignment]\n"
+
+
+def test_all_24xx_characters_in_text_do_not_crash_and_bearer_after_newline_is_redacted():
+    # ronda 3 F-03: StopIteration con los 256 U+24xx; con U+2400..245F ausentes el centinela era U+2460 (\w)
+    from agent_reporter.redact import redact_text_counted
+
+    allc = "".join(map(chr, range(0x2400, 0x2500)))
+    out, _ = redact_text_counted(allc + "\\n" + BEAR + " ZZZZ9999")
+    assert "ZZZZ9999" not in out
