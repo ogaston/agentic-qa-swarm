@@ -1,0 +1,3 @@
+INFO flujo flow-2 inicia contra GET /accounts/{id}/balance
+INFO paso 1 ok
+INFO paso 2 GET /accounts/{id}/balance -> 200

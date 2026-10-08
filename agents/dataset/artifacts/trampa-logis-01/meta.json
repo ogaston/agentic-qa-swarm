@@ -1,0 +1,6 @@
+{
+  "id": "trampa-logis-01",
+  "domain": "logistica",
+  "kind": "trampa-esquema",
+  "description": "La corrida falla por formato de la entrada, no por logica de negocio. Dominio logistica."
+}

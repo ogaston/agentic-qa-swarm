@@ -1,0 +1,6 @@
+{
+  "flow_id": "flow-1",
+  "status": "failed",
+  "steps": 2,
+  "violated": "revertir una transferencia es idempotente"
+}

@@ -1,0 +1,16 @@
+{
+  "planner": {
+    "outcome": "plan",
+    "must_cover_invariants": [
+      "un envio entregado no vuelve a estado en transito"
+    ]
+  },
+  "reporter": {
+    "verdict": "bug",
+    "root_cause": {
+      "invariant": "un envio entregado no vuelve a estado en transito",
+      "method": "PATCH",
+      "path": "/shipments/{id}/status"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "flow_id": "flow-1",
+  "status": "failed",
+  "steps": 1,
+  "reason": "formato"
+}

@@ -1,0 +1,6 @@
+{
+  "id": "noarranca-logis-01",
+  "domain": "logistica",
+  "kind": "no-arranca",
+  "description": "La aplicacion no arranca; la corrida nunca ocurrio. Dominio logistica."
+}

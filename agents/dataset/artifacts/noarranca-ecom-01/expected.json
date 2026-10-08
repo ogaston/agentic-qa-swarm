@@ -1,0 +1,10 @@
+{
+  "planner": {
+    "outcome": "error",
+    "must_cover_invariants": []
+  },
+  "reporter": {
+    "verdict": "error",
+    "root_cause": null
+  }
+}

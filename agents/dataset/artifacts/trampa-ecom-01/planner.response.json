@@ -1,0 +1,28 @@
+{
+  "flows": [
+    {
+      "id": "flow-1",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/orders"
+        }
+      ],
+      "invariants": [
+        "el stock nunca es negativo tras una orden"
+      ]
+    },
+    {
+      "id": "flow-2",
+      "steps": [
+        {
+          "method": "GET",
+          "path": "/orders/{id}"
+        }
+      ],
+      "invariants": [
+        "el stock nunca es negativo tras una orden"
+      ]
+    }
+  ]
+}

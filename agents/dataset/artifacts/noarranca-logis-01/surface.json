@@ -1,0 +1,6 @@
+{
+  "run_id": "run-noarranca-logis-01",
+  "base_url": "http://noarranca-logis-01.warm.svc.cluster.local:8080",
+  "endpoints": [],
+  "source": "probe"
+}

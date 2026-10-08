@@ -1,0 +1,6 @@
+{
+  "id": "golden-fintech-01",
+  "domain": "fintech",
+  "kind": "golden",
+  "description": "Aplicacion sin defectos de logica: todos los invariantes se cumplen. Dominio fintech."
+}

@@ -1,0 +1,16 @@
+{
+  "planner": {
+    "outcome": "plan",
+    "must_cover_invariants": [
+      "revertir una transferencia es idempotente"
+    ]
+  },
+  "reporter": {
+    "verdict": "bug",
+    "root_cause": {
+      "invariant": "revertir una transferencia es idempotente",
+      "method": "POST",
+      "path": "/transfers/{id}/reverse"
+    }
+  }
+}

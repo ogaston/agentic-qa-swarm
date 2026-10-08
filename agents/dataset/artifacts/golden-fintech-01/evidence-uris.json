@@ -1,0 +1,9 @@
+{
+  "run_id": "run-golden-fintech-01",
+  "uris": [
+    "s3://aqs-evidence/runs/run-golden-fintech-01/flow-1/logs.txt",
+    "s3://aqs-evidence/runs/run-golden-fintech-01/flow-1/result.json",
+    "s3://aqs-evidence/runs/run-golden-fintech-01/flow-2/logs.txt",
+    "s3://aqs-evidence/runs/run-golden-fintech-01/flow-2/result.json"
+  ]
+}

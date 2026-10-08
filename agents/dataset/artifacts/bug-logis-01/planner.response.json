@@ -1,0 +1,28 @@
+{
+  "flows": [
+    {
+      "id": "flow-1",
+      "steps": [
+        {
+          "method": "PATCH",
+          "path": "/shipments/{id}/status"
+        }
+      ],
+      "invariants": [
+        "un envio entregado no vuelve a estado en transito"
+      ]
+    },
+    {
+      "id": "flow-2",
+      "steps": [
+        {
+          "method": "PATCH",
+          "path": "/shipments/{id}/status"
+        }
+      ],
+      "invariants": [
+        "un envio entregado no vuelve a estado en transito"
+      ]
+    }
+  ]
+}

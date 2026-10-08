@@ -1,0 +1,6 @@
+{
+  "flow_id": "flow-1",
+  "status": "failed",
+  "steps": 2,
+  "violated": "una transferencia conserva la suma total de saldos"
+}

@@ -1,0 +1,6 @@
+{
+  "flow_id": "flow-1",
+  "status": "failed",
+  "steps": 2,
+  "violated": "el stock nunca es negativo tras una orden"
+}

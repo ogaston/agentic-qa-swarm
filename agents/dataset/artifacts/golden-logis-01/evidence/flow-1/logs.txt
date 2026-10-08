@@ -1,0 +1,3 @@
+INFO flujo flow-1 inicia contra POST /shipments
+INFO paso 1 ok
+INFO paso 2 POST /shipments -> 200

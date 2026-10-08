@@ -1,0 +1,3 @@
+INFO flujo flow-2 inicia contra PATCH /shipments/{id}/status
+INFO paso 1 ok
+INFO paso 2 PATCH /shipments/{id}/status -> 200

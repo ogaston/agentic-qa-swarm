@@ -1,0 +1,6 @@
+{
+  "id": "bug-logis-01",
+  "domain": "logistica",
+  "kind": "bug-sembrado",
+  "description": "Defecto de logica sembrado con causa raiz conocida. Dominio logistica."
+}

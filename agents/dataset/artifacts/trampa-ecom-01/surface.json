@@ -1,0 +1,19 @@
+{
+  "run_id": "run-trampa-ecom-01",
+  "base_url": "http://trampa-ecom-01.warm.svc.cluster.local:8080",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/orders"
+    },
+    {
+      "method": "GET",
+      "path": "/orders/{id}"
+    },
+    {
+      "method": "POST",
+      "path": "/orders/{id}/cancel"
+    }
+  ],
+  "source": "openapi"
+}

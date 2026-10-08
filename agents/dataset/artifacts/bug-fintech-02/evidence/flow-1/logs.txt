@@ -1,0 +1,3 @@
+INFO flujo flow-1 inicia contra POST /transfers/{id}/reverse
+WARN invariante violado: revertir una transferencia es idempotente
+ERROR respuesta POST /transfers/{id}/reverse -> 200 pero el estado es inconsistente

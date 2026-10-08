@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DatasetExpected",
+  "type": "object",
+  "properties": {
+    "planner": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "enum": [
+            "plan",
+            "error"
+          ]
+        },
+        "must_cover_invariants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "outcome",
+        "must_cover_invariants"
+      ],
+      "additionalProperties": false
+    },
+    "reporter": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "enum": [
+            "bug",
+            "sin-hallazgos",
+            "inconcluso",
+            "error"
+          ]
+        },
+        "root_cause": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "invariant": {
+                  "type": "string"
+                },
+                "method": {
+                  "enum": [
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE"
+                  ]
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^/"
+                }
+              },
+              "required": [
+                "invariant",
+                "method",
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "verdict",
+        "root_cause"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "planner",
+    "reporter"
+  ],
+  "additionalProperties": false
+}

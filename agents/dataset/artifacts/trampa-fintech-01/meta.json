@@ -1,0 +1,6 @@
+{
+  "id": "trampa-fintech-01",
+  "domain": "fintech",
+  "kind": "trampa-esquema",
+  "description": "La corrida falla por formato de la entrada, no por logica de negocio. Dominio fintech."
+}
