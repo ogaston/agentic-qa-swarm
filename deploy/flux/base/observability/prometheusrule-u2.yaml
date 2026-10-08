@@ -1,0 +1,29 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: aqs-u2-rules
+  namespace: aqs-observability
+spec:
+  groups:
+    - name: aqs.u2
+      rules:
+        - alert: AqsHandoffRising
+          expr: increase(aqs_handoff_total[15m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Handoff a humano en {{ $labels.phase }}"
+        # La metrica aqs_upstream_circuit_open la publicara el circuito del controlador (candidata); hasta entonces no hay serie.
+        - alert: AqsUpstreamCircuitOpen
+          expr: aqs_upstream_circuit_open == 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Circuito abierto hacia {{ $labels.upstream }}"
+        - alert: AqsTestJobFailed
+          expr: kube_job_status_failed{namespace="aqs-test"} > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Job fallido en aqs-test: {{ $labels.job_name }}"

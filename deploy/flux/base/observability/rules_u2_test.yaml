@@ -1,0 +1,46 @@
+# Prueba de las reglas de U2. NO forma parte del kustomization.yaml.
+# rules.yaml = .spec de aqs-u2-rules; rules_core.yaml = .spec de aqs-rules (ambos extraidos del build).
+rule_files:
+  - rules.yaml
+  - rules_core.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'aqs_handoff_total{phase="deploy"}'
+        values: '0x4 1x30'
+      - series: 'aqs_upstream_circuit_open{upstream="go-reset"}'
+        values: '0x3 1x30'
+      - series: 'aqs_upstream_circuit_open{upstream="go-warm-manager"}'
+        values: '0x30'
+      - series: 'kube_job_status_failed{namespace="aqs-test",job_name="runner-1"}'
+        values: '0x4 1x30'
+      - series: 'aqs_warm_quarantined'
+        values: '0x4 1x30'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AqsHandoffRising
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AqsHandoffRising
+        exp_alerts:
+          - exp_labels: {severity: warning, phase: deploy}
+            exp_annotations: {summary: "Handoff a humano en deploy"}
+      - eval_time: 4m
+        alertname: AqsUpstreamCircuitOpen
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: AqsUpstreamCircuitOpen
+        exp_alerts:
+          - exp_labels: {severity: critical, upstream: go-reset}
+            exp_annotations: {summary: "Circuito abierto hacia go-reset"}
+      - eval_time: 6m
+        alertname: AqsTestJobFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: aqs-test, job_name: runner-1}
+            exp_annotations: {summary: "Job fallido en aqs-test: runner-1"}
+      - eval_time: 7m
+        alertname: AqsWarmQuarantined
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: "El entorno warm esta en cuarentena"}

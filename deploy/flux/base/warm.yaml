@@ -189,6 +189,7 @@ spec:
       port: 6379
       targetPort: redis
 ---
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -203,14 +204,52 @@ spec:
         spec:
           restartPolicy: Never
           serviceAccountName: go-reset
+          securityContext:
+            fsGroup: 65532
+          # El PVC go-reset-data es RWO: el Job va al mismo nodo que el pod de go-reset para compartir sesiones y outbox.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: go-reset
           containers:
             - name: housekeeping
               # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
               env:
                 - name: TZ
                   value: UTC
+                - name: RESET_NAMESPACE
+                  value: aqs-test
+                - name: RESET_DATA_DIR
+                  value: /data/sessions
+                - name: RESET_OUTBOX_FILE
+                  value: /data/outbox.jsonl
+                - name: RESET_WARM_ID
+                  value: warm-1
+                - name: RESET_REDIS_ADDR
+                  value: warm-redis.aqs-test.svc:6379
+                - name: RESET_BASELINE_SCRIPT
+                  value: /etc/aqs/baseline/baseline.sh
+                - name: RESET_BASELINE_VERSION
+                  value: v1
               image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
               args: ["housekeeping"]
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                - name: baseline
+                  mountPath: /etc/aqs/baseline
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
               resources:
                 requests:
                   cpu: 50m
@@ -218,14 +257,25 @@ spec:
                 limits:
                   cpu: 250m
                   memory: 128Mi
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: go-reset-data
+            - name: baseline
+              configMap:
+                name: go-reset-baseline
+                defaultMode: 0555
+            - name: tmp
+              emptyDir: {}
 ---
+# Domingo 03:30, desfasado de housekeeping (03:00) e idle-check (:x5): sin Lease aun, no hay exclusion entre procesos (candidata).
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: rebuild
   namespace: aqs-system
 spec:
-  schedule: "0 3 * * 0"
+  schedule: "30 3 * * 0"
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
@@ -233,14 +283,52 @@ spec:
         spec:
           restartPolicy: Never
           serviceAccountName: go-reset
+          securityContext:
+            fsGroup: 65532
+          # El PVC go-reset-data es RWO: el Job va al mismo nodo que el pod de go-reset para compartir sesiones y outbox.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: go-reset
           containers:
             - name: rebuild
               # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
               env:
                 - name: TZ
                   value: UTC
+                - name: RESET_NAMESPACE
+                  value: aqs-test
+                - name: RESET_DATA_DIR
+                  value: /data/sessions
+                - name: RESET_OUTBOX_FILE
+                  value: /data/outbox.jsonl
+                - name: RESET_WARM_ID
+                  value: warm-1
+                - name: RESET_REDIS_ADDR
+                  value: warm-redis.aqs-test.svc:6379
+                - name: RESET_BASELINE_SCRIPT
+                  value: /etc/aqs/baseline/baseline.sh
+                - name: RESET_BASELINE_VERSION
+                  value: v1
               image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
               args: ["rebuild"]
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                - name: baseline
+                  mountPath: /etc/aqs/baseline
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
               resources:
                 requests:
                   cpu: 50m
@@ -248,3 +336,127 @@ spec:
                 limits:
                   cpu: 250m
                   memory: 128Mi
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: go-reset-data
+            - name: baseline
+              configMap:
+                name: go-reset-baseline
+                defaultMode: 0555
+            - name: tmp
+              emptyDir: {}
+---
+# Scale-down del warm en idle cada 10 min; el umbral sale solo de warm-policy (idleScaleDownAfter, minReplicasIdle).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: idle-check
+  namespace: aqs-system
+spec:
+  schedule: "5,15,25,35,45,55 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: go-reset
+          securityContext:
+            fsGroup: 65532
+          # El PVC go-reset-data es RWO: el Job va al mismo nodo que el pod de go-reset para compartir sesiones y outbox.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: go-reset
+          containers:
+            - name: idle-check
+              # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
+              env:
+                - name: TZ
+                  value: UTC
+                - name: RESET_NAMESPACE
+                  value: aqs-test
+                - name: RESET_DATA_DIR
+                  value: /data/sessions
+                - name: RESET_OUTBOX_FILE
+                  value: /data/outbox.jsonl
+                - name: RESET_WARM_ID
+                  value: warm-1
+                - name: RESET_REDIS_ADDR
+                  value: warm-redis.aqs-test.svc:6379
+                - name: RESET_BASELINE_SCRIPT
+                  value: /etc/aqs/baseline/baseline.sh
+                - name: RESET_BASELINE_VERSION
+                  value: v1
+              image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
+              args: ["idle-check"]
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                - name: baseline
+                  mountPath: /etc/aqs/baseline
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 250m
+                  memory: 128Mi
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: go-reset-data
+            - name: baseline
+              configMap:
+                name: go-reset-baseline
+                defaultMode: 0555
+            - name: tmp
+              emptyDir: {}
+---
+# Burst de una corrida: 1 ensayo + 3 runners (RUN_MAX_PARALLEL_RUNNERS) = 4 Jobs; warm base = 3 pods + 2 de surge en rollouts.
+# 15 pods, 10 Jobs (reintentos), limits 6 CPU / 6Gi (4 x 500m/512Mi + warm 1.75/1.1Gi + margen), requests 2 CPU / 3Gi.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: aqs-test-quota
+  namespace: aqs-test
+spec:
+  hard:
+    pods: "15"
+    count/jobs.batch: "10"
+    requests.cpu: "2"
+    requests.memory: 3Gi
+    limits.cpu: "6"
+    limits.memory: 6Gi
+---
+# Ningun pod/Job entra sin limites: default y defaultRequest rellenan, max acota por contenedor.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: aqs-test-limits
+  namespace: aqs-test
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 250m
+        memory: 256Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: "1"
+        memory: 1Gi
