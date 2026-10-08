@@ -1,0 +1,16 @@
+{
+  "planner": {
+    "outcome": "plan",
+    "must_cover_invariants": [
+      "el stock nunca es negativo tras una orden"
+    ]
+  },
+  "reporter": {
+    "verdict": "bug",
+    "root_cause": {
+      "invariant": "el stock nunca es negativo tras una orden",
+      "method": "POST",
+      "path": "/orders"
+    }
+  }
+}

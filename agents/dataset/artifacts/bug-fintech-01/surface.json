@@ -1,0 +1,19 @@
+{
+  "run_id": "run-bug-fintech-01",
+  "base_url": "http://bug-fintech-01.warm.svc.cluster.local:8080",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/accounts/{id}/transfers"
+    },
+    {
+      "method": "GET",
+      "path": "/accounts/{id}/balance"
+    },
+    {
+      "method": "POST",
+      "path": "/transfers/{id}/reverse"
+    }
+  ],
+  "source": "openapi"
+}

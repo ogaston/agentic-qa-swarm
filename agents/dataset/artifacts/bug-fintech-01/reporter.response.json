@@ -1,0 +1,14 @@
+{
+  "verdict": "bug",
+  "root_cause": {
+    "invariant": "una transferencia conserva la suma total de saldos",
+    "method": "POST",
+    "path": "/accounts/{id}/transfers"
+  },
+  "findings": [
+    {
+      "flow_id": "flow-1",
+      "summary": "invariante violado"
+    }
+  ]
+}

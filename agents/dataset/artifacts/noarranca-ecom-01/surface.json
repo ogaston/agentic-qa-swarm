@@ -1,0 +1,6 @@
+{
+  "run_id": "run-noarranca-ecom-01",
+  "base_url": "http://noarranca-ecom-01.warm.svc.cluster.local:8080",
+  "endpoints": [],
+  "source": "probe"
+}

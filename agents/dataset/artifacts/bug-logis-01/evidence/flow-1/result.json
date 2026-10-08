@@ -1,0 +1,6 @@
+{
+  "flow_id": "flow-1",
+  "status": "failed",
+  "steps": 2,
+  "violated": "un envio entregado no vuelve a estado en transito"
+}

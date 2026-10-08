@@ -1,0 +1,6 @@
+{
+  "id": "golden-logis-01",
+  "domain": "logistica",
+  "kind": "golden",
+  "description": "Aplicacion sin defectos de logica: todos los invariantes se cumplen. Dominio logistica."
+}

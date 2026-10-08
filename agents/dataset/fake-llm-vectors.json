@@ -1,0 +1,29 @@
+{
+  "description": "Pares prompt->sha256 (UTF-8, CRLF normalizado a LF). Compartidos por ambas copias de FakeLLM.",
+  "vectors": [
+    {
+      "prompt": "hola",
+      "sha256": "b221d9dbb083a7f33428d7c2a3c3198ae925614d70210e28716ccaa7cd4ddb79"
+    },
+    {
+      "prompt": "Planifica los flujos para POST /orders",
+      "sha256": "732e34c4f91b5f280c895913c4409333a0dca44fb5d0f55a8ad8309fe57a55e6"
+    },
+    {
+      "prompt": "linea1\r\nlinea2",
+      "sha256": "eb6e44c908490bc7d39a631135f2eeda5181844f18bce65b0c01e64e08309e3c"
+    },
+    {
+      "prompt": "Ñandú y café ☕ — 日本語",
+      "sha256": "769d4912117c3a4954d859d072235985e1a1fd55ab00ed2185a97b1dec5becf5"
+    },
+    {
+      "prompt": "línea\ncon salto",
+      "sha256": "ebebebba373e5fa2dc05b5bd8980897d0a99c6d3d5bb806cf8514f7b0587f6b5"
+    },
+    {
+      "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "sha256": "aa20c23e3201834050679e1d88941b9a6fed0557c9a705cb2c315e2e63fd486d"
+    }
+  ]
+}

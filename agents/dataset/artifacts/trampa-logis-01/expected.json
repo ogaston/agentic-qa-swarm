@@ -1,0 +1,12 @@
+{
+  "planner": {
+    "outcome": "plan",
+    "must_cover_invariants": [
+      "un envio entregado no vuelve a estado en transito"
+    ]
+  },
+  "reporter": {
+    "verdict": "inconcluso",
+    "root_cause": null
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "description": "Dataset 100% sintetico para pruebas offline de U3.",
+  "artifacts": [
+    {
+      "id": "golden-ecom-01",
+      "kind": "golden"
+    },
+    {
+      "id": "golden-fintech-01",
+      "kind": "golden"
+    },
+    {
+      "id": "golden-logis-01",
+      "kind": "golden"
+    },
+    {
+      "id": "bug-ecom-01",
+      "kind": "bug-sembrado"
+    },
+    {
+      "id": "bug-fintech-01",
+      "kind": "bug-sembrado"
+    },
+    {
+      "id": "bug-logis-01",
+      "kind": "bug-sembrado"
+    },
+    {
+      "id": "bug-fintech-02",
+      "kind": "bug-sembrado"
+    },
+    {
+      "id": "trampa-ecom-01",
+      "kind": "trampa-esquema"
+    },
+    {
+      "id": "trampa-fintech-01",
+      "kind": "trampa-esquema"
+    },
+    {
+      "id": "trampa-logis-01",
+      "kind": "trampa-esquema"
+    },
+    {
+      "id": "noarranca-ecom-01",
+      "kind": "no-arranca"
+    },
+    {
+      "id": "noarranca-logis-01",
+      "kind": "no-arranca"
+    }
+  ]
+}

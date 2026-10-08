@@ -1,0 +1,6 @@
+{
+  "id": "golden-ecom-01",
+  "domain": "ecommerce",
+  "kind": "golden",
+  "description": "Aplicacion sin defectos de logica: todos los invariantes se cumplen. Dominio ecommerce."
+}

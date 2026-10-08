@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-reporter"
+version = "0.0.1"
+description = "Esqueleto de agent-reporter (U3-T01): sin servidor ni logica."
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+markers = [
+  "pbt_demo: demostracion de PBT (U3-T03)",
+  "k6: requiere k6 (U3-T03)",
+  "minio: requiere MinIO local (U3-T06)",
+]
+addopts = "-vv -m 'not pbt_demo and not k6 and not minio'"

@@ -1,0 +1,12 @@
+{
+  "planner": {
+    "outcome": "plan",
+    "must_cover_invariants": [
+      "el stock nunca es negativo tras una orden"
+    ]
+  },
+  "reporter": {
+    "verdict": "sin-hallazgos",
+    "root_cause": null
+  }
+}

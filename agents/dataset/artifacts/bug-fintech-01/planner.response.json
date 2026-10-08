@@ -1,0 +1,28 @@
+{
+  "flows": [
+    {
+      "id": "flow-1",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/accounts/{id}/transfers"
+        }
+      ],
+      "invariants": [
+        "una transferencia conserva la suma total de saldos"
+      ]
+    },
+    {
+      "id": "flow-2",
+      "steps": [
+        {
+          "method": "GET",
+          "path": "/accounts/{id}/balance"
+        }
+      ],
+      "invariants": [
+        "una transferencia conserva la suma total de saldos"
+      ]
+    }
+  ]
+}

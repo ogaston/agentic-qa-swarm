@@ -1,0 +1,19 @@
+{
+  "run_id": "run-bug-logis-01",
+  "base_url": "http://bug-logis-01.warm.svc.cluster.local:8080",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/shipments"
+    },
+    {
+      "method": "PATCH",
+      "path": "/shipments/{id}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/shipments/{id}"
+    }
+  ],
+  "source": "openapi"
+}

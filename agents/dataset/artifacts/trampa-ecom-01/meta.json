@@ -1,0 +1,6 @@
+{
+  "id": "trampa-ecom-01",
+  "domain": "ecommerce",
+  "kind": "trampa-esquema",
+  "description": "La corrida falla por formato de la entrada, no por logica de negocio. Dominio ecommerce."
+}
