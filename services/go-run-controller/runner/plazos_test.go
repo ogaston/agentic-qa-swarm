@@ -8,6 +8,7 @@ import (
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
 )
@@ -46,7 +47,7 @@ func withCount(r *rig) *countKube {
 	return ck
 }
 
-func notMarker(k string) bool {
+func isFlowEvidenceKey(k string) bool {
 	return strings.HasSuffix(k, "/logs.txt") || strings.HasSuffix(k, "/result.json")
 }
 
@@ -77,7 +78,7 @@ func TestRunnerRunTimeoutNotStretched(t *testing.T) {
 func TestRunnerExpiredJobsKeptUntilSettled(t *testing.T) {
 	r := newRig("a")
 	r.ev.FailPut = func(k string) error {
-		if notMarker(k) {
+		if isFlowEvidenceKey(k) {
 			return errors.New("bucket caído")
 		}
 		return nil
@@ -254,5 +255,79 @@ func TestRunnerLogsUnavailable(t *testing.T) {
 	b, _ = r2.ev.Get(context.Background(), "runs/r-1/a/result.json")
 	if strings.Contains(string(b), "logs_unavailable") {
 		t.Fatalf("marcado sin falla: %s", b)
+	}
+}
+
+// --- marcador de inicio (started-at): ramas fail-closed ---
+
+const startObj = "runs/r-1/started-at"
+
+func assertNothingLaunched(t *testing.T, r *rig, err error, wantMarker string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("avanzó con el marcador de inicio inutilizable")
+	}
+	if n := len(r.jobs(t)); n != 0 {
+		t.Fatalf("Jobs creados: %d", n)
+	}
+	got, ok := r.ev.Objs[startObj]
+	if wantMarker == "" && ok {
+		t.Fatalf("marcador escrito: %q", got)
+	}
+	if wantMarker != "" && string(got) != wantMarker {
+		t.Fatalf("marcador reescrito: %q", got)
+	}
+}
+
+func TestRunnerStartMarkerWriteFailure(t *testing.T) {
+	r := newRig("a")
+	r.ev.FailPut = func(k string) error {
+		if k == startObj {
+			return errors.New("bucket caído")
+		}
+		return nil
+	}
+	_, err := r.l.Launch(context.Background(), runctl.PhaseRun, passedRun("r-1"))
+	assertNothingLaunched(t, r, err, "")
+}
+
+func TestRunnerStartMarkerReadError(t *testing.T) {
+	r := newRig("a")
+	r.ev.Objs = map[string][]byte{startObj: []byte("2026-10-07T12:00:00Z")}
+	r.ev.GetErr = func(k string) error {
+		if k == startObj {
+			return errors.New("lectura caída")
+		}
+		return nil
+	}
+	_, err := r.l.Launch(context.Background(), runctl.PhaseRun, passedRun("r-1"))
+	assertNothingLaunched(t, r, err, "2026-10-07T12:00:00Z")
+	if len(r.gt.Calls) != 0 {
+		t.Fatalf("cuota consultada de nuevo: %d", len(r.gt.Calls))
+	}
+}
+
+func TestRunnerStartMarkerCorrupt(t *testing.T) {
+	r := newRig("a")
+	r.ev.Objs = map[string][]byte{startObj: []byte("basura")}
+	_, err := r.l.Launch(context.Background(), runctl.PhaseRun, passedRun("r-1"))
+	assertNothingLaunched(t, r, err, "basura")
+	if len(r.gt.Calls) != 0 {
+		t.Fatalf("cuota consultada de nuevo: %d", len(r.gt.Calls))
+	}
+}
+
+// La limpieza de un lanzamiento parcial solo borra lo que ESTA llamada creó, no lo adoptado (AlreadyExists).
+func TestRunnerPartialLaunchKeepsAdoptedJobs(t *testing.T) {
+	r := newRig("a", "b")
+	_, _ = r.cs.BatchV1().Jobs(ns).Create(context.Background(), &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "runner-r-1-a", Namespace: ns}}, metav1.CreateOptions{})
+	ck := withCount(r)
+	ck.failJob = "runner-r-1-b"
+	if _, err := r.l.Launch(context.Background(), runctl.PhaseRun, passedRun("r-1")); err == nil {
+		t.Fatal("el fallo de CreateJob se tragó")
+	}
+	js := r.jobs(t)
+	if len(js) != 1 || js[0].Name != "runner-r-1-a" {
+		t.Fatalf("el Job adoptado se borró: %+v", js)
 	}
 }

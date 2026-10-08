@@ -378,7 +378,7 @@ func TestEvidenceWriteFailureMakesFlowFailedAndNeverClaimsIt(t *testing.T) {
 	for name, mut := range map[string]func(*MemEvidence){
 		"put falla": func(e *MemEvidence) {
 			e.FailPut = func(k string) error {
-				if notMarker(k) { // el marcador de inicio ya se escribió al lanzar
+				if isFlowEvidenceKey(k) { // el marcador de inicio ya se escribió al lanzar
 					return errors.New("bucket inexistente")
 				}
 				return nil

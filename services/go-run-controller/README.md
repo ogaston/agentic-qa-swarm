@@ -63,3 +63,7 @@ con un gate de go-governance (U4) en cada transición, `GET /runs/{id}`, `/healt
   (escrito una sola vez en el almacén antes del primer Job, no depende de Jobs que se borran). Un Job vencido no se borra
   hasta que su evidencia queda escrita. La ola de Jobs se valida entera antes de crear ninguno; si una creación falla, se
   borran los creados en esa llamada.
+- Salvedad conocida: un Job vencido por el plazo de la CORRIDA cuya evidencia no se pudo escribir se conserva (no se borra) hasta el
+  reset de la corrida, y su pod puede vivir hasta su `activeDeadlineSeconds`; no se lanza nada nuevo y la corrida sale con
+  `FailReason`. Candidata: verificar que el reset borre esos Jobs. Si el marcador `started-at` no se puede escribir/leer, no se
+  lanza nada; la cuota ya consultada puede consultarse otra vez en el reintento.
