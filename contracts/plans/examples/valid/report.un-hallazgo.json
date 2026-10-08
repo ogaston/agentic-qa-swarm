@@ -1,0 +1,1 @@
+{"run_id":"run-1","verdict":"bug","summary":"Un flujo fallido","findings":[{"finding_id":"flow-1","root_cause":"el stock se descuenta dos veces","invariant":"el stock nunca es negativo tras una orden","method":"POST","path":"/orders","evidence_uris":["s3://aqs-evidence/runs/run-1/flow-1/result.json"]}]}
