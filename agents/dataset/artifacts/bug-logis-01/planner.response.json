@@ -4,8 +4,8 @@
       "id": "flow-1",
       "steps": [
         {
-          "method": "POST",
-          "path": "/shipments"
+          "method": "PATCH",
+          "path": "/shipments/{id}/status"
         }
       ],
       "invariants": [

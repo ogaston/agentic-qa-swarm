@@ -22,6 +22,10 @@
       "sha256": "ebebebba373e5fa2dc05b5bd8980897d0a99c6d3d5bb806cf8514f7b0587f6b5"
     },
     {
+      "prompt": "a\rb",
+      "sha256": "7e18f737311b2dc3b2f269dd78396b0351f14fb66efa879f768cb23181883c78"
+    },
+    {
       "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
       "sha256": "aa20c23e3201834050679e1d88941b9a6fed0557c9a705cb2c315e2e63fd486d"
     }

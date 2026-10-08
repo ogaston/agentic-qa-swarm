@@ -13,6 +13,8 @@ dependencies = []
 where = ["src"]
 
 [tool.pytest.ini_options]
+# -vv a proposito: los criterios de U3 usan "-q -v | grep PASSED"; -q y -v se cancelan
+# a verbosidad 0, pero con -vv de base "-q -v" suma 2 y lista los nombres de prueba.
 testpaths = ["tests"]
 pythonpath = ["tests"]
 markers = [
