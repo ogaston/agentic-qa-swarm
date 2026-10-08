@@ -71,6 +71,8 @@ def test_pbt_validator_accept_implies_invariants(s):
         assert out is None, "acepto un paso con endpoint no observado"
     if s.kind != "valid":
         assert out is None, f"acepto un plan de clase {s.kind}"
+    else:
+        assert out is not None, "rechazo un plan valido"
     if out is None:
         return
     obs = _observed(s.surface)
@@ -83,6 +85,22 @@ def test_pbt_validator_accept_implies_invariants(s):
         assert len(f["steps"]) <= s.limits.max_steps
         for st_ in f["steps"]:
             assert (st_["method"], st_["path"]) in obs
+
+
+# 3b (PBT-03) cada clase de respuesta se ejercita SIEMPRE (no depende de que el azar la sortee): la clase `valid`
+# se acepta y toda clase rota se rechaza; una mutacion que quite un chequeo muere con cualquier seed.
+@pytest.mark.parametrize("kind", gen.KINDS)
+@settings(max_examples=60)
+@given(data=st.data())
+def test_pbt_validator_each_class(kind, data):
+    s = data.draw(gen.scenario(kind=kind))
+    assert s.kind == kind
+    if kind == "valid":
+        out = parse_and_validate(s.text, s.surface, s.workflow, s.limits)  # no debe lanzar
+        assert out == json.loads(s.text)
+    else:
+        with pytest.raises(PlanRejected):
+            parse_and_validate(s.text, s.surface, s.workflow, s.limits)
 
 
 # 4 (PBT-03) prompt: prefijo fijo, un solo bloque de datos, funcion pura

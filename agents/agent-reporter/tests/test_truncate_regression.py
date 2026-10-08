@@ -37,3 +37,13 @@ def test_truncate_does_not_split_utf8_characters():
         out, _ = _truncate(data, limit)
         assert len(out) <= limit
         out.decode("utf-8")  # estricto: no hay caracteres partidos (antes: U+FFFD que crece al re-codificar)
+
+
+def test_non_utf8_evidence_does_not_triple_the_budget():
+    # F-04, ejemplo reducido: 100 bytes 0xff con tope 100 daban 300 bytes (cada byte invalido -> U+FFFD, 3 bytes)
+    objs = {"s3://b/runs/run-1/f0/logs.txt": b"\xff" * 100}
+    (c,) = _contents(objs, max_object_bytes=100, max_total_bytes=100)
+    assert len(c) <= 100
+    c.decode("utf-8")
+    objs = {f"s3://b/runs/run-1/f{i}/logs.txt": b"ab\xe6\x97" * 50 for i in range(4)}
+    assert sum(len(c) for c in _contents(objs, max_object_bytes=90, max_total_bytes=250)) <= 250

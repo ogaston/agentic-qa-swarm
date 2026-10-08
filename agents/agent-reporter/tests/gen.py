@@ -79,16 +79,19 @@ def report(draw, verdict=None, uris=None, rid=None):
 
 # ---- evidencia: result.json, logs, conjuntos ---------------------------------------------------
 
-def result_json():
+def result_json(state=None):
     """(bytes, estado): estado esperado segun el contrato: passed | failed | unknown (JSON roto, forma o estado raros)."""
     def mk(status):
         return json.dumps({"flow_id": "f", "status": status}).encode()
-    return st.one_of(
+    opts = [
         st.just((mk("passed"), "passed")), st.just((mk("failed"), "failed")),
         st.just((mk("running"), "unknown")), st.just((b"{no es json", "unknown")),
         st.just((b"[1, 2]", "unknown")), st.just((b'{"status": ["failed"]}', "unknown")),
         st.just((b"\xff\xfe\x00", "unknown")),
-    )
+    ]
+    if state is not None:  # sin .filter(): construye la clase pedida (un filtro 1/7 dispara el health check)
+        return st.one_of(*[o for o, s in zip(opts, ["passed", "failed", "unknown", "unknown", "unknown", "unknown", "unknown"]) if s == state])
+    return st.one_of(*opts)
 
 
 def logs_text(max_size=60):
@@ -121,10 +124,10 @@ def evidence_set(draw, mode=None):
         uris.append(f"{base}/logs.txt")
         if mode == "all_passed":
             has, (raw, state) = True, (b"", "passed")
-            raw, state = draw(result_json().filter(lambda t: t[1] == "passed"))
+            raw, state = draw(result_json("passed"))
         elif mode == "with_failed" and k == 0:
             has = True
-            raw, state = draw(result_json().filter(lambda t: t[1] == "failed"))
+            raw, state = draw(result_json("failed"))
         else:
             has = draw(st.booleans())
             raw, state = draw(result_json()) if has else (b"", "unknown")
@@ -140,12 +143,14 @@ KINDS = ("valid", "foreign_uri", "broken_json", "extra_keys", "dup_finding", "bu
 
 
 @st.composite
-def model_response(draw, ev):
-    """(kind, texto): respuesta del modelo para la evidencia; valida o rota de forma controlada."""
-    kind = draw(st.sampled_from(KINDS + ("valid",) * 3))  # "valid" pesa mas: es la clase que debe aceptarse
+def model_response(draw, ev, kind=None, verdict=None):
+    """(kind, texto): respuesta del modelo para la evidencia; valida o rota de forma controlada.
+
+    `kind` / `verdict` fuerzan la clase (para construir el caso a proposito, sin depender del azar)."""
+    kind = kind or draw(st.sampled_from(KINDS + ("valid",) * 3))  # "valid" pesa mas: es la clase que debe aceptarse
     states = list(ev.flows.values())
     best = "bug" if "failed" in states else ("sin-hallazgos" if all(s == "passed" for s in states) else "inconcluso")
-    verdict = draw(st.sampled_from(VERDICTS + (best,) * 3))
+    verdict = verdict or draw(st.sampled_from(VERDICTS + (best,) * 3))
     rep = draw(report(verdict=verdict, uris=ev.uris, rid=ev.run_id))
     out = {"verdict": rep["verdict"], "summary": rep["summary"], "findings": rep["findings"]}
     if kind == "foreign_uri":
@@ -260,6 +265,9 @@ def clean_text(max_size=40):
     return st.lists(piece, max_size=max_size // 4).map(" ".join)
 
 
+# Lo que puede quedar pegado a un secreto: Unicode, control, ANSI crudo (cualquier ASCII alfanumerico lo dejaria
+# fuera de la definicion de "secreto": `xBearer` no es un bearer).
+GLUE = ("", "\x1b[31m", "\x1b[1;31;4m", "\x1b", "\x00", "\x7f", "\u00e9", "\u65e5", "\U0001f600", "\u2028")
 SEPARATORS = (" ", "\n", "\t", ", ", "; ", " (", "\n\n")
 CONTEXTS = ("plain", "json", "header", "log")
 
@@ -271,7 +279,7 @@ def secret_text(draw, max_secrets=3):
     secs = [draw(secret()) for _ in range(n)]
     parts = [draw(clean_text(20))]
     for s in secs:
-        parts += [draw(st.sampled_from(SEPARATORS)), s.text, draw(st.sampled_from(SEPARATORS)), draw(clean_text(20))]
+        parts += [draw(st.sampled_from(SEPARATORS)) + draw(st.sampled_from(GLUE)), s.text, draw(st.sampled_from(SEPARATORS)), draw(clean_text(20))]
     body = "".join(parts)
     ctx = draw(st.sampled_from(CONTEXTS))
     if ctx == "json":
@@ -286,10 +294,16 @@ def secret_text(draw, max_secrets=3):
 
 
 def evidence_blob(max_obj):
-    """Contenido de evidencia (valido en UTF-8, sin patrones secretos) con tamanos que cruzan los topes."""
-    piece = st.sampled_from(["abc", "xyz ", "linea\n", "éñ", "日本", "\U0001f600", "0123456789"])
-    return st.one_of(
+    """Evidencia (bytes, SIN patrones secretos) con tamanos que cruzan los topes: UTF-8 valido o bytes arbitrarios."""
+    piece = st.sampled_from(["abc", "xyz ", "linea\n", "\u00e9\u00f1", "\u65e5\u672c", "\U0001f600", "0123456789"])
+    utf8 = st.one_of(
         st.lists(piece, max_size=max(max_obj // 2, 2)).map("".join),
         st.integers(0, 3 * max_obj).map(lambda n: ("0123456789abcdef" * (n // 16 + 1))[:n]),
-        st.integers(0, max_obj // 3 + 1).map(lambda n: "日" * n),
+        st.integers(0, max_obj // 3 + 1).map(lambda n: "\u65e5" * n),
+    ).map(str.encode)
+    return st.one_of(
+        utf8,
+        st.binary(max_size=3 * max_obj),
+        st.integers(0, 3 * max_obj).map(lambda n: b"\xff" * n),
+        st.integers(0, max_obj).map(lambda n: b"ab\xe6\x97" * (n // 4)),  # caracter UTF-8 partido
     )

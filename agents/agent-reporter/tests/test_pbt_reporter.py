@@ -13,6 +13,7 @@ from agent_reporter.report_model import validate_report
 from agent_reporter.reporter import CLOSE, OPEN, Limits, correlate_postmortem, prepare
 from support import report_validator
 
+MODE_FOR = {"bug": "with_failed", "sin-hallazgos": "all_passed", "inconcluso": "mixed"}
 MARKER = re.compile(rb"\n\[\.\.\.recortado: (\d+) bytes\.\.\.\]\n")
 
 
@@ -90,7 +91,7 @@ def _evidence_case(draw):
     max_obj = draw(st.integers(1, 300))
     max_total = draw(st.integers(1, 900))
     n = draw(st.integers(1, 8))
-    blobs = [draw(gen.evidence_blob(max_obj)).encode("utf-8") for _ in range(n)]
+    blobs = [draw(gen.evidence_blob(max_obj)) for _ in range(n)]
     return max_obj, max_total, blobs
 
 
@@ -106,6 +107,7 @@ def test_pbt_evidence_truncation_bounded_deterministic_keeps_head_and_tail(case)
     assert [o["uri"] for o in objs] == uris
     used = 0
     for o, orig in zip(objs, blobs):
+        orig = orig.decode("utf-8", errors="replace").encode("utf-8")  # el reporter normaliza a UTF-8 valido ANTES de recortar
         content = o["content"].encode("utf-8")
         eff = min(max_obj, max(max_total - used, 0))
         used += len(content)
@@ -145,16 +147,22 @@ def _draw_classes(data, seen):
         prep = prepare(ev.run_id, ev.uris, MemReader(ev.objects), Limits())
         llm = FakeLLM()
         llm.register(prep.prompt, txt)
-        rep = correlate_postmortem(ev.run_id, ev.uris, MemReader(ev.objects), llm, Limits())
-        seen.add("aceptado_" + rep["verdict"])
+        correlate_postmortem(ev.run_id, ev.uris, MemReader(ev.objects), llm, Limits())
+        seen.add("aceptado_algun_veredicto")
     except ReportRejected:
         seen.add("rechazado")
-    for v in gen.VERDICTS:
-        if data.draw(gen.report()) ["verdict"] == v:
-            seen.add("report_" + v)
-    seen.add("secreto_" + data.draw(gen.secret()).kind)
+    # caso construido a proposito: evidencia coherente con el veredicto + respuesta valida de ese veredicto.
+    # Asi la clase "aceptado_<veredicto>" no depende de que el azar junte evidencia y respuesta.
+    v = data.draw(st.sampled_from(gen.VERDICTS))
+    ev2 = data.draw(gen.evidence_set(mode=MODE_FOR[v]))
+    _, txt2 = data.draw(gen.model_response(ev2, kind="valid", verdict=v))
+    prep2 = prepare(ev2.run_id, ev2.uris, MemReader(ev2.objects), Limits())
+    llm2 = FakeLLM()
+    llm2.register(prep2.prompt, txt2)
+    seen.add("aceptado_" + correlate_postmortem(ev2.run_id, ev2.uris, MemReader(ev2.objects), llm2, Limits())["verdict"])
+    seen.add("report_" + data.draw(gen.report())["verdict"])
     body, secs = data.draw(gen.secret_text())
-    seen.update("contexto_con_" + s.kind for s in secs)
+    seen.update("secreto_" + s.kind for s in secs)
 
 
 def test_pbt_generator_coverage():
@@ -162,7 +170,7 @@ def test_pbt_generator_coverage():
     _draw_classes(seen=seen)
     esperadas = {
         "evidencia_con_fallido", "evidencia_sin_fallido", "evidencia_todo_pasado", "evidencia_con_desconocido",
-        "logs_con_instrucciones", "logs_sin_instrucciones", "rechazado",
+        "logs_con_instrucciones", "logs_sin_instrucciones", "rechazado", "aceptado_algun_veredicto",
         *("resp_" + k for k in gen.KINDS), *("aceptado_" + v for v in gen.VERDICTS),
         *("report_" + v for v in gen.VERDICTS), *("secreto_" + k for k in gen.SECRET_KINDS),
     }

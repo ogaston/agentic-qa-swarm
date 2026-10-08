@@ -14,6 +14,11 @@ _PRIVATE_KEY = re.compile(
 )
 # Todos los patrones arrancan en un limite (lookbehind) o llevan cotas {0,N}: el costo es lineal
 # (una cadena de 64 KiB de letras, "token", "eyJ"... no dispara backtracking cuadratico).
+# Limite izquierdo de bearer/JWT/URL: lo que deja una letra/digito pegado a la palabra sin ser parte de ella (un escape JSON
+# \n \t \uXXXX, o el final de una secuencia ANSI ESC[..m) no cuenta como caracter de palabra. En vez de ~25 lookbehinds en
+# cada patron (10x mas lento), un pre-paso marca el final de esos escapes con un centinela (simbolo Unicode, no \w) que ningun patron
+# trata como palabra, y se retira al final. Los patrones conservan sus limites simples y su costo lineal.
+_ESC_END = re.compile(r"\\[nrtbf]|\\u001[bB]\[[0-9;]{0,11}m|\\u[0-9a-fA-F]{4}|\x1b\[[0-9;]{0,11}m")
 _URL_CRED = re.compile(
     r"(?<![A-Za-z0-9+.-])(?P<scheme>[A-Za-z][A-Za-z0-9+.-]{0,31}://)[^/\s@:]*:[^/\s]*@"
 )
@@ -22,16 +27,15 @@ _VALUE = r"""(?:\\"(?P<bq>[^"\\\r\n]*)\\"|"(?P<dq>(?:[^"\\\r\n]|\\.)*)"|'(?P<sq>
 _AUTH_HEADER = re.compile(
     r"""(?i)(?P<k>authorization(?:\\?["'])?[ \t]*[=:][ \t]*)""" + _VALUE % r"[^\r\n]+"
 )
-# Limite izquierdo: no alfanumerico, o un escape JSON (\n, \t...) que deja la `n`/`t` pegada a la palabra.
-_BEARER = re.compile(r"(?i)(?:(?<![A-Za-z0-9_])|(?<=\\[nrtbf]))(?P<k>bearer)[ \t]+[A-Za-z0-9._~+/=-]{4,}")
+_BEARER = re.compile(r"(?i)\b(?P<k>bearer)[ \t]+[A-Za-z0-9._~+/=-]{4,}")
 _JWT = re.compile(
-    r"(?:(?<![A-Za-z0-9_-])|(?<=\\[nrtbf]))eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
+    r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
 )
 _AWS = re.compile(r"AKIA[0-9A-Z]{16}")
 _GH = re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")
 _ASSIGN = re.compile(
     r"(?i)(?P<key>" + _KEYWORDS + r"""[\w-]{0,32}(?:\\?["'])?)(?P<sep>[ \t]*[=:][ \t]*)"""
-    + _VALUE % r"[^\s\"',;&]+"
+    + _VALUE % r"""(?:\\(?![nrtbf])|[^\s"',;&\\])+"""  # la barra de un escape \n / \t JSON cierra el valor
 )
 
 
@@ -60,6 +64,12 @@ def _repl_value(m, head: str, kind: str, counts: Counter) -> str:
 
 
 def _redact_str(s: str, counts: Counter) -> str:
+    sent = next(c for c in map(chr, range(0x2400, 0x2500)) if c not in s)  # centinela (simbolo, no \w) ausente de la entrada
+    s = _ESC_END.sub(lambda m: m.group(0) + sent, s)
+    return _redact_marked(s, counts).replace(sent, "")
+
+
+def _redact_marked(s: str, counts: Counter) -> str:
     def sub_simple(rx, kind, text):
         def f(m):
             counts[kind] += 1

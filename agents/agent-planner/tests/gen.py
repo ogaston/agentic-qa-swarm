@@ -149,9 +149,9 @@ def _unobserved(ep_set, base):
 
 
 @st.composite
-def model_response(draw, surf, wf, lim):
+def model_response(draw, surf, wf, lim, kind=None):
     """(kind, texto) de una respuesta del modelo para esa superficie: valida o rota de forma controlada."""
-    kind = draw(st.sampled_from(KINDS))
+    kind = kind or draw(st.sampled_from(KINDS))
     eps = surf["endpoints"]
     ep_set = {(e["method"], e["path"]) for e in eps}
     nflows = draw(st.integers(1, lim.max_flows))
@@ -193,9 +193,9 @@ def model_response(draw, surf, wf, lim):
 
 
 @st.composite
-def scenario(draw):
+def scenario(draw, kind=None):
     surf = draw(surface(nonempty=True))
     wf = draw(workflow())
     lim = draw(limits())
-    kind, txt = draw(model_response(surf, wf, lim))
+    kind, txt = draw(model_response(surf, wf, lim, kind))
     return Scenario(surf, wf, lim, kind, txt)

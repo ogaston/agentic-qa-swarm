@@ -128,6 +128,7 @@ def prepare(run_id: str, uris, reader: EvidenceReader, limits: Limits) -> Prepar
                 flows[fl] = _status(raw)
         red, counts = redact_secrets_counted(raw)  # UNICA pasada: el objeto completo se redacta ANTES de recortar (un secreto partido por el recorte no sobrevive)
         redactions.update(counts)
+        red = red.decode("utf-8", errors="replace").encode("utf-8")  # UTF-8 valido ANTES de recortar: un byte invalido pasa a 3 bytes y el tope se media antes de eso
         cut, was = _truncate(red, min(limits.max_object_bytes, max(remaining, 0)))
         remaining -= len(cut)
         truncated += was
