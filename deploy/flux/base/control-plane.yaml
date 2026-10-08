@@ -1,3 +1,7 @@
+# Secrets que un humano crea cifrados con SOPS (sin valores aqui; ns aqs-system): go-governance-service-token{token},
+# go-warm-manager-service-token{token}, go-reset-service-token{token}, aqs-evidence-s3{access-key,secret-key}.
+# ConfigMap que un humano aporta: go-reset-baseline{baseline.sh} (script de baseline de la app; contrato clean|verify|version).
+# El Role aqs-test-operator es compartido por go-run-controller, go-warm-manager y go-reset (separarlo por servicio: candidata).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -116,6 +120,9 @@ metadata:
     aqs.io/tier: control-plane
 spec:
   replicas: 1
+  # PVC ReadWriteOnce con una replica: RollingUpdate dejaria dos pods compitiendo por el volumen (U4-T07, C-70).
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: go-run-controller
@@ -126,16 +133,98 @@ spec:
         aqs.io/tier: control-plane
     spec:
       serviceAccountName: go-run-controller
+      securityContext:
+        fsGroup: 65532
       containers:
         - name: go-run-controller
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
+            - name: SSL_CERT_FILE
+              value: /etc/aqs/minio-ca/ca.crt
+            - name: RUN_PHASES
+              value: real
+            - name: RUN_TEST_NAMESPACE
+              value: aqs-test
+            - name: LISTEN_ADDR
+              value: ":8080"
+            - name: RUN_DATA_DIR
+              value: /data
+            - name: RUN_EVENTS_FILE
+              value: /data/events.jsonl
+            - name: RUN_OUTBOX_FILE
+              value: /data/outbox.jsonl
+            - name: RUN_MAX_PARALLEL_RUNNERS
+              value: "3"
+            - name: GOVERNANCE_URL
+              value: http://go-governance.aqs-system.svc:8080
+            - name: GOVERNANCE_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: go-governance-service-token
+                  key: token
+            - name: IDENTITY_URL
+              value: http://go-identity.aqs-system.svc:8080
+            - name: WARM_URL
+              value: http://go-warm-manager.aqs-system.svc:8080
+            - name: WARM_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: go-warm-manager-service-token
+                  key: token
+            - name: RESET_URL
+              value: http://go-reset.aqs-system.svc:8080
+            - name: RESET_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: go-reset-service-token
+                  key: token
+            - name: RUN_ARTIFACT_REF
+              value: ghcr.io/ogaston/agentic-qa-swarm/target-app:0.0.0
+            - name: REHEARSAL_IMAGE
+              value: ghcr.io/ogaston/agentic-qa-swarm/rehearsal:0.0.0
+            - name: REHEARSAL_TARGET_URL
+              value: http://warm-app.aqs-test.svc
+            - name: RUNNER_IMAGE
+              value: ghcr.io/ogaston/agentic-qa-swarm/runner:0.0.0
+            - name: EVIDENCE_ENDPOINT
+              value: https://minio.aqs-system.svc:9000
+            - name: EVIDENCE_BUCKET
+              value: evidence
+            - name: EVIDENCE_ACCESS_KEY_FILE
+              value: /etc/aqs/evidence/access-key
+            - name: EVIDENCE_SECRET_KEY_FILE
+              value: /etc/aqs/evidence/secret-key
           image: ghcr.io/ogaston/agentic-qa-swarm/go-run-controller:0.0.0
           ports:
             - name: http
               containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: evidence
+              mountPath: /etc/aqs/evidence
+              readOnly: true
+            - name: minio-ca
+              mountPath: /etc/aqs/minio-ca
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -143,6 +232,37 @@ spec:
             limits:
               cpu: 250m
               memory: 128Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: go-run-controller-data
+        - name: tmp
+          emptyDir: {}
+        - name: evidence
+          secret:
+            secretName: aqs-evidence-s3
+            defaultMode: 0440
+        - name: minio-ca
+          secret:
+            secretName: minio-tls
+            defaultMode: 0444
+            items:
+              - key: ca.crt
+                path: ca.crt
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: go-run-controller-data
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-run-controller
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
@@ -169,6 +289,9 @@ metadata:
     aqs.io/tier: control-plane
 spec:
   replicas: 1
+  # PVC ReadWriteOnce con una replica: RollingUpdate dejaria dos pods compitiendo por el volumen (U4-T07, C-70).
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: go-warm-manager
@@ -179,16 +302,73 @@ spec:
         aqs.io/tier: control-plane
     spec:
       serviceAccountName: go-warm-manager
+      securityContext:
+        fsGroup: 65532
       containers:
         - name: go-warm-manager
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
+            - name: SSL_CERT_FILE
+              value: /etc/aqs/minio-ca/ca.crt
+            - name: WARM_NAMESPACE
+              value: aqs-test
+            - name: LISTEN_ADDR
+              value: ":8080"
+            - name: WARM_KUBE
+              value: incluster
+            - name: WARM_OUTBOX_FILE
+              value: /data/outbox.jsonl
+            - name: WARM_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: go-warm-manager-service-token
+                  key: token
+            - name: WARM_OBJECT_STORE
+              value: s3
+            - name: WARM_S3_ENDPOINT
+              value: minio.aqs-system.svc:9000
+            - name: WARM_S3_BUCKET
+              value: evidence
+            - name: WARM_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aqs-evidence-s3
+                  key: access-key
+            - name: WARM_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aqs-evidence-s3
+                  key: secret-key
+            - name: WARM_APP_URL
+              value: http://warm-app.aqs-test.svc
           image: ghcr.io/ogaston/agentic-qa-swarm/go-warm-manager:0.0.0
           ports:
             - name: http
               containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: minio-ca
+              mountPath: /etc/aqs/minio-ca
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -196,6 +376,33 @@ spec:
             limits:
               cpu: 250m
               memory: 128Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: go-warm-manager-data
+        - name: tmp
+          emptyDir: {}
+        - name: minio-ca
+          secret:
+            secretName: minio-tls
+            defaultMode: 0444
+            items:
+              - key: ca.crt
+                path: ca.crt
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: go-warm-manager-data
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-warm-manager
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
@@ -222,6 +429,9 @@ metadata:
     aqs.io/tier: control-plane
 spec:
   replicas: 1
+  # PVC ReadWriteOnce con una replica: RollingUpdate dejaria dos pods compitiendo por el volumen (U4-T07, C-70).
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: go-reset
@@ -232,16 +442,61 @@ spec:
         aqs.io/tier: control-plane
     spec:
       serviceAccountName: go-reset
+      securityContext:
+        fsGroup: 65532
       containers:
         - name: go-reset
           # TZ=UTC: variable inocua; existe para que image no sea la primera clave y el grep de CA-7 (^\s+image:) cuente todos los contenedores. Ver bitacoras/U5-T04.md F-03.
           env:
             - name: TZ
               value: UTC
+            - name: RESET_NAMESPACE
+              value: aqs-test
+            - name: LISTEN_ADDR
+              value: ":8080"
+            - name: RESET_DATA_DIR
+              value: /data/sessions
+            - name: RESET_OUTBOX_FILE
+              value: /data/outbox.jsonl
+            - name: RESET_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: go-reset-service-token
+                  key: token
+            - name: RESET_WARM_ID
+              value: warm-1
+            - name: RESET_REDIS_ADDR
+              value: warm-redis.aqs-test.svc:6379
+            - name: RESET_BASELINE_SCRIPT
+              value: /etc/aqs/baseline/baseline.sh
+            - name: RESET_BASELINE_VERSION
+              value: v1
           image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
           ports:
             - name: http
               containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: baseline
+              mountPath: /etc/aqs/baseline
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -249,6 +504,30 @@ spec:
             limits:
               cpu: 250m
               memory: 128Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: go-reset-data
+        - name: tmp
+          emptyDir: {}
+        - name: baseline
+          configMap:
+            name: go-reset-baseline
+            defaultMode: 0555
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: go-reset-data
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: go-reset
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
@@ -456,3 +735,25 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+---
+# maxReplicas: 1 a proposito: el diario del controlador vive en un PVC de un solo escritor; mas replicas romperian su
+# integridad hasta resolver la persistencia compartida (C-45/C-49). Escalar = cambiar este numero despues de eso.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: go-run-controller
+  namespace: aqs-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: go-run-controller
+  minReplicas: 1
+  maxReplicas: 1
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80

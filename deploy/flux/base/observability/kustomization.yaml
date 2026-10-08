@@ -10,3 +10,4 @@ resources:
   - prometheusrule-security.yaml
   - dashboard-u4.yaml
   - dashboard-u1.yaml
+  - prometheusrule-u2.yaml
