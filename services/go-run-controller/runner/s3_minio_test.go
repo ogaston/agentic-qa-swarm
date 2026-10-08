@@ -136,6 +136,9 @@ type flaky struct {
 }
 
 func (f *flaky) Put(ctx context.Context, key string, data []byte) (string, error) {
+	if strings.HasSuffix(key, "/started-at") { // el marcador de inicio se escribe antes de lanzar y sí sube
+		return f.S3.Put(ctx, key, data)
+	}
 	bad := *f.S3
 	bad.Bucket = "no-existe"
 	return bad.Put(ctx, key, data)
