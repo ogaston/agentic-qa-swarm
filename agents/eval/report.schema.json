@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvalReport",
+  "type": "object",
+  "properties": {
+    "dataset": {
+      "type": "object",
+      "properties": {
+        "artifacts": {"type": "integer", "minimum": 0},
+        "labelled": {"type": "integer", "minimum": 0},
+        "regressions": {"type": "integer", "minimum": 0}
+      },
+      "required": ["artifacts", "labelled", "regressions"],
+      "additionalProperties": false
+    },
+    "llm": {"const": "fake"},
+    "valid_for": {"const": "pipeline"},
+    "note": {"type": "string", "minLength": 1},
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "factualidad": {"type": "number", "minimum": 0, "maximum": 1},
+        "precision": {"type": "number", "minimum": 0, "maximum": 1},
+        "ruido": {"type": "number", "minimum": 0, "maximum": 1},
+        "adherencia": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["factualidad", "precision", "ruido", "adherencia"],
+      "additionalProperties": false
+    },
+    "thresholds": {
+      "type": "object",
+      "properties": {
+        "factualidad": {"$ref": "#/$defs/threshold"},
+        "precision": {"$ref": "#/$defs/threshold"},
+        "ruido": {"$ref": "#/$defs/threshold"},
+        "adherencia": {"$ref": "#/$defs/threshold"}
+      },
+      "required": ["factualidad", "precision", "ruido", "adherencia"],
+      "additionalProperties": false
+    },
+    "thresholds_met": {
+      "type": "object",
+      "properties": {
+        "factualidad": {"type": "boolean"},
+        "precision": {"type": "boolean"},
+        "ruido": {"type": "boolean"},
+        "adherencia": {"type": "boolean"}
+      },
+      "required": ["factualidad", "precision", "ruido", "adherencia"],
+      "additionalProperties": false
+    },
+    "per_artifact": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["golden", "bug-sembrado", "trampa-esquema", "no-arranca", "regresion-fp"]},
+          "expected": {"type": "object"},
+          "planner": {
+            "type": "object",
+            "properties": {
+              "outcome": {"enum": ["plan", "error"]},
+              "flows": {"type": "integer", "minimum": 0},
+              "error": {"type": ["string", "null"]}
+            },
+            "required": ["outcome", "flows", "error"],
+            "additionalProperties": false
+          },
+          "reporter": {
+            "type": "object",
+            "properties": {
+              "verdict": {"enum": ["bug", "sin-hallazgos", "inconcluso", "error"]},
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "finding_id": {"type": "string"},
+                    "invariant": {"type": "string"},
+                    "method": {"type": "string"},
+                    "path": {"type": "string"},
+                    "false_positive": {"type": "boolean"}
+                  },
+                  "required": ["finding_id", "invariant", "method", "path", "false_positive"],
+                  "additionalProperties": false
+                }
+              },
+              "error": {"type": ["string", "null"]}
+            },
+            "required": ["verdict", "findings", "error"],
+            "additionalProperties": false
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rule": {"enum": ["A1", "A2", "A3", "A4", "A5", "A6", "A7"]},
+                "ok": {"type": "boolean"},
+                "detail": {"type": "string"}
+              },
+              "required": ["rule", "ok", "detail"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["id", "kind", "expected", "planner", "reporter", "checks"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["dataset", "llm", "valid_for", "note", "metrics", "thresholds", "thresholds_met", "per_artifact"],
+  "additionalProperties": false,
+  "$defs": {
+    "threshold": {
+      "type": "object",
+      "properties": {
+        "op": {"enum": [">", "<", "=="]},
+        "value": {"type": "number"},
+        "source": {"type": "string"}
+      },
+      "required": ["op", "value", "source"],
+      "additionalProperties": false
+    }
+  }
+}
