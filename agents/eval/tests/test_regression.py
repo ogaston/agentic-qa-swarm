@@ -106,3 +106,35 @@ def test_regression_duplicate_artifact_and_finding_is_rejected_clearly(tmp_path)
     with pytest.raises(DatasetError, match="ya existe la regresion bug-ecom-01-fp-1"):
         add_regression(ds, "bug-ecom-01", "flow-1", "sin-hallazgos")
     assert sorted(p.name for p in (ds / "regressions").iterdir()) == ["bug-ecom-01-fp-1"]
+
+
+def _expected(d):
+    return json.loads((d / "expected.json").read_text())
+
+
+def test_regression_label_inconcluso_is_written_to_expected(tmp_path):
+    ds = copy_ds(tmp_path)
+    d = add_regression(ds, "bug-ecom-01", "flow-1", "inconcluso")
+    assert _expected(d)["reporter"] == {"verdict": "inconcluso", "root_cause": None}
+    d2 = add_regression(ds, "bug-ecom-01", "flow-2", "sin-hallazgos")
+    assert _expected(d2)["reporter"]["verdict"] == "sin-hallazgos"
+    # el bloque planner se conserva del original
+    assert _expected(d)["planner"] == json.loads((ds / "artifacts/bug-ecom-01/expected.json").read_text())["planner"]
+
+
+def test_regression_same_finding_in_different_artifacts_coexist(tmp_path):
+    ds = copy_ds(tmp_path)
+    a = add_regression(ds, "bug-ecom-01", "flow-1", "inconcluso")
+    b = add_regression(ds, "bug-fintech-01", "flow-1", "inconcluso")
+    assert (a.name, b.name) == ("bug-ecom-01-fp-1", "bug-fintech-01-fp-1")
+
+
+def test_regression_duplicate_is_checked_against_every_existing_one(tmp_path):
+    ds = copy_ds(tmp_path)
+    add_regression(ds, "bug-ecom-01", "flow-1", "inconcluso")
+    add_regression(ds, "bug-ecom-01", "flow-2", "inconcluso")
+    with pytest.raises(DatasetError, match="ya existe"):
+        add_regression(ds, "bug-ecom-01", "flow-2", "inconcluso")
+    with pytest.raises(DatasetError, match="ya existe"):
+        add_regression(ds, "bug-ecom-01", "flow-1", "sin-hallazgos")
+    assert sorted(p.name for p in (ds / "regressions").iterdir()) == ["bug-ecom-01-fp-1", "bug-ecom-01-fp-2"]

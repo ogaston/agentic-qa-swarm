@@ -168,3 +168,26 @@ def test_detects_bug_verdict_with_wrong_root_cause_lowers_factualidad(tmp_path):
     rep = report.evaluate(ds)
     assert rep["metrics"]["factualidad"] == 0.75 and rep["thresholds_met"]["factualidad"] is False
     assert by_id(rep, "bug-ecom-01")["reporter"]["findings"][0]["false_positive"] is True
+
+
+def test_threshold_failing_metric_prints_falla_not_ok(tmp_path, capsys):
+    ds = copy_ds(tmp_path)
+    edit(ds / "artifacts/bug-ecom-01/reporter.response.json", lambda d: d.update(verdict="inconcluso", findings=[]))
+    assert cli.main(["run", "--dataset", str(ds), "--out", str(tmp_path / "o")]) == 1
+    lines = {l.split()[1]: l.split()[0] for l in capsys.readouterr().out.splitlines()[:4]}
+    assert lines == {"factualidad": "FALLA", "precision": "OK", "ruido": "OK", "adherencia": "OK"}
+
+
+def test_threshold_noise_at_limit_prints_falla_ruido(tmp_path, capsys):
+    from agent_eval.regression import add_regression
+    ds = copy_ds(tmp_path)
+    add_regression(ds, "bug-ecom-01", "flow-1", "sin-hallazgos")
+    assert cli.main(["run", "--dataset", str(ds), "--out", str(tmp_path / "o")]) == 1
+    out = capsys.readouterr().out
+    assert "FALLA ruido" in out and "OK ruido" not in out and "OK precision" in out
+
+
+def test_threshold_run_output_states_fake_llm_scope(tmp_path, capsys):
+    cli.main(["run", "--out", str(tmp_path / "o")])
+    nota = [l for l in capsys.readouterr().out.splitlines() if l.startswith("NOTA")]
+    assert len(nota) == 1 and "llm=fake" in nota[0] and "valid_for=pipeline" in nota[0] and "NO mide la calidad" in nota[0]
