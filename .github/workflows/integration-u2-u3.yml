@@ -1,0 +1,31 @@
+name: integration-u2-u3
+
+# Contrato U2 (go-run-controller) <-> U3 (planner de flujos) contra un stub HTTP local del contrato.
+# U3-T07 prueba el mismo borde contra el planner real. Sin secretos del repositorio.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-u2-u3-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: services/go-run-controller/go.mod
+          cache-dependency-path: services/go-run-controller/go.sum
+
+      - name: Pruebas de contrato U2-U3 (stub local)
+        working-directory: services/go-run-controller
+        run: go test -count=1 -race -tags contract -run 'Contract(U3)' -v ./...

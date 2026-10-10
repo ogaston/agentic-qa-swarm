@@ -38,6 +38,7 @@ type config struct {
 	evEndpoint, evBucket, evAccessFile, evSecretFile string
 	maxParallel                                      int
 	flowTimeout, runTimeout                          time.Duration
+	flowSource, u3URL, u3Workflow                    string // RUN_FLOW_SOURCE (""|u3|fake), U3_URL y U3_DEFAULT_WORKFLOW
 }
 
 // parseSeconds lee una duración en segundos (vacío: def). Valor no numérico o <=0 es un error.
@@ -97,14 +98,34 @@ func loadConfig(env func(string) string) (config, error) {
 	if c.runTimeout, err = parseSeconds("RUNNER_RUN_TIMEOUT_SECONDS", env("RUNNER_RUN_TIMEOUT_SECONDS"), 900); err != nil {
 		return c, err
 	}
+	c.flowSource, c.u3URL = env("RUN_FLOW_SOURCE"), env("U3_URL")
+	switch c.flowSource {
+	case "":
+	case "u3":
+		if env("RUN_PHASES") != "real" {
+			return c, errors.New("RUN_FLOW_SOURCE=u3 exige RUN_PHASES=real")
+		}
+		if c.u3URL == "" {
+			return c, errors.New("RUN_FLOW_SOURCE=u3: U3_URL es obligatorio")
+		}
+		if _, err := adapters.ValidateHTTPURL(c.u3URL); err != nil {
+			return c, fmt.Errorf("U3_URL %w", err)
+		}
+		// run.confirmed no lleva workflow: sin Run.Workflow se usa este valor; sin ninguno el plan falla cerrado.
+		if c.u3Workflow = env("U3_DEFAULT_WORKFLOW"); len(c.u3Workflow) > 128 {
+			return c, errors.New("U3_DEFAULT_WORKFLOW excede 128 caracteres")
+		}
+	case "fake":
+		if err := checkFakeAllowed("RUN_FLOW_SOURCE=fake", env); err != nil {
+			return c, err
+		}
+	default:
+		return c, errors.New("RUN_FLOW_SOURCE debe ser u3 o fake")
+	}
 	switch env("RUN_PHASES") {
 	case "fake":
-		if env("RUN_ALLOW_FAKE_PHASES") != "true" {
-			return c, errors.New("RUN_PHASES=fake exige RUN_ALLOW_FAKE_PHASES=true")
-		}
-		switch strings.ToLower(strings.TrimSpace(env("RUN_ENV"))) {
-		case "prod", "production":
-			return c, errors.New("RUN_PHASES=fake no se permite con RUN_ENV=prod")
+		if err := checkFakeAllowed("RUN_PHASES=fake", env); err != nil {
+			return c, err
 		}
 	case "real":
 		c.real = true
@@ -143,6 +164,18 @@ func loadConfig(env func(string) string) (config, error) {
 		return c, errors.New("RUN_PHASES es obligatorio: fake (con RUN_ALLOW_FAKE_PHASES=true) o real")
 	}
 	return c, nil
+}
+
+// checkFakeAllowed exige RUN_ALLOW_FAKE_PHASES=true y prohíbe RUN_ENV=prod para cualquier modo fake.
+func checkFakeAllowed(what string, env func(string) string) error {
+	if env("RUN_ALLOW_FAKE_PHASES") != "true" {
+		return fmt.Errorf("%s exige RUN_ALLOW_FAKE_PHASES=true", what)
+	}
+	switch strings.ToLower(strings.TrimSpace(env("RUN_ENV"))) {
+	case "prod", "production":
+		return fmt.Errorf("%s no se permite con RUN_ENV=prod", what)
+	}
+	return nil
 }
 
 type logAlerter struct{ log *slog.Logger }
