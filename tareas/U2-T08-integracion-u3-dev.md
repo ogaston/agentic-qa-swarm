@@ -15,7 +15,7 @@
 Detalle:
 
 - **Adaptador `FlowSource`** (en `services/go-run-controller/`): cliente HTTP del servicio de U3 que, dado un `SurfaceArtifact` y un workflow, devuelve un `FlowPlan`. Valida la respuesta contra `contracts/plans/flow-plan.schema.json`; un plan inválido, vacío, con flujos que apuntan fuera del warm o un timeout → fallo de fase (nunca se ejecuta un plan sin validar). Solo `http(s)`, timeout 30 s, circuito (el de U2-T07). Selección por `RUN_FLOW_SOURCE=u3` (`U3_URL` obligatoria); `fake` sigue exigiendo `RUN_ALLOW_FAKE_PHASES=true` y rechazado con `RUN_ENV=prod`.
-- **Contrato U2↔U3** en CI: workflow nuevo `.github/workflows/integration-u2-u3.yml` (en `push` a `main` y en `pull_request`; `permissions: contents: read`; acciones fijadas por SHA, **las mismas** que `ci.yml`; sin secretos del repositorio) que levanta el servicio de U3 y el controlador con fakes de Kubernetes y ejecuta `go test -tags contract -run 'Contract(U3)'`: la superficie del warm sembrado produce un `FlowPlan` válido contra su esquema, y la evidencia producida valida contra `evidence-uris.schema.json`.
+- **Contrato U2↔U3** en CI: workflow nuevo `.github/workflows/integration-u2-u3.yml` (en `push` a `main` y en `pull_request`; `permissions: contents: read`; acciones fijadas por SHA, **las mismas** que `ci.yml`; sin secretos del repositorio) que ejecuta `go test -tags contract -run 'Contract(U3)'`. La prueba levanta un stub HTTP de U3 en loopback, verifica que el cliente del controlador acepta un `FlowPlan` válido y falla cerrado ante un plan inválido y un servicio detenido. **U3-T07** prueba el mismo borde contra el planner real, que es dueño de su lanzador y fixture determinista.
 - **Guion de la demostración en dev** `docs/demo-dev-u2.md` (nuevo): comandos exactos, en orden, con la salida esperada de cada uno, **sin credenciales** (referencias a Secrets por nombre), y con el marcador `APROBACIÓN HUMANA REQUERIDA` antes de cada comando que cambia algo en el clúster. Cubre: camino feliz (journey 7.1), **bloqueo de escape** (un flujo que intenta salir de `aqs-test` es bloqueado y se ve en el audit de `go-governance`), **fail-closed** (parar `go-governance` → ninguna transición avanza), **reset** (ensuciar la DB a mano → cuarentena y aviso) y un recorrido de 3 corridas seguidas donde la 2.ª y la 3.ª solo arrancan con `reset_verified=true`.
 - **Script de verificación local** `scripts/test/u2-demo-local.sh` (nuevo): ejecuta la parte de la demostración que **no** requiere clúster (todo con fakes de Kubernetes y de MinIO local) e imprime `OK|FALLA <comprobación>` por cada una; es lo que el codificador y el revisor corren en el loop.
 
@@ -51,13 +51,11 @@ Desde la raíz del worktree.
   ```
   Esperado: `--- PASS` en al menos seis pruebas (plan válido; plan inválido; plan vacío; plan con paso fuera de `/`; timeout; URL no `http(s)`) y `0`.
 
-- [ ] **CA-2** — Contrato U2↔U3 contra el servicio de U3 real.
+- [ ] **CA-2** — Contrato U2↔U3 contra un stub HTTP local del contrato.
   ```bash
-  up   # el codificador documenta la función en la bitácora: levanta U3 y el controlador con fakes de Kubernetes
-  cd services/go-run-controller && U3_URL=http://127.0.0.1:18400 go test -tags contract -run 'Contract(U3)' -v ./... | grep -E '^\s*--- (PASS|FAIL|SKIP)|^(ok|FAIL)'
-  down
+  cd services/go-run-controller && go test -tags contract -run 'Contract(U3)' -v ./... | grep -E '^\s*--- (PASS|FAIL|SKIP)|^(ok|FAIL)'
   ```
-  Esperado: al menos 3 `--- PASS` (superficie → `FlowPlan` válido; `FlowPlan` inválido de U3 → fallo de fase; U3 detenido → fallo de fase) y ningún `FAIL`/`SKIP`.
+  Esperado: al menos 3 `--- PASS` (stub → `FlowPlan` válido; respuesta inválida → fallo de fase; stub detenido → fallo de fase) y ningún `FAIL`/`SKIP`. U3-T07 verifica este contrato contra el planner real.
 
 - [ ] **CA-3** — El recorrido completo, sin clúster, con todos los gates y reset 100%.
   ```bash
@@ -69,7 +67,7 @@ Desde la raíz del worktree.
   ```bash
   grep -c 'APROBACIÓN HUMANA REQUERIDA' docs/demo-dev-u2.md
   grep -c -E '^\s*(kubectl (apply|delete|create|patch)|flux reconcile|helm )' docs/demo-dev-u2.md
-  grep -c -i -E 'password=|token=[A-Za-z0-9]|apikey' docs/demo-dev-u2.md
+  grep -c -i -E 'AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.' docs/demo-dev-u2.md
   for s in 'camino feliz' 'bloqueo de escape' 'fail-closed' 'reset' '3 corridas'; do grep -c -i "$s" docs/demo-dev-u2.md; done | paste -sd' '
   ```
   Esperado: un número ≥ `6`; el segundo, el de órdenes que cambian el clúster **sin** marcador, debe ser `0` (el codificador estructura el documento para que cada orden de ese tipo esté en una línea precedida inmediatamente por el marcador, y el revisor lo verifica leyendo); `0` credenciales; y cinco números ≥ `1`.
@@ -92,7 +90,7 @@ Desde la raíz del worktree.
 
 - [ ] **CA-7** — Higiene y alcance.
   ```bash
-  (cd services/go-run-controller && go vet ./... && go vet -tags contract ./... && test -z "$(gofmt -l .)" && echo ok); git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(services/go-run-controller/|\.github/workflows/integration-u2-u3\.yml|docs/demo-dev-u2\.md|scripts/test/u2-demo-local\.sh|bitacoras/U2-T08\.md|revisiones/U2-T08/)' | wc -l
+  (cd services/go-run-controller && go vet ./... && go vet -tags contract ./... && test -z "$(gofmt -l .)" && echo ok); git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(tareas/U2-T08-integracion-u3-dev\.md|services/go-run-controller/|\.github/workflows/integration-u2-u3\.yml|docs/demo-dev-u2\.md|scripts/test/u2-demo-local\.sh|bitacoras/U2-T08\.md|revisiones/U2-T08/)' | wc -l
   ```
   Esperado: `ok`, `0` y `0`.
 
@@ -103,7 +101,7 @@ Desde la raíz del worktree.
 ## Plan de pruebas
 
 - Unitarias del adaptador con `httptest` (plan válido, inválido, vacío, lento, redirección).
-- Contrato U2↔U3 en CI (CA-2, CA-5) y recorrido local con fakes (CA-3).
+- Contrato U2↔U3 contra el stub HTTP local (CA-2, CA-5) y recorrido local con fakes (CA-3). U3-T07 añade el contrato contra el planner real.
 - Negativas: un `FlowPlan` con una URL fuera del warm es bloqueado antes de crear Jobs; un `FlowPlan` sin flujos no avanza del ensayo.
 
 **Rojo primero:** registrar que `scripts/test/u2-demo-local.sh` y `docs/demo-dev-u2.md` no existen y que `RUN_FLOW_SOURCE=u3` no arranca.
@@ -112,8 +110,8 @@ Desde la raíz del worktree.
 
 ## Notas
 
-- **Esta tarea no se despacha hasta que U3 exista.** El orquestador, al verla sin U3 fusionada, reporta el hueco al humano y no despacha. Si la API de U3 difiere de lo descrito aquí, se actualiza este archivo antes de despachar (es una especificación, no un contrato con U3).
-- **Go y workflows.** `go 1.26.8`; acciones fijadas por SHA, las mismas de `ci.yml`. Podman: montajes con `:z`.
+- **Decisión A (2026-10-10):** CA-2 usa un stub HTTP local del contrato para no anticipar el lanzador ni las fixtures de U3-T07. U3-T07 prueba el mismo borde contra el planner real. Si la API de U3 difiere de lo descrito aquí, se actualiza este archivo antes de despachar (es una especificación, no un contrato con U3).
+- **Go y workflows.** `go 1.26.9`; acciones fijadas por SHA, las mismas de `ci.yml`. Podman: montajes con `:z`.
 - **Informes del loop.** El diff de `revisiones/<tarea>/` no cuenta como desborde.
 - Ningún comando contra un clúster ni la nube en el loop; CA-8 es del humano.
 
