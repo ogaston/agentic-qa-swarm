@@ -616,3 +616,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **User Input (2026-10-10)**: "yes, commit and start the first wave"
 
 ---
+
+## Construction — Redacción de U7 (plataforma en kind local, podman)
+**Timestamp**: 2026-10-10T16:09:53-05:00
+**User Input**: "can we use a cluster creaetd with kind for this project? and run everything in docker/podman" / "yes, draft the U7 kind tasks"
+**AI Response**: "Se crea la unidad U7 — Plataforma en kind local (podman) en `unidades-y-tareas.md` con cinco tareas en `tareas/U7-T01…T05` (clúster kind con guarda de contexto, imágenes con podman cargadas en kind, overlay `deploy/flux/kind` con Secrets efímeros y despliegue, humo con APIs reales y NetworkPolicy aplicada, dashboard contra kind). Orden secuencial; T05 exige además U6-T06. El ciclo de corrida completo queda fuera (exige P1–P3) y el humo lo declara como PENDIENTE. Gate: decisión C-96 (autorizar apply solo en el contexto `kind-aqs`). Candidatas nuevas: C-96, C-97 (Retry-After en el contrato) y C-98 (validación en runtime en el dashboard), estas dos surgidas en U6-T03 ronda 1."
+**Context**: Construction — segunda unidad post-MVP; U6-T03 sigue en revisión en paralelo (sin conflicto de archivos).
+
+---

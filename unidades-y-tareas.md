@@ -156,6 +156,25 @@
 
 > **Tareas redactadas (2026-10-10)**: orden T01 ∥ T02 → T03 → (T04 ∥ T05) → T06. T03 exige T01; T05 exige T02 y T03; T06 exige T04 y T05. Decisiones tomadas al redactar (el humano puede revertirlas): stack Vite + React 18 + TypeScript con versiones exactas y sin librerías de UI/estado; tipos generados con `openapi-typescript` y control de deriva en CI; el frontend llama a `/api/*` y el proxy de Vite enruta a identidad, controlador o `ui-api` (en producción lo hará el ingress); el estado del warm se lee a través de `ui-api` porque `go-warm-manager` solo acepta token de servicio; familias de flujos fijas en `['happy-path']` (S2 sigue fuera); sin navegador real en las pruebas (Testing Library + MSW, y `curl` en el recorrido). Todo se verifica sin clúster. Candidatas nuevas: C-94, C-95.
 
+## U7 — Plataforma en kind local (podman)
+
+- **Responsabilidad**: levantar la plataforma en un clúster kind **efímero y local** sobre podman, con las imágenes construidas en la máquina, el overlay `deploy/flux/kind` y Secrets aleatorios creados en el clúster; verificar con servicios reales que arrancan, que login/inbox/warm responden y que RBAC y NetworkPolicy se **aplican** (kindnet), no solo que pasan `conftest`.
+- **Bounded context**: Plataforma/operación local. **Historias**: US-M10, sobre US-M8.1, US-M8.2 y S5 (U6). Primer paso de P5 sin depender de un entorno dev compartido.
+- **Desplegables**: `deploy/kind/` (configuración del clúster), `deploy/flux/kind/` (overlay), `scripts/kind/` (up/down, imágenes, secretos, despliegue, humo) y `docs/operaciones/kind-local.md`.
+- **Límites**: todo script que hable con el clúster exige el contexto `kind-aqs` (sale `3` con cualquier otro); nunca se apunta a dev/prod; Secrets solo en el clúster (nunca en el repo); el overlay no relaja ninguna política (`policy/*.rego` y `deploy/flux/base|dev|prod` no cambian); observabilidad y backups quedan fuera de kind (exigen CRDs y un S3 externo).
+- **Predecesoras**: U5 (manifiestos, políticas), U1/U2/U4 (servicios); U7-T05 además U6-T06. **Gate**: decisión **C-96** aprobada por el humano antes de despachar U7-T01.
+- **Salida**: `kind-up → build-images → load-images → deploy → kind-smoke → kind-down` en verde. **No** incluye el ciclo de corrida completo: los eventos viajan por archivos del disco de cada pod y los agentes no tienen Deployment; eso exige P1–P3 (sería una unidad siguiente) y el humo lo declara como `PENDIENTE`.
+
+| # | Hecho | Tarea | Historias | Comando de verificación |
+|---|---|---|---|---|
+| U7-T1 | [ ] | Clúster kind `aqs` sobre podman (imagen de nodo por digest), `kind-up`/`kind-down` idempotentes y guarda de contexto `kind-aqs` | US-M10 | `tareas/U7-T01-cluster-kind.md` |
+| U7-T2 | [ ] | Construir con podman las 9 imágenes (`:0.0.0`, contexto igual que la CI) y cargarlas con `kind load image-archive` | US-M10 | `tareas/U7-T02-imagenes-locales.md` |
+| U7-T3 | [ ] | Overlay `deploy/flux/kind` (sin observabilidad ni backups), Secrets aleatorios en el clúster, `deploy.sh` con espera de disponibilidad y overlay `kind` en `policies.sh` | US-M10, US-M8.1, US-M8.2 | `tareas/U7-T03-overlay-kind-y-despliegue.md` |
+| U7-T4 | [ ] | `kind-smoke.sh`: salud de los 7 servicios, login/inbox/warm reales, RBAC y NetworkPolicy aplicados (con prueba de sensibilidad) y pendientes P1/P2 declarados; runbook | US-M10, US-M8.1, US-M8.2, US-M1 | `tareas/U7-T04-humo-y-aislamiento.md` |
+| U7-T5 | [ ] | Dashboard (`vite preview`) contra la plataforma en kind: login → inbox → warm → logout por el origen del dashboard | S5 | `tareas/U7-T05-dashboard-contra-kind.md` |
+
+> **Tareas redactadas (2026-10-10)**, a pedido del humano («can we use a cluster created with kind for this project? and run everything in docker/podman» → «yes, draft the U7 kind tasks»). Orden estrictamente secuencial T01 → T02 → T03 → T04 → T05; T05 exige además U6-T06. Decisiones tomadas al redactar (el humano puede revertirlas): kind con proveedor podman y un solo nodo; kindnet como CNI porque aplica NetworkPolicy; acceso solo por `kubectl port-forward` en loopback (sin `extraPortMappings` ni ingress); imágenes cargadas con `podman save` + `kind load image-archive` (sin registro local); el overlay referencia piezas de `base` para excluir `observability` y `backup`; Secrets generados por script y nunca versionados (no se usa SOPS en kind). **No despachable hasta que el humano resuelva C-96** (autorizar a codificador y revisor a crear/destruir el clúster `aqs` y aplicar manifiestos solo en el contexto `kind-aqs`). Candidatas nuevas: C-96, C-97, C-98.
+
 ## Cobertura historias → unidades (13/13 Must, 0 sin asignar)
 
 | Historia | Unidad(es) |
