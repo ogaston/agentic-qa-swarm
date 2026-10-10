@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../test/server';
-import { ApiError, apiFetch, setAuthToken } from './client';
+import { ApiError, apiFetch, setAuthToken, setUnauthorizedHandler } from './client';
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,64}$/;
 
@@ -122,5 +122,25 @@ describe('apiFetch — fallo de red', () => {
     const err = await apiFetch('/api/notifications').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 0, code: 'network_error' });
+  });
+});
+
+describe('apiFetch — manejador de 401 global', () => {
+  it('llama al manejador solo si la petición llevaba token, y sigue lanzando ApiError', async () => {
+    const manejador = vi.fn();
+    setUnauthorizedHandler(manejador);
+    try {
+      server.use(
+        http.get('/api/x', () => HttpResponse.json({ code: 'unauthorized', message: 'm' }, { status: 401 })),
+      );
+      await expect(apiFetch('/api/x')).rejects.toMatchObject({ status: 401 });
+      expect(manejador).not.toHaveBeenCalled();
+      setAuthToken('t');
+      await expect(apiFetch('/api/x')).rejects.toMatchObject({ status: 401 });
+      expect(manejador).toHaveBeenCalledTimes(1);
+    } finally {
+      setAuthToken(null);
+      setUnauthorizedHandler(null);
+    }
   });
 });
