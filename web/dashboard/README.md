@@ -1,7 +1,7 @@
 # web/dashboard — frontend del Agentic QA Swarm
 
-SPA en Vite + React + TypeScript estricto. Login, sesión en memoria y guarda de rutas (U6-T03). Las rutas
-`/inbox`, `/runs/:id` y `/warm` son todavía placeholders; sus pantallas llegan en U6-T04 y U6-T05.
+SPA en Vite + React + TypeScript estricto. Login, sesión en memoria y guarda de rutas (U6-T03). La ruta
+`/inbox` es todavía placeholder (U6-T04). `/runs`, `/runs/:id` y `/warm` son pantallas de solo lectura (U6-T05).
 
 ## Arranque
 
@@ -66,6 +66,22 @@ La tabla vive en `src/proxy/table.ts`, función pura con pruebas.
 - `src/api/errors.tsx` exporta `<ApiErrorNotice error={…} />`: `429` con cuenta atrás,
   `503`/red con «Servicio no disponible» y `Retry-After` si viene, y el resto con `code`,
   `message` y `requestId` para soporte. Nunca muestra el token.
+
+## Corridas y warm (U6-T05)
+
+- `/runs/:id` (`src/pages/Run/RunPage.tsx`): línea de tiempo de las fases del contrato. Sondea
+  `GET /api/runs/{id}` cada 3 s hasta `done` o `failed`. `id` inválido no hace petición; `404`
+  muestra «Corrida no encontrada» sin sondeo; 5 fallos seguidos paran el sondeo y muestran «Reintentar».
+- `/runs` («Mis corridas», `src/pages/Runs/RunsPage.tsx`): recibos de `GET /api/confirmations?limit=20`,
+  con enlace a `/runs/:id`. Carga única, sin sondeo.
+- `/warm` (`src/pages/Warm/WarmPage.tsx`): estado de `GET /api/warm` con una insignia por estado,
+  aviso si `ready` con `reset_verified=false` y sondeo cada 10 s. `503 warm_unavailable` muestra
+  «Estado del warm no disponible».
+- Sondeo común: `src/hooks/usePolling.ts`. Pausa con la pestaña oculta (`visibilitychange`), se
+  detiene al desmontar y tras 5 fallos seguidos.
+- Con `Retry-After` (429/503) la espera es `min(300 s, max(intervalo, Retry-After))`. Volver a la
+  pestaña respeta esa espera pendiente; no se pide antes.
+- La cabecera enlaza a Inbox, Mis corridas y Warm.
 
 ## Scripts
 
