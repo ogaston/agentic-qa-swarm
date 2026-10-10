@@ -15,6 +15,7 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/rehearsal"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runner"
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/stubs"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -24,6 +25,34 @@ type noFlows struct{}
 
 func (noFlows) Flows(string) (plan.FlowPlan, error) {
 	return plan.FlowPlan{}, errors.New("sin fuente de FlowPlan (U3): falla cerrado")
+}
+
+// newFlowSource elige la fuente de FlowPlan: u3 (adaptador HTTP; la superficie sale de go-warm-manager y
+// el workflow de la corrida), fake (solo tras checkFakeAllowed en loadConfig) o noFlows (falla cerrado).
+// El bool indica que el adaptador de U3 quedó cableado.
+func newFlowSource(c config, wc *adapters.WarmClient, store runctl.RunStore) (rehearsal.FlowSource, bool) {
+	switch c.flowSource {
+	case "u3":
+		if wc == nil {
+			return noFlows{}, false
+		}
+		fs, err := adapters.NewFlowSourceU3(c.u3URL, wc.Surface, func(id string) (string, bool) {
+			r, ok := store.Get(id)
+			if r.Workflow == "" {
+				return c.u3Workflow, ok
+			}
+			return r.Workflow, ok
+		})
+		if err != nil {
+			return noFlows{}, false
+		}
+		return fs, true
+	case "fake":
+		f := &stubs.FakeFlowSource{}
+		f.Program()
+		return f, false
+	}
+	return noFlows{}, false
 }
 
 // inClusterClient crea el clientset del clúster (solo en RUN_PHASES=real).
@@ -54,13 +83,17 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 	if err != nil {
 		return base, err
 	}
-	l := &rehearsal.Launcher{Kube: rehearsal.ClientGo{CS: cs, NS: c.namespace}, Plans: noFlows{},
+	flows, u3 := newFlowSource(c, wc, store)
+	if c.flowSource == "u3" && !u3 {
+		return base, errors.New("RUN_FLOW_SOURCE=u3: no se pudo crear el adaptador de U3")
+	}
+	l := &rehearsal.Launcher{Kube: rehearsal.ClientGo{CS: cs, NS: c.namespace}, Plans: flows,
 		Cfg: rehearsal.Config{Namespace: c.namespace, Image: c.rehearsalImage, ServiceAccount: c.rehearsalSA, TargetURL: c.rehearsalTarget}}
 	ev, err := runner.NewS3(c.evEndpoint, c.evBucket, c.evAccessFile, c.evSecretFile)
 	if err != nil {
 		return base, err
 	}
-	rl := &runner.Launcher{Kube: runner.ClientGo{CS: cs, NS: c.namespace}, Plans: noFlows{}, Exec: runner.HTTPStepsExecutor{Target: c.rehearsalTarget},
+	rl := &runner.Launcher{Kube: runner.ClientGo{CS: cs, NS: c.namespace}, Plans: flows, Exec: runner.HTTPStepsExecutor{Target: c.rehearsalTarget},
 		Evidence: ev, Gate: gate, Policy: runner.StaticPolicy{L: runner.Limits{FlowTimeout: c.flowTimeout, RunTimeout: c.runTimeout}},
 		MaxParallel: c.maxParallel, Obs: rm, Log: log,
 		Cfg: runner.Config{Namespace: c.namespace, Image: c.runnerImage, ServiceAccount: c.runnerSA}}

@@ -4,6 +4,17 @@ Controlador de corridas (C9): máquina de estados persistida en un diario JSONL 
 con un gate de go-governance (U4) en cada transición, `GET /runs/{id}`, `/healthz`, `/readyz` y `/metrics`.
 `RUN_PHASES=real` usa los adaptadores reales (U2-T04); `fake` sigue exigiendo `RUN_ALLOW_FAKE_PHASES=true` y se rechaza con `RUN_ENV=prod`.
 
+## Origen de flujos (U3)
+
+`RUN_FLOW_SOURCE=u3` (solo con `RUN_PHASES=real`; `U3_URL` http(s) obligatoria) cablea `adapters.FlowSourceU3`:
+`POST {U3_URL}/v1/plan {surface, workflow}` → `FlowPlan`, validado contra el esquema, sin redirecciones, plazo de 30 s,
+circuito (5 fallos seguidos abren 10 s) y rechazo de pasos fuera de la raíz del warm. Un plan inválido, vacío, de otra corrida
+o un U3 caído es un fallo de fase: nunca se lanza un plan sin validar. `run.confirmed` no lleva workflow: se usa `Run.Workflow`
+o, si falta, `U3_DEFAULT_WORKFLOW` (sin ninguno, falla cerrado). `RUN_FLOW_SOURCE=fake` exige `RUN_ALLOW_FAKE_PHASES=true` y se
+rechaza con `RUN_ENV=prod`. Sin `RUN_FLOW_SOURCE`, el controlador real sigue fallando cerrado (sin plan no hay ensayo).
+Contrato: `go test -tags contract -run 'Contract(U3)' ./...` (stub HTTP local; con `U3_URL` el caso válido usa ese servicio).
+Recorrido local sin clúster: `bash scripts/test/u2-demo-local.sh`; guion para dev: `docs/demo-dev-u2.md`.
+
 ## Persistencia y fallos de disco
 
 - **Diario** (`RUN_DATA_DIR/runs.jsonl`). Un `Save` que falla en `Write` o `Sync` trunca el archivo al

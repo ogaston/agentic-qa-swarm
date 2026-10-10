@@ -187,3 +187,84 @@ func keyFiles() (string, string) {
 	})
 	return akf, skf
 }
+
+func TestLoadConfigFlowSourceU3(t *testing.T) {
+	m := realEnv()
+	m["RUN_FLOW_SOURCE"], m["U3_URL"] = "u3", "http://planner.u3:8080"
+	c, err := loadConfig(envOf(m))
+	if err != nil || c.flowSource != "u3" || c.u3URL != "http://planner.u3:8080" {
+		t.Fatalf("%+v %v", c, err)
+	}
+	for name, mut := range map[string]func(map[string]string){
+		"sin U3_URL":         func(m map[string]string) { delete(m, "U3_URL") },
+		"U3_URL ftp":         func(m map[string]string) { m["U3_URL"] = "ftp://x" },
+		"U3_URL con claves":  func(m map[string]string) { m["U3_URL"] = "http://u:p@x" },
+		"origen desconocido": func(m map[string]string) { m["RUN_FLOW_SOURCE"] = "otro" },
+		"u3 con fases fake":  func(m map[string]string) { m["RUN_PHASES"], m["RUN_ALLOW_FAKE_PHASES"] = "fake", "true" },
+	} {
+		m := realEnv()
+		m["RUN_FLOW_SOURCE"], m["U3_URL"] = "u3", "http://planner.u3:8080"
+		mut(m)
+		if _, err := loadConfig(envOf(m)); err == nil {
+			t.Errorf("%s: aceptado", name)
+		}
+	}
+}
+
+func TestLoadConfigFlowSourceFakeStillGuarded(t *testing.T) {
+	m := realEnv()
+	m["RUN_FLOW_SOURCE"] = "fake"
+	if _, err := loadConfig(envOf(m)); err == nil {
+		t.Fatal("RUN_FLOW_SOURCE=fake sin RUN_ALLOW_FAKE_PHASES aceptado")
+	}
+	m["RUN_ALLOW_FAKE_PHASES"] = "true"
+	if _, err := loadConfig(envOf(m)); err != nil {
+		t.Fatal(err)
+	}
+	m["RUN_ENV"] = "prod"
+	if _, err := loadConfig(envOf(m)); err == nil {
+		t.Fatal("RUN_FLOW_SOURCE=fake con RUN_ENV=prod aceptado")
+	}
+}
+
+func TestBuildConfigU3WiresFlowSourceAndFakeStaysFailClosedByDefault(t *testing.T) {
+	m := realEnv()
+	m["RUN_FLOW_SOURCE"], m["U3_URL"] = "u3", "http://planner.u3:8080"
+	c, err := loadConfig(envOf(m))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buildConfig(c, fake.NewSimpleClientset(), runctl.AllowAll(), runctl.NewMemStore(), &runctl.FakePublisher{}, &runctl.FakeAlerter{}, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := newFlowSource(c, nil, runctl.NewMemStore()); ok {
+		t.Fatal("sin cliente de warm no puede haber fuente u3")
+	}
+	if fs, _ := newFlowSource(realCfg(t), nil, runctl.NewMemStore()); fs == nil {
+		t.Fatal("la fuente por defecto no puede ser nil")
+	} else if _, err := fs.Flows("r1"); err == nil {
+		t.Fatal("la fuente por defecto debe fallar cerrado")
+	}
+}
+
+func realCfg(t *testing.T) config {
+	t.Helper()
+	c, err := loadConfig(envOf(realEnv()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func TestFlowSourceU3WorkflowFallbackAndLimit(t *testing.T) {
+	m := realEnv()
+	m["RUN_FLOW_SOURCE"], m["U3_URL"], m["U3_DEFAULT_WORKFLOW"] = "u3", "http://planner.u3:8080", "checkout"
+	c, err := loadConfig(envOf(m))
+	if err != nil || c.u3Workflow != "checkout" {
+		t.Fatalf("%+v %v", c, err)
+	}
+	m["U3_DEFAULT_WORKFLOW"] = strings.Repeat("x", 129)
+	if _, err := loadConfig(envOf(m)); err == nil {
+		t.Fatal("workflow de 129 caracteres aceptado")
+	}
+}
