@@ -88,6 +88,7 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 			continue
 		}
 		if _, dup := s.receipt[r.NotificationID]; !dup {
+			s.rorder = append(s.rorder, r.NotificationID)
 			s.receipt[r.NotificationID] = r.Receipt
 			s.flows[r.NotificationID], s.traces[r.NotificationID] = r.Flows, r.TraceID
 		}

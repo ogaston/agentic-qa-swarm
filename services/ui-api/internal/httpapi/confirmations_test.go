@@ -131,3 +131,27 @@ func TestConfirmationsSinTokenDa401(t *testing.T) {
 		t.Fatalf("sin token: %d", w.Code)
 	}
 }
+
+// Reabrir el store sobre el mismo directorio (reinicio del servicio) debe conservar /confirmations.
+func TestConfirmationsTrasReinicioSigueListando(t *testing.T) {
+	e := confEnv(t)
+	confirm(t, e, "n-a1", "ua")
+	confirm(t, e, "n-x2", "adm")
+
+	st, err := inbox.OpenStore(e.dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := auth.NewFakeTokenVerifier(confTokA + "=ua:user," + confTokX + "=adm:admin")
+	h, err := New(Config{Store: st, Verifier: v, AllowedOrigins: []string{"https://app.example"}, RateRPS: 1000, RateBurst: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e2 := &env{h: h, store: st, dir: e.dir}
+	if got := decodeReceipts(t, e2.do(http.MethodGet, "/confirmations", confTokX, "").Body.Bytes()); len(got) != 2 {
+		t.Fatalf("admin tras reinicio vio %v, quiero 2", got)
+	}
+	if got := decodeReceipts(t, e2.do(http.MethodGet, "/confirmations", confTokA, "").Body.Bytes()); len(got) != 1 || got[0] != "n-a1|ua" {
+		t.Fatalf("user tras reinicio vio %v", got)
+	}
+}
