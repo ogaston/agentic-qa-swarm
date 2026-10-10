@@ -38,6 +38,8 @@ La tabla vive en `src/proxy/table.ts`, función pura con pruebas.
 - `npm run check:api` regenera a un archivo temporal y falla si difiere del commiteado. Lo corre CI.
 - `src/api/client.ts`: `apiFetch<T>(path, init)`. Una sola petición por llamada, sin reintentos.
   Cualquier fallo no 2xx lanza `ApiError {status, code, message, retryAfter?, requestId}`.
+  Un fallo de red (fetch rechazado) lanza `ApiError` con `code: "network_error"` y `status: 0`.
+  Un cuerpo no JSON o no `Error` produce `code: "unexpected_response"`.
 - El token se inyecta con `setAuthToken` y vive solo en memoria.
 
 ## Scripts

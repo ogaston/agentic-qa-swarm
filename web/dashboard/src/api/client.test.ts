@@ -115,3 +115,12 @@ describe('apiFetch — respuestas y errores', () => {
     expect(hits).toBe(1);
   });
 });
+
+describe('apiFetch — fallo de red', () => {
+  it('si fetch rechaza, lanza ApiError con code network_error y status 0', async () => {
+    server.use(http.get('*/api/notifications', () => HttpResponse.error()));
+    const err = await apiFetch('/api/notifications').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 0, code: 'network_error' });
+  });
+});
