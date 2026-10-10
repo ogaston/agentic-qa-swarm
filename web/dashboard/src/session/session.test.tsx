@@ -1,10 +1,12 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiFetch } from '../api/client';
 import { server } from '../test/server';
 import { currentLocation, renderApp } from '../test/renderApp';
+import { SessionProvider, useSession } from './SessionContext';
 
 const TOKEN = 'tok-MARCADOR-unico-7f3a9c';
 
@@ -202,5 +204,75 @@ describe('expires_at inválido', () => {
     expect(screen.queryByText('ana')).toBeNull();
     await apiFetch('/api/probe');
     expect(ultimaAutorizacion).toBeNull();
+  });
+});
+
+describe('login descarta la sesión previa (A-2 / F-03)', () => {
+  type Api = ReturnType<typeof useSession>;
+  let api: Api | null = null;
+
+  function Capturar() {
+    api = useSession();
+    return null;
+  }
+
+  function montar() {
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <SessionProvider>
+          <Capturar />
+        </SessionProvider>
+      </MemoryRouter>,
+    );
+    if (api === null) throw new Error('sin api');
+    return api;
+  }
+
+  it('dos logins seguidos: el segundo POST no lleva el Bearer del primero', async () => {
+    const cabeceras: (string | null)[] = [];
+    let emitidos = 0;
+    server.use(
+      http.post('/api/auth/login', ({ request }) => {
+        cabeceras.push(request.headers.get('authorization'));
+        emitidos += 1;
+        return HttpResponse.json({ token: `T${emitidos}`, expires_at: '2099-01-01T00:00:00Z', session_id: 's' });
+      }),
+      http.get('/api/auth/session', () =>
+        HttpResponse.json({ principal_id: 'ana', role: 'user', session_id: 's', expires_at: '2099-01-01T00:00:00Z' }),
+      ),
+    );
+    const sesion = montar();
+    await act(async () => {
+      await sesion.login({ username: 'ana', password: 'x' });
+    });
+    await act(async () => {
+      await sesion.login({ username: 'ana', password: 'x' });
+    });
+    expect(cabeceras).toEqual([null, null]);
+  });
+
+  it('un login fallido con sesión previa deja sin sesión', async () => {
+    let intento = 0;
+    server.use(
+      http.post('/api/auth/login', () => {
+        intento += 1;
+        if (intento === 1) {
+          return HttpResponse.json({ token: 'T1', expires_at: '2099-01-01T00:00:00Z', session_id: 's' });
+        }
+        return HttpResponse.json({ code: 'unauthorized', message: 'x' }, { status: 401 });
+      }),
+      http.get('/api/auth/session', () =>
+        HttpResponse.json({ principal_id: 'ana', role: 'user', session_id: 's', expires_at: '2099-01-01T00:00:00Z' }),
+      ),
+    );
+    const sesion = montar();
+    await act(async () => {
+      await sesion.login({ username: 'ana', password: 'x' });
+    });
+    expect(api?.session?.principal.principal_id).toBe('ana');
+    await act(async () => {
+      await expect(sesion.login({ username: 'ana', password: 'malo' })).rejects.toBeInstanceOf(ApiError);
+    });
+    expect(api?.session).toBeNull();
   });
 });
