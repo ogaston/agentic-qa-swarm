@@ -51,6 +51,7 @@ type Store struct {
 	pubDone map[string]struct{} // notification_id con run.confirmed ya publicado
 	pubPath string
 	seq     int
+	rorder  []string // notification_id de cada recibo, en orden de llegada (el último es el más reciente)
 	// Skipped cuenta lineas de recibos ilegibles ignoradas al abrir.
 	Skipped int
 }
@@ -170,6 +171,20 @@ func (s *Store) Counts() map[string]int {
 	return out
 }
 
+// Receipts devuelve hasta limit recibos, el más reciente primero, filtrados por visible.
+// Devuelve siempre un slice no nil.
+func (s *Store) Receipts(limit int, visible func(Receipt) bool) []Receipt {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Receipt, 0, limit)
+	for i := len(s.rorder) - 1; i >= 0 && len(out) < limit; i-- {
+		if rc := s.receipt[s.rorder[i]]; visible(rc) {
+			out = append(out, rc)
+		}
+	}
+	return out
+}
+
 // Confirm registra la confirmacion de id por principalID: persiste (fsync) y
 // solo despues cambia el estado. La segunda confirmacion devuelve
 // ErrAlreadyConfirmed sin crear otro recibo.
@@ -201,6 +216,7 @@ func (s *Store) ConfirmTraced(id, principalID string, flows []string, traceID st
 		return Receipt{}, fmt.Errorf("persistiendo confirmacion: %w", err)
 	}
 	s.receipt[id] = r
+	s.rorder = append(s.rorder, id)
 	s.flows[id], s.traces[id] = append([]string(nil), flows...), traceID
 	return r, nil
 }

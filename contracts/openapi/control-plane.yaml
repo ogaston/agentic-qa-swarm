@@ -82,6 +82,44 @@ paths:
         '401': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /warm:
+    get:
+      operationId: getWarmState
+      summary: Estado del warm (solo lectura). ui-api lo lee con el token de servicio; el token de la persona no sale de ui-api.
+      responses:
+        '200':
+          description: Estado del warm.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WarmState'}
+        '401': {$ref: '#/components/responses/Error'}
+        '503':
+          description: Warm no disponible (sin configurar, respuesta invalida, caido, 401/5xx del warm o circuito abierto). Incluye Retry-After.
+          headers:
+            Retry-After:
+              schema: {type: integer}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /confirmations:
+    get:
+      operationId: listConfirmations
+      summary: Recibos de confirmacion, mas reciente primero. Un user ve solo los suyos (confirmed_by); un admin ve todos.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Lista de recibos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ConfirmationReceipt'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
   /runs/{id}:
     get:
       operationId: getRun
@@ -320,6 +358,15 @@ components:
             ref: {type: string, minLength: 1}
           additionalProperties: false
         state: {type: string, enum: [pending, confirmed, rejected]}
+    WarmState:
+      type: object
+      required: [warm_id, state, reset_verified, baseline_version]
+      additionalProperties: false
+      properties:
+        warm_id: {type: string, minLength: 1}
+        state: {type: string, enum: [ready, dirty, cuarentena, idle-escalado]}
+        reset_verified: {type: boolean}
+        baseline_version: {type: string, minLength: 1}
     ConfirmationReceipt:
       type: object
       required: [run_id, notification_id, confirmed_by, confirmed_at]

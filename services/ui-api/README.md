@@ -4,6 +4,8 @@ API JSON del inbox. Sin UI HTML ni Kubernetes.
 
 - `GET /notifications[?state=pending|confirmed|rejected]` -> `[]Notification`, mas reciente primero.
 - `POST /notifications/{id}/confirm` con `{"flows":[...]}` -> `201 ConfirmationReceipt`; `404`, `409`, `400`, `413`, `415`, `401`.
+- `GET /warm` -> `200 WarmState` (estado del warm, solo lectura). Lee `GET {WARM_URL}/warm` de go-warm-manager con el token de **servicio** (`UIAPI_WARM_TOKEN_FILE`); el token de la persona nunca sale hacia el warm. Respuesta inválida contra el esquema, transporte, plazo 2 s, 5xx, `401` del warm o circuito abierto -> `503 warm_unavailable` + `Retry-After`. Sin `WARM_URL` -> `503 warm_unavailable` (el resto de rutas sigue sirviendo).
+- `GET /confirmations[?limit=N]` -> `200 []ConfirmationReceipt`, más reciente primero; `limit` 1–100 (por defecto 20; fuera de rango -> `400`). Un `user` ve solo sus recibos (`confirmed_by` = su `Principal.ID`); `admin` ve todos. El rol sale del verificador de tokens, nunca de cabeceras ni parámetros.
 - Errores: `{"code","message"}`. Todas las respuestas llevan los cinco security headers.
 
 `run_id` = `run-` + 32 hex (128 bits de `crypto/rand`). `confirmed_by` es el `Principal.ID` del token.
@@ -17,6 +19,8 @@ API JSON del inbox. Sin UI HTML ni Kubernetes.
 | `UIAPI_ALLOW_FAKE_AUTH` / `UIAPI_ENV` | `fake` exige `UIAPI_ALLOW_FAKE_AUTH=true` y no arranca con `UIAPI_ENV=prod`. |
 | `UIAPI_OUTBOX_FILE` | **Obligatoria.** Outbox JSONL donde se publica `run.confirmed` al confirmar (transporte de transición, C-45). Si publicar falla, el `201` se mantiene, el recibo queda pendiente (`aqs_inbox_publish_pending`) y se reintenta al arrancar y cada 5 s; `event_id` es UUIDv5 de `run_id`, sin duplicados. |
 | `UIAPI_FAKE_TOKENS` | Con `fake`: `token=id:rol,...` (roles `user`/`admin`). |
+| `WARM_URL` | Opcional. URL `http(s)` de go-warm-manager para `GET /warm`. Sin ella, `/warm` responde `503 warm_unavailable`. Con ella es obligatoria `UIAPI_WARM_TOKEN_FILE` (si falta, no arranca). |
+| `UIAPI_WARM_TOKEN_FILE` | Archivo con el token de servicio del warm-manager. Se lee en cada llamada; nunca se pasa el valor por variable de entorno ni se registra. |
 | `UIAPI_EVENTS_FILE` | Outbox JSONL de go-intake (transicion, C-45). Tail desde el inicio, idempotente por `event_id`; evento invalido = descartado y contado. |
 | `UIAPI_DATA_DIR` | Contiene `confirmations.jsonl` (solo-agregar, fsync por recibo). Una linea truncada no impide arrancar. |
 | `UIAPI_ALLOWED_ORIGINS` | Origenes CORS separados por coma; vacia = ninguno; `*` se rechaza. |
