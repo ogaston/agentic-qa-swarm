@@ -1,0 +1,26 @@
+:root {
+  --color-bg: #ffffff;
+  --color-fg: #1a1a1a;
+  --color-muted: #5b6270;
+  --color-accent: #2f6fde;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #121418;
+    --color-fg: #e8eaf0;
+    --color-muted: #9aa3b2;
+    --color-accent: #7aa7ff;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: system-ui, sans-serif;
+}
+
+main {
+  padding: 1.5rem;
+}

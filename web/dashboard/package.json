@@ -1,0 +1,36 @@
+{
+  "name": "@aqs/dashboard",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "gen:api": "openapi-typescript ../../contracts/openapi/control-plane.yaml -o src/api/schema.gen.ts",
+    "check:api": "openapi-typescript ../../contracts/openapi/control-plane.yaml -o .schema.check.ts && (diff -q .schema.check.ts src/api/schema.gen.ts >/dev/null || (echo 'schema.gen.ts desactualizado: ejecuta npm run gen:api' >&2; rm -f .schema.check.ts; exit 1)) && rm -f .schema.check.ts"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.1.0",
+    "@testing-library/user-event": "14.5.2",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "eslint": "9.16.0",
+    "jsdom": "25.0.1",
+    "msw": "2.6.8",
+    "openapi-typescript": "7.4.4",
+    "typescript": "5.6.3",
+    "typescript-eslint": "8.18.0",
+    "vite": "5.4.11",
+    "vitest": "2.1.8"
+  }
+}

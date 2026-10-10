@@ -1,0 +1,49 @@
+name: web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'contracts/openapi/**'
+      - '.github/workflows/web.yml'
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'contracts/openapi/**'
+      - '.github/workflows/web.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web/dashboard
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/dashboard/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tipos del contrato al día
+        run: npm run check:api
+      - name: Pruebas
+        run: npm run test
+      - name: Build
+        run: npm run build
+      - name: Auditoría de dependencias de producción
+        run: npm audit --omit=dev --audit-level=high
