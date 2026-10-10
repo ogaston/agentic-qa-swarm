@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { InboxPage } from './pages/Inbox/InboxPage';
 import { LoginPage } from './pages/Login/LoginPage';
 import { ProtectedLayout } from './session/ProtectedLayout';
 import { SessionProvider } from './session/SessionContext';
@@ -18,7 +19,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
-        <Route path="/inbox" element={<Placeholder name="Inbox" />} />
+        <Route path="/inbox" element={<InboxPage />} />
         <Route path="/runs/:id" element={<Placeholder name="Corrida" />} />
         <Route path="/warm" element={<Placeholder name="Warm" />} />
       </Route>
