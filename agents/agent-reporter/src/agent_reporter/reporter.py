@@ -72,13 +72,24 @@ def _flow_of(uri: str) -> str | None:
 
 
 def _truncate(data: bytes, limit: int) -> tuple[bytes, bool]:
+    """Recorta a <= limit bytes: cabeza + marca + cola. Nunca parte un caracter UTF-8 y nunca supera `limit`."""
     if len(data) <= limit:
         return data, False
     marker = f"\n[...recortado: {len(data) - limit} bytes...]\n".encode()
-    keep = max(limit - len(marker), 0)
+    if len(marker) > limit:  # ni la marca cabe en el tope: solo cabeza (la marca por si sola lo superaria)
+        end = limit
+        while end > 0 and (data[end] & 0xC0) == 0x80:  # data[end] es continuacion: el corte partiria un caracter
+            end -= 1
+        return data[:end], True
+    keep = limit - len(marker)
     head = keep // 2
     tail = keep - head
-    return data[:head] + marker + (data[len(data) - tail:] if tail else b""), True
+    while head > 0 and (data[head] & 0xC0) == 0x80:
+        head -= 1
+    start = len(data) - tail
+    while start < len(data) and (data[start] & 0xC0) == 0x80:
+        start += 1
+    return data[:head] + marker + data[start:], True
 
 
 def _status(raw: bytes) -> str:
@@ -117,6 +128,7 @@ def prepare(run_id: str, uris, reader: EvidenceReader, limits: Limits) -> Prepar
                 flows[fl] = _status(raw)
         red, counts = redact_secrets_counted(raw)  # UNICA pasada: el objeto completo se redacta ANTES de recortar (un secreto partido por el recorte no sobrevive)
         redactions.update(counts)
+        red = red.decode("utf-8", errors="replace").encode("utf-8")  # UTF-8 valido ANTES de recortar: un byte invalido pasa a 3 bytes y el tope se media antes de eso
         cut, was = _truncate(red, min(limits.max_object_bytes, max(remaining, 0)))
         remaining -= len(cut)
         truncated += was

@@ -1,7 +1,10 @@
 import ipaddress
+import os
+import random
 import socket
 
 import pytest
+from hypothesis import settings
 
 
 class NetworkBlocked(Exception):
@@ -72,3 +75,25 @@ def _block_non_local_network(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
     monkeypatch.setattr(socket, "gethostbyname", gethostbyname)
     monkeypatch.setattr(socket, "gethostbyname_ex", gethostbyname_ex)
+
+
+# --- PBT-08 (U3-T06): seed siempre registrado y reproducible ---------------------------------
+# Prioridad: --hypothesis-seed, luego PBT_SEED, si no uno aleatorio. Se imprime en la cabecera.
+settings.register_profile("aqs", max_examples=200, deadline=None, print_blob=True)
+settings.load_profile("aqs")  # el shrinking queda activo: no se restringe `phases`
+
+_SEED = {}
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_configure(config):
+    raw = config.getoption("hypothesis_seed", default=None)
+    if raw is None:
+        raw = os.environ.get("PBT_SEED")
+    seed = int(raw) if raw not in (None, "") else random.SystemRandom().randrange(2**32)
+    _SEED["value"] = seed
+    config.option.hypothesis_seed = str(seed)  # lo lee el plugin de hypothesis en su propio configure
+
+
+def pytest_report_header(config):
+    return f"hypothesis seed: {_SEED['value']}"
