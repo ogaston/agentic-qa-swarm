@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ApiError } from '../api/client';
 
 export type PollingOptions<T> = {
   /** Estado terminal: al recibirlo el sondeo se detiene. */
@@ -37,7 +38,8 @@ type Estado<T> = {
  * - Con la pestaña oculta no se pide nada (`visibilitychange`); al volver se pide de inmediato.
  * - Estado terminal o error fatal → se detiene.
  * - `maxFailures` fallos seguidos → se detiene y queda `agotado` hasta `refrescar()`.
- * - Desmontar aborta la petición en curso y no pide más.
+ * - Un `Retry-After` en el error espera `max(intervalMs, retryAfter)` antes de la siguiente petición.
+ * - Desmontar no pide más. La petición en curso termina, pero su resultado se descarta.
  *
  * `fn` puede cambiar en cada render; el sondeo usa siempre la última. Para cambiar de
  * recurso, la vista debe remontarse (`key`), porque el efecto solo depende de
@@ -81,10 +83,10 @@ export function usePolling<T>(
 
     const oculta = () => document.visibilityState === 'hidden';
 
-    const programar = () => {
+    const programar = (esperaMs: number = intervalMs) => {
       parar();
       if (!vivo || detenido || agotado || oculta()) return;
-      timer = setTimeout(() => void ejecutar(), intervalMs);
+      timer = setTimeout(() => void ejecutar(), esperaMs);
     };
 
     const publicar = (parcial: Partial<Estado<T>>) => {
@@ -119,7 +121,8 @@ export function usePolling<T>(
           agotado = true;
         }
         publicar({ error });
-        programar();
+        const retryAfter = error instanceof ApiError ? error.retryAfter : undefined;
+        programar(retryAfter === undefined ? intervalMs : Math.max(intervalMs, retryAfter * 1000));
       } finally {
         enVuelo = false;
       }

@@ -73,6 +73,32 @@ describe('WarmPage', () => {
     expect(screen.getByText('Estado del warm no disponible')).toBeTruthy();
   });
 
+  it('sin aviso si state=dirty aunque reset_verified=false', async () => {
+    contarPeticiones(() => HttpResponse.json({ ...WARM, state: 'dirty', reset_verified: false }));
+    renderWarm();
+    await vaciar();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('sin aviso si state=ready y reset_verified=true', async () => {
+    contarPeticiones(() => HttpResponse.json({ ...WARM, state: 'ready', reset_verified: true }));
+    renderWarm();
+    await vaciar();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('tras una lectura buena, un fallo marca el dato como desactualizado', async () => {
+    let i = 0;
+    contarPeticiones(() =>
+      i++ === 0 ? HttpResponse.json(WARM) : HttpResponse.json({ code: 'warm_unavailable', message: 'x' }, { status: 503 }),
+    );
+    renderWarm();
+    await vaciar();
+    await avanzar(10_000);
+    expect(screen.getByText('Estado del warm no disponible')).toBeTruthy();
+    expect(screen.getByText(/Mostrando la última lectura correcta/)).toBeTruthy();
+  });
+
   it('sondeo cada 10 s: 3 peticiones en 25 s', async () => {
     const contador = contarPeticiones(() => HttpResponse.json(WARM));
     renderWarm();

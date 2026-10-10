@@ -86,6 +86,19 @@ describe('usePolling', () => {
     expect(result.current.detenido).toBe(true);
   });
 
+  it('respeta Retry-After en 429: la siguiente petición espera max(intervalo, retryAfter)', async () => {
+    const fn = vi.fn(async () => {
+      throw new ApiError({ status: 429, code: 'rate_limited', message: 'x', requestId: 'r', retryAfter: 30 });
+    });
+    renderHook(() => usePolling(fn, 3000, { isTerminal: () => false }));
+    await vaciar();
+    expect(fn).toHaveBeenCalledTimes(1);
+    await avanzar(12_000);
+    expect(fn).toHaveBeenCalledTimes(1);
+    await avanzar(18_000);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
   it('refrescar tras agotarse reanuda el sondeo', async () => {
     let fallar = true;
     const fn = vi.fn(async () => {

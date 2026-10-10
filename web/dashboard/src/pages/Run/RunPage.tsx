@@ -73,6 +73,7 @@ function VistaCorrida({ id }: { id: string }) {
       {noEncontrada && <p role="alert">Corrida no encontrada</p>}
 
       {!noEncontrada && error !== null && <ApiErrorNotice error={error} />}
+      {!noEncontrada && error !== null && data !== null && <p>Mostrando la última lectura correcta.</p>}
       {agotado && (
         <p>
           <button type="button" onClick={refrescar}>

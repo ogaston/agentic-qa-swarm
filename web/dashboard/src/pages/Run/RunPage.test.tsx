@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../../test/server';
 import { TIMERS_FALSOS, avanzar, vaciar } from '../../test/tiempo';
@@ -49,7 +49,51 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const ID_B = 'run-' + 'b'.repeat(32);
+
+function Saltar({ a }: { a: string }) {
+  const navegar = useNavigate();
+  return <button type="button" onClick={() => navegar(a)}>ir</button>;
+}
+
 describe('RunPage', () => {
+  it('cambiar de :id no muestra datos de la corrida anterior ni vuelve a pedirla', async () => {
+    const pedidasA = { n: 0 };
+    server.use(
+      http.get(`/api/runs/${ID}`, () => {
+        pedidasA.n++;
+        return HttpResponse.json({ id: ID, state: 'running', trace_id: 'tr-A' });
+      }),
+      // B nunca responde: lo que se vea después es lo que quedó de A.
+      http.get(`/api/runs/${ID_B}`, () => new Promise(() => {})),
+    );
+    render(
+      <MemoryRouter initialEntries={[`/runs/${ID}`]}>
+        <Routes>
+          <Route
+            path="/runs/:id"
+            element={
+              <>
+                <RunPage />
+                <Saltar a={`/runs/${ID_B}`} />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await vaciar();
+    expect(screen.getByText('tr-A')).toBeTruthy();
+    const antes = pedidasA.n;
+    act(() => {
+      screen.getByRole('button', { name: 'ir' }).click();
+    });
+    await avanzar(12_000);
+    expect(screen.queryByText('tr-A')).toBeNull();
+    expect(pedidasA.n).toBe(antes);
+  });
+
+
   it('running marca 6 fases como hechas o actuales y running como actual', async () => {
     respuestas('running', 'running');
     renderRun();

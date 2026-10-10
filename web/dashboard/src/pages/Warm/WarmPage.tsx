@@ -30,6 +30,7 @@ export function WarmPage() {
 
       {warmNoDisponible && <p role="alert">Estado del warm no disponible</p>}
       {error !== null && !warmNoDisponible && <ApiErrorNotice error={error} />}
+      {error !== null && data !== null && <p>Mostrando la última lectura correcta.</p>}
       {agotado && (
         <p>
           <button type="button" onClick={refrescar}>
