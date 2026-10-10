@@ -17,7 +17,7 @@ from agent_reporter.errors import (
 )
 from agent_reporter.llm import LLMClient, LLMError
 from agent_reporter.metrics import METRICS
-from agent_reporter.reporter import Limits, correlate_postmortem
+from agent_reporter.reporter import Limits, correlate_postmortem, prepare
 
 MAX_BODY = 64 * 1024
 log = logging.getLogger("agent_reporter")
@@ -116,8 +116,29 @@ def make_server(svc: Service, host: str = "127.0.0.1", port: int = 0) -> Threadi
     return ThreadingHTTPServer((host, port), make_handler(svc))
 
 
+def _http_llm(e):
+    from agent_reporter.llm_http import HttpLLM
+
+    base, model, key_file = e.get("LLM_BASE_URL", ""), e.get("LLM_MODEL", ""), e.get("LLM_API_KEY_FILE", "")
+    if not base or not model or not key_file:
+        raise SystemExit("LLM_PROVIDER=http requiere LLM_BASE_URL, LLM_MODEL y LLM_API_KEY_FILE")
+    try:
+        return HttpLLM(base, model, key_file)
+    except (ValueError, OSError):
+        raise SystemExit("configuracion LLM_PROVIDER=http invalida") from None
+
+
+def _register_fixtures(llm, reader, path: str, limits) -> None:
+    """REPORTER_FAKE_FIXTURES (U3-T07): [{run_id, evidence_uris, response}] -> prompt exacto -> respuesta."""
+    with open(path, encoding="utf-8") as fh:
+        items = json.load(fh)
+    for it in items:
+        prep = prepare(it["run_id"], it["evidence_uris"], reader, limits)
+        llm.register(prep.prompt, json.dumps(it["response"]))
+
+
 def build_service(env=None) -> Service:
-    """LLM_PROVIDER=fake solo con REPORTER_ALLOW_FAKE=1 y fuera de prod. Otro proveedor: no arranca."""
+    """LLM_PROVIDER=fake solo con REPORTER_ALLOW_FAKE=1 y fuera de prod; LLM_PROVIDER=http (U3-T07). Otro: no arranca."""
     from agent_reporter.fakes.evidence import DirEvidenceReader
     from agent_reporter.fakes.fake_llm import FakeLLM
     from agent_reporter.fakes.publisher import RecordingPublisher
@@ -125,22 +146,27 @@ def build_service(env=None) -> Service:
 
     e = os.environ if env is None else env
     provider = e.get("LLM_PROVIDER", "")
-    if provider != "fake":
-        raise SystemExit("LLM_PROVIDER no soportado (el adaptador real es de U3-T07)")
-    if e.get("REPORTER_ALLOW_FAKE") != "1":
-        raise SystemExit("LLM_PROVIDER=fake requiere REPORTER_ALLOW_FAKE=1")
-    if e.get("REPORTER_ENV") == "prod":
-        raise SystemExit("LLM_PROVIDER=fake prohibido con REPORTER_ENV=prod")
-    return Service(
-        DirEvidenceReader(e.get("REPORTER_EVIDENCE_DIR", "/evidence")),
-        FakeLLM(), MemoryReportStore(), RecordingPublisher(), Limits.from_env(e),
-    )
+    limits = Limits.from_env(e)
+    reader = DirEvidenceReader(e.get("REPORTER_EVIDENCE_DIR", "/evidence"))
+    if provider == "http":
+        llm = _http_llm(e)
+    elif provider == "fake":
+        if e.get("REPORTER_ALLOW_FAKE") != "1":
+            raise SystemExit("LLM_PROVIDER=fake requiere REPORTER_ALLOW_FAKE=1")
+        if e.get("REPORTER_ENV") == "prod":
+            raise SystemExit("LLM_PROVIDER=fake prohibido con REPORTER_ENV=prod")
+        llm = FakeLLM()
+        if e.get("REPORTER_FAKE_FIXTURES"):
+            _register_fixtures(llm, reader, e["REPORTER_FAKE_FIXTURES"], limits)
+    else:
+        raise SystemExit("LLM_PROVIDER no soportado")
+    return Service(reader, llm, MemoryReportStore(), RecordingPublisher(), limits)
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
     svc = build_service()
-    srv = make_server(svc, "0.0.0.0", int(os.environ.get("PORT", "8080")))
+    srv = make_server(svc, os.environ.get("REPORTER_HOST", "0.0.0.0"), int(os.environ.get("PORT", "8080")))
     srv.serve_forever()
 
 
