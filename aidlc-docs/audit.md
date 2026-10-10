@@ -632,3 +632,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U6 ola 3 y U7 ola 1.
 
 ---
+
+## Construction — U6-T06 ronda 1: despacho, puertos ocupados y CSP en dev
+**Timestamp**: 2026-10-10T17:46:26-05:00
+**User Input**: "continue with U6-T06" / "yes, open the docs PR for T3-T5" / (respuestas a preguntas) "Kill both (Recommended)" · "Strict CSP on preview only (Recommended)"
+**AI Response**: "Se despacha U6-T06 (worktree desde origin/main 7cb9dc4, con T04 y T05 fusionadas). PR #78 marca [x] U6-T4 y U6-T5; U6-T3 ya estaba marcada (PR #75). Con autorización del humano se paran los PIDs 647599 (ui-api) y 647597 (warm_stub.py), que otra sesión había dejado en 18501/18502. H-1: la CSP estricta se sirve solo en `vite preview`; `dev` queda sin CSP por el script en línea de React Refresh (errata en la tarea). El codificador repite los CA con los puertos por defecto."
+**Context**: Construction — U6 ola 4.
+
+---

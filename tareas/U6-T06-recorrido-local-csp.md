@@ -22,6 +22,7 @@ Detalle:
   - `u6-down.sh` para todos los procesos por PID y borra el directorio temporal.
 - **Recorrido** (`u6-demo-local.sh`): `u6-up` → comprobaciones con `curl` **solo contra `:18504`** (el origen del navegador) → `u6-down`. Imprime `OK|FALLA <comprobación>` por cada una: `index-servido`, `csp-estricta`, `login`, `inbox-con-pendientes`, `confirmar-201`, `confirmar-otra-vez-409`, `corrida-hasta-done`, `warm-ready`, `mis-corridas`, `sin-token-401`, `logout-invalida-token`. Sale distinto de 0 si alguna falla y siempre llama a `u6-down` (trap).
 - **CSP del build**: `index.html` del build sin scripts ni estilos en línea, y `vite preview` (y `dev`) sirven `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`, más `X-Content-Type-Options: nosniff` y `Referrer-Policy: no-referrer`. La app funciona con esa política (el recorrido lo demuestra).
+  - **Errata (2026-10-10, decisión del humano en la ronda 1):** la CSP estricta se sirve solo en `vite preview`. `dev` mantiene `nosniff` y `no-referrer`, pero no lleva CSP, porque `@vitejs/plugin-react` inyecta un script en línea de React Refresh que esa política bloquearía. El build no se ve afectado.
 
 **Fuera** (lo que el codificador debe rechazar aunque lo vea roto):
 
