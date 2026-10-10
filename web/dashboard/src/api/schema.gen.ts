@@ -55,6 +55,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/warm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado del warm (solo lectura). ui-api lo lee con el token de servicio; el token de la persona no sale de ui-api. */
+        get: operations["getWarmState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recibos de confirmacion, mas reciente primero. Un user ve solo los suyos (confirmed_by); un admin ve todos. */
+        get: operations["listConfirmations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}": {
         parameters: {
             query?: never;
@@ -256,6 +290,13 @@ export interface components {
             /** @enum {string} */
             state: "pending" | "confirmed" | "rejected";
         };
+        WarmState: {
+            warm_id: string;
+            /** @enum {string} */
+            state: "ready" | "dirty" | "cuarentena" | "idle-escalado";
+            reset_verified: boolean;
+            baseline_version: string;
+        };
         ConfirmationReceipt: {
             run_id: string;
             notification_id: string;
@@ -418,6 +459,61 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    getWarmState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Estado del warm. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarmState"];
+                };
+            };
+            401: components["responses"]["Error"];
+            /** @description Warm no disponible (sin configurar, respuesta invalida, caido, 401/5xx del warm o circuito abierto). Incluye Retry-After. */
+            503: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listConfirmations: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lista de recibos. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationReceipt"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
         };
     };
     getRun: {
