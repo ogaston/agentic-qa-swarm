@@ -1,0 +1,12 @@
+# Clúster kind efímero y local `aqs` (U7-T01). Sobre podman: KIND_EXPERIMENTAL_PROVIDER=podman.
+# Nunca apuntar a dev ni a prod. Acceso a la plataforma solo por `kubectl port-forward` en loopback
+# (sin extraPortMappings ni ingress). Un solo nodo; kindnet (CNI por defecto) aplica NetworkPolicy.
+# Imagen de nodo: la que kind 0.33.0 declara por defecto, fijada por digest (no se admite tag sin digest).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: aqs
+networking:
+  disableDefaultCNI: false
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
