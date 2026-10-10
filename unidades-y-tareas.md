@@ -147,8 +147,8 @@
 
 | # | Hecho | Tarea | Historias | Comando de verificación |
 |---|---|---|---|---|
-| U6-T1 | [ ] | Esqueleto `web/dashboard` (Vite + React + TS estricto), tipos generados desde el OpenAPI, cliente API tipado, proxy `/api` y workflow `web.yml` | S5 | `tareas/U6-T01-esqueleto-web.md` |
-| U6-T2 | [ ] | `ui-api`: `GET /warm` (token de servicio hacia `go-warm-manager`) y `GET /confirmations` (con control de propiedad) + OpenAPI | S5, US-M7.1 | `tareas/U6-T02-ui-api-lectura-warm-confirmaciones.md` |
+| U6-T1 | [x] | Esqueleto `web/dashboard` (Vite + React + TS estricto), tipos generados desde el OpenAPI, cliente API tipado, proxy `/api` y workflow `web.yml` | S5 | `tareas/U6-T01-esqueleto-web.md` |
+| U6-T2 | [x] | `ui-api`: `GET /warm` (token de servicio hacia `go-warm-manager`) y `GET /confirmations` (con control de propiedad) + OpenAPI | S5, US-M7.1 | `tareas/U6-T02-ui-api-lectura-warm-confirmaciones.md` |
 | U6-T3 | [ ] | Login contra `go-identity`, sesión solo en memoria, logout, guarda de rutas y errores comunes (401/429/503) | S5, US-M8.3 | `tareas/U6-T03-login-sesion.md` |
 | U6-T4 | [ ] | Inbox con filtros y confirmación explícita (`POST /notifications/{id}/confirm` → `/runs/{run_id}`) | S5, US-M1, US-M2 | `tareas/U6-T04-inbox-confirmacion.md` |
 | U6-T5 | [ ] | Vista de corrida con sondeo hasta estado terminal, «Mis corridas» y estado del warm | S5, US-M2, US-M7.1 | `tareas/U6-T05-corrida-y-warm.md` |
