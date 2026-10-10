@@ -15,6 +15,8 @@
 //	UIAPI_RATE_LIMIT_RPS      por defecto 10
 //	UIAPI_RATE_LIMIT_BURST    por defecto 20
 //	UIAPI_TRUST_PROXY         true para usar X-Forwarded-For
+//	WARM_URL                  opcional: URL http(s) de go-warm-manager (GET /warm); sin ella /warm responde 503
+//	UIAPI_WARM_TOKEN_FILE     con WARM_URL: archivo con el token de servicio del warm (obligatoria)
 //	LOG_LEVEL                 debug|info|warn|error (por defecto info)
 package main
 
@@ -126,6 +128,7 @@ func run(log *slog.Logger) error {
 	h, err := newHandler(log, httpapi.Config{
 		Store: store, Verifier: verifier, Publisher: pub, AllowedOrigins: origins,
 		RateRPS: rps, RateBurst: burst, TrustProxy: os.Getenv("UIAPI_TRUST_PROXY") == "true",
+		WarmURL: os.Getenv("WARM_URL"), WarmTokenFile: os.Getenv("UIAPI_WARM_TOKEN_FILE"),
 	}, dataDir, eventsFile)
 	if err != nil {
 		return err

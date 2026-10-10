@@ -1,4 +1,4 @@
-// Package httpapi expone GET /notifications y POST /notifications/{id}/confirm.
+// Package httpapi expone GET /notifications, POST /notifications/{id}/confirm, GET /warm y GET /confirmations.
 package httpapi
 
 import (
@@ -37,6 +37,12 @@ type Config struct {
 	Metrics *obs.Inbox // nil = sin métricas de dominio
 	// Publisher publica run.confirmed tras persistir el recibo; nil = no publica (solo pruebas).
 	Publisher *inbox.Publisher
+	// WarmURL es la base de go-warm-manager (GET /warm); vacía = la ruta /warm responde 503.
+	WarmURL string
+	// WarmTokenFile es el archivo con el token de servicio del warm-manager (nunca el valor en el entorno).
+	WarmTokenFile string
+	// WarmTimeout es el plazo de la llamada al warm-manager; 0 = 2 s.
+	WarmTimeout time.Duration
 }
 
 // IdentityRetryAfter es el Retry-After (segundos) del 503 identity_unavailable.
@@ -48,6 +54,7 @@ type Handler struct {
 	lim     *limiter
 	origins map[string]struct{}
 	log     *log.Logger
+	warmc   *warmClient // nil = sin WARM_URL
 }
 
 // New construye el handler con toda la cadena de middleware.
@@ -74,13 +81,22 @@ func New(cfg Config) (http.Handler, error) {
 		}
 		h.origins[o] = struct{}{}
 	}
+	if cfg.WarmURL != "" {
+		wc, err := newWarmClient(cfg.WarmURL, cfg.WarmTokenFile, cfg.WarmTimeout, cfg.Now)
+		if err != nil {
+			return nil, err
+		}
+		h.warmc = wc
+	}
 	return h, nil
 }
 
 // Patrones de ruta de ui-api (etiqueta route de las métricas).
 const (
-	RouteList    = "/notifications"
-	RouteConfirm = "/notifications/{id}/confirm"
+	RouteList          = "/notifications"
+	RouteConfirm       = "/notifications/{id}/confirm"
+	RouteWarm          = "/warm"
+	RouteConfirmations = "/confirmations"
 )
 
 // RoutePattern devuelve el PATRÓN de ruta de la petición ("unmatched" si no hay), nunca la ruta cruda.
@@ -90,6 +106,10 @@ func RoutePattern(r *http.Request) string {
 	switch {
 	case p == RouteList:
 		return RouteList
+	case p == RouteWarm:
+		return RouteWarm
+	case p == RouteConfirmations:
+		return RouteConfirmations
 	case strings.HasPrefix(p, "/notifications/") && strings.HasSuffix(p, "/confirm"):
 		id := strings.TrimSuffix(strings.TrimPrefix(p, "/notifications/"), "/confirm")
 		if id != "" && !strings.Contains(id, "/") {
@@ -164,6 +184,22 @@ func (h *Handler) cors(w http.ResponseWriter, r *http.Request) bool {
 
 func (h *Handler) route(w http.ResponseWriter, r *http.Request) {
 	switch p := r.URL.Path; {
+	case p == RouteWarm:
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w, "GET")
+			return
+		}
+		if _, ok := h.authenticate(w, r); ok {
+			h.warm(w, r)
+		}
+	case p == RouteConfirmations:
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w, "GET")
+			return
+		}
+		if pr, ok := h.authenticate(w, r); ok {
+			h.confirmations(w, r, pr)
+		}
 	case p == "/notifications":
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w, "GET")
@@ -220,6 +256,38 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request, _ auth.Principal)
 		}
 	}
 	writeJSON(w, http.StatusOK, h.cfg.Store.List(state))
+}
+
+// Límites de GET /confirmations.
+const (
+	ConfirmationsDefault = 20
+	ConfirmationsMax     = 100
+)
+
+// confirmations lista los recibos más recientes primero. El rol sale del verificador: un user solo
+// ve sus recibos (confirmed_by == su Principal.ID); admin ve todos. Ignora X-Role y parámetros.
+func (h *Handler) confirmations(w http.ResponseWriter, r *http.Request, pr auth.Principal) {
+	limit := ConfirmationsDefault
+	if q, present := r.URL.Query()["limit"]; present {
+		n, err := strconv.Atoi(firstOr(q, ""))
+		if len(q) != 1 || q[0] == "" || strings.Trim(q[0], "0123456789") != "" || err != nil || n < 1 || n > ConfirmationsMax {
+			writeError(w, http.StatusBadRequest, "invalid_request", "limit debe ser un entero de 1 a 100")
+			return
+		}
+		limit = n
+	}
+	visible := func(inbox.Receipt) bool { return true }
+	if pr.Role != auth.RoleAdmin {
+		visible = func(rc inbox.Receipt) bool { return rc.ConfirmedBy == pr.ID }
+	}
+	writeJSON(w, http.StatusOK, h.cfg.Store.Receipts(limit, visible))
+}
+
+func firstOr(q []string, def string) string {
+	if len(q) == 0 {
+		return def
+	}
+	return q[0]
 }
 
 type confirmBody struct {
