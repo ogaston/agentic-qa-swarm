@@ -607,3 +607,12 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — re-alcance de U3-T07; despachable sin gates de infraestructura.
 
 ---
+
+## Construction — Cierre de U3 y redacción de U6 (frontend, S5)
+**Timestamp**: 2026-10-10T15:12:11-05:00
+**User Input**: "continue with the next" / "mark U3 as done and write the task for the next U" / (respuesta a la pregunta de alcance) "S5 real frontend (Recommended)"
+**AI Response**: "El cierre de U3 (U3-T7 [x]) ya estaba en main por el PR #68; no se duplica. Se crea la unidad U6 — Frontend web (S5) en `unidades-y-tareas.md` con seis tareas redactadas en `tareas/U6-T01…T06` (esqueleto web + CI, lectura de warm/confirmaciones en ui-api, login y sesión en memoria, inbox y confirmación, corrida y warm, recorrido local con CSP). Orden T01 ∥ T02 → T03 → (T04 ∥ T05) → T06. Candidatas C-94 y C-95. S5 queda marcado como en curso."
+**Context**: Construction — primera unidad post-MVP; ola 1 despachable (U6-T01, U6-T02). La rama local `tarea/U6-T01` ya existe (trabajo previo de transporte NATS, sin PR, anterior a la simplificación) y no se toca: la U6-T01 nueva usa la rama `tarea/U6-T01-web`.
+**User Input (2026-10-10)**: "yes, commit and start the first wave"
+
+---
