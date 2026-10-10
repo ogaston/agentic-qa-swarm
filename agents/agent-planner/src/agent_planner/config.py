@@ -7,7 +7,9 @@ from typing import Mapping
 
 from .errors import Limits
 from .fakes.fake_llm import FakeLLM
+from .fakes.surfaces import register_surfaces
 from .llm import LLMClient
+from .llm_http import HttpLLM
 
 
 class ConfigError(Exception):
@@ -47,10 +49,35 @@ def load_config(env: Mapping[str, str]) -> Config:
     provider = env.get("LLM_PROVIDER", "")
     if not provider:
         raise ConfigError("LLM_PROVIDER no configurado")
-    if provider != "fake":
+    if provider == "http":
+        llm = _http_llm(env)
+    elif provider == "fake":
+        llm = _fake_llm(env)
+    else:
         raise ConfigError("proveedor no implementado")
+    return Config(llm, limits, env.get("PLANNER_HOST", "0.0.0.0"), port)
+
+
+def _http_llm(env: Mapping[str, str]) -> HttpLLM:
+    base, model, key_file = env.get("LLM_BASE_URL", ""), env.get("LLM_MODEL", ""), env.get("LLM_API_KEY_FILE", "")
+    if not base or not model or not key_file:
+        raise ConfigError("LLM_PROVIDER=http requiere LLM_BASE_URL, LLM_MODEL y LLM_API_KEY_FILE")
+    try:
+        return HttpLLM(base, model, key_file)
+    except (ValueError, OSError):
+        raise ConfigError("configuracion LLM_PROVIDER=http invalida") from None
+
+
+def _fake_llm(env: Mapping[str, str]) -> FakeLLM:
     if env.get("PLANNER_ENV", "").strip().lower() in ("prod", "production"):
         raise ConfigError("LLM_PROVIDER=fake no se permite con PLANNER_ENV=prod")
     if env.get("PLANNER_ALLOW_FAKE") != "true":
         raise ConfigError("LLM_PROVIDER=fake requiere PLANNER_ALLOW_FAKE=true")
-    return Config(FakeLLM(), limits, env.get("PLANNER_HOST", "0.0.0.0"), port)
+    llm = FakeLLM()
+    surfaces = env.get("U3_FAKE_SURFACES_DIR", "")
+    if surfaces:
+        try:
+            register_surfaces(llm, surfaces)
+        except (OSError, ValueError, KeyError, TypeError):
+            raise ConfigError("U3_FAKE_SURFACES_DIR invalido") from None
+    return llm
