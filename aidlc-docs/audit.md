@@ -390,3 +390,220 @@ Make sure to make the info very compact so I can read quickly"
 **Context**: Construction — Code Generation, unidad U4.
 
 ---
+
+## Construction — Clarificación de UI: Mockup no es la UI final
+**Timestamp**: 2026-10-06T19:44:04-05:00
+**User Input**: "I want that the plan conteplates that this mock is only a "mock" not the end UI"
+**AI Response**: "Plan y especificaciones actualizados para explicitar que `mockups/swarm-mock.html` es exclusivamente un mockup/prototipo exploratorio de diseño y NO la UI final de producción. Se ajustaron `DECISIONES.md` (§7), `unidades-y-tareas.md` (ítem S5 en Backlog post-MVP), `specs/prd.md`, `entradas/prd.md` y `mockups/swarm-mock.html`."
+**Context**: Alcance de UI — el prototipo estático sirve como referencia de interacción, mientras que la UI final de producción será una aplicación web cliente real (frontend) que consuma `services/ui-api` y `contracts/openapi/control-plane.yaml`.
+
+---
+
+## Construction — Evaluación de alineación del Mockup vs. Estado actual
+**Timestamp**: 2026-10-06T20:06:05-05:00
+**User Input**: "now I want you to look into the current status of the project and tell me if tghe mockup still fit the expectations?"
+**AI Response**: "Análisis exhaustivo del mockup frente al estado actual del proyecto: el mockup sigue capturando acertadamente la esencia de producto (inbox de notificaciones, generación de k6 inspectables, ensayo bloqueante, reporte post-mortem con hallazgos de negocio y audit log), pero presenta cuatro desalineaciones técnicas clave producto de los pivotes: 1) Modelo warm (reuso + reset verificado vs. destrucción/teardown efímero en el mock), 2) Momento del confirm (en el mock el boot corre antes del confirm, en la arquitectura el confirm es previo en el inbox), 3) Estados del warm (ready/dirty/cuarentena/idle no reflejados), y 4) Workflows de negocio y roles de identidad no integrados."
+**Context**: Evaluación de expectativas de diseño y deuda técnica conceptual entre el mockup de Inception y la arquitectura construida en U5, U4 y U1.
+
+---
+
+## Construction — Actualización de `mockups/swarm-mock.html` a la visión actual
+**Timestamp**: 2026-10-06T20:08:43-05:00
+**User Input**: "Update @[mockups/swarm-mock.html] to fit the current vision of the project"
+**AI Response**: "Mockup `mockups/swarm-mock.html` completamente actualizado para reflejar la arquitectura y ciclo de vida actuales: 1) Indicador en vivo del Warm Sandbox (`ready`/`busy`/`resetting`/`cuarentena` en namespace `aqs-test`), 2) Secuencia de pipeline real con confirmación humana previa (cero auto-run), 3) Despliegue de versión sobre pod de aplicación sin destruir Postgres ni Redis, 4) Flujos inspectables k6 y ensayo bloqueante, 5) Reset verificado (`reset_verified=true`) con TRUNCATE de DB y FLUSHDB de cache en lugar de destrucción/teardown de entorno, 6) KPI 'Reset verificado garantizado 100%', y 7) Guardrails de gobernanza (bloqueo de staging/prod, NetworkPolicy deny-by-default sin egress ni LLM) y eventos de auditoría sincronizados con U1/U4/U5/U2."
+**Context**: Actualización de mockup visual exploratorio para servir como referencia exacta de diseño para el futuro frontend (S5).
+
+---
+
+## Construction — Creación de Landing Page para Desarrolladores (`mockups/landing-mock.html`)
+**Timestamp**: 2026-10-06T20:47:03-05:00
+**User Input**: "now I need you to create a landing page for this mock project @[mockups/swarm-mock.html] (create a landing-mock.html) Build a minimal developer tools landing page with dark mode, code snippet previews, feature comparison table, integration logos, and documentation link. Use syntax highlighting colors."
+## Construction — Finalización de Landing Page para Desarrolladores (`mockups/landing-mock.html`)
+**Timestamp**: 2026-10-06T21:13:00-05:00
+**User Input**: "continue"
+**AI Response**: "Landing page para desarrolladores finalizada y verificada en `mockups/landing-mock.html`. Integra diseño responsive dark mode, badges de estado, métricas de confianza (100% reset verificado, 0 incidentes staging), simulador interactivo de estados del Warm Sandbox, visor de snippets de código coloreados (k6, OpenAPI, logs de reset y post-mortem json), matriz comparativa, logos de integraciones y enlaces directos al mockup de consola (`swarm-mock.html`) y contratos OpenAPI."
+**Context**: Portal de producto y presentación de herramientas de desarrollo.
+
+---
+
+## Construction — Continuación de U3-T06
+**Timestamp**: 2026-10-10T15:37:08Z
+**User Input**: "try again"
+**AI Response**: "Reintentado el despacho con acceso a Git. Se confirmó el worktree aislado `agentic-qa-swarm-wt-U3-T06` y la rama `tarea/U3-T06`; el codificador completó dos rondas y la tercera está lista para revisión adversarial."
+**Context**: Construction — Code Generation, U3-T06. Se preservan los cambios no relacionados del worktree principal.
+
+---
+
+## Construction — Continuación tras U3-T06
+**Timestamp**: 2026-10-10T15:40:46Z
+**User Input**: "continue"
+**AI Response**: "Se resolverán el grafo de dependencias y la cola de revisión humana antes de despachar la siguiente tarea."
+**Context**: Construction — Code Generation; U3-T06 entregada para revisión humana en PR #61.
+
+---
+
+## Construction — Aprobación requerida para U2-T08
+**Timestamp**: 2026-10-10T15:40:46Z
+**User Input**: "continue"
+**AI Response**: "Se detectó que U2-T08 es la siguiente tarea potencial, pero exige aprobación humana explícita antes de cualquier validación que toque el entorno dev. Se solicita esa decisión antes de despacharla."
+**Context**: Construction — U2-T08 integra U2 con U3 y documenta una demo en dev; U3-T07 sigue bloqueada por U2-T08 y decisiones pendientes.
+
+---
+
+## Construction — Investigación de fallo de PR
+**Timestamp**: 2026-10-10T15:41:51Z
+**User Input**: "the PR is failing"
+**AI Response**: "Se inspeccionan las comprobaciones y logs fallidos de PR #61 para aislar y corregir la causa en la rama de U3-T06."
+**Context**: Construction — verificación CI de U3-T06.
+
+---
+
+## Construction — Corrección de baseline de vulnerabilidades Go
+**Timestamp**: 2026-10-10T15:41:51Z
+**User Input**: "the PR is failing"
+**AI Response**: "La causa fue una regresión transversal: `govulncheck` detectó Go 1.26.8 y `golang.org/x/net` 0.57/0.58 vulnerables, no cambios de U3-T06. Se abrió PR #62 con Go 1.26.9, x/net 0.60.0 y las imágenes builder alineadas. Todos los checks de #62 están verdes; #61 fue comentado con la dependencia."
+**Context**: Construction — la corrección se mantiene en un PR separado para no ampliar el alcance revisado de U3-T06.
+
+---
+
+## Construction — Actualización de U3-T06 sobre main
+**Timestamp**: 2026-10-10T15:56:05Z
+**User Input**: "merged 62, now update the branch with main"
+**AI Response**: "Se actualizará la rama `tarea/U3-T06` con el `main` que contiene la corrección de seguridad de PR #62, preservando el alcance y la evidencia de U3-T06."
+**Context**: Construction — mantenimiento posterior a la fusión de dependencia de CI.
+
+---
+
+## Construction — Continuación tras U3-T06 fusionada
+**Timestamp**: 2026-10-10T16:01:14Z
+**User Input**: "merged, continue"
+**AI Response**: "Se confirma la fusión de U3-T06 y se avanza al siguiente trabajo potencialmente despachable, respetando las aprobaciones humanas requeridas para el entorno dev."
+**Context**: Construction — transición desde U3-T06 hacia la integración U2-T08.
+
+---
+
+## Construction — Solicitud de autorización de U2-T08
+**Timestamp**: 2026-10-10T16:01:14Z
+**User Input**: "merged, continue"
+**AI Response**: "U2-T08 es la siguiente tarea: requiere autorización humana explícita del entorno dev antes de despacharse. Se solicita la decisión."
+**Context**: Construction — U2-T08 realiza la integración U2↔U3 y entrega un guion de validación dev con pasos explícitamente controlados por un humano.
+
+---
+
+## Construction — Autorización de U2-T08
+**Timestamp**: 2026-10-10T16:02:01Z
+**User Input**: "yes"
+**AI Response**: "Autorización registrada para despachar U2-T08. El loop implementará y verificará únicamente el trabajo local; la validación final que toca el entorno dev sigue siendo ejecutada por el humano."
+**Context**: Construction — autorización humana explícita del entorno dev para U2-T08.
+
+---
+
+## Construction — Bloqueo de especificación de U2-T08
+**Timestamp**: 2026-10-10T16:02:01Z
+**User Input**: "yes"
+**AI Response**: "La verificación de lista detectó dos vacíos: CA-4 usa un patrón de credenciales enmascarado que no puede pasar, y CA-2 depende del lanzador/fixtures de U3-T07, creando un ciclo. Se solicita una decisión para redefinir el contrato local de CA-2."
+**Context**: Construction — preparación de U2-T08; no se despachó código ni se creó worktree.
+
+---
+
+## Construction — Explicación del bloqueo de U2-T08
+**Timestamp**: 2026-10-10T16:04:56Z
+**User Input**: "explain me what you need to know exactly?"
+**AI Response**: "Se explica la decisión pendiente: elegir si U2-T08 prueba el cliente U3 contra un stub local del contrato, adelanta el lanzador real de U3-T07, o queda bloqueada. También se aclara la corrección requerida del patrón de secretos de CA-4."
+**Context**: Construction — aclaración de especificación para destrabar U2-T08.
+
+---
+
+## Construction — Decisión de contrato local de U2-T08
+**Timestamp**: 2026-10-10T16:05:28Z
+**User Input**: "go A."
+**AI Response**: "Decisión A aprobada: U2-T08 verificará el cliente U3 contra un stub HTTP local que implementa el contrato; U3-T07 verificará la integración con el planner real. Se corregirá el patrón de secretos de CA-4 y se despachará la tarea."
+**Context**: Construction — resolución del ciclo U2-T08↔U3-T07.
+
+---
+
+## Construction — Estado posterior a U2-T08
+**Timestamp**: 2026-10-10T11:27:28-05:00
+**User Input**: "merged, what's left? can we skip this validation for now?"
+**AI Response**: "Se confirma la fusión de PR #63 y se evalúan las tareas restantes. Se aclara que la validación CA-8 puede diferirse, pero debe permanecer registrada como pendiente y bloquea el cierre verificable de U2-T08 y el despacho de U3-T07 junto con sus decisiones abiertas."
+**Context**: Construction — decisión de aplazamiento de validación humana en dev.
+
+---
+
+## Construction — Continuidad después de U2-T08
+**Timestamp**: 2026-10-10T11:27:55-05:00
+**User Input**: "You have not yet marked the task as complete using the task_complete tool. If you were planning, stop planning and start implementing. You aren't done until you have fully completed the task.
+
+IMPORTANT: Do NOT call task_complete if:
+- You have open questions or ambiguities - make good decisions and keep working
+- You encountered an error - try to resolve it or find an alternative approach
+- There are remaining steps - complete them first
+
+Keep working autonomously until the task is truly finished, then call task_complete."
+**AI Response**: "Se continúa con la preparación de la siguiente tarea. U3-T07 sigue bloqueada por decisiones de arquitectura explícitamente reservadas al humano; se solicita una selección estructurada para evitar inventar proveedor, despliegue/egress o transporte de eventos."
+**Context**: Construction — continuidad autónoma con bloqueos de decisión humana para U3-T07.
+
+---
+
+## Construction — Proveedor LLM propuesto para U3-T07
+**Timestamp**: 2026-10-10T11:29:11-05:00
+**User Input**: "I'm going to use LiteLLM, or Deepseek"
+**AI Response**: "Se interpreta LiteLLM como proxy compatible con OpenAI y DeepSeek como proveedor/modelo subyacente, pendiente de confirmar el modelo y las decisiones restantes de despliegue/egress y transporte de eventos."
+**Context**: Construction — resolución parcial de C-82 para U3-T07.
+
+---
+
+## Construction — Aclaración de decisiones U3-T07
+**Timestamp**: 2026-10-10T11:32:37-05:00
+**User Input**: "tell me what exactly I need to decide?"
+**AI Response**: "Se explican las tres decisiones mínimas: la forma concreta de LiteLLM/DeepSeek y su secreto, el despliegue y egress de los agentes, y el transporte durable de eventos. Se ofrecen valores predeterminados simples para que el humano pueda aprobarlos o sustituirlos."
+**Context**: Construction — aclaración de bloqueos de despacho U3-T07.
+
+---
+
+## Construction — Decisiones U3-T07 aprobadas
+**Timestamp**: 2026-10-10T11:32:46-05:00
+**User Input**: "use the recommended simple defualt"
+**AI Response**: "Se aprueban los valores predeterminados: LiteLLM como gateway compatible con OpenAI hacia `deepseek/deepseek-chat`; LiteLLM, planner y reporter como Deployments de Kubernetes con credenciales en archivos de Secret y egress limitado; NATS JetStream como transporte durable de eventos. Se actualizan las decisiones y se separan sus prerrequisitos de infraestructura de U3-T07."
+**Context**: Construction — resolución de C-45, C-82 y C-83.
+
+---
+
+## Construction — Continuación después de las decisiones U3
+**Timestamp**: 2026-10-10T11:41:36-05:00
+**User Input**: "continue"
+**AI Response**: "Se verifica que PR #64, que registra las decisiones necesarias para el siguiente trabajo, tiene todas las comprobaciones en verde pero permanece abierto. Se mantiene el gate de fusión humana antes de despachar trabajo que dependa de esas decisiones."
+**Context**: Construction — gate de fusión humana de la línea de decisiones U3.
+
+---
+
+## Construction — Bloqueo de continuación
+**Timestamp**: 2026-10-10T11:41:52-05:00
+**User Input**: "You have not yet marked the task as complete using the task_complete tool. If you were planning, stop planning and start implementing. You aren't done until you have fully completed the task.
+
+IMPORTANT: Do NOT call task_complete if:
+- You have open questions or ambiguities - make good decisions and keep working
+- You encountered an error - try to resolve it or find an alternative approach
+- There are remaining steps - complete them first
+
+Keep working autonomously until the task is truly finished, then call task_complete."
+**AI Response**: "La continuación está bloqueada exclusivamente por la fusión humana requerida de PR #64, que contiene las decisiones de arquitectura de las que depende la siguiente implementación. No se fusiona ni se construye sobre una decisión no fusionada."
+**Context**: Construction — aplicación del gate de fusión humana.
+
+---
+
+## Construction — Simplificación del plan restante
+**Timestamp**: 2026-10-10T14:34:57-05:00
+**User Input**: "now I want to make this project simpler, so the rest of the tasks are more easy to tackle."
+**AI Response**: "Se propone: fusionar U2-T08 y U3-T07 en una integración local, reducir U3-T06, dejar S1–S5 fuera de alcance y corregir la tabla de U3."
+**Context**: Construction — propuesta de simplificación.
+
+---
+
+## Construction — Simplificación aprobada y aplicada
+**Timestamp**: 2026-10-10T14:34:57-05:00
+**User Input**: "yes, apply all of it"
+**AI Response**: "Tras sincronizar con origin/main se constata que U2-T08 (PR #63) y U3-T06 (PR #61) ya estaban fusionadas. Se marcan [x] en `unidades-y-tareas.md`; U3-T07 se reescribe como integración local (adaptador LLM compatible con OpenAI en loopback, u3-up/u3-down, recorrido local contra el contrato de U2), sin clúster, proveedor real, NATS, LiteLLM, S3 ni costo. Lo retirado pasa al backlog post-MVP (P1–P6). S1–S5 ya figuraban fuera de alcance. Decisión registrada en DECISIONES.md §8."
+**Context**: Construction — re-alcance de U3-T07; despachable sin gates de infraestructura.
+
+---
