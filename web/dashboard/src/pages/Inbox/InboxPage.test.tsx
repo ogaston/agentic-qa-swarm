@@ -168,13 +168,41 @@ describe('Inbox lista', () => {
     await user.click(screen.getByRole('button', { name: 'Actualizar' }));
     await waitFor(() => expect(reg.listas).toHaveLength(2));
     expect(reg.listas).toEqual(['pending', 'pending']);
+  });
 
-    vi.useFakeTimers();
-    await act(async () => {
-      vi.advanceTimersByTime(2000);
-    });
-    vi.useRealTimers();
-    expect(reg.listas).toHaveLength(2);
+  it('sin polling: con temporizadores falsos instalados antes de montar, 6 s no generan peticiones', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const reg = nuevoRegistro();
+      await abrirInbox([listaPorEstado({ pending: [pendienteA] }, reg)]);
+      await screen.findByText('acme/api');
+      expect(reg.listas).toEqual(['pending']);
+
+      await act(async () => {
+        vi.advanceTimersByTime(6000);
+      });
+      expect(reg.listas).toEqual(['pending']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('descarta la respuesta vieja de una pestaña anterior', async () => {
+    const reg = nuevoRegistro();
+    const user = await abrirInbox([
+      http.get(LIST, async ({ request }) => {
+        const estado = new URL(request.url).searchParams.get('state');
+        reg.listas.push(estado ?? '');
+        if (estado === 'pending') await new Promise((r) => setTimeout(r, 400));
+        return HttpResponse.json(estado === 'confirmed' ? [confirmada] : [pendienteA]);
+      }),
+    ]);
+    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
+    await screen.findByText('acme/confirmado');
+    await new Promise((r) => setTimeout(r, 600));
+    expect(screen.queryByText('acme/api')).toBeNull();
+    expect(screen.queryByText('acme/confirmado')).not.toBeNull();
+    expect(screen.getByRole('tab', { name: 'Confirmadas' }).getAttribute('aria-selected')).toBe('true');
   });
 });
 
@@ -282,6 +310,53 @@ describe('Inbox confirma', () => {
     await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));
     expect(await screen.findByText(/cuerpo inválido/)).toBeTruthy();
     expect(screen.getByText(/Referencia para soporte/)).toBeTruthy();
+  });
+
+  it('409 con un POST en vuelo: la pestaña no cambia y la recarga muestra pendientes', async () => {
+    const reg = nuevoRegistro();
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA], confirmed: [confirmada] }, reg),
+      http.post(CONFIRM, async () => {
+        await new Promise((r) => setTimeout(r, 300));
+        return HttpResponse.json({ code: 'conflict', message: 'x' }, { status: 409 });
+      }),
+    ]);
+    const dialogo = await abrirPanel(user, 'acme/api');
+    await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));
+    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
+    expect(screen.getByRole('tab', { name: 'Pendientes' }).getAttribute('aria-selected')).toBe('true');
+
+    expect(await screen.findByText('Esta notificación ya no está pendiente')).toBeTruthy();
+    await waitFor(() => expect(reg.listas).toEqual(['pending', 'pending']));
+    expect(within(screen.getByRole('table')).getByText('acme/api')).toBeTruthy();
+    expect(screen.queryByText('acme/confirmado')).toBeNull();
+  });
+
+  it('un 400 con un POST en vuelo: la pestaña no cambia y el aviso sigue visible', async () => {
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA], confirmed: [confirmada] }, nuevoRegistro()),
+      http.post(CONFIRM, async () => {
+        await new Promise((r) => setTimeout(r, 300));
+        return HttpResponse.json({ code: 'bad_request', message: 'cuerpo inválido' }, { status: 400 });
+      }),
+    ]);
+    const dialogo = await abrirPanel(user, 'acme/api');
+    await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));
+    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
+    expect(screen.getByRole('tab', { name: 'Pendientes' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByText(/cuerpo inválido/)).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('201 con run_id no válido no navega y avisa', async () => {
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
+      http.post(CONFIRM, () => HttpResponse.json({ ...recibo, run_id: '..' }, { status: 201 })),
+    ]);
+    const dialogo = await abrirPanel(user, 'acme/api');
+    await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));
+    expect(await screen.findByText(/no se pudo abrir la corrida/)).toBeTruthy();
+    expect(currentLocation()).toBe('/inbox');
   });
 
   it('notificaciones confirmed y rejected no ofrecen confirmar', async () => {

@@ -17,6 +17,7 @@ const PESTANAS: { estado: Estado; etiqueta: string; vacio: string }[] = [
 
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';
 const MSG_NO_EXISTE = 'La notificación ya no existe';
+const RUN_ID = /^run-[0-9a-f]{32}$/;
 
 /** Inbox: lista filtrable, detalle y confirmación explícita. Sin polling ni confirmaciones automáticas. */
 export function InboxPage() {
@@ -32,6 +33,8 @@ export function InboxPage() {
   const [errorAccion, setErrorAccion] = useState<unknown>(null);
   const enCurso = useRef(false);
   const peticion = useRef(0);
+  // Pestaña vigente, para que una recarga tras una acción use siempre la pestaña actual.
+  const estadoRef = useRef<Estado>('pending');
   const tituloPanel = useRef<HTMLHeadingElement | null>(null);
 
   // Carga la pestaña indicada. Una respuesta vieja (otra pestaña o recarga posterior) se descarta.
@@ -59,8 +62,10 @@ export function InboxPage() {
   const seleccionada = lista?.find((n) => n.id === seleccionadaId) ?? null;
 
   function elegirPestana(nueva: Estado) {
+    if (enCurso.current) return; // sin cambiar de pestaña con un POST en vuelo
     setMensajeAccion(null);
     setErrorAccion(null);
+    estadoRef.current = nueva;
     setEstado(nueva);
   }
 
@@ -106,17 +111,26 @@ export function InboxPage() {
           body: JSON.stringify({ flows: familias }),
         },
       );
+      if (!RUN_ID.test(recibo.run_id)) {
+        // La confirmación ya se registró: no navegamos a una ruta sin sentido.
+        setPanelAbierto(false);
+        setMensajeAccion(
+          `La confirmación se registró, pero no se pudo abrir la corrida (respuesta sin run_id válido). Notificación ${seleccionada.id}.`,
+        );
+        void cargar(estadoRef.current);
+        return;
+      }
       navigate(`/runs/${encodeURIComponent(recibo.run_id)}`);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) return; // lo gestiona la sesión (T03)
       if (error instanceof ApiError && error.status === 409) {
         setPanelAbierto(false);
         setMensajeAccion(MSG_YA_NO_PENDIENTE);
-        void cargar(estado);
+        void cargar(estadoRef.current);
       } else if (error instanceof ApiError && error.status === 404) {
         setPanelAbierto(false);
         setMensajeAccion(MSG_NO_EXISTE);
-        void cargar(estado);
+        void cargar(estadoRef.current);
       } else {
         setErrorAccion(error);
       }
@@ -141,6 +155,7 @@ export function InboxPage() {
             id={`tab-${p.estado}`}
             aria-selected={p.estado === estado}
             aria-controls="inbox-lista"
+            disabled={enVuelo}
             onClick={() => elegirPestana(p.estado)}
           >
             {p.etiqueta}
@@ -181,7 +196,7 @@ export function InboxPage() {
             </thead>
             <tbody>
               {lista.map((n) => (
-                <tr key={n.id} aria-selected={n.id === seleccionadaId}>
+                <tr key={n.id}>
                   <td>{n.repo}</td>
                   <td>{n.github_event}</td>
                   <td>
@@ -192,6 +207,7 @@ export function InboxPage() {
                   <td>
                     <button
                       type="button"
+                      disabled={enVuelo}
                       onClick={() => {
                         setSeleccionadaId(n.id);
                         setPanelAbierto(false);
