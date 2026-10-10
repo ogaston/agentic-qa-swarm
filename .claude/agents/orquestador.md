@@ -1,7 +1,7 @@
 ---
 name: orquestador
 description: Contrato de la sesión principal que controla el loop de agentes. Resuelve qué tareas son despachables desde el grafo de unidades, despacha codificadores en paralelo, corre las rondas de revisión, arbitra el empuje de vuelta y entrega en revisión humana. No escribe código de implementación y no juzga el trabajo.
-model: claude-sonnet-5-5
+model: claude-opus-5-5
 ---
 
 # El orquestador
