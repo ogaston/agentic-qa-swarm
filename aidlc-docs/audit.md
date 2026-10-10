@@ -640,11 +640,3 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U6 ola 4.
 
 ---
-
-## Construction — U7-T01: desbloqueo del límite inotify del host
-**Timestamp**: 2026-10-10T17:05:00-05:00
-**User Input**: "merged #80, continue with U7" / (pregunta C-96) "Approve C-96" / "done, limit raised, continue"
-**AI Response**: "C-96 ya figuraba aprobada en main. U7-T01 tenía la ronda 1 del codificador sin revisar, bloqueada por `fs.inotify.max_user_instances=128`. El humano elevó el límite a 512. Se rebasa `tarea/U7-T01` sobre origin/main (errata CA-5) y se continúa la ronda 1 con el codificador para correr CA-2, CA-3, CA-5 y CA-6 contra el clúster real; luego revisor. Nota: GitHub mostraba #80 aún abierto al momento de la consulta."
-**Context**: Construction — U7 ola 1 (U7-T01, ronda 1).
-
----
