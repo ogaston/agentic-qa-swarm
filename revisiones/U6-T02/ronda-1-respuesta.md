@@ -1,0 +1,6 @@
+# U6-T02 — respuesta a la ronda 1
+
+F-01: Corregido en 8d7a514: `OpenStore` añade cada recibo a `rorder` al cargar el archivo (orden del archivo, sin duplicados por notification_id). Pruebas rojo→verde: `inbox/receipts_restart_test.go` (TestReceiptsTrasReinicioConservanOrden, TestReceiptsTrasReinicioIgnoraDuplicados) y `internal/httpapi/confirmations_test.go` (TestConfirmationsTrasReinicioSigueListando). La bitácora afirmaba lo contrario y queda corregida con una nota.
+F-02: Corregido en 8d7a514 (pruebas, sin cambio de código): TestWarmArranqueRechazaConfigIncompleta (WARM_URL sin token file, sin esquema, esquema ftp, sin host, con credenciales), TestWarmCincoCincoxxNoAbreElCircuito (6 llamadas con 5xx llegan todas al warm).
+F-03: Corregido en 8d7a514 (pruebas, sin cambio de código): TestWarmTokenIlegibleOVacioDa503SinLlamar (archivo inexistente y vacío) y TestWarmCircuitoMedioAbiertoConRelojInyectable (reloj inyectado en e.clock; ventana, sonda fallida que reabre, sonda sana que cierra). Verificadas con mutantes temporales: 5xx que abre el circuito, ventana ignorada y token vacío aceptado hacen fallar la prueba correspondiente.
+F-04: Fuera de alcance: tarea candidata propuesta (unificar el circuito de internal/auth/identity.go y internal/httpapi/warm.go). No se toca en U6-T02.
