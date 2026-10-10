@@ -2,7 +2,7 @@
 name: codificador
 description: Implementa UNA tarea de UNA unidad, en su propio worktree de git. Trabaja desde el archivo de la tarea y los criterios de aceptación, no desde una conversación. Lo despacha el orquestador; se le vuelve a despachar con los hallazgos del revisor cuando la ronda sale NO-VERDE. Nunca fusiona, nunca escribe fuera de su worktree, nunca mueve el estado de la tarea.
 tools: Bash, Read, Edit, Write, Grep, Glob
-model: claude-sonnet-5-5
+model: claude-haiku-5-5
 effort: low
 ---
 
