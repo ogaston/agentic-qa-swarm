@@ -86,14 +86,14 @@ describe('sesión', () => {
   it('401 de una llamada protegida borra la sesión y redirige con next', async () => {
     server.use(
       ...loginHandlers(),
-      http.get('/api/notifications', () =>
+      http.get('/api/warm', () =>
         HttpResponse.json({ code: 'unauthorized', message: 'x' }, { status: 401 }),
       ),
     );
     const user = userEvent.setup();
     renderApp('/login');
     await loginDesdeFormulario(user);
-    await expect(apiFetch('/api/notifications')).rejects.toBeInstanceOf(ApiError);
+    await expect(apiFetch('/api/warm')).rejects.toBeInstanceOf(ApiError);
     await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
     expect(screen.queryByText('ana')).toBeNull();
   });
@@ -178,13 +178,13 @@ describe('el token del módulo se borra en todo cierre', () => {
     server.use(
       ...loginHandlers(),
       probeHandler(),
-      http.get('/api/notifications', () => HttpResponse.json({ code: 'unauthorized', message: 'x' }, { status: 401 })),
+      http.get('/api/warm', () => HttpResponse.json({ code: 'unauthorized', message: 'x' }, { status: 401 })),
     );
     const user = userEvent.setup();
     renderApp('/login');
     await loginDesdeFormulario(user);
     await confirmarBearerVivo();
-    await expect(apiFetch('/api/notifications')).rejects.toBeInstanceOf(ApiError);
+    await expect(apiFetch('/api/warm')).rejects.toBeInstanceOf(ApiError);
     await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
     await apiFetch('/api/probe');
     expect(ultimaAutorizacion).toBeNull();
