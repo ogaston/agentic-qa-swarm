@@ -70,7 +70,7 @@ Desde la raíz del worktree, con kind 0.33, podman y kubectl instalados.
 
 - [ ] **CA-5** — Destrucción.
   ```bash
-  bash scripts/kind/kind-down.sh; echo "rc=$?"; kind get clusters | grep -c '^aqs$'; podman ps -a --format '{{.Names}}' | grep -c '^aqs-'
+  bash scripts/kind/kind-down.sh; echo "rc=$?"; kind get clusters | grep -c '^aqs$'; podman ps -a --format '{{.Names}}' | grep -c '^aqs-control-plane$'
   bash scripts/kind/kind-down.sh; echo "rc=$?"
   ```
   Esperado: `rc=0`, `0`, `0` y otra vez `rc=0`.
