@@ -640,3 +640,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U6 ola 4.
 
 ---
+
+## Construction — Cierre de U6 (U6-T06 VERDE en la ronda 1)
+**Timestamp**: 2026-10-10T17:56:36-05:00
+**User Input**: "merged #78 and #79"
+**AI Response**: "Se marca [x] U6-T6 (PR #79, VERDE en la ronda 1, con 3 hallazgos AMARILLO) y S5 como hecha en U6. U6 queda cerrada. Candidata nueva: C-99 (`preview.cors`/`server.cors` explícitos en Vite). U7-T05 queda desbloqueada en cuanto a U6-T06."
+**Context**: Construction — fin de U6.
+
+---

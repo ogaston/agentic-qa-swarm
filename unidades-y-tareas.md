@@ -152,7 +152,7 @@
 | U6-T3 | [x] | Login contra `go-identity`, sesión solo en memoria, logout, guarda de rutas y errores comunes (401/429/503) | S5, US-M8.3 | `tareas/U6-T03-login-sesion.md` |
 | U6-T4 | [x] | Inbox con filtros y confirmación explícita (`POST /notifications/{id}/confirm` → `/runs/{run_id}`) | S5, US-M1, US-M2 | `tareas/U6-T04-inbox-confirmacion.md` |
 | U6-T5 | [x] | Vista de corrida con sondeo hasta estado terminal, «Mis corridas» y estado del warm | S5, US-M2, US-M7.1 | `tareas/U6-T05-corrida-y-warm.md` |
-| U6-T6 | [ ] | Recorrido local con servicios reales en loopback (`u6-demo-local.sh`) y CSP estricta del build | S5 | `tareas/U6-T06-recorrido-local-csp.md` |
+| U6-T6 | [x] | Recorrido local con servicios reales en loopback (`u6-demo-local.sh`) y CSP estricta del build | S5 | `tareas/U6-T06-recorrido-local-csp.md` |
 
 > **Tareas redactadas (2026-10-10)**: orden T01 ∥ T02 → T03 → (T04 ∥ T05) → T06. T03 exige T01; T05 exige T02 y T03; T06 exige T04 y T05. Decisiones tomadas al redactar (el humano puede revertirlas): stack Vite + React 18 + TypeScript con versiones exactas y sin librerías de UI/estado; tipos generados con `openapi-typescript` y control de deriva en CI; el frontend llama a `/api/*` y el proxy de Vite enruta a identidad, controlador o `ui-api` (en producción lo hará el ingress); el estado del warm se lee a través de `ui-api` porque `go-warm-manager` solo acepta token de servicio; familias de flujos fijas en `['happy-path']` (S2 sigue fuera); sin navegador real en las pruebas (Testing Library + MSW, y `curl` en el recorrido). Todo se verifica sin clúster. Candidatas nuevas: C-94, C-95.
 
@@ -205,7 +205,7 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 | S2 | Segunda familia de flujos (p. ej. concurrencia) | U3 (agent-planner) | M4/M6 |
 | S3 | Traspaso a humano con contexto estructurado (boot/deploy, reset o ensayo fallido) | U2 | Fail-closed de M2/M5 |
 | S4 | Panel de políticas (eventos, cuotas del warm, workflows, confirm-required) | U4 (C7) | M7 |
-| S5 | **En curso como U6 (2026-10-10).** Dashboard inbox + estado del warm (`ready`/`dirty`/`cuarentena`/`idle-escalado`) — **Frontend web real** (consumiendo `ui-api` y OpenAPI; el archivo `mockups/swarm-mock.html` es únicamente un prototipo exploratorio de diseño, no la UI final) | U1/U2/Frontend | M1, M3, U1-T04 |
+| S5 | **Hecha como U6 (2026-10-10; cerrada con U6-T06, PR #79).** Dashboard inbox + estado del warm (`ready`/`dirty`/`cuarentena`/`idle-escalado`) — **Frontend web real** (consumiendo `ui-api` y OpenAPI; el archivo `mockups/swarm-mock.html` es únicamente un prototipo exploratorio de diseño, no la UI final) | U1/U2/Frontend | M1, M3, U1-T04 |
 
 ### Retirado del MVP en la simplificación (2026-10-10)
 
