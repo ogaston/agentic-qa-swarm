@@ -624,3 +624,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — segunda unidad post-MVP; U6-T03 sigue en revisión en paralelo (sin conflicto de archivos).
 
 ---
+
+## Construction — Aprobación de C-96 y ola 3 (U6-T04 ∥ U6-T05 ∥ U7-T01)
+**Timestamp**: 2026-10-10T16:22:58-05:00
+**User Input**: "merged #73 and #74, C-96 approved"
+**AI Response**: "Se marca [x] U6-T3 (PR #74, VERDE en ronda 3). C-96 queda aprobada: codificador y revisor pueden crear/destruir el clúster kind efímero `aqs` y aplicar manifiestos solo en el contexto `kind-aqs`. Se despachan en paralelo U6-T04, U6-T05 y U7-T01. Errata en U7-T01 CA-5: en esta máquina existen los clústeres kind `aqs-poc` y `ckad`, así que el grep `^aqs-` se cambia por `^aqs-control-plane$` (el despacho ya lo indicaba)."
+**Context**: Construction — U6 ola 3 y U7 ola 1.
+
+---
