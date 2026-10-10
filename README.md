@@ -8,3 +8,4 @@
 - `deploy/flux/dev/` — overlay del entorno dev (U5-T04).
 - `deploy/flux/prod/` — overlay del entorno prod (U5-T04).
 - `.github/workflows/` — workflows de GitHub Actions (U5-T03).
+- `web/` — frontend (U6). `web/dashboard/` es la SPA Vite + React + TypeScript.
