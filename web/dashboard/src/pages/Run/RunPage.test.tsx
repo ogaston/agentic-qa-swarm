@@ -93,7 +93,6 @@ describe('RunPage', () => {
     expect(pedidasA.n).toBe(antes);
   });
 
-
   it('running marca 6 fases como hechas o actuales y running como actual', async () => {
     respuestas('running', 'running');
     renderRun();
@@ -177,6 +176,24 @@ describe('RunPage', () => {
     await avanzar(10_000);
     expect(contador.peticiones).toBe(0);
     expect(screen.getByText(/identificador de corrida no válido/i)).toBeTruthy();
+  });
+
+  it('lectura buena y luego 503: conserva la línea de tiempo y avisa del dato desactualizado', async () => {
+    respuestas('running', { status: 503 });
+    renderRun();
+    await vaciar();
+    await avanzar(3000);
+    expect(screen.getByText('Mostrando la última lectura correcta.')).toBeTruthy();
+    expect(screen.getByText('running').closest('li')?.getAttribute('aria-current')).toBe('step');
+  });
+
+  it('lectura buena y luego 404: no muestra el aviso de dato desactualizado', async () => {
+    respuestas('running', { status: 404 });
+    renderRun();
+    await vaciar();
+    await avanzar(3000);
+    expect(screen.getByText('Corrida no encontrada')).toBeTruthy();
+    expect(screen.queryByText('Mostrando la última lectura correcta.')).toBeNull();
   });
 
   it('muestra trace_id si viene', async () => {

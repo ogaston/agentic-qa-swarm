@@ -79,6 +79,8 @@ La tabla vive en `src/proxy/table.ts`, función pura con pruebas.
   «Estado del warm no disponible».
 - Sondeo común: `src/hooks/usePolling.ts`. Pausa con la pestaña oculta (`visibilitychange`), se
   detiene al desmontar y tras 5 fallos seguidos.
+- Con `Retry-After` (429/503) la espera es `min(300 s, max(intervalo, Retry-After))`. Volver a la
+  pestaña respeta esa espera pendiente; no se pide antes.
 - La cabecera enlaza a Inbox, Mis corridas y Warm.
 
 ## Scripts

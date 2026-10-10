@@ -99,6 +99,33 @@ describe('usePolling', () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
+  it('Retry-After sin tope: la espera se limita a 300 s', async () => {
+    const fn = vi.fn(async () => {
+      throw new ApiError({ status: 429, code: 'rate_limited', message: 'x', requestId: 'r', retryAfter: 3600 });
+    });
+    renderHook(() => usePolling(fn, 3000, { isTerminal: () => false }));
+    await vaciar();
+    await avanzar(299_000);
+    expect(fn).toHaveBeenCalledTimes(1);
+    await avanzar(2000);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('volver a la pestaña no salta una espera de Retry-After pendiente', async () => {
+    const fn = vi.fn(async () => {
+      throw new ApiError({ status: 429, code: 'rate_limited', message: 'x', requestId: 'r', retryAfter: 30 });
+    });
+    renderHook(() => usePolling(fn, 3000, { isTerminal: () => false }));
+    await vaciar();
+    setVisibilidad('hidden');
+    await avanzar(5000);
+    setVisibilidad('visible');
+    await avanzar(5000);
+    expect(fn).toHaveBeenCalledTimes(1);
+    await avanzar(20_000);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
   it('refrescar tras agotarse reanuda el sondeo', async () => {
     let fallar = true;
     const fn = vi.fn(async () => {

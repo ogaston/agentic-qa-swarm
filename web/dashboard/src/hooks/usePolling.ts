@@ -32,13 +32,17 @@ type Estado<T> = {
   detenido: boolean;
 };
 
+/** Tope de espera que impone un `Retry-After`, para no quedarse parado horas. */
+const ESPERA_MAXIMA_MS = 300_000;
+
 /**
  * Sondeo de una petición cada `intervalMs`. Reglas:
  * - Nunca hay dos peticiones en vuelo; la siguiente se programa al terminar la anterior.
  * - Con la pestaña oculta no se pide nada (`visibilitychange`); al volver se pide de inmediato.
  * - Estado terminal o error fatal → se detiene.
  * - `maxFailures` fallos seguidos → se detiene y queda `agotado` hasta `refrescar()`.
- * - Un `Retry-After` en el error espera `max(intervalMs, retryAfter)` antes de la siguiente petición.
+ * - Un `Retry-After` en el error espera `min(300 s, max(intervalMs, retryAfter))` antes de la siguiente
+ *   petición; volver a la pestaña respeta esa espera pendiente.
  * - Desmontar no pide más. La petición en curso termina, pero su resultado se descarta.
  *
  * `fn` puede cambiar en cada render; el sondeo usa siempre la última. Para cambiar de
@@ -75,6 +79,8 @@ export function usePolling<T>(
     let fallos = 0;
     let agotado = false;
     let detenido = false;
+    // Instante (epoch ms) antes del que no se debe pedir, por un Retry-After.
+    let esperaHasta = 0;
 
     const parar = () => {
       if (timer !== null) clearTimeout(timer);
@@ -122,7 +128,12 @@ export function usePolling<T>(
         }
         publicar({ error });
         const retryAfter = error instanceof ApiError ? error.retryAfter : undefined;
-        programar(retryAfter === undefined ? intervalMs : Math.max(intervalMs, retryAfter * 1000));
+        const esperaMs =
+          retryAfter === undefined
+            ? intervalMs
+            : Math.min(ESPERA_MAXIMA_MS, Math.max(intervalMs, retryAfter * 1000));
+        esperaHasta = Date.now() + esperaMs;
+        programar(esperaMs);
       } finally {
         enVuelo = false;
       }
@@ -133,7 +144,10 @@ export function usePolling<T>(
         parar();
         return;
       }
-      if (!detenido && !agotado) void ejecutar();
+      if (detenido || agotado) return;
+      const restaMs = esperaHasta - Date.now();
+      if (restaMs > 0) programar(restaMs);
+      else void ejecutar();
     };
 
     ejecutarRef.current = () => {
