@@ -46,3 +46,11 @@ Para despachar las 37 tareas de `unidades-y-tareas.md` mediante el loop de tres 
 - **Codificador**: `Sonnet 5.5 (effort: low)` — generación de código ágil, enfocada y costo-eficiente por tarea en su propio worktree.
 - **Revisor**: `Sonnet 5.5 (effort: high)` — análisis exhaustivo con razonamiento profundo para ejecutar comandos de verificación, auditar contratos y detectar fallos sutiles.
 - **Humano**: Revisa y fusiona (el techo del loop).
+
+### 7. Clarificación de UI: Mockup como prototipo exploratorio, no UI final — 2026-10-06
+
+Se explicita en el plan que `mockups/swarm-mock.html` es exclusivamente un **mockup/prototipo visual exploratorio de diseño** (creado en Inception para explorar flujos, interacciones y validar requisitos), y **no la UI final del producto**. La UI final (S5 en el backlog Should) será una aplicación web cliente real (frontend) que consuma la API del control plane (`services/ui-api` y `contracts/openapi/control-plane.yaml`), sin sustituirse ni considerarse terminada con el archivo estático de mockup.
+
+### 8. Simplificación del cierre del MVP — 2026-10-10
+
+Con U2-T08 y U3-T06 fusionadas, la única tarea restante (U3-T07) dependía de infraestructura nueva (NATS JetStream, LiteLLM, Deployments con egress, adaptadores S3) y de una demo en un clúster de dev con aprobación humana. Para cerrar el MVP sin ese bloqueo, U3-T07 se redefine como **integración local**: adaptador LLM compatible con OpenAI probado en loopback, arranque local de planner y reporter, y un recorrido que pasa el contrato de U2 contra el planner real y genera un reporte desde evidencia en disco. Lo retirado queda en el backlog post-MVP de `unidades-y-tareas.md` (P1–P6). Las decisiones C-45, C-82 y C-83 no se revierten; se aplazan.
