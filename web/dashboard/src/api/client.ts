@@ -38,6 +38,15 @@ export function setAuthToken(token: string | null): void {
   authToken = token;
 }
 
+// Manejador global de 401: la sesión lo registra para borrar el estado y redirigir.
+// Solo se invoca si la petición llevaba token (un 401 de login sin sesión es un
+// fallo de credenciales, no una sesión caducada). El error se sigue lanzando.
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
+}
+
 function newRequestId(): string {
   // UUID v4 (36 caracteres): cumple ^[A-Za-z0-9._-]{8,64}$.
   return globalThis.crypto.randomUUID();
@@ -64,6 +73,7 @@ function isErrorBody(value: unknown): value is ErrorBody {
  */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const requestId = newRequestId();
+  const sentWithToken = authToken !== null;
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   headers.set('X-Request-Id', requestId);
@@ -111,6 +121,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   const retryAfter = parseRetryAfter(response.headers.get('Retry-After'));
   const withRetry = retryAfter === undefined ? {} : { retryAfter };
+
+  if (response.status === 401 && sentWithToken && unauthorizedHandler !== null) {
+    unauthorizedHandler();
+  }
 
   if (jsonOk && isErrorBody(body)) {
     throw new ApiError({

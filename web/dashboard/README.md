@@ -1,7 +1,7 @@
 # web/dashboard — frontend del Agentic QA Swarm
 
-SPA en Vite + React + TypeScript estricto. Esta versión es el esqueleto: rutas vacías
-`/login`, `/inbox`, `/runs/:id`, `/warm` y `NotFound`. Las pantallas llegan en U6-T03…T05.
+SPA en Vite + React + TypeScript estricto. Login, sesión en memoria y guarda de rutas (U6-T03). Las rutas
+`/inbox`, `/runs/:id` y `/warm` son todavía placeholders; sus pantallas llegan en U6-T04 y U6-T05.
 
 ## Arranque
 
@@ -41,6 +41,28 @@ La tabla vive en `src/proxy/table.ts`, función pura con pruebas.
   Un fallo de red (fetch rechazado) lanza `ApiError` con `code: "network_error"` y `status: 0`.
   Un cuerpo no JSON o no `Error` produce `code: "unexpected_response"`.
 - El token se inyecta con `setAuthToken` y vive solo en memoria.
+
+## Sesión y login
+
+- `/login` pide usuario y contraseña. El campo de código de verificación (6 dígitos) aparece si
+  el servidor responde `401` a un intento con usuario `admin`, o si la persona lo despliega.
+  El código se envía solo si se rellenó.
+- Tras entrar se llama a `GET /api/auth/session` para obtener `principal_id` y `role`, que se
+  muestran en la cabecera junto al botón de salir.
+- **El token vive solo en memoria** (estado de React y el módulo del cliente). No se usa
+  `localStorage`, `sessionStorage`, `indexedDB` ni `document.cookie`. **Recargar la página
+  obliga a iniciar sesión otra vez.** Es una decisión de seguridad: un XSS no puede leer lo
+  que no se persiste, a cambio de pedir login al recargar. Cambiarlo es decisión del humano
+  (candidata C-94).
+- Un temporizador cierra la sesión local al llegar a `expires_at`. Cualquier `401` de una
+  llamada autenticada borra la sesión y lleva a `/login?next=<ruta>`. Tras entrar se navega a
+  `next` solo si es una ruta interna (empieza por `/`, no por `//` ni `/\`).
+- Logout: `POST /api/auth/logout` y borrado local aunque la petición falle.
+- `/inbox`, `/runs/:id` y `/warm` exigen sesión: sin ella redirigen a `/login?next=…` sin
+  llamar a la API.
+- `src/api/errors.tsx` exporta `<ApiErrorNotice error={…} />`: `429` con cuenta atrás,
+  `503`/red con «Servicio no disponible» y `Retry-After` si viene, y el resto con `code`,
+  `message` y `requestId` para soporte. Nunca muestra el token.
 
 ## Scripts
 
