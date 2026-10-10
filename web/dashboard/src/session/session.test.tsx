@@ -8,6 +8,22 @@ import { currentLocation, renderApp } from '../test/renderApp';
 
 const TOKEN = 'tok-MARCADOR-unico-7f3a9c';
 
+// Cabecera Authorization que llegó al último probe. `undefined` = ningún probe todavía.
+let ultimaAutorizacion: string | null | undefined;
+
+function probeHandler() {
+  return http.get('/api/probe', ({ request }) => {
+    ultimaAutorizacion = request.headers.get('authorization');
+    return HttpResponse.json({ ok: true });
+  });
+}
+
+/** Tras un login real, comprueba que el probe SÍ lleva el Bearer (así la prueba no es vacía). */
+async function confirmarBearerVivo() {
+  await apiFetch('/api/probe');
+  expect(ultimaAutorizacion).toBe(`Bearer ${TOKEN}`);
+}
+
 function loginHandlers(expiresAt = '2099-01-01T00:00:00Z') {
   return [
     http.post('/api/auth/login', () =>
@@ -53,14 +69,16 @@ describe('sesión', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const ahora = Date.now();
     const expiraEn = new Date(ahora + 60_000).toISOString();
-    server.use(...loginHandlers(expiraEn));
+    server.use(...loginHandlers(expiraEn), probeHandler());
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderApp('/login');
     await loginDesdeFormulario(user);
     await act(async () => {
       vi.advanceTimersByTime(61_000);
     });
-    await waitFor(() => expect(currentLocation().startsWith('/login')).toBe(true));
+    await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
+    await expect(apiFetch('/api/probe')).resolves.toBeDefined();
+    expect(ultimaAutorizacion).toBeNull();
   });
 
   it('401 de una llamada protegida borra la sesión y redirige con next', async () => {
@@ -102,5 +120,87 @@ describe('sesión', () => {
     expect(sessionStorage.length).toBe(0);
     expect(document.cookie).toBe('');
     expect(document.body.innerHTML.includes(TOKEN)).toBe(false);
+  });
+});
+
+describe('el token del módulo se borra en todo cierre', () => {
+  it('tras logout con 500 una petición apiFetch no lleva Authorization', async () => {
+    server.use(
+      ...loginHandlers(),
+      probeHandler(),
+      http.post('/api/auth/logout', () => HttpResponse.json({ code: 'internal', message: 'boom' }, { status: 500 })),
+    );
+    const user = userEvent.setup();
+    renderApp('/login');
+    await loginDesdeFormulario(user);
+    await confirmarBearerVivo();
+    await user.click(screen.getByRole('button', { name: 'Salir' }));
+    await waitFor(() => expect(currentLocation()).toBe('/login'));
+    await apiFetch('/api/probe');
+    expect(ultimaAutorizacion).toBeNull();
+  });
+
+  it('tras logout con 204 una petición apiFetch no lleva Authorization', async () => {
+    server.use(
+      ...loginHandlers(),
+      probeHandler(),
+      http.post('/api/auth/logout', () => new HttpResponse(null, { status: 204 })),
+    );
+    const user = userEvent.setup();
+    renderApp('/login');
+    await loginDesdeFormulario(user);
+    await confirmarBearerVivo();
+    await user.click(screen.getByRole('button', { name: 'Salir' }));
+    await waitFor(() => expect(currentLocation()).toBe('/login'));
+    await apiFetch('/api/probe');
+    expect(ultimaAutorizacion).toBeNull();
+  });
+
+  it('tras expirar una petición apiFetch no lleva Authorization', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const expiraEn = new Date(Date.now() + 60_000).toISOString();
+    server.use(...loginHandlers(expiraEn), probeHandler());
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/login');
+    await loginDesdeFormulario(user);
+    await confirmarBearerVivo();
+    await act(async () => {
+      vi.advanceTimersByTime(61_000);
+    });
+    await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
+    await apiFetch('/api/probe');
+    expect(ultimaAutorizacion).toBeNull();
+  });
+
+  it('tras un 401 una petición apiFetch no lleva Authorization', async () => {
+    server.use(
+      ...loginHandlers(),
+      probeHandler(),
+      http.get('/api/notifications', () => HttpResponse.json({ code: 'unauthorized', message: 'x' }, { status: 401 })),
+    );
+    const user = userEvent.setup();
+    renderApp('/login');
+    await loginDesdeFormulario(user);
+    await confirmarBearerVivo();
+    await expect(apiFetch('/api/notifications')).rejects.toBeInstanceOf(ApiError);
+    await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
+    await apiFetch('/api/probe');
+    expect(ultimaAutorizacion).toBeNull();
+  });
+});
+
+describe('expires_at inválido', () => {
+  it('expires_at no parseable rechaza el login: sin sesión, sin token y sin temporizador', async () => {
+    server.use(...loginHandlers('no-es-una-fecha'), probeHandler());
+    const user = userEvent.setup();
+    renderApp('/login');
+    await user.type(screen.getByLabelText('Usuario'), 'ana');
+    await user.type(screen.getByLabelText('Contraseña'), 'clave-larga-1');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+    expect(await screen.findByText(/expires_at no es una fecha válida/)).toBeTruthy();
+    expect(currentLocation()).toBe('/login');
+    expect(screen.queryByText('ana')).toBeNull();
+    await apiFetch('/api/probe');
+    expect(ultimaAutorizacion).toBeNull();
   });
 });

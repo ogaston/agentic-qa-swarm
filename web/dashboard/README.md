@@ -58,6 +58,9 @@ La tabla vive en `src/proxy/table.ts`, función pura con pruebas.
   llamada autenticada borra la sesión y lleva a `/login?next=<ruta>`. Tras entrar se navega a
   `next` solo si es una ruta interna (empieza por `/`, no por `//` ni `/\`).
 - Logout: `POST /api/auth/logout` y borrado local aunque la petición falle.
+- Si el reloj del equipo va adelantado respecto al servidor, la sesión puede expirar antes de
+  tiempo: el contrato no trae `expires_in`, así que el cliente compara con `expires_at`.
+- Un `expires_at` que no sea una fecha válida rechaza el login y no deja sesión ni token.
 - `/inbox`, `/runs/:id` y `/warm` exigen sesión: sin ella redirigen a `/login?next=…` sin
   llamar a la API.
 - `src/api/errors.tsx` exporta `<ApiErrorNotice error={…} />`: `429` con cuenta atrás,

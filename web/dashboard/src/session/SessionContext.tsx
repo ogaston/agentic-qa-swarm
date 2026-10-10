@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { components } from '../api/schema.gen';
-import { apiFetch, setAuthToken, setUnauthorizedHandler } from '../api/client';
+import { ApiError, apiFetch, setAuthToken, setUnauthorizedHandler } from '../api/client';
 import { loginPath } from './next';
 
 type SessionBody = components['schemas']['Session'];
@@ -87,7 +87,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     let id: ReturnType<typeof setTimeout> | undefined;
     const armar = () => {
       const restante = Date.parse(session.expiresAt) - Date.now();
-      if (restante <= 0) {
+      // NaN (expires_at no parseable) no es sesión válida: nunca se re-arma.
+      if (!Number.isFinite(restante) || restante <= 0) {
         expulsar();
         return;
       }
@@ -101,6 +102,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (input: LoginInput) => {
+      // Un login nuevo no lleva el Bearer de una sesión previa: se descarta antes de la petición.
+      borrarLocal();
       const cuerpo: Record<string, string> = {
         username: input.username,
         password: input.password,
@@ -112,6 +115,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cuerpo),
       });
+      // F-02: sin fecha de expiración válida no hay sesión, y el token no llega a fijarse.
+      if (!Number.isFinite(Date.parse(respuesta.expires_at))) {
+        throw new ApiError({
+          status: 200,
+          code: 'unexpected_response',
+          message: 'expires_at no es una fecha válida',
+          requestId: 'sin-id',
+        });
+      }
       setAuthToken(respuesta.token);
       try {
         const sesion = await apiFetch<SessionBody>('/api/auth/session');

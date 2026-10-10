@@ -152,6 +152,14 @@ describe('LoginPage', () => {
     await waitFor(() => expect(currentLocation()).toBe('/inbox'));
   });
 
+  it('next con tabulador («/\\t/evil.example») se ignora y va a /inbox', async () => {
+    server.use(...okLogin());
+    const user = userEvent.setup();
+    renderApp('/login?next=' + encodeURIComponent('/\t/evil.example'));
+    await fillAndSubmit(user);
+    await waitFor(() => expect(currentLocation()).toBe('/inbox'));
+  });
+
   it('next=/warm se respeta tras el login', async () => {
     server.use(...okLogin());
     const user = userEvent.setup();
