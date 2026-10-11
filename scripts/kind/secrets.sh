@@ -38,6 +38,37 @@ declare -A SECRET_NS=(
   [go-intake-webhook]=aqs-system
 )
 
+# Namespace con apply (no create): así lleva last-applied-configuration y apply -k no avisa (F-04).
+ensure_namespace() {
+  kubectl create namespace "$1" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+}
+
+# ConfigMap go-reset-baseline de relleno para kind (errata E-2; F-01/F-02). Si ya existe, no se toca:
+# un baseline real aplicado a mano no se pisa. Contrato: clean -> 0; verify -> imprime 0; version -> kind-stub.
+ensure_baseline_stub() {
+  local ns=aqs-system name=go-reset-baseline dir="$work/go-reset-baseline"
+  if kubectl get configmap "$name" -n "$ns" >/dev/null 2>&1; then
+    echo "secrets: $ns/configmap $name ya existe; no se toca"
+    return 0
+  fi
+  ensure_namespace "$ns"
+  mkdir "$dir"
+  cat > "$dir/baseline.sh" <<'SH'
+#!/bin/sh
+# Relleno de kind (U7-T03, errata E-2). NO verifica nada: el reset verificado queda PENDIENTE en kind.
+case "${1:-}" in
+  clean) exit 0 ;;
+  verify) echo 0 ;;
+  version) echo kind-stub ;;
+  *) echo "uso: baseline.sh clean|verify|version" >&2; exit 2 ;;
+esac
+SH
+  kubectl create configmap "$name" -n "$ns" --from-file=baseline.sh="$dir/baseline.sh" --dry-run=client -o yaml \
+    | kubectl label --local -f - aqs.io/kind-stub=true -o yaml \
+    | kubectl apply -f - >/dev/null
+  echo "secrets: $ns/configmap $name creado (relleno de kind, etiqueta aqs.io/kind-stub=true)"
+}
+
 rand_hex() { openssl rand -hex "$1" | tr -d '\n'; }
 
 # --- 1. Descubrimiento de los Secrets que referencia el overlay ---------------------------
@@ -129,7 +160,7 @@ for name in "${wanted[@]}"; do
     echo "secrets: $ns/$name ya existe; no se regenera"
     continue
   fi
-  kubectl get namespace "$ns" >/dev/null 2>&1 || kubectl create namespace "$ns" >/dev/null
+  ensure_namespace "$ns"
   dir="$work/$name"
   mkdir "$dir"
   chmod 700 "$dir"
@@ -144,4 +175,6 @@ for name in "${wanted[@]}"; do
   echo "secrets: $ns/$name creado"
 done
 
-echo "secrets: OK (${#wanted[@]} Secrets referenciados por deploy/flux/kind)"
+ensure_baseline_stub
+
+echo "secrets: OK (${#wanted[@]} Secrets referenciados por deploy/flux/kind; ConfigMap go-reset-baseline de relleno)"

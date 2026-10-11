@@ -11,7 +11,6 @@ kind: Kustomization
 # `$patch: delete` los objetos de observability y backup, uno por uno, por grupo/versión/kind/nombre.
 resources:
   - ../base
-  - kind-stubs.yaml
 patches:
   # --- observability: fuera en kind ---
   - target:
@@ -213,6 +212,8 @@ patches:
                   - name: GOVERNANCE_ENV
                     value: dev
   # --- E-2: huecos de arranque en kind (secretos y variables que los manifiestos base no dan) ---
+  # El ConfigMap go-reset-baseline de relleno lo crea scripts/kind/secrets.sh (no está en el overlay,
+  # para que apply -k no pise un baseline real aplicado a mano).
   - target:
       kind: Deployment
       name: go-intake
