@@ -95,6 +95,21 @@ Desde la raíz del worktree, con el clúster creado y las imágenes cargadas (`k
 
 ---
 
+## Errata (2026-10-10, ronda 1, decidida por el humano)
+
+La ronda 1 destapó dos problemas de la especificación. El humano decidió:
+
+- **E-1 · Forma del overlay.** El cargador por defecto de kustomize no admite archivos sueltos de `../base` fuera del directorio del overlay. Se acepta que el overlay use `../base` **entero** y quite `observability` y `backup` con parches `$patch: delete`. CA-2 sigue siendo la comprobación del resultado. No se usa `--load-restrictor`.
+- **E-2 · Huecos de configuración que impiden arrancar (solo en kind).** Tres Deployments del control plane no arrancan por huecos que `base`, `dev` y `prod` también tienen. En kind se cubren **solo** desde `deploy/flux/kind/` y `scripts/kind/`. `base`, `dev` y `prod` no cambian.
+  - `go-intake` exige `GITHUB_WEBHOOK_SECRET` (`services/go-intake/cmd/go-intake/main.go:39`). El overlay la añade con `secretKeyRef` a un Secret nuevo `go-intake-webhook` (clave `secret`). `secrets.sh` crea ese Secret con un valor aleatorio, igual que los demás.
+  - `ui-api` exige `UIAPI_AUTH` (`services/ui-api/cmd/ui-api/main.go:57`). El overlay pone `UIAPI_AUTH=identity` e `IDENTITY_URL` apuntando al Service de `go-identity` dentro del clúster. Primero se mira si las NetworkPolicy de `base` ya permiten el tráfico `ui-api` → `go-identity`. Si no lo permiten, el overlay añade **una** NetworkPolicy de permiso acotada a ese par de pods y a ese puerto, y debe seguir pasando `policies.sh`. Ninguna regla de `policy/*.rego` cambia.
+  - `go-reset` monta el ConfigMap `go-reset-baseline`, que `base` declara como aportado por un humano; en el repo no existe ningún `baseline.sh`. `secrets.sh` crea en el clúster un `baseline.sh` **de relleno**, solo para kind, con el contrato `clean|verify|version`:
+    - `clean` sale con `0`;
+    - `verify` imprime `0`;
+    - `version` imprime `kind-stub`.
+    El ConfigMap lleva la etiqueta `aqs.io/kind-stub: "true"`. Ese relleno **no** verifica nada: U7-T04 debe declarar el reset verificado como `PENDIENTE` en kind.
+- Los criterios de aceptación y CA-6 no cambian. Candidatas: C-103 a C-106.
+
 ## Notas
 
 - El HPA de `go-run-controller` queda sin métricas (no hay metrics-server); con `maxReplicas: 1` no cambia nada.
