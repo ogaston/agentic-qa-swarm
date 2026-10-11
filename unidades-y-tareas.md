@@ -186,12 +186,12 @@
 
 | # | Hecho | Tarea | Historias | Comando de verificación |
 |---|---|---|---|---|
-| U8-T1 | [ ] | NATS JetStream en `base`/kind (StatefulSet, stream `AQS_EVENTS`, NetworkPolicy, `nats-init`) | US-M1, US-M2 | `tareas/U8-T01-nats-jetstream.md` |
-| U8-T2 | [ ] | Transporte NATS en `go-intake`, `ui-api` y `go-run-controller` (`EVENTS_TRANSPORT=nats`, al menos una vez, dedupe por `event_id`) | US-M1, US-M2 | `tareas/U8-T02-transporte-nats-servicios.md` |
+| U8-T1 | [x] | NATS JetStream en `base`/kind (StatefulSet, stream `AQS_EVENTS`, NetworkPolicy, `nats-init`) | US-M1, US-M2 | `tareas/U8-T01-nats-jetstream.md` |
+| U8-T2 | [x] | Transporte NATS en `go-intake`, `ui-api` y `go-run-controller` (`EVENTS_TRANSPORT=nats`, al menos una vez, dedupe por `event_id`) | US-M1, US-M2 | `tareas/U8-T02-transporte-nats-servicios.md` |
 | U8-T3 | [x] | Imagen `aqs-runner` (`rehearse` y `http-steps` con la interfaz de los Jobs) y fin del `9` fijo en los scripts de kind | US-M5, US-M6 | `tareas/U8-T03-imagen-runner.md` |
-| U8-T4 | [ ] | App de referencia `demo/target-app` (pedidos, invariante de stock, bug sembrado) y `baseline.sh` real | US-M2, US-M3, US-M7.1 | `tareas/U8-T04-app-de-referencia.md` |
+| U8-T4 | [x] | App de referencia `demo/target-app` (pedidos, invariante de stock, bug sembrado) y `baseline.sh` real | US-M2, US-M3, US-M7.1 | `tareas/U8-T04-app-de-referencia.md` |
 | U8-T5 | [ ] | Agentes en el clúster, reporter sobre MinIO y usuario MinIO `aqs-evidence` con política mínima | US-M3, US-M4, US-M9 | `tareas/U8-T05-agentes-en-cluster.md` |
-| U8-T6 | [ ] | Fase `report` real en el controlador y fuente de flujos U3 cableada | US-M4, US-M9 | `tareas/U8-T06-fase-report-controlador.md` |
+| U8-T6 | [x] | Fase `report` real en el controlador y fuente de flujos U3 cableada | US-M4, US-M9 | `tareas/U8-T06-fase-report-controlador.md` |
 | U8-T7 | [ ] | Llevar a `base` los huecos que hoy solo cubre kind (C-103) | US-M1, US-M8.3 | `tareas/U8-T07-huecos-de-base.md` |
 | U8-T8 | [ ] | `kind-e2e.sh`: del webhook firmado al reporte, con reset verificado y bug sembrado detectado | US-M1…M10 | `tareas/U8-T08-ciclo-completo-kind.md` |
 | U8-T9 | [ ] | Con el humano: LiteLLM + DeepSeek, app definitiva y webhook real de GitHub | US-M1, US-M3, US-M4, US-M9 | `tareas/U8-T09-llm-app-y-github-reales.md` |

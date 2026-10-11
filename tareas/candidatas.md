@@ -113,3 +113,15 @@ Trabajo que apareció durante las rondas y que **nadie pidió todavía**. No for
 | C-107 | U7-T03 rondas 1-2; U2-T07 ronda 2, F-A1 | Nadie aprovisiona en MinIO el usuario de `aqs-evidence-s3` (`init-bucket.sh` solo crea el bucket `evidence`); en kind `secrets.sh` genera credenciales que MinIO no conoce | **Decidido por el humano (2026-10-11):** «crea un usuario tú para MinIO, tu decisión» → usuario `aqs-evidence` con política limitada al bucket `evidence` (Get/Put/List), creado por `minio-init`; se implementa en U8-T05 |
 | C-108 | U7-T05 ronda 1, F-04 (revisor) | Extraer a `scripts/kind/lib.sh` las funciones `pf` y `wait_url` (hoy duplicadas en `kind-smoke.sh` y `dashboard-up.sh`), con prueba de que `kind-smoke.sh` no cambia de comportamiento | AMARILLO; no rompe ningún CA |
 | C-109 | U7-T05 ronda 1, F-02 (revisor) | Fuente única de la CSP del dashboard (hoy copiada en `vite.config.ts`, `scripts/test/u6-demo-local.sh` y `scripts/kind/dashboard-smoke.sh`) | AMARILLO; si una copia diverge, el smoke falla ruidosamente |
+| C-110 | U8-T01 ronda 3 (revisor) | Actualizar `docs/seguridad/aislamiento.md`: `allow-same-namespace` ya excluye NATS y falta documentar `nats-clients-only` | Documentación |
+| C-111 | U8-T01 ronda 3 (revisor) | NKeys y TLS en NATS; hoy la etiqueta `aqs.io/nats-client=true` es autoservicio | Endurecimiento |
+| C-112 | U8-T02 ronda 2 (revisor) | Retención de 7 días del stream vs. inbox en memoria de `ui-api`: tras ese plazo y un reinicio se pierden notificaciones pendientes; persistir la proyección o un snapshot | |
+| C-113 | U8-T02 ronda 2 (revisor) | `run.done` solo se deduplica 2 min por `Nats-Msg-Id`; deduplicar también en el consumidor | |
+| C-114 | U8-T02 ronda 2 (revisor) | `rehearsal.*` y los eventos de `go-warm-manager`/`go-reset` siguen sin transporte NATS | Decisión de U8: warm y reset por HTTP |
+| C-115 | U8-T02 ronda 2, F-05 (revisor) | Copias de `ConnectNATS`/`NATSReady` por módulo y `Poll` con WARN por tick durante `nats-init` | AMARILLO |
+| C-116 | U8-T02 ronda 2 (revisor) | `UIAPI_DATA_DIR` e `INTAKE_DATA_DIR` ausentes de `control-plane.yaml` | Pariente de U8-T07 (C-103); el humano decide si entra ahí |
+| C-117 | U8-T04 ronda 2 (revisor) | NetworkPolicy que acote `:9090` de la app al par `go-reset` → warm-app (hoy solo lo protege el token) | |
+| C-118 | U8-T04 ronda 2 (revisor) | `go-reset`: ejecutar el reset con un contexto desligado de la petición HTTP (estado `dirty` sin cuarentena si el cliente corta) | |
+| C-119 | U8-T04 ronda 2 (revisor) | Fijar la imagen de postgres de la app de referencia por digest; `sslmode=disable` en warm-db | AMARILLO |
+| C-120 | U8-T06 ronda 1 (revisor) | Idempotencia de `POST /v1/report` (un fallo antes de guardar `Launched` repite el reporte) | |
+| C-121 | U8-T06 ronda 1 (revisor) | La prueba de contrato con `REPORTER_URL` no compara el `report_uri` con el del store real; y publicar `report.ready` por NATS | |
