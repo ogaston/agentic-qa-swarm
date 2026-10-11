@@ -6,7 +6,17 @@ name: integration-u2-u3
 on:
   push:
     branches: [main]
+    paths:
+      - 'services/**'
+      - 'agents/**'
+      - 'contracts/**'
+      - '.github/workflows/integration-u2-u3.yml'
   pull_request:
+    paths:
+      - 'services/**'
+      - 'agents/**'
+      - 'contracts/**'
+      - '.github/workflows/integration-u2-u3.yml'
 
 permissions:
   contents: read

@@ -6,7 +6,15 @@ name: integration-u1-u4
 on:
   push:
     branches: [main]
+    paths:
+      - 'services/**'
+      - 'contracts/**'
+      - '.github/workflows/integration-u1-u4.yml'
   pull_request:
+    paths:
+      - 'services/**'
+      - 'contracts/**'
+      - '.github/workflows/integration-u1-u4.yml'
 
 permissions:
   contents: read
