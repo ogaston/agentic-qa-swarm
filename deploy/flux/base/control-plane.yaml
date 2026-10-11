@@ -186,11 +186,11 @@ spec:
             - name: RUN_ARTIFACT_REF
               value: ghcr.io/ogaston/agentic-qa-swarm/target-app:0.0.0
             - name: REHEARSAL_IMAGE
-              value: ghcr.io/ogaston/agentic-qa-swarm/rehearsal:0.0.0
+              value: ghcr.io/ogaston/agentic-qa-swarm/aqs-runner:0.0.0
             - name: REHEARSAL_TARGET_URL
               value: http://warm-app.aqs-test.svc
             - name: RUNNER_IMAGE
-              value: ghcr.io/ogaston/agentic-qa-swarm/runner:0.0.0
+              value: ghcr.io/ogaston/agentic-qa-swarm/aqs-runner:0.0.0
             - name: EVIDENCE_ENDPOINT
               value: https://minio.aqs-system.svc:9000
             - name: EVIDENCE_BUCKET
@@ -199,6 +199,14 @@ spec:
               value: /etc/aqs/evidence/access-key
             - name: EVIDENCE_SECRET_KEY_FILE
               value: /etc/aqs/evidence/secret-key
+            - name: RUN_FLOW_SOURCE
+              value: u3
+            - name: U3_URL
+              value: http://agent-planner.aqs-system.svc:8080
+            - name: U3_DEFAULT_WORKFLOW
+              value: happy-path
+            - name: REPORTER_URL
+              value: http://agent-reporter.aqs-system.svc:8080
           image: ghcr.io/ogaston/agentic-qa-swarm/go-run-controller:0.0.0
           ports:
             - name: http

@@ -17,7 +17,7 @@ from agent_reporter.errors import (
 )
 from agent_reporter.llm import LLMClient, LLMError
 from agent_reporter.metrics import METRICS
-from agent_reporter.reporter import Limits, correlate_postmortem, prepare
+from agent_reporter.reporter import Limits, correlate_postmortem, correlate_postmortem_uri, prepare
 
 MAX_BODY = 64 * 1024
 log = logging.getLogger("agent_reporter")
@@ -47,11 +47,13 @@ def handle_report(svc: Service, body: bytes) -> tuple[int, dict]:
     ):
         return 422, {"error": "invalid_request"}
     try:
-        report = correlate_postmortem(
+        report, uri = correlate_postmortem_uri(
             req["run_id"], req["evidence_uris"], svc.reader, svc.llm, svc.limits,
             store=svc.store, publisher=svc.publisher,
         )
-        return 200, report
+        if uri is None:  # E-1: sin URI del store no hay respuesta válida (falla cerrado)
+            return 500, {"error": "internal"}
+        return 200, {**report, "report_uri": uri}
     except NoEvidence:
         return 422, {"error": "no_evidence"}
     except ReportRejected as e:

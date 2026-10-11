@@ -39,6 +39,7 @@ type config struct {
 	maxParallel                                      int
 	flowTimeout, runTimeout                          time.Duration
 	flowSource, u3URL, u3Workflow                    string // RUN_FLOW_SOURCE (""|u3|fake), U3_URL y U3_DEFAULT_WORKFLOW
+	reporterURL                                      string // REPORTER_URL (fase report, U8-T06)
 }
 
 // parseSeconds lee una duración en segundos (vacío: def). Valor no numérico o <=0 es un error.
@@ -134,6 +135,10 @@ func loadConfig(env func(string) string) (config, error) {
 		c.rehearsalSA = env("REHEARSAL_SERVICE_ACCOUNT")
 		c.runnerImage, c.runnerSA = env("RUNNER_IMAGE"), env("RUNNER_SERVICE_ACCOUNT")
 		c.evBucket, c.evAccessFile, c.evSecretFile = env("EVIDENCE_BUCKET"), env("EVIDENCE_ACCESS_KEY_FILE"), env("EVIDENCE_SECRET_KEY_FILE")
+		c.reporterURL = env("REPORTER_URL")
+		if _, err := adapters.ValidateHTTPURL(c.reporterURL); err != nil {
+			return c, fmt.Errorf("REPORTER_URL %w", err)
+		}
 		if c.runnerSA == "" {
 			c.runnerSA = "aqs-runner"
 		}

@@ -195,6 +195,22 @@ def correlate_postmortem(
     publisher: EventPublisher | None = None,
     trace_id: str | None = None,
 ) -> dict:
+    report, _ = correlate_postmortem_uri(run_id, uris, reader, llm, limits, store=store, publisher=publisher, trace_id=trace_id)
+    return report
+
+
+def correlate_postmortem_uri(
+    run_id: str,
+    uris,
+    reader: EvidenceReader,
+    llm: LLMClient,
+    limits: Limits | None = None,
+    *,
+    store: ReportStore | None = None,
+    publisher: EventPublisher | None = None,
+    trace_id: str | None = None,
+) -> tuple[dict, str | None]:
+    """Igual que correlate_postmortem, y además devuelve el URI con el que el store guardó el reporte (None sin store)."""
     limits = limits or Limits()
     prep = prepare(run_id, uris, reader, limits)
     if len(prep.prompt) // 4 > limits.max_input_tokens:
@@ -212,6 +228,7 @@ def correlate_postmortem(
     METRICS.redaction(acc)
     if validate_report(report):
         raise ReportRejected("esquema_invalido_tras_redactar")
+    uri = None
     if store is not None:
         data = json.dumps(report, sort_keys=True, ensure_ascii=False).encode("utf-8")
         uri = store.put(run_id, data)
@@ -229,4 +246,4 @@ def correlate_postmortem(
                     "data": {"run_id": run_id, "report_uri": uri, "findings_count": len(report["findings"])},
                 }
             )
-    return report
+    return report, uri

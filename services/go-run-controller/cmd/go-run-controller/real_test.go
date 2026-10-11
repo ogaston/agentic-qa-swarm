@@ -22,6 +22,7 @@ func realEnv() map[string]string {
 	m["RUN_PHASES"] = "real"
 	delete(m, "RUN_ALLOW_FAKE_PHASES")
 	m["WARM_URL"], m["RESET_URL"] = "http://warm:8080", "https://reset:8080"
+	m["REPORTER_URL"] = "http://agent-reporter.aqs-system.svc:8080"
 	m["WARM_SERVICE_TOKEN"], m["RESET_SERVICE_TOKEN"] = "w", "r"
 	m["RUN_ARTIFACT_REF"] = "ghcr.io/x/app:1.0"
 	m["REHEARSAL_IMAGE"] = "ghcr.io/ogaston/aqs-rehearsal:0.1.0"
@@ -43,6 +44,8 @@ func TestLoadConfigRealOK(t *testing.T) {
 func TestLoadConfigRealFailsClosed(t *testing.T) {
 	for name, mut := range map[string]func(map[string]string){
 		"sin WARM_URL":      func(m map[string]string) { delete(m, "WARM_URL") },
+		"sin REPORTER_URL":  func(m map[string]string) { delete(m, "REPORTER_URL") },
+		"REPORTER_URL ftp":  func(m map[string]string) { m["REPORTER_URL"] = "ftp://x" },
 		"sin RESET_URL":     func(m map[string]string) { delete(m, "RESET_URL") },
 		"WARM_URL ftp":      func(m map[string]string) { m["WARM_URL"] = "ftp://x" },
 		"RESET_URL file":    func(m map[string]string) { m["RESET_URL"] = "file:///x" },

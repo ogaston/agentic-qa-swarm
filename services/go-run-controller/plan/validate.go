@@ -69,3 +69,37 @@ func ValidateWarmState(w WarmState) error {
 	}
 	return nil
 }
+
+// ValidateReport replica contracts/plans/report.schema.json: veredicto de enum, bug exige hallazgos,
+// sin-hallazgos e inconcluso no los admiten, y cada hallazgo enlaza evidencia s3:// o https://.
+func ValidateReport(r Report) error {
+	if r.RunID == "" {
+		return errors.New("report: run_id vacío")
+	}
+	switch r.Verdict {
+	case "bug":
+		if len(r.Findings) == 0 {
+			return errors.New("report: bug sin hallazgos")
+		}
+	case "sin-hallazgos", "inconcluso":
+		if len(r.Findings) != 0 {
+			return errors.New("report: el veredicto no admite hallazgos")
+		}
+	default:
+		return errors.New("report: verdict inválido")
+	}
+	for i, f := range r.Findings {
+		if f.FindingID == "" || f.RootCause == "" || f.Invariant == "" || !validMethod(f.Method) || !validPath(f.Path) {
+			return fmt.Errorf("report: hallazgo %d incompleto", i)
+		}
+		if len(f.EvidenceURIs) == 0 {
+			return fmt.Errorf("report: hallazgo %d sin evidencia", i)
+		}
+		for _, u := range f.EvidenceURIs {
+			if !strings.HasPrefix(u, "s3://") && !strings.HasPrefix(u, "https://") {
+				return fmt.Errorf("report: hallazgo %d con evidencia no s3/https", i)
+			}
+		}
+	}
+	return nil
+}

@@ -366,17 +366,26 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 		if err := k.save(r); err != nil {
 			return err
 		}
-		uris, err := k.c.Phases.Launch(ctx, phase, r.clone())
-		if err != nil {
-			return k.phaseFailed(ctx, r, phase, err.Error())
+		if rl, ok := k.c.Phases.(ReportLauncher); ok && phase == PhaseReport {
+			// La fase report real devuelve el veredicto y conserva la evidencia que dejó la fase run.
+			res, err := rl.LaunchReport(ctx, r.clone())
+			if err != nil {
+				return k.phaseFailed(ctx, r, phase, err.Error())
+			}
+			r.Verdict, r.ReportURI = res.Verdict, res.ReportURI
+		} else {
+			uris, err := k.c.Phases.Launch(ctx, phase, r.clone())
+			if err != nil {
+				return k.phaseFailed(ctx, r, phase, err.Error())
+			}
+			if phase == PhaseReport {
+				r.Evidence = uris
+			}
 		}
 		if r.Launched == nil {
 			r.Launched = map[string]bool{}
 		}
 		r.Launched[phase] = true
-		if phase == PhaseReport {
-			r.Evidence = uris
-		}
 		if err := k.save(r); err != nil {
 			return err
 		}
