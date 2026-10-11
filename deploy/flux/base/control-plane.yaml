@@ -183,11 +183,11 @@ spec:
             - name: RUN_ARTIFACT_REF
               value: ghcr.io/ogaston/agentic-qa-swarm/target-app:0.0.0
             - name: REHEARSAL_IMAGE
-              value: ghcr.io/ogaston/agentic-qa-swarm/rehearsal:0.0.0
+              value: ghcr.io/ogaston/agentic-qa-swarm/aqs-runner:0.0.0
             - name: REHEARSAL_TARGET_URL
               value: http://warm-app.aqs-test.svc
             - name: RUNNER_IMAGE
-              value: ghcr.io/ogaston/agentic-qa-swarm/runner:0.0.0
+              value: ghcr.io/ogaston/agentic-qa-swarm/aqs-runner:0.0.0
             - name: EVIDENCE_ENDPOINT
               value: https://minio.aqs-system.svc:9000
             - name: EVIDENCE_BUCKET
