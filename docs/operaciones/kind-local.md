@@ -32,13 +32,16 @@ si ninguna falla. Las comprobaciones son:
   `docs/seguridad/rbac-matriz.csv`.
 - `netpol-control-positivo` y `netpol-sin-egress-test`: un pod efímero `aqs-smoke-probe` en
   `aqs-test` (imagen `busybox:1.37.0`, borrado al terminar) alcanza warm-app y no alcanza
-  `1.1.1.1:443` ni go-identity en `aqs-system`.
+  el testigo interno (ClusterIP de `kubernetes.default`, puerto 443, abierto sin políticas y sin
+  depender de Internet) ni el testigo externo `1.1.1.1:443`. go-identity en `aqs-system` no sirve
+  como testigo: lo bloquea el ingress de `aqs-system` aunque no haya políticas en `aqs-test`.
 - `secrets-no-en-logs`: los logs de los 7 Deployments no contienen `password_hash`,
   `$argon2id$`, tokens de servicio ni la contraseña demo.
 
 La sensibilidad de la comprobación de red se verifica borrando las NetworkPolicy de `aqs-test`:
-`netpol-sin-egress-test` debe pasar a `FALLA` (requiere salida a Internet desde el nodo kind,
-porque `1.1.1.1:443` es el destino que demuestra la falta de política).
+`netpol-sin-egress-test` debe pasar a `FALLA` y la línea `FALLA` nombra el testigo alcanzable
+(`kubernetes.default`, con el ClusterIP leído de `kubectl get svc kubernetes -n default`). Ese
+testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo.
 
 ## Qué funciona y qué queda pendiente en kind
 
@@ -49,7 +52,7 @@ porque `1.1.1.1:443` es el destino que demuestra la falta de política).
 | RBAC de go-warm-manager y go-reset según la matriz | Funciona | `rbac-test-ns-only` |
 | NetworkPolicy de aqs-test aplicada (kindnet) | Funciona | `netpol-*` |
 | Logs sin secretos | Funciona | `secrets-no-en-logs` |
-| Estado del warm desde ui-api (`GET /warm`) | Bloqueado: el Deployment de ui-api no define `WARM_URL` ni `UIAPI_WARM_TOKEN_FILE`; responde 503 `warm no configurado` | `warm-estado` (FALLA, defecto de manifiesto, ver bitácora U7-T04) |
+| Estado del warm desde ui-api (`GET /warm`) | Funciona. Solo en kind: el overlay `deploy/flux/kind/` define `WARM_URL` y `UIAPI_WARM_TOKEN_FILE` (errata E-3 de U7-T04). En `base`, `dev` y `prod` el hueco sigue abierto (C-103) | `warm-estado` |
 | Ciclo de corrida webhook → notificación → confirm → run.confirmed → controlador | Pendiente | P1: los eventos viajan por archivos en el disco de cada pod |
 | Planner y reporter | Pendiente | P2: los agentes no tienen Deployment; falta LiteLLM y egress limitado |
 | Reset verificado del warm | Pendiente | C-104: `go-reset-baseline` en kind es un relleno `kind-stub` que no verifica nada |

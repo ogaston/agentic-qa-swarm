@@ -39,6 +39,7 @@ work=""
 
 cleanup() {
   local p
+  trap '' INT TERM # F-03: una señal durante la limpieza no debe dejar $work sin borrar
   for p in "${PF_PIDS[@]:-}"; do
     [ -n "$p" ] && kill "$p" 2>/dev/null
   done
@@ -58,10 +59,11 @@ chmod 700 "$work"
 check() {
   local name=$1
   shift
+  FAIL_SUFFIX=""
   if "$@" >"$work/last.out" 2>&1; then
     echo "OK $name"
   else
-    echo "FALLA $name"
+    echo "FALLA $name$FAIL_SUFFIX"
     sed 's/^/    /' "$work/last.out"
     fail=1
   fi
@@ -214,12 +216,23 @@ netpol_control_positivo() {
   alcanza "$ip" 80 || { echo "el pod de prueba no alcanza warm-app ($ip:80) dentro de aqs-test"; return 1; }
 }
 
+# F-01: testigo interno (ClusterIP de kubernetes.default:443, abierto sin políticas y sin depender de
+# Internet) y testigo externo 1.1.1.1:443. Un testigo alcanzable hace FALLA y se nombra en la línea FALLA.
 netpol_sin_egress_test() {
   [ "$PROBE_OK" -eq 1 ] || { echo "pod de prueba no disponible"; return 1; }
-  local ip hit=0
-  if alcanza 1.1.1.1 443; then echo "1.1.1.1:443 alcanzable desde aqs-test"; hit=1; fi
-  ip=$(ip_de go-identity "$NS_SYS") || return 1
-  if alcanza "$ip" 8080; then echo "go-identity.$NS_SYS ($ip:8080) alcanzable desde aqs-test"; hit=1; fi
+  local kip hit=0
+  kip=$(kubectl get svc kubernetes -n default -o jsonpath='{.spec.clusterIP}') || return 1
+  [ -n "$kip" ] || { echo "kubernetes.default sin ClusterIP"; return 1; }
+  if alcanza "$kip" 443; then
+    echo "kubernetes.default ($kip:443) alcanzable desde aqs-test"
+    FAIL_SUFFIX=" (testigo interno alcanzable: kubernetes.default $kip:443)"
+    hit=1
+  fi
+  if alcanza 1.1.1.1 443; then
+    echo "1.1.1.1:443 alcanzable desde aqs-test"
+    FAIL_SUFFIX="${FAIL_SUFFIX:- (testigo externo alcanzable: 1.1.1.1:443)}"
+    hit=1
+  fi
   [ "$hit" -eq 0 ]
 }
 check netpol-control-positivo netpol_control_positivo
@@ -241,6 +254,8 @@ secrets_no_en_logs() {
   for svc in "${SERVICES[@]}"; do
     kubectl logs "deploy/$svc" -n "$NS_SYS" --all-containers >>"$logs" 2>&1 || { echo "kubectl logs deploy/$svc falló"; return 1; }
   done
+  # F-04: cero líneas en total no demuestra ausencia de secretos; sería un falso OK.
+  [ -s "$logs" ] || { echo "los logs de los 7 Deployments están vacíos (0 líneas leídas)"; return 1; }
   if grep -q -F -f "$pats" "$logs"; then
     echo "coincidencias de secretos en logs: $(grep -c -F -f "$pats" "$logs")"
     return 1
