@@ -326,16 +326,20 @@ func (r *ResetClient) Reset(ctx context.Context, runID string) error {
 type ArtifactSource func(runID string) (kind, ref string, err error)
 
 // RealPhases es el PhaseLauncher de deploy, superficie y reset sobre HTTP, y delega el ensayo en
-// Rehearse (Job) y la fase run en Run (runners). report (U3) falla cerrado.
+// Rehearse (Job) y la fase run en Run (runners). report (reporter, U8-T06) falla cerrado.
 type RealPhases struct {
 	Warm     *WarmClient
 	Reset    *ResetClient
 	Artifact ArtifactSource
 	Rehearse runctl.PhaseLauncher
 	Run      runctl.PhaseLauncher // runners (U2-T05); sin él la fase run falla cerrado
+	Report   *ReporterClient      // reporter (U8-T06); sin él la fase report falla cerrado
 }
 
-var _ runctl.PhaseLauncher = (*RealPhases)(nil)
+var (
+	_ runctl.PhaseLauncher  = (*RealPhases)(nil)
+	_ runctl.ReportLauncher = (*RealPhases)(nil)
+)
 
 // ErrNotImplemented marca fases que llegan con U2-T05.
 var ErrNotImplemented = errors.New("fase no implementada (U2-T05): falla cerrado")
@@ -367,6 +371,22 @@ func (p *RealPhases) Launch(ctx context.Context, phase string, run runctl.Run) (
 		return p.Run.Launch(ctx, phase, run)
 	case runctl.PhaseReset:
 		return nil, p.Reset.Reset(ctx, run.ID)
+	case runctl.PhaseReport:
+		_, err := p.LaunchReport(ctx, run)
+		return nil, err
 	}
 	return nil, fmt.Errorf("%w: %s", ErrNotImplemented, phase)
+}
+
+// LaunchReport implementa runctl.ReportLauncher: POST /v1/report con la evidencia que dejó la fase run.
+// Sin evidencia o sin reporter, falla cerrado; el veredicto solo sale de un reporte validado.
+func (p *RealPhases) LaunchReport(ctx context.Context, run runctl.Run) (runctl.ReportResult, error) {
+	if p.Report == nil {
+		return runctl.ReportResult{}, errors.New("sin cliente del reporter (REPORTER_URL): falla cerrado")
+	}
+	rep, err := p.Report.Report(ctx, run.ID, run.Evidence)
+	if err != nil {
+		return runctl.ReportResult{}, err
+	}
+	return runctl.ReportResult{Verdict: rep.Verdict, ReportURI: rep.ReportURI}, nil
 }

@@ -50,3 +50,23 @@ type WarmState struct {
 	ResetVerified   bool   `json:"reset_verified"`
 	BaselineVersion string `json:"baseline_version"`
 }
+
+// Report es contracts/plans/report.schema.json (veredicto del reporter).
+type Report struct {
+	RunID   string `json:"run_id"`
+	Verdict string `json:"verdict"`
+	Summary string `json:"summary"`
+	// ReportURI lo añade la respuesta de POST /v1/report (E-1): URI con el que el store guardó el reporte.
+	ReportURI string          `json:"report_uri,omitempty"`
+	Findings  []ReportFinding `json:"findings"`
+}
+
+// ReportFinding es un hallazgo del reporte.
+type ReportFinding struct {
+	FindingID    string   `json:"finding_id"`
+	RootCause    string   `json:"root_cause"`
+	Invariant    string   `json:"invariant"`
+	Method       string   `json:"method"`
+	Path         string   `json:"path"`
+	EvidenceURIs []string `json:"evidence_uris"`
+}

@@ -122,3 +122,16 @@ def test_reader_invalid_uri_maps_to_no_evidence_even_if_validator_accepts(tmp_pa
     svc = Service(DirEvidenceReader(tmp_path), FakeLLM(), MemoryReportStore(), RecordingPublisher(), Limits())
     code, body = handle_report(svc, json.dumps({"run_id": RUN, "evidence_uris": ["s3://[/x/y/result.json"]}).encode())
     assert (code, body["error"]) == (422, "no_evidence")
+
+
+def test_server_respuesta_lleva_report_uri_del_store(srv):
+    # E-1 (U8-T06): la respuesta de POST /v1/report incluye report_uri, el mismo URI que guarda el store.
+    s, svc, llm, uris = srv
+    llm.register(prepare(RUN, uris, svc.reader, svc.limits).prompt, resp("bug", [bug_finding()]))
+    code, body = call(s, "POST", "/v1/report", {"run_id": RUN, "evidence_uris": uris})
+    assert code == 200
+    doc = json.loads(body)
+    uri = doc.pop("report_uri")
+    assert isinstance(uri, str) and uri
+    assert uri in svc.store.objects
+    assert json.loads(svc.store.objects[uri].decode()) == doc
