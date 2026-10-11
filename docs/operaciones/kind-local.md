@@ -59,3 +59,29 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Evidencia en MinIO desde los agentes | Pendiente | P3 y C-107: el usuario de `aqs-evidence-s3` no está aprovisionado |
 
 El smoke imprime estos pendientes como `PENDIENTE <paso> (<motivo>)`; no cuentan como fallo.
+
+## Dashboard (U7-T05)
+
+El build de `web/dashboard` se sirve en loopback contra la plataforma de kind, con el mismo origen
+que usaría el navegador. Requiere la plataforma ya desplegada (secuencia de arriba hasta `deploy.sh`)
+y `npm ci` hecho en `web/dashboard`.
+
+```bash
+bash scripts/kind/dashboard-up.sh     # build + port-forward a go-identity (18600), ui-api (18601), go-run-controller (18603) + vite preview en 127.0.0.1:18610
+bash scripts/kind/dashboard-smoke.sh  # comprobaciones OK|FALLA contra http://127.0.0.1:18610 (cierra lo que abre)
+bash scripts/kind/dashboard-down.sh   # para vite preview y los port-forwards
+```
+
+`dashboard-smoke.sh` arranca con `dashboard-up.sh` y para la pila siempre (trap). Comprueba por el
+origen del dashboard: `index-servido`, `csp-estricta` (la misma política que `vite preview` en
+`vite.config.ts`), `login` (usuario demo y sesión con rol `user`), `inbox` (`GET /api/notifications`),
+`warm-estado` (`GET /api/warm` con un `state` del enum de WarmState), `sin-token-401` y
+`logout-invalida-token`. Imprime `PENDIENTE confirmar-y-seguir-corrida (P1)`: confirmar una
+notificación y seguir la corrida no se comprueba en kind hasta que P1 esté resuelto.
+
+El proxy `/api` no se configura aquí: `dashboard-up.sh` exporta `AQS_IDENTITY_URL`,
+`AQS_RUN_CONTROLLER_URL` y `AQS_UI_API_URL` hacia los port-forwards, y `vite.config.ts` no cambia.
+El dashboard no corre dentro del clúster (sin imagen, Deployment ni ingress; C-95).
+
+Los comandos que tocan `aqs` se ejecutan dentro de `flock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock`
+cuando hay más de un codificador usando el clúster.
