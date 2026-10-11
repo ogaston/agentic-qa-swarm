@@ -77,11 +77,20 @@ Desde la raíz del worktree, con la plataforma desplegada (`kind-up`, `build-ima
 
 - [ ] **CA-5** — Alcance.
   ```bash
-  git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(scripts/kind/|docs/operaciones/kind-local\.md|deploy/kind/README\.md|bitacoras/U7-T04\.md|revisiones/U7-T04/)' | wc -l
+  git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(scripts/kind/|deploy/flux/kind/|docs/operaciones/kind-local\.md|deploy/kind/README\.md|bitacoras/U7-T04\.md|revisiones/U7-T04/)' | wc -l
   ```
   Esperado: `0` y `0`.
 
 ---
+
+## Errata (2026-10-10, ronda 1, decidida por el humano)
+
+- **E-3 · `ui-api` sin configuración del warm (solo en kind).** `warm-estado` da `503 warm no configurado`. El Deployment de `ui-api` no define `WARM_URL` ni `UIAPI_WARM_TOKEN_FILE` (`services/ui-api/cmd/ui-api/main.go:18-19`); `base`, `dev` y `prod` tienen el mismo hueco (C-103). En kind se cubre **solo** desde `deploy/flux/kind/`, igual que E-2 de U7-T03:
+  - `WARM_URL` apunta al Service de `go-warm-manager` dentro del clúster.
+  - `UIAPI_WARM_TOKEN_FILE` apunta a un archivo montado desde el Secret existente `go-warm-manager-service-token`, clave `token`. Es el mismo token que ya acepta `go-warm-manager`.
+  - Si la NetworkPolicy de `base` no deja pasar `ui-api` → `go-warm-manager`, se añade una de permiso acotada a ese par de pods, como en E-2.
+  - `base`, `dev`, `prod` y `policy/` no cambian. `policies.sh` debe seguir sin `FALLA`.
+  - CA-5 admite ahora `deploy/flux/kind/`. CA-1 no cambia.
 
 ## Plan de pruebas
 

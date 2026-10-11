@@ -688,3 +688,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U7 ola 4.
 
 ---
+
+## Construction — U7-T04 ronda 1: errata E-3 (warm en ui-api)
+**Timestamp**: 2026-10-10T23:23:59-05:00
+**User Input**: (respuesta a pregunta) "Fill in kind overlay (Recommended)"
+**AI Response**: "Ronda 1 del codificador de U7-T04: 21 OK y 1 FALLA (warm-estado, 503 porque ui-api no tiene WARM_URL ni UIAPI_WARM_TOKEN_FILE en ningún manifiesto); CA-2 a CA-5 en verde. Decisión del humano: E-3, cubrirlo solo en el overlay de kind (WARM_URL al Service de go-warm-manager y token montado desde go-warm-manager-service-token); CA-5 admite deploy/flux/kind/. C-103 se amplía con este hueco."
+**Context**: Construction — U7 ola 4.
+
+---
