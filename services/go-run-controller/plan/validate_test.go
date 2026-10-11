@@ -38,6 +38,11 @@ func TestValidatorsAgreeWithContractExamples(t *testing.T) {
 				if verr = strictDecode(b, &v); verr == nil {
 					verr = ValidateSurface(v)
 				}
+			case strings.HasPrefix(base, "report."):
+				var v Report
+				if verr = strictDecode(b, &v); verr == nil {
+					verr = ValidateReport(v)
+				}
 			case strings.HasPrefix(base, "warm-state."):
 				var v WarmState
 				if verr = strictDecode(b, &v); verr == nil {
@@ -52,7 +57,7 @@ func TestValidatorsAgreeWithContractExamples(t *testing.T) {
 			}
 		}
 	}
-	if n < 12 {
+	if n < 12+4 {
 		t.Fatalf("solo %d ejemplos recorridos", n)
 	}
 }

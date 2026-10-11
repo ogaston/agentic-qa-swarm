@@ -309,6 +309,11 @@ export interface components {
             /** @enum {string} */
             state: "confirmed" | "warm_ready" | "deploying" | "inferring" | "rehearsing" | "running" | "resetting" | "reporting" | "done" | "failed";
             trace_id?: string;
+            /**
+             * @description Veredicto del reporter (fase report); ausente hasta que el reporte validado llega.
+             * @enum {string}
+             */
+            verdict?: "bug" | "sin-hallazgos" | "inconcluso";
         };
         Report: {
             run_id: string;

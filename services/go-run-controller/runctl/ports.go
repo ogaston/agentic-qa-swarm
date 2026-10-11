@@ -63,6 +63,7 @@ type Run struct {
 	FailReason   string          `json:"fail_reason,omitempty"`   // si está, la corrida termina en failed tras el reset
 	Halted       bool            `json:"halted,omitempty"`        // sin salida segura: el controlador no la toca más
 	Evidence     []string        `json:"evidence_uris,omitempty"`
+	Verdict      string          `json:"verdict,omitempty"` // veredicto del reporter (fase report)
 	DonePublish  bool            `json:"done_published,omitempty"`
 	Seen         []string        `json:"seen_events,omitempty"` // event_id ya aplicados (idempotencia ante el replay del archivo)
 	Started      map[string]int  `json:"started,omitempty"`     // lanzamientos iniciados por fase (se persiste ANTES de lanzar; tope 3)
@@ -169,6 +170,12 @@ const (
 // intento (tope 3) y NO sirve como clave de deduplicación: cambia en cada intento.
 type PhaseLauncher interface {
 	Launch(ctx context.Context, phase string, run Run) ([]string, error)
+}
+
+// ReportLauncher es opcional: un PhaseLauncher que sabe producir el veredicto de la fase report lo
+// implementa. El controlador lo usa en vez de Launch para report y no toca la evidencia de run.
+type ReportLauncher interface {
+	LaunchReport(ctx context.Context, run Run) (verdict string, err error)
 }
 
 // RehearsalOutcome es el resultado leído del Job de ensayo. Done=false: aún corre (o no existe).

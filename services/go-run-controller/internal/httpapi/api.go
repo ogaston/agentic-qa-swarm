@@ -76,6 +76,7 @@ type RunView struct {
 	ID      string       `json:"id"`
 	State   runctl.State `json:"state"`
 	TraceID string       `json:"trace_id,omitempty"`
+	Verdict string       `json:"verdict,omitempty"`
 }
 
 // New devuelve el handler de la aplicación.
@@ -102,7 +103,7 @@ func New(store runctl.RunStore, v TokenVerifier) http.Handler {
 			writeErr(w, http.StatusNotFound, "not_found")
 			return
 		}
-		writeJSON(w, http.StatusOK, RunView{ID: run.ID, State: run.State, TraceID: run.TraceID})
+		writeJSON(w, http.StatusOK, RunView{ID: run.ID, State: run.State, TraceID: run.TraceID, Verdict: run.Verdict})
 	})
 	return mux
 }

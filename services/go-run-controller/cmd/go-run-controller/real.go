@@ -101,7 +101,11 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 	base.Warm = wc
 	base.Results = l
 	base.Runners = rl
-	base.Phases = &adapters.RealPhases{Warm: wc, Reset: rc, Rehearse: l, Run: rl,
+	rep, err := adapters.NewReporterClient(c.reporterURL)
+	if err != nil {
+		return base, err
+	}
+	base.Phases = &adapters.RealPhases{Warm: wc, Reset: rc, Rehearse: l, Run: rl, Report: rep,
 		Artifact: func(string) (string, string, error) { return "published-image", ref, nil }}
 	return base, nil
 }
