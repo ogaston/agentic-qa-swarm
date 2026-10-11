@@ -368,11 +368,11 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 		}
 		if rl, ok := k.c.Phases.(ReportLauncher); ok && phase == PhaseReport {
 			// La fase report real devuelve el veredicto y conserva la evidencia que dejó la fase run.
-			verdict, err := rl.LaunchReport(ctx, r.clone())
+			res, err := rl.LaunchReport(ctx, r.clone())
 			if err != nil {
 				return k.phaseFailed(ctx, r, phase, err.Error())
 			}
-			r.Verdict = verdict
+			r.Verdict, r.ReportURI = res.Verdict, res.ReportURI
 		} else {
 			uris, err := k.c.Phases.Launch(ctx, phase, r.clone())
 			if err != nil {

@@ -314,6 +314,8 @@ export interface components {
              * @enum {string}
              */
             verdict?: "bug" | "sin-hallazgos" | "inconcluso";
+            /** @description URI con el que el reporter guardó el reporte validado (E-1); ausente hasta entonces. */
+            report_uri?: string;
         };
         Report: {
             run_id: string;

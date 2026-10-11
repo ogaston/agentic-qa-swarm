@@ -10,8 +10,9 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
 )
 
-const reportBugJSON = `{"run_id":"r1","verdict":"bug","summary":"stock negativo","findings":[{"finding_id":"f1",
-"root_cause":"causa","invariant":"inv","method":"POST","path":"/orders","evidence_uris":["s3://evidence/r1/f1/result.json"]}]}`
+const reportBugJSON = `{"run_id":"r1","verdict":"bug","summary":"stock negativo","report_uri":"s3://evidence/reports/r1.json",
+"findings":[{"finding_id":"f1","root_cause":"causa","invariant":"inv","method":"POST","path":"/orders",
+"evidence_uris":["s3://evidence/r1/f1/result.json"]}]}`
 
 var evidence = []string{"s3://evidence/r1/f1/logs.txt", "s3://evidence/r1/f1/result.json"}
 
@@ -35,9 +36,9 @@ func TestReporterValidoDaVeredicto(t *testing.T) {
 	}))
 	defer s.Close()
 	p := &RealPhases{Report: newReporter(t, s.URL)}
-	v, err := p.LaunchReport(context.Background(), runctl.Run{ID: "r1", Evidence: evidence})
-	if err != nil || v != "bug" {
-		t.Fatalf("veredicto: %q %v", v, err)
+	res, err := p.LaunchReport(context.Background(), runctl.Run{ID: "r1", Evidence: evidence})
+	if err != nil || res.Verdict != "bug" || res.ReportURI != "s3://evidence/reports/r1.json" {
+		t.Fatalf("resultado: %+v %v", res, err)
 	}
 }
 
@@ -53,8 +54,14 @@ func TestReporterFallaCerrado(t *testing.T) {
 		"otra corrida": func(w http.ResponseWriter, _ *http.Request) {
 			js(w, 200, `{"run_id":"otra","verdict":"sin-hallazgos","summary":"x","findings":[]}`)
 		},
+		"sin report_uri": func(w http.ResponseWriter, _ *http.Request) {
+			js(w, 200, `{"run_id":"r1","verdict":"sin-hallazgos","summary":"x","findings":[]}`)
+		},
+		"report_uri vacío": func(w http.ResponseWriter, _ *http.Request) {
+			js(w, 200, `{"run_id":"r1","verdict":"sin-hallazgos","summary":"x","findings":[],"report_uri":""}`)
+		},
 		"campo extra": func(w http.ResponseWriter, _ *http.Request) {
-			js(w, 200, `{"run_id":"r1","verdict":"sin-hallazgos","summary":"x","findings":[],"report_uri":"s3://x"}`)
+			js(w, 200, `{"run_id":"r1","verdict":"sin-hallazgos","summary":"x","findings":[],"report_uri":"s3://x","campo_inventado":1}`)
 		},
 		"redirección": func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "http://evil.example/", http.StatusFound)
@@ -62,10 +69,10 @@ func TestReporterFallaCerrado(t *testing.T) {
 	}
 	for name, h := range cases {
 		s := httptest.NewServer(http.HandlerFunc(h))
-		v, err := (&RealPhases{Report: newReporter(t, s.URL)}).LaunchReport(context.Background(), runctl.Run{ID: "r1", Evidence: evidence})
+		res, err := (&RealPhases{Report: newReporter(t, s.URL)}).LaunchReport(context.Background(), runctl.Run{ID: "r1", Evidence: evidence})
 		s.Close()
-		if err == nil || v != "" {
-			t.Errorf("%s: aceptado (verdict=%q, err=%v)", name, v, err)
+		if err == nil || res.Verdict != "" {
+			t.Errorf("%s: aceptado (verdict=%q, err=%v)", name, res.Verdict, err)
 		}
 	}
 }
@@ -134,5 +141,15 @@ func TestReporterPlazo(t *testing.T) {
 	c.Timeout = 100 * time.Millisecond
 	if _, err := c.Report(context.Background(), "r1", evidence); err == nil {
 		t.Fatal("plazo agotado aceptado")
+	}
+}
+
+// E-1 (U8-T06): la respuesta trae el URI del reporte, que la corrida guarda; sin él no hay reporte válido.
+func TestReporterDevuelveReportURI(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { js(w, 200, reportBugJSON) }))
+	defer s.Close()
+	rep, err := newReporter(t, s.URL).Report(context.Background(), "r1", evidence)
+	if err != nil || rep.ReportURI != "s3://evidence/reports/r1.json" {
+		t.Fatalf("report_uri: %q %v", rep.ReportURI, err)
 	}
 }

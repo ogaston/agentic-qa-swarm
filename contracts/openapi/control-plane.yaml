@@ -388,6 +388,9 @@ components:
           type: string
           description: Veredicto del reporter (fase report); ausente hasta que el reporte validado llega.
           enum: [bug, sin-hallazgos, inconcluso]
+        report_uri:
+          type: string
+          description: URI con el que el reporter guardó el reporte validado (E-1); ausente hasta entonces.
     Report:
       type: object
       required: [run_id, findings]

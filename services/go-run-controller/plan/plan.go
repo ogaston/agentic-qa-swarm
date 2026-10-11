@@ -53,10 +53,12 @@ type WarmState struct {
 
 // Report es contracts/plans/report.schema.json (veredicto del reporter).
 type Report struct {
-	RunID    string          `json:"run_id"`
-	Verdict  string          `json:"verdict"`
-	Summary  string          `json:"summary"`
-	Findings []ReportFinding `json:"findings"`
+	RunID   string `json:"run_id"`
+	Verdict string `json:"verdict"`
+	Summary string `json:"summary"`
+	// ReportURI lo añade la respuesta de POST /v1/report (E-1): URI con el que el store guardó el reporte.
+	ReportURI string          `json:"report_uri,omitempty"`
+	Findings  []ReportFinding `json:"findings"`
 }
 
 // ReportFinding es un hallazgo del reporte.

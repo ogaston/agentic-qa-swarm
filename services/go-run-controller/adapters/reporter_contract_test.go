@@ -14,7 +14,7 @@ import (
 // está definida, la prueba de reporte válido corre contra el reporter real (loopback) en vez del stub.
 
 const contractReport = `{"run_id":"run-bug-ecom-01","verdict":"bug","summary":"el stock quedo negativo tras una orden",
-"findings":[{"finding_id":"flow-1","root_cause":"invariante violado en la orden","invariant":"el stock nunca es negativo tras una orden",
+"report_uri":"s3://aqs-reports/runs/run-bug-ecom-01/report.json","findings":[{"finding_id":"flow-1","root_cause":"invariante violado en la orden","invariant":"el stock nunca es negativo tras una orden",
 "method":"POST","path":"/orders","evidence_uris":["s3://aqs-evidence/runs/run-bug-ecom-01/flow-1/result.json"]}]}`
 
 var contractEvidence = []string{

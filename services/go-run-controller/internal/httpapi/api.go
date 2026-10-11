@@ -73,10 +73,11 @@ func (v *IdentityVerifier) Verify(ctx context.Context, bearer string) error {
 
 // RunView es components.schemas.Run.
 type RunView struct {
-	ID      string       `json:"id"`
-	State   runctl.State `json:"state"`
-	TraceID string       `json:"trace_id,omitempty"`
-	Verdict string       `json:"verdict,omitempty"`
+	ID        string       `json:"id"`
+	State     runctl.State `json:"state"`
+	TraceID   string       `json:"trace_id,omitempty"`
+	Verdict   string       `json:"verdict,omitempty"`
+	ReportURI string       `json:"report_uri,omitempty"`
 }
 
 // New devuelve el handler de la aplicación.
@@ -103,7 +104,7 @@ func New(store runctl.RunStore, v TokenVerifier) http.Handler {
 			writeErr(w, http.StatusNotFound, "not_found")
 			return
 		}
-		writeJSON(w, http.StatusOK, RunView{ID: run.ID, State: run.State, TraceID: run.TraceID, Verdict: run.Verdict})
+		writeJSON(w, http.StatusOK, RunView{ID: run.ID, State: run.State, TraceID: run.TraceID, Verdict: run.Verdict, ReportURI: run.ReportURI})
 	})
 	return mux
 }

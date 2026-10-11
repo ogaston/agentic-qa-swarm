@@ -15,9 +15,9 @@ type reportPhases struct {
 
 func (p *reportPhases) Launch(context.Context, string, Run) ([]string, error) { return nil, nil }
 
-func (p *reportPhases) LaunchReport(_ context.Context, _ Run) (string, error) {
+func (p *reportPhases) LaunchReport(_ context.Context, _ Run) (ReportResult, error) {
 	p.calls++
-	return p.verdict, p.err
+	return ReportResult{Verdict: p.verdict, ReportURI: "s3://evidence/reports/r.json"}, p.err
 }
 
 func reportingRun(store RunStore) {
@@ -39,8 +39,8 @@ func TestReportGuardaVeredictoYConservaEvidencia(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := store.Get("r")
-	if ph.calls != 1 || got.Verdict != "bug" || got.State != Done {
-		t.Fatalf("calls=%d verdict=%q state=%s", ph.calls, got.Verdict, got.State)
+	if ph.calls != 1 || got.Verdict != "bug" || got.ReportURI != "s3://evidence/reports/r.json" || got.State != Done {
+		t.Fatalf("calls=%d verdict=%q uri=%q state=%s", ph.calls, got.Verdict, got.ReportURI, got.State)
 	}
 	if len(got.Evidence) != 1 || got.Evidence[0] != "s3://evidence/r/f1/result.json" {
 		t.Fatalf("evidencia sobrescrita: %v", got.Evidence)

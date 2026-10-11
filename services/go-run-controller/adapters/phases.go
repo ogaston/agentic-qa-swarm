@@ -380,13 +380,13 @@ func (p *RealPhases) Launch(ctx context.Context, phase string, run runctl.Run) (
 
 // LaunchReport implementa runctl.ReportLauncher: POST /v1/report con la evidencia que dejó la fase run.
 // Sin evidencia o sin reporter, falla cerrado; el veredicto solo sale de un reporte validado.
-func (p *RealPhases) LaunchReport(ctx context.Context, run runctl.Run) (string, error) {
+func (p *RealPhases) LaunchReport(ctx context.Context, run runctl.Run) (runctl.ReportResult, error) {
 	if p.Report == nil {
-		return "", errors.New("sin cliente del reporter (REPORTER_URL): falla cerrado")
+		return runctl.ReportResult{}, errors.New("sin cliente del reporter (REPORTER_URL): falla cerrado")
 	}
 	rep, err := p.Report.Report(ctx, run.ID, run.Evidence)
 	if err != nil {
-		return "", err
+		return runctl.ReportResult{}, err
 	}
-	return rep.Verdict, nil
+	return runctl.ReportResult{Verdict: rep.Verdict, ReportURI: rep.ReportURI}, nil
 }

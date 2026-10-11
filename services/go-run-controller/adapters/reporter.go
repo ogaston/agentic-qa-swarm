@@ -101,6 +101,9 @@ func (c *ReporterClient) fetch(ctx context.Context, runID string, evidence []str
 	if err := plan.ValidateReport(rep); err != nil {
 		return plan.Report{}, false, err
 	}
+	if rep.ReportURI == "" { // E-1: sin URI del reporte no hay reporte guardado que referenciar
+		return plan.Report{}, false, errors.New("reporter: respuesta sin report_uri")
+	}
 	if rep.RunID != runID {
 		return plan.Report{}, false, errors.New("reporter: reporte de otra corrida")
 	}
