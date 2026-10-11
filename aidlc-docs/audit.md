@@ -704,3 +704,19 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — redacción de U8.
 
 ---
+
+## Construction — U8 ola 1 despachada con U7-T05 en paralelo
+**Timestamp**: 2026-10-11T05:30:00-05:00
+**User Input**: "Me dijiste esto en otra sesion: Despacho la ola 1 de U8 (T01, T03 y T04: el camino crítico). U7-T05 entra en cuanto se libere un hueco, porque el máximo es 3 en paralelo" / (respuesta a pregunta) "U7-T05 + U8-T01 + U8-T03 (Recomendado)"
+**AI Response**: "Nada se había despachado. Las tareas de U8 dicen «Depende de: U7 cerrada (U7-T04 y U7-T05 fusionadas)»; decisión del humano: se relaja esa dependencia para U8 (la ola 1 no toca el dashboard). Se despachan U7-T05, U8-T01 y U8-T03 desde origin/main 18cd43c; U8-T04 entra al liberarse un hueco. El clúster aqs se usa en un único bloque flock de kind-up a kind-down (otra sesión hizo kind-down a mitad del trabajo de U7-T05)."
+**Context**: Construction — U8 ola 1.
+
+---
+
+## Construction — U7 cerrada y U8-T03 hecha
+**Timestamp**: 2026-10-11T07:33:40-05:00
+**User Input**: "fusioné #92 y #93, sigue con la ola"
+**AI Response**: "Se marcan [x] U7-T4 (PR #90), U7-T5 (PR #93, VERDE en la ronda 1, 4 AMARILLOS) y U8-T3 (PR #92, VERDE en la ronda 2; la ronda 1 salió NO-VERDE por F-01: README con el «9 fijo»). U7 queda cerrada. Candidatas nuevas C-108 (pf/wait_url a lib.sh) y C-109 (fuente única de la CSP). U8-T06 despachada al liberarse el hueco de U7-T05; siguen en vuelo U8-T01 y U8-T04."
+**Context**: Construction — U8 olas 1-2.
+
+---
