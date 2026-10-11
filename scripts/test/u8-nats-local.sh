@@ -98,6 +98,17 @@ podman run --rm -i --network host -e NATS_URL="nats://127.0.0.1:$p_nats" --entry
   || fail "nats-init no creó el stream (log en $state/nats-init.log)"
 grep -q 'AQS_EVENTS' "$state/nats-init.log" || fail "nats-init no informa del stream AQS_EVENTS"
 
+nats_url="nats://127.0.0.1:$p_nats"
+# Consultas de estado NATS con la nats-box fijada (salida JSON a stdout).
+nats_json() { # <comando nats con argumentos>
+  podman run --rm --network host -e NATS_URL="$nats_url" --entrypoint /bin/sh "$NATS_BOX" \
+    -c "nats --server \"\$NATS_URL\" $1 --json" 2>/dev/null
+}
+# Secuencia del último mensaje del stream AQS_EVENTS.
+stream_last_seq() { nats_json "stream info AQS_EVENTS" | jq -r '.state.last_seq // 0'; }
+# Secuencia hasta la que el consumidor durable ui-api-inbox tiene ack (AckFloor del stream).
+durable_ack_seq() { nats_json "consumer info AQS_EVENTS ui-api-inbox" | jq -r '.ack_floor.stream_seq // 0'; }
+
 # 3. Usuario demo de go-identity (contraseña aleatoria, hash PHC) y stub de gobierno.
 python3 - "$state" <<'PY' || fail "no se pudo generar el usuario demo"
 import json, os, secrets, subprocess, sys
@@ -136,7 +147,6 @@ esperar_puerto "$p_id" || fail "go-identity no arranca (log en $state/identity.l
 
 # 4. Los tres servicios con EVENTS_TRANSPORT=nats. Sin archivos de eventos.
 mkdir -p "$state/intake" "$state/uiapi" "$state/run"
-nats_url="nats://127.0.0.1:$p_nats"
 start_all() {
   arranca intake env GITHUB_WEBHOOK_SECRET="$SECRET" INTAKE_DATA_DIR="$state/intake" \
     EVENTS_TRANSPORT=nats NATS_URL="$nats_url" LISTEN_ADDR="127.0.0.1:$p_intake" LOG_LEVEL=warn "$state/bin/go-intake"
@@ -174,6 +184,18 @@ campo, valor = sys.argv[1], sys.argv[2]
 print(sum(1 for n in json.load(sys.stdin) if n.get(campo) == valor))' "$1" "$2"
 }
 
+journal="$state/run/runs.jsonl"
+# creados_confirmados <run_id>: registros del diario del controlador cuyo estado es confirmed para esa corrida.
+creados_confirmados() {
+  python3 -c '
+import json, sys
+n = 0
+for line in open(sys.argv[1], encoding="utf-8"):
+    r = json.loads(line)["run"]
+    if r["id"] == sys.argv[2] and r["state"] == "confirmed":
+        n += 1
+print(n)' "$journal" "$1" 2>/dev/null || echo 0
+}
 sha=$(python3 -c 'import secrets; print(secrets.token_hex(20))')
 # Funciones (no comandos con sustitución) para que esperar() reevalúe la condición en cada intento.
 inbox_sha_1() { [ "$(cuenta_inbox sha "$sha")" = 1 ]; }
@@ -225,14 +247,17 @@ PY
     podman run --rm --network host -e NATS_URL="$nats_url" -e SUBJ="$1" -e MSG="$2" --entrypoint /bin/sh "$NATS_BOX" \
       -c 'nats --server "$NATS_URL" pub "$SUBJ" "$MSG" >/dev/null 2>&1 && nats --server "$NATS_URL" pub "$SUBJ" "$MSG" >/dev/null 2>&1'
   }
+  c_before=$(creados_confirmados "$run")
   nats_pub aqs.events.notify.created "$dup_notify" || falla sin-duplicados "no se pudo publicar notify.created duplicado"
   nats_pub aqs.events.run.confirmed "$dup_confirm" || falla sin-duplicados "no se pudo publicar run.confirmed duplicado"
   sleep 2
   dup_count=$(cuenta_inbox id "$dup_nid")
-  if [ "$dup_count" = 1 ] && [ "$(getrun "$run")" = 200 ]; then
+  c_after=$(creados_confirmados "$run")
+  # Una sola corrida: exactamente un registro de creación confirmed en el diario, antes y después del duplicado.
+  if [ "$dup_count" = 1 ] && [ "$(getrun "$run")" = 200 ] && [ "$c_before" = 1 ] && [ "$c_after" = 1 ]; then
     ok sin-duplicados
   else
-    falla sin-duplicados "notificaciones con el id duplicado=$dup_count (quiero 1) o GET /runs/$run distinto de 200"
+    falla sin-duplicados "notificaciones con el id duplicado=$dup_count (quiero 1); registros confirmed de la corrida antes=$c_before después=$c_after (quiero 1 y 1); GET /runs/$run=$(getrun "$run") (quiero 200)"
   fi
 else
   # CA-3: para ui-api, publica, la arranca: la notificación aparece una vez.
@@ -240,14 +265,23 @@ else
   esperar 10 bash -c "! kill -0 ${PID[uiapi]} 2>/dev/null" || fail "ui-api no se detuvo"
   code=$(webhook "$(python3 -c 'import uuid; print(uuid.uuid4())')" "$sha" acme/shop)
   [ "$code" = 202 ] || fail "webhook con ui-api parada: HTTP $code"
+  last_seq=$(stream_last_seq)
   arranca uiapi env UIAPI_AUTH=identity IDENTITY_URL="http://127.0.0.1:$p_id" UIAPI_DATA_DIR="$state/uiapi" \
     EVENTS_TRANSPORT=nats NATS_URL="$nats_url" LISTEN_ADDR="127.0.0.1:$p_uiapi" LOG_LEVEL=warn "$state/bin/ui-api"
   esperar 20 curl -sf -o /dev/null "http://127.0.0.1:$p_uiapi/readyz" || fail "ui-api no queda lista tras reiniciarla"
-  if esperar 20 inbox_sha_1; then
-    sleep 2
-    if [ "$(cuenta_inbox sha "$sha")" = 1 ]; then ok reentrega-tras-reinicio; else falla reentrega-tras-reinicio "la notificación aparece más de una vez"; fi
+  # La prueba es la reentrega del durable: el mensaje publicado con ui-api parada debe quedar acusado por
+  # ui-api-inbox (AckFloor >= su secuencia). Con el replay del stream la notificación aparecería igual sin
+  # el durable, así que el ack del durable es la comprobación que decide.
+  durable_acked() { [ "$last_seq" -gt 0 ] && [ "$(durable_ack_seq)" -ge "$last_seq" ]; }
+  if esperar 20 durable_acked && esperar 20 inbox_sha_1; then
+    sleep 1
+    if [ "$(cuenta_inbox sha "$sha")" = 1 ]; then
+      ok reentrega-tras-reinicio
+    else
+      falla reentrega-tras-reinicio "la notificación aparece más de una vez"
+    fi
   else
-    falla reentrega-tras-reinicio "la notificación no aparece tras reiniciar ui-api"
+    falla reentrega-tras-reinicio "el durable ui-api-inbox no acusó el mensaje (ack_floor=$(durable_ack_seq), secuencia=$last_seq) o no aparece la notificación"
   fi
 fi
 

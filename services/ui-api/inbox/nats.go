@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -61,7 +62,7 @@ func (p *NATSPublisher) Publish(ctx context.Context, ev RunConfirmed) error {
 type NATSSubscriber struct {
 	js       jetstream.JetStream
 	log      *slog.Logger
-	replayed bool
+	replayed atomic.Bool // true tras el replay completo de este proceso (lo mira /readyz)
 }
 
 var _ EventSubscriber = (*NATSSubscriber)(nil)
@@ -73,6 +74,9 @@ func NewNATSSubscriber(js jetstream.JetStream, log *slog.Logger) *NATSSubscriber
 	}
 	return &NATSSubscriber{js: js, log: log}
 }
+
+// Replayed dice si el replay inicial del stream ya terminó: hasta entonces el inbox puede estar incompleto.
+func (s *NATSSubscriber) Replayed() bool { return s.replayed.Load() }
 
 // Run implementa EventSubscriber. Bloquea hasta que ctx termina. Si NATS no responde o el stream aún
 // no existe (nats-init reinicia al arrancar el clúster), reintenta con espera fija; no termina.
@@ -97,11 +101,11 @@ func (s *NATSSubscriber) session(ctx context.Context, handle func(NotifyCreated)
 	if err != nil {
 		return err
 	}
-	if !s.replayed {
+	if !s.replayed.Load() {
 		if err := s.replay(ctx, stream, handle); err != nil {
 			return err
 		}
-		s.replayed = true
+		s.replayed.Store(true)
 	}
 	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		Durable:       durableInbox,

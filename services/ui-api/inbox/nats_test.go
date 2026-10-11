@@ -239,3 +239,52 @@ func TestNATSSubscriberDedupePorEventIDEnStore(t *testing.T) {
 		t.Fatalf("notificaciones = %d, quiero 1 (dedupe por event_id)", n)
 	}
 }
+
+// Mismo event_id con notification_id distinto: el dedupe debe ser por event_id (F-02), no solo por
+// notification_id. Sin el dedupe por event_id, n-2 se aplicaría.
+func TestNATSSubscriberMismoEventIDDistintaNotificacion(t *testing.T) {
+	srv := startNATS(t)
+	_, js := jsConn(t, srv)
+	streamAQS(t, js)
+	ctx := context.Background()
+	const e = "99999999-9999-4999-8999-999999999999"
+	for _, n := range []string{"n-1", "n-2"} {
+		if _, err := js.Publish(ctx, "aqs.events.notify.created", notifyLine(e, n)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := OpenStore(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	runCtx, stop := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- NewNATSSubscriber(js, nil).Run(runCtx, func(ev NotifyCreated) {
+			mu.Lock()
+			defer mu.Unlock()
+			st.Apply(ev)
+		})
+	}()
+	esperar(t, "ambos mensajes confirmados", func() bool {
+		s, err := js.Stream(ctx, EventsStreamName)
+		if err != nil {
+			return false
+		}
+		c, err := s.Consumer(ctx, "ui-api-inbox")
+		if err != nil {
+			return false
+		}
+		info, err := c.Info(ctx)
+		return err == nil && info.AckFloor.Stream == 2
+	})
+	stop()
+	<-done
+	mu.Lock()
+	defer mu.Unlock()
+	pend := st.List(StatePending)
+	if len(pend) != 1 || pend[0].ID != "n-1" {
+		t.Fatalf("notificaciones = %+v, quiero solo n-1 (el event_id repetido se descarta)", pend)
+	}
+}

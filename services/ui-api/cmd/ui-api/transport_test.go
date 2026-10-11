@@ -29,6 +29,15 @@ func TestTransportNATSSinServidorArrancaYNoEstaListo(t *testing.T) {
 	if natsCheck == nil || natsCheck(context.Background()) == nil {
 		t.Fatal("falta el chequeo nats o no falla sin conexión")
 	}
+	var replayCheck func(context.Context) error
+	for _, c := range tr.ready {
+		if c.Name == "replay" {
+			replayCheck = c.Fn
+		}
+	}
+	if replayCheck == nil || replayCheck(context.Background()) == nil {
+		t.Fatal("falta el chequeo replay o no falla antes del replay")
+	}
 }
 
 func TestTransportNATSExigeURLYDataDir(t *testing.T) {

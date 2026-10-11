@@ -46,10 +46,11 @@ func transportFromEnv(log *slog.Logger, dataDir string, verifierSet func() bool)
 		if err != nil {
 			return transporte{}, err
 		}
+		sub := inbox.NewNATSSubscriber(js, log)
 		return transporte{
 			pub:   inbox.NewNATSPublisher(js),
-			nats:  inbox.NewNATSSubscriber(js, log),
-			ready: natsReadyChecks(dataDir, nc, verifierSet),
+			nats:  sub,
+			ready: natsReadyChecks(dataDir, nc, verifierSet, sub.Replayed),
 		}, nil
 	default:
 		return transporte{}, errors.New("EVENTS_TRANSPORT debe ser file o nats")
@@ -57,13 +58,20 @@ func transportFromEnv(log *slog.Logger, dataDir string, verifierSet func() bool)
 }
 
 // natsReadyChecks son los chequeos de /readyz con NATS: los del servicio sin events_file (el outbox
-// de archivo no aplica), más "nats", que falla sin conexión.
-func natsReadyChecks(dataDir string, nc *nats.Conn, verifierSet func() bool) []obs.Check {
+// de archivo no aplica), más "nats" (falla sin conexión) y "replay" (falla hasta que el inbox está
+// completo tras el replay del stream: con file, Drain cargaba todo antes de servir).
+func natsReadyChecks(dataDir string, nc *nats.Conn, verifierSet func() bool, replayed func() bool) []obs.Check {
 	var out []obs.Check
 	for _, c := range obs.ReadyChecks(dataDir, "", verifierSet) {
 		if c.Name != "events_file" {
 			out = append(out, c)
 		}
 	}
-	return append(out, obs.Check{Name: "nats", Fn: func(context.Context) error { return inbox.NATSReady(nc) }})
+	out = append(out, obs.Check{Name: "nats", Fn: func(context.Context) error { return inbox.NATSReady(nc) }})
+	return append(out, obs.Check{Name: "replay", Fn: func(context.Context) error {
+		if !replayed() {
+			return errors.New("replay del stream pendiente")
+		}
+		return nil
+	}})
 }
