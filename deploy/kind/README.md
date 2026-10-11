@@ -81,6 +81,14 @@ bash scripts/kind/deploy.sh    # secrets.sh → kubectl apply -k deploy/flux/kin
 - `scripts/ci/policies.sh` valida también el overlay `kind` (kubeconform estricto, conftest, default-deny)
   sin relajar ninguna política.
 
+## Agentes (U8-T05): prerrequisitos del host
+
+- `scripts/test/u8-agents-kind.sh` valida las respuestas de los agentes en el host con `jsonschema`. Usa el venv
+  `agents/agent-planner/.venv` (`pip install -r requirements-dev.txt -e .`); otro intérprete con `U8_AGENTS_PY`.
+- `scripts/test/u8-minio-user-kind.sh` y `u8-agents-kind.sh` no necesitan `mc` en el host: lo ejecutan dentro de
+  un pod con la imagen de MinIO fijada (la del StatefulSet `minio`).
+- Ningún script imprime las credenciales de `aqs-evidence-s3` ni de `minio-root`.
+
 ## Advertencia
 
 El clúster `aqs` es efímero y local. Sus Secrets y datos no son de ningún entorno compartido.

@@ -25,5 +25,10 @@ JSON
 mc admin policy create aqs "$POLICY" "$tmp/policy.json" >/dev/null
 # Actualiza la clave si el usuario ya existe (rotación del Secret) y lo deja con la política.
 mc admin user add aqs "$EVIDENCE_ACCESS_KEY" "$EVIDENCE_SECRET_KEY" >/dev/null
-mc admin policy attach aqs "$POLICY" --user "$EVIDENCE_ACCESS_KEY" >/dev/null 2>&1 || true
+# Si el attach falla (p. ej. ya adjunta en una corrida previa) no se traga el error: se exige que el usuario
+# tenga la política. Cualquier otro fallo tumba el Job.
+if ! mc admin policy attach aqs "$POLICY" --user "$EVIDENCE_ACCESS_KEY" >/dev/null 2>&1; then
+  mc admin user info aqs "$EVIDENCE_ACCESS_KEY" 2>/dev/null | grep -q "$POLICY" \
+    || { echo "no se pudo adjuntar la politica $POLICY al usuario de evidencia" >&2; exit 1; }
+fi
 echo "usuario de evidencia listo: politica $POLICY sobre bucket $BUCKET"

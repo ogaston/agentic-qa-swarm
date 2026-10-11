@@ -131,10 +131,17 @@ def _http_llm(e):
 
 
 def _register_fixtures(llm, reader, path: str, limits) -> None:
-    """REPORTER_FAKE_FIXTURES (U3-T07): [{run_id, evidence_uris, response}] -> prompt exacto -> respuesta."""
+    """REPORTER_FAKE_FIXTURES (U3-T07): [{run_id, evidence_uris, response}] -> prompt exacto -> respuesta.
+
+    U8-T05: una entrada con «prompt» precalculado se registra tal cual, sin leer evidencia al arrancar
+    (con REPORTER_EVIDENCE=s3 el arranque no depende de MinIO).
+    """
     with open(path, encoding="utf-8") as fh:
         items = json.load(fh)
     for it in items:
+        if "prompt" in it:
+            llm.register(it["prompt"], json.dumps(it["response"]))
+            continue
         prep = prepare(it["run_id"], it["evidence_uris"], reader, limits)
         llm.register(prep.prompt, json.dumps(it["response"]))
 

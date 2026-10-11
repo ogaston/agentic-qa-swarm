@@ -97,3 +97,121 @@ all_images() {
   fi
   printf '%s' "$all"
 }
+
+# --- Pods de prueba de U8-T05 (scripts/test/u8-*-kind.sh). Los crea y borra cada script (trap). ---
+# Todos corren como 65532, sin token de ServiceAccount, sin privilegios. Ninguna credencial sale por
+# la línea de comandos ni se imprime: el mc del pod las toma de variables de entorno desde los Secrets.
+
+# pod_sleep_up <ns> <pod> <imagen> [etiqueta app.kubernetes.io/name]: pod que duerme; la etiqueta decide
+# qué pasa el ingreso de NetworkPolicy (go-run-controller es el único cliente de los agentes).
+pod_sleep_up() {
+  local ns=$1 pod=$2 img=$3 label=${4:-} lbl=""
+  [ -n "$label" ] && lbl="    app.kubernetes.io/name: $label"
+  kubectl apply -n "$ns" -f - >/dev/null <<YAML || return 1
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $pod
+  namespace: $ns
+  labels:
+    aqs.io/test: u8-t05
+$lbl
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: probe
+      image: $img
+      command: ["sleep", "900"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+YAML
+  kubectl wait -n "$ns" --for=condition=Ready "pod/$pod" --timeout=180s >/dev/null
+}
+
+# mc_pod_up <ns> <pod>: pod con la imagen de MinIO fijada (la del StatefulSet minio, mismo digest) y mc.
+# Credenciales por env desde minio-root (raíz, solo para preparar y limpiar) y aqs-evidence-s3 (el usuario
+# de los agentes, lo que se prueba). CA de MinIO montada: SSL_CERT_FILE. TLS verificado, sin --insecure.
+mc_pod_up() {
+  local ns=$1 pod=$2 img
+  img=$(kubectl get statefulset minio -n "$ns" -o jsonpath='{.spec.template.spec.containers[0].image}') || return 1
+  [ -n "$img" ] || return 1
+  kubectl apply -n "$ns" -f - >/dev/null <<YAML || return 1
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $pod
+  namespace: $ns
+  labels:
+    aqs.io/test: u8-t05
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: mc
+      image: $img
+      command: ["sleep", "900"]
+      env:
+        - name: MC_CONFIG_DIR
+          value: /tmp/mc
+        - name: SSL_CERT_FILE
+          value: /etc/minio-ca/ca.crt
+        - name: MINIO_ROOT_USER
+          valueFrom: {secretKeyRef: {name: minio-root, key: root-user}}
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom: {secretKeyRef: {name: minio-root, key: root-password}}
+        - name: EVIDENCE_ACCESS_KEY
+          valueFrom: {secretKeyRef: {name: aqs-evidence-s3, key: access-key}}
+        - name: EVIDENCE_SECRET_KEY
+          valueFrom: {secretKeyRef: {name: aqs-evidence-s3, key: secret-key}}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+        - {name: ca, mountPath: /etc/minio-ca, readOnly: true}
+  volumes:
+    - name: tmp
+      emptyDir: {}
+    - name: ca
+      secret:
+        secretName: minio-tls
+        items:
+          - {key: ca.crt, path: ca.crt}
+YAML
+  kubectl wait -n "$ns" --for=condition=Ready "pod/$pod" --timeout=180s >/dev/null
+}
+
+# mc_as <aqs|root> <pod> <args de mc...>: ejecuta mc en el pod con el usuario indicado. Alias «m».
+# aqs = usuario de evidencia (aqs-evidence-s3); root = minio-root. El alias se monta dentro del pod.
+mc_as() {
+  local who=$1 pod=$2 ns=${MC_NS:-aqs-system} envs
+  shift 2
+  if [ "$who" = root ]; then
+    envs='export MC_HOST_m="https://$MINIO_ROOT_USER:$MINIO_ROOT_PASSWORD@minio.aqs-system.svc:9000"'
+  else
+    envs='export MC_HOST_m="https://$EVIDENCE_ACCESS_KEY:$EVIDENCE_SECRET_KEY@minio.aqs-system.svc:9000"'
+  fi
+  kubectl exec -i -n "$ns" "$pod" -- sh -c "$envs; exec mc \"\$@\"" mc "$@"
+}
+
+# pod_down <ns> <pod...>: borra pods de prueba y ESPERA a que desaparezcan (sin error si no existen).
+# Esperar evita que una corrida siguiente aplique sobre un pod aún en terminación (carrera vista en U8-T05).
+pod_down() {
+  local ns=$1
+  shift
+  kubectl delete pod "$@" -n "$ns" --ignore-not-found --wait=true --timeout=120s >/dev/null 2>&1 || true
+}
