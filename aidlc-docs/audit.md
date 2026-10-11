@@ -672,3 +672,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U7 ola 3.
 
 ---
+
+## Construction — U7-T03 ronda 1: errata del overlay y huecos de arranque
+**Timestamp**: 2026-10-10T19:50:02-05:00
+**User Input**: "merged #84" / "is the coder working yet?" / (respuestas a preguntas) "Fill gaps in kind only (Recommended)" · "Accept $patch: delete (Recommended)"
+**AI Response**: "Ronda 1 del codificador de U7-T03: CA-1, CA-2, CA-4 y CA-6 en verde; CA-3 y CA-5 en rojo porque go-intake (falta GITHUB_WEBHOOK_SECRET), ui-api (falta UIAPI_AUTH) y go-reset (falta el ConfigMap go-reset-baseline, sin baseline.sh en el repo) no arrancan, huecos que base/dev/prod también tienen. Decisión del humano: E-1, el overlay usa ../base entero con $patch: delete; E-2, cubrir los huecos solo en kind (Secret go-intake-webhook, UIAPI_AUTH=identity, baseline.sh de relleno marcado kind-stub). Candidatas C-103 a C-106. El codificador continúa la ronda 1 con la errata; aún no ha habido revisión."
+**Context**: Construction — U7 ola 3.
+
+---
