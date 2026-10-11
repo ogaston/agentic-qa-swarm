@@ -1,0 +1,308 @@
+# Agentes en el clúster (U8-T05): agent-planner y agent-reporter en aqs-system.
+# Solo go-run-controller les habla (ingreso); egreso acotado: planner -> LiteLLM; reporter -> LiteLLM y MinIO.
+# En base, LLM_PROVIDER=http hacia LiteLLM (U8-T09 lo despliega). El overlay kind lo sustituye por fake.
+# Secret agents-llm-key (clave `api-key`, arbitraje del orquestador): opcional aquí para que el pod arranque sin él en kind.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-planner
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: agent-planner
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-reporter
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: agent-reporter
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-planner
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: agent-planner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-planner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-planner
+    spec:
+      serviceAccountName: agent-planner
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent-planner
+          image: ghcr.io/ogaston/agentic-qa-swarm/agent-planner:0.0.0
+          env:
+            - name: LLM_PROVIDER
+              value: http
+            - name: LLM_BASE_URL
+              value: http://litellm.aqs-system.svc:4000/v1
+            - name: LLM_MODEL
+              value: deepseek/deepseek-chat
+            - name: LLM_API_KEY_FILE
+              value: /etc/aqs/llm/api-key
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: llm-key
+              mountPath: /etc/aqs/llm
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: llm-key
+          secret:
+            secretName: agents-llm-key
+            optional: true
+            defaultMode: 0440
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-reporter
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: agent-reporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-reporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-reporter
+    spec:
+      serviceAccountName: agent-reporter
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent-reporter
+          image: ghcr.io/ogaston/agentic-qa-swarm/agent-reporter:0.0.0
+          env:
+            - name: LLM_PROVIDER
+              value: http
+            - name: LLM_BASE_URL
+              value: http://litellm.aqs-system.svc:4000/v1
+            - name: LLM_MODEL
+              value: deepseek/deepseek-chat
+            - name: LLM_API_KEY_FILE
+              value: /etc/aqs/llm/api-key
+            - name: REPORTER_EVIDENCE
+              value: s3
+            - name: EVIDENCE_BUCKET
+              value: evidence
+            - name: S3_ENDPOINT
+              value: https://minio.aqs-system.svc:9000
+            - name: S3_ACCESS_KEY_FILE
+              value: /etc/aqs/evidence/access-key
+            - name: S3_SECRET_KEY_FILE
+              value: /etc/aqs/evidence/secret-key
+            - name: S3_CA_FILE
+              value: /etc/aqs/minio-ca/ca.crt
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: llm-key
+              mountPath: /etc/aqs/llm
+              readOnly: true
+            - name: evidence
+              mountPath: /etc/aqs/evidence
+              readOnly: true
+            - name: minio-ca
+              mountPath: /etc/aqs/minio-ca
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: llm-key
+          secret:
+            secretName: agents-llm-key
+            optional: true
+            defaultMode: 0440
+        - name: evidence
+          secret:
+            secretName: aqs-evidence-s3
+            defaultMode: 0440
+        - name: minio-ca
+          secret:
+            secretName: minio-tls
+            defaultMode: 0444
+            items:
+              - key: ca.crt
+                path: ca.crt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-planner
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: agent-planner
+spec:
+  selector:
+    app.kubernetes.io/name: agent-planner
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-reporter
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: agent-reporter
+spec:
+  selector:
+    app.kubernetes.io/name: agent-reporter
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# Ingreso: solo go-run-controller en aqs-system.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agents-ingress-from-controller
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [agent-planner, agent-reporter]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: go-run-controller
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+# Egreso del planner: DNS y LiteLLM.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-planner-egress
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent-planner
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: litellm
+      ports:
+        - {protocol: TCP, port: 4000}
+---
+# Egreso del reporter: DNS, LiteLLM y MinIO. Nada más.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-reporter-egress
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent-reporter
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: litellm
+      ports:
+        - {protocol: TCP, port: 4000}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: minio
+      ports:
+        - {protocol: TCP, port: 9000}

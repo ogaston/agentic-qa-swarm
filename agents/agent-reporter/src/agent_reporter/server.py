@@ -149,7 +149,19 @@ def build_service(env=None) -> Service:
     e = os.environ if env is None else env
     provider = e.get("LLM_PROVIDER", "")
     limits = Limits.from_env(e)
-    reader = DirEvidenceReader(e.get("REPORTER_EVIDENCE_DIR", "/evidence"))
+    store, reader = MemoryReportStore(), None
+    if e.get("REPORTER_EVIDENCE", "dir") == "s3":
+        from agent_reporter.s3 import S3EvidenceReader, S3ReportStore, make_s3_client
+
+        bucket = e.get("EVIDENCE_BUCKET", "")
+        if not bucket:
+            raise SystemExit("REPORTER_EVIDENCE=s3 requiere EVIDENCE_BUCKET")
+        s3 = make_s3_client(e)
+        reader, store = S3EvidenceReader(s3, bucket), S3ReportStore(s3, bucket)
+    elif e.get("REPORTER_EVIDENCE", "dir") == "dir":
+        reader = DirEvidenceReader(e.get("REPORTER_EVIDENCE_DIR", "/evidence"))
+    else:
+        raise SystemExit("REPORTER_EVIDENCE no soportado")
     if provider == "http":
         llm = _http_llm(e)
     elif provider == "fake":
@@ -162,7 +174,7 @@ def build_service(env=None) -> Service:
             _register_fixtures(llm, reader, e["REPORTER_FAKE_FIXTURES"], limits)
     else:
         raise SystemExit("LLM_PROVIDER no soportado")
-    return Service(reader, llm, MemoryReportStore(), RecordingPublisher(), limits)
+    return Service(reader, llm, store, RecordingPublisher(), limits)
 
 
 def main() -> None:
