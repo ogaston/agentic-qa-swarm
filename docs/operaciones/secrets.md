@@ -6,8 +6,15 @@ La clave privada age nunca entra al repo. Quien ejecuta estos pasos es un humano
 
 Secrets cubiertos: `minio-root`, `minio-kms`, `minio-tls`, `backup-target` (ns `aqs-system`),
 `warm-db-credentials` (`aqs-test`), `grafana-admin` (`aqs-observability`), `go-intake-webhook` (`aqs-system`) y
-`target-app-baseline-token` (`aqs-test` y `aqs-system`, mismo valor) los genera `generate.sh` (seccion 3);
+`target-app-baseline-token` (`aqs-test` y `aqs-system`, mismo valor) y `agents-llm-key` (`aqs-system`, clave `api-key`, valor
+aportado por el humano) los genera `generate.sh` (seccion 3);
 `go-governance-service-token` y `go-identity-users` (ns `aqs-system`) se crean con el procedimiento de la seccion 6.
+`go-warm-manager-service-token` (`aqs-system`, clave `token`) es un Secret que el humano crea cifrado, igual que los de la
+seccion 6: `ui-api` lo monta en base.
+
+**Prerrequisitos de `ui-api` en dev y prod:** `ui-api` arranca solo si existen `go-warm-manager-service-token` (volumen
+`warm-token`, `WARM_URL` y `UIAPI_WARM_TOKEN_FILE` en base) y `go-identity-users` (con `UIAPI_AUTH=identity` e `IDENTITY_URL`
+en base; lo exige `go-identity`, seccion 6). Sin ellos, el pod no pasa a `Ready`.
 
 ## 1. Generar la clave age
 
@@ -29,27 +36,28 @@ El Secret `sops-age` vive solo en el clúster. Despues borra la copia local de `
 
 ```bash
 BACKUP_ENDPOINT=https://... BACKUP_BUCKET=... BACKUP_ACCESS_KEY_ID=... BACKUP_SECRET_ACCESS_KEY=... \
+AGENTS_LLM_API_KEY=... \
   scripts/secrets/generate.sh <dev|prod> <age1-publica>
 ```
 
 El script crea contraseñas aleatorias, la CA y el certificado de MinIO (SAN `minio.aqs-system.svc` y
 `minio.aqs-system.svc.cluster.local`) y `MINIO_KMS_SECRET_KEY` (`aqs-kms:<base64 de 32 bytes>`); falla si falta
-alguna variable `BACKUP_*`; escribe `deploy/flux/<env>/secrets/*.sops.yaml` cifrados y actualiza `secrets/kustomization.yaml`.
+alguna variable `BACKUP_*` ni `AGENTS_LLM_API_KEY`; escribe `deploy/flux/<env>/secrets/*.sops.yaml` cifrados y actualiza `secrets/kustomization.yaml`.
 Los temporales van en `mktemp -d` y se borran al salir. Valores en `stringData`; SOPS cifra solo `data`/`stringData`.
 Commitea los `*.sops.yaml` solo con una clave real y bajo revision humana. `scripts/ci/check-secrets.sh` (parte de
 `scripts/ci/policies.sh`) falla si algun Secret bajo `deploy/` no esta cifrado. No hay `.sops.yaml` en el repo: el
 destinatario siempre se pasa como argumento.
 
-Dos Secrets de U8-T07 necesitan un paso humano fuera del clúster:
+Tres Secrets de U8-T07 necesitan un paso humano: `go-intake-webhook` y `target-app-baseline-token` (abajo) y
+`agents-llm-key`, cuyo valor (`AGENTS_LLM_API_KEY`) es la clave del proveedor del LLM que aporta el humano por entorno:
+el script no la genera ni la imprime, y falla si falta. Quien la usa son los agentes (U8-T05 la montará; este documento no
+la monta).
 
 - `go-intake-webhook` (clave `secret`) es el HMAC del webhook de GitHub. El valor que genera el script (o el que el humano
   cifre) debe copiarse también en la configuración del webhook del repositorio de GitHub; si no coincide, go-intake rechaza
   las firmas. Un valor nuevo exige cambiarlo en los dos sitios a la vez.
 - `target-app-baseline-token` (clave `token`) va en `aqs-test` (warm-app) y en `aqs-system` (go-reset) con el mismo valor.
   Si rotas uno, rota el otro en la misma operación; si no coinciden, el baseline falla con 401.
-
-Pendiente: la clave del proveedor del LLM (LiteLLM, U8-T09) todavía no tiene Secret definido en `generate.sh`. Su nombre y su
-clave los fija U8-T09; hasta entonces el humano no debe darla por cubierta por este script.
 
 ## 4. Rotar
 

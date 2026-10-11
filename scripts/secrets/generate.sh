@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Genera y cifra con SOPS + age los Secrets generables de la plataforma (U5-T14; U8-T07 añade
 # go-intake-webhook y target-app-baseline-token, este último en aqs-test y aqs-system con el mismo valor).
-# Uso: BACKUP_ENDPOINT=.. BACKUP_BUCKET=.. BACKUP_ACCESS_KEY_ID=.. BACKUP_SECRET_ACCESS_KEY=.. \
+# Uso: BACKUP_ENDPOINT=.. BACKUP_BUCKET=.. BACKUP_ACCESS_KEY_ID=.. BACKUP_SECRET_ACCESS_KEY=.. AGENTS_LLM_API_KEY=.. \
 #        scripts/secrets/generate.sh <dev|prod> <age-recipient>
+# AGENTS_LLM_API_KEY (U8-T07, arbitraje del orquestador): clave del proveedor del LLM; la aporta el humano, no se genera.
 # Lo ejecuta un humano. Los temporales viven en mktemp -d y se borran con trap.
 # Solo escribe deploy/flux/<env>/secrets/*.sops.yaml (cifrados) y secrets/kustomization.yaml.
 set -euo pipefail
@@ -22,7 +23,7 @@ esac
   echo "falta el destinatario age (age1...)" >&2
   exit 2
 }
-for v in BACKUP_ENDPOINT BACKUP_BUCKET BACKUP_ACCESS_KEY_ID BACKUP_SECRET_ACCESS_KEY; do
+for v in BACKUP_ENDPOINT BACKUP_BUCKET BACKUP_ACCESS_KEY_ID BACKUP_SECRET_ACCESS_KEY AGENTS_LLM_API_KEY; do
   [ -n "${!v:-}" ] || {
     echo "falta la variable $v" >&2
     exit 2
@@ -110,6 +111,10 @@ Y
 emit aqs-system target-app-baseline-token target-app-baseline-token-aqs-system <<Y
   token: "$(scalar "$work/plain/target-app-baseline-token")"
 Y
+# U8-T07 (F-01): clave del LLM de los agentes. La aporta el humano por entorno (AGENTS_LLM_API_KEY); no se monta aquí (U8-T05).
+emit aqs-system agents-llm-key <<Y
+  api-key: '$(yq_quote "$AGENTS_LLM_API_KEY")'
+Y
 
 # Guarda: ningun archivo en claro puede ser accesible por grupo u otros (se comprueba justo antes de cifrar).
 if [ -n "$(find "$work" -perm /077)" ]; then
@@ -118,7 +123,7 @@ if [ -n "$(find "$work" -perm /077)" ]; then
 fi
 [ -z "${AQS_STAT_DEBUG:-}" ] || find "$work" -printf '%m %p\n' >&2
 
-names=(minio-root minio-kms minio-tls backup-target warm-db-credentials grafana-admin go-intake-webhook target-app-baseline-token target-app-baseline-token-aqs-system)
+names=(minio-root minio-kms minio-tls backup-target warm-db-credentials grafana-admin go-intake-webhook target-app-baseline-token target-app-baseline-token-aqs-system agents-llm-key)
 for n in "${names[@]}"; do
   docker run --rm --security-opt label=disable -v "$work/plain":/in:ro "$SOPS" \
     encrypt --age "$recipient" --encrypted-regex '^(data|stringData)$' "/in/$n.yaml" > "$work/enc/$n.sops.yaml"
