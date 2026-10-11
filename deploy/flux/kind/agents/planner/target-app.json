@@ -1,0 +1,38 @@
+{
+  "surface": {
+    "run_id": "run-kind-target-app",
+    "base_url": "http://warm-app.aqs-test.svc:80",
+    "endpoints": [
+      {"method": "GET", "path": "/health"},
+      {"method": "GET", "path": "/products"},
+      {"method": "POST", "path": "/products"},
+      {"method": "GET", "path": "/orders"},
+      {"method": "POST", "path": "/orders"}
+    ],
+    "source": "openapi"
+  },
+  "workflow": "pedido-no-deja-stock-negativo",
+  "plan": {
+    "run_id": "run-kind-target-app",
+    "workflow": "pedido-no-deja-stock-negativo",
+    "flows": [
+      {
+        "flow_id": "pedido-stock",
+        "name": "El pedido descuenta stock sin llevarlo a negativo",
+        "steps": [
+          {"method": "POST", "path": "/products", "expect_status": 201},
+          {"method": "POST", "path": "/orders", "expect_status": 201}
+        ],
+        "invariant": "el stock nunca es negativo tras una orden"
+      },
+      {
+        "flow_id": "pedidos-listados",
+        "name": "Los pedidos quedan listados tras crearse",
+        "steps": [
+          {"method": "GET", "path": "/orders", "expect_status": 200}
+        ],
+        "invariant": "el listado de pedidos responde 200"
+      }
+    ]
+  }
+}

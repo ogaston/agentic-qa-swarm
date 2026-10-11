@@ -54,9 +54,9 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Logs sin secretos | Funciona | `secrets-no-en-logs` |
 | Estado del warm desde ui-api (`GET /warm`) | Funciona. Solo en kind: el overlay `deploy/flux/kind/` define `WARM_URL` y `UIAPI_WARM_TOKEN_FILE` (errata E-3 de U7-T04). En `base`, `dev` y `prod` el hueco sigue abierto (C-103) | `warm-estado` |
 | Ciclo de corrida webhook → notificación → confirm → run.confirmed → controlador | Pendiente | P1: los eventos viajan por archivos en el disco de cada pod |
-| Planner y reporter | Pendiente | P2: los agentes no tienen Deployment; falta LiteLLM y egress limitado |
+| Planner y reporter en el clúster | Funciona con LLM falso (U8-T05). Sin LiteLLM ni clave real (U8-T09); el ciclo completo no está conectado (U8-T06) | `scripts/test/u8-agents-kind.sh` (`planner-plan-valido`, `reporter-lee-minio`, `otro-pod-bloqueado`) |
 | Reset verificado del warm | Verificado (U8-T04) | `go-reset-baseline` es el baseline real de `demo/target-app`; `scripts/test/u8-target-app-kind.sh` ensucia la base, resetea y lee `GET /orders` vacío y `verify` 0 |
-| Evidencia en MinIO desde los agentes | Pendiente | P3 y C-107: el usuario de `aqs-evidence-s3` no está aprovisionado |
+| Evidencia en MinIO desde los agentes | Funciona (U8-T05). El usuario `aqs-evidence` lo crea `minio-init` con política solo sobre `evidence` | `scripts/test/u8-minio-user-kind.sh` (`put-evidence`, `get-evidence`, `sin-admin`, `otro-bucket-denegado`) |
 
 El smoke imprime estos pendientes como `PENDIENTE <paso> (<motivo>)`; no cuentan como fallo.
 
@@ -91,6 +91,37 @@ notificación y seguir la corrida no se comprueba en kind hasta que P1 esté res
 El proxy `/api` no se configura aquí: `dashboard-up.sh` exporta `AQS_IDENTITY_URL`,
 `AQS_RUN_CONTROLLER_URL` y `AQS_UI_API_URL` hacia los port-forwards, y `vite.config.ts` no cambia.
 El dashboard no corre dentro del clúster (sin imagen, Deployment ni ingress; C-95).
+
+## Agentes en el clúster (U8-T05)
+
+`agent-planner` y `agent-reporter` corren como Deployments en `aqs-system` (`deploy/flux/base/agents.yaml`),
+con Service `:8080`, sondas, `securityContext` endurecido y NetworkPolicy: solo `go-run-controller` les habla;
+el egreso es DNS, LiteLLM (`litellm.aqs-system.svc:4000`) y, el reporter, MinIO.
+
+- **LLM en kind:** el overlay `deploy/flux/kind/` pone `LLM_PROVIDER=fake` con `PLANNER_ALLOW_FAKE=true` y
+  `REPORTER_ALLOW_FAKE=1` (nunca `*_ENV=prod`). Los fixtures salen de ConfigMaps del overlay:
+  - `agents-fixtures-planner`: la superficie de la app de referencia (`demo/target-app`) y el plan esperado.
+  - `agents-fixtures-reporter`: el prompt exacto de la evidencia sembrada de `bug-ecom-01` y su respuesta.
+    Se regenera con `PYTHONPATH=agents/agent-reporter/src agents/agent-reporter/.venv/bin/python scripts/kind/gen_agent_fixtures.py > deploy/flux/kind/agents/reporter/fixtures.json`.
+    Como la entrada trae el `prompt` ya calculado, el arranque del reporter no lee MinIO.
+- **Evidencia:** `REPORTER_EVIDENCE=s3` con `EVIDENCE_BUCKET=evidence`. Las credenciales son las del Secret
+  `aqs-evidence-s3` (usuario `aqs-evidence`). `minio-init` lo crea con `provision-user.sh` usando el `mc` que
+  trae la imagen de MinIO fijada por digest (no `minio/mc`, que no se puede descargar aquí).
+- **Pruebas** (dentro de `flock`, sobre `kind-aqs`):
+
+  ```bash
+  bash scripts/test/u8-minio-user-kind.sh   # CA-2: OK put-evidence, get-evidence, sin-admin, otro-bucket-denegado; rc=0
+  bash scripts/test/u8-agents-kind.sh       # CA-3: OK planner-plan-valido, reporter-lee-minio, otro-pod-bloqueado; rc=0
+  ```
+
+  Ambos crean sus pods de prueba (`u8-t05-*`) y los borran al salir. El primero prueba el usuario con
+  `mc` y sus credenciales; el segundo siembra la evidencia, llama a los agentes desde un pod con la etiqueta
+  de `go-run-controller` y valida cada respuesta contra `contracts/plans/*.schema.json` en el host (con el venv
+  del planner, `agents/agent-planner/.venv`; otro intérprete con `U8_AGENTS_PY`).
+- Un pod sin la etiqueta de `go-run-controller` no llega a los agentes: el fallo es un timeout de conexión
+  (la NetworkPolicy descarta), no un fallo de DNS.
+- Fuera de alcance: LiteLLM y la clave real (U8-T09), la llamada del controlador al reporter (U8-T06) y
+  el evento `report.ready` por NATS.
 
 Los comandos que tocan `aqs` se ejecutan dentro de `flock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock`
 cuando hay más de un codificador usando el clúster.

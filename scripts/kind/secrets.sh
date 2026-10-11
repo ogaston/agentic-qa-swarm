@@ -37,6 +37,7 @@ declare -A SECRET_NS=(
   [go-identity-users]=aqs-system
   [go-intake-webhook]=aqs-system
   [target-app-baseline-token]=aqs-test
+  [agents-llm-key]=aqs-system
 )
 
 # Namespace con apply (no create): así lleva last-applied-configuration y apply -k no avisa (F-04).
@@ -155,6 +156,9 @@ gen_go_identity_users() { # key: users.json; contraseñas y mfa_secret a $state_
 gen_go_intake_webhook() { # key: secret (HMAC del webhook de GitHub, go-intake)
   rand_hex 32 > "$1/secret"
 }
+gen_agents_llm_key() { # key: api-key (U8-T05). En kind los agentes usan LLM_PROVIDER=fake y no la leen: valor de relleno.
+  rand_hex 32 > "$1/api-key"
+}
 
 # Archivos de cada Secret: nombre del Secret -> función generadora.
 declare -A GENERATOR=(
@@ -169,6 +173,7 @@ declare -A GENERATOR=(
   [go-identity-users]=gen_go_identity_users
   [go-intake-webhook]=gen_go_intake_webhook
   [target-app-baseline-token]=gen_service_token
+  [agents-llm-key]=gen_agents_llm_key
 )
 
 # --- 4. Creación ------------------------------------------------------------------------

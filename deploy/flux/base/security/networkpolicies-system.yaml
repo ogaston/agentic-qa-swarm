@@ -17,11 +17,12 @@ metadata:
   namespace: aqs-system
 spec:
   # NATS (U8-T01) excluido: solo le hablan los pods con aqs.io/nats-client=true (nats/networkpolicy.yaml).
+  # Agentes (U8-T05) excluidos: solo les habla go-run-controller (agents.yaml).
   podSelector:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: NotIn
-        values: [nats]
+        values: [nats, agent-planner, agent-reporter]
   policyTypes: [Ingress]
   ingress:
     - from:

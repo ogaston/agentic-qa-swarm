@@ -131,10 +131,17 @@ def _http_llm(e):
 
 
 def _register_fixtures(llm, reader, path: str, limits) -> None:
-    """REPORTER_FAKE_FIXTURES (U3-T07): [{run_id, evidence_uris, response}] -> prompt exacto -> respuesta."""
+    """REPORTER_FAKE_FIXTURES (U3-T07): [{run_id, evidence_uris, response}] -> prompt exacto -> respuesta.
+
+    U8-T05: una entrada con «prompt» precalculado se registra tal cual, sin leer evidencia al arrancar
+    (con REPORTER_EVIDENCE=s3 el arranque no depende de MinIO).
+    """
     with open(path, encoding="utf-8") as fh:
         items = json.load(fh)
     for it in items:
+        if "prompt" in it:
+            llm.register(it["prompt"], json.dumps(it["response"]))
+            continue
         prep = prepare(it["run_id"], it["evidence_uris"], reader, limits)
         llm.register(prep.prompt, json.dumps(it["response"]))
 
@@ -149,7 +156,19 @@ def build_service(env=None) -> Service:
     e = os.environ if env is None else env
     provider = e.get("LLM_PROVIDER", "")
     limits = Limits.from_env(e)
-    reader = DirEvidenceReader(e.get("REPORTER_EVIDENCE_DIR", "/evidence"))
+    store, reader = MemoryReportStore(), None
+    if e.get("REPORTER_EVIDENCE", "dir") == "s3":
+        from agent_reporter.s3 import S3EvidenceReader, S3ReportStore, make_s3_client
+
+        bucket = e.get("EVIDENCE_BUCKET", "")
+        if not bucket:
+            raise SystemExit("REPORTER_EVIDENCE=s3 requiere EVIDENCE_BUCKET")
+        s3 = make_s3_client(e)
+        reader, store = S3EvidenceReader(s3, bucket), S3ReportStore(s3, bucket)
+    elif e.get("REPORTER_EVIDENCE", "dir") == "dir":
+        reader = DirEvidenceReader(e.get("REPORTER_EVIDENCE_DIR", "/evidence"))
+    else:
+        raise SystemExit("REPORTER_EVIDENCE no soportado")
     if provider == "http":
         llm = _http_llm(e)
     elif provider == "fake":
@@ -162,7 +181,7 @@ def build_service(env=None) -> Service:
             _register_fixtures(llm, reader, e["REPORTER_FAKE_FIXTURES"], limits)
     else:
         raise SystemExit("LLM_PROVIDER no soportado")
-    return Service(reader, llm, MemoryReportStore(), RecordingPublisher(), limits)
+    return Service(reader, llm, store, RecordingPublisher(), limits)
 
 
 def main() -> None:

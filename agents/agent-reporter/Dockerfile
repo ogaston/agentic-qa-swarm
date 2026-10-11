@@ -1,6 +1,8 @@
 FROM python:3.12-slim@sha256:2b4f19dae3a777dfc3b76730bda1e82e1f66ab2a2686fa93ca78edbfb4f04ffe
-# Sin dependencias de ejecucion de terceros: solo biblioteca estandar.
+# Dependencias fijadas (requirements.txt): boto3 solo para REPORTER_EVIDENCE=s3 (U8-T05).
 WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY src/ /app/src/
 ENV PYTHONPATH=/app/src PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 USER 65532:65532

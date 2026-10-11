@@ -6,6 +6,7 @@ resources:
   - namespaces.yaml
   - backup
   - control-plane.yaml
+  - agents.yaml
   - observability
   - warm.yaml
   - security
