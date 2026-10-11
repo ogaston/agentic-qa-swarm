@@ -9,6 +9,8 @@ set -eu
 
 BASE_URL="${TARGET_APP_BASELINE_URL:-http://warm-app.aqs-test.svc:9090}"
 TOKEN_FILE="${TARGET_APP_BASELINE_TOKEN_FILE:-/etc/aqs/target-app-baseline/token}"
+# -T: sin timeout busybox espera indefinidamente y go-reset se cuelga (U8-T04, F-01).
+TIMEOUT="${TARGET_APP_BASELINE_TIMEOUT:-10}"
 
 fail() { echo "baseline: $*" >&2; exit 1; }
 
@@ -19,9 +21,9 @@ TOKEN=$(cat "$TOKEN_FILE")
 # call <POST|GET> <ruta>: la respuesta del cuerpo queda en stdout; el error de HTTP sale con rc != 0.
 call() {
   if [ "$1" = POST ]; then
-    wget -q -O - --header="Authorization: Bearer $TOKEN" --post-data="" "$BASE_URL$2"
+    wget -q -T "$TIMEOUT" -O - --header="Authorization: Bearer $TOKEN" --post-data="" "$BASE_URL$2"
   else
-    wget -q -O - --header="Authorization: Bearer $TOKEN" "$BASE_URL$2"
+    wget -q -T "$TIMEOUT" -O - --header="Authorization: Bearer $TOKEN" "$BASE_URL$2"
   fi
 }
 

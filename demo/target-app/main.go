@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -69,16 +70,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	st, err := openStore(ctx, cfg.DatabaseURL, cfg.Bug == "oversell")
+	st, err := newStore(cfg.DatabaseURL, cfg.Bug == "oversell")
 	if err != nil {
-		log.Error("no se pudo abrir la base", "error", err.Error())
-		os.Exit(1)
+		log.Error("dsn invalido", "error", err.Error())
+		os.Exit(2)
 	}
 	defer st.Close()
-	if err := st.Migrate(ctx); err != nil {
-		log.Error("migracion fallida", "error", err.Error())
-		os.Exit(1)
-	}
 
 	tok, err := readToken(cfg.BaselineTokFile)
 	if err != nil {
@@ -86,7 +83,11 @@ func main() {
 		os.Exit(2)
 	}
 
-	srv := &http.Server{Addr: cfg.ListenAddr, Handler: appMux(st), ReadHeaderTimeout: 5 * time.Second}
+	// La app escucha ya y reintenta la base mientras viva el contexto (U8-T04, F-02). Hasta tener base,
+	// /health y las rutas de datos responden 503.
+	go st.Init(ctx, log)
+
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: gate(st, appMux(st)), ReadHeaderTimeout: 5 * time.Second}
 	base := &http.Server{Addr: cfg.BaselineAddr, Handler: baselineMux(st, tok), ReadHeaderTimeout: 5 * time.Second}
 	errc := make(chan error, 2)
 	go func() { errc <- srv.ListenAndServe() }()
@@ -104,6 +105,18 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	_ = base.Shutdown(shutdownCtx)
+}
+
+// gate responde 503 a todo lo que depende de la base hasta que Init termine. "/" y /openapi.json son
+// estaticos y siempre responden (la sonda de readiness de warm-app usa "/").
+func gate(st *store, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if st.Ready() || r.URL.Path == "/" || r.URL.Path == "/openapi.json" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "db_down"})
+	})
 }
 
 func appMux(st *store) http.Handler {
@@ -204,6 +217,10 @@ func baselineMux(st *store, token string) http.Handler {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
+		if !st.Ready() {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "db_down"})
+			return
+		}
 		mux.ServeHTTP(w, r)
 	})
 }
@@ -214,18 +231,7 @@ func authorized(r *http.Request, token string) bool {
 	if !strings.HasPrefix(h, pfx) {
 		return false
 	}
-	return constantTimeEq(strings.TrimPrefix(h, pfx), token)
-}
-
-func constantTimeEq(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	var v byte
-	for i := 0; i < len(a); i++ {
-		v |= a[i] ^ b[i]
-	}
-	return v == 0
+	return subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(h, pfx)), []byte(token)) == 1
 }
 
 func readToken(path string) (string, error) {

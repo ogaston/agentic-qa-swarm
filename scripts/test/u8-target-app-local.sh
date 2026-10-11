@@ -156,6 +156,27 @@ start_app oversell || { echo "FALLA app-arranque-oversell"; exit 1; }
 bl POST /__aqs/baseline/clean >/dev/null
 check "defecto-oversell-sembrado" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{\"product_id\":1,\"qty\":11}' '$app_url/orders')\" = 201 ] && curl -fsS '$app_url/products' | jq -e '[.[] | select(.id==1)][0].stock < 0' >/dev/null"
 
+# Fase C (F-02): la base llega tarde. La app no sale: escucha, /health da 503 y se recupera al aparecer la base.
+late_pg_name="$pg_name-late"
+late_port=55998
+stop_app
+DATABASE_URL_LATE="postgres://postgres:$pg_pass@127.0.0.1:$late_port/postgres?sslmode=disable"
+env -i PATH="$PATH" HOME="$HOME" DATABASE_URL="$DATABASE_URL_LATE" LISTEN_ADDR="127.0.0.1:$app_port" \
+  BASELINE_LISTEN_ADDR="127.0.0.1:$base_port" BASELINE_TOKEN_FILE="$work/token" TARGET_APP_BUG="" \
+  "$work/target-app" >"$work/app-late.log" 2>&1 &
+app_pid=$!
+sleep 35
+check "db-tarde-app-sigue-viva" bash -c "kill -0 $app_pid"
+check "db-tarde-health-503" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' '$app_url/health')\" = 503 ]"
+podman run -d --name "$late_pg_name" -e POSTGRES_PASSWORD="$pg_pass" -p "127.0.0.1:$late_port:5432" "$pg_img" >/dev/null
+late_ok=0
+for _ in $(seq 1 120); do
+  if [ "$(curl -s -o /dev/null -w '%{http_code}' "$app_url/health")" = 200 ]; then late_ok=1; break; fi
+  sleep 1
+done
+podman rm -f "$late_pg_name" >/dev/null 2>&1 || true
+if [ "$late_ok" -eq 1 ]; then echo "OK db-tarde-recupera-health-200"; else echo "FALLA db-tarde-recupera-health-200"; fail=1; fi
+stop_app
 stop_app
 if [ "$fail" -eq 0 ]; then echo "rc=0"; else echo "rc=1"; fi
 exit "$fail"

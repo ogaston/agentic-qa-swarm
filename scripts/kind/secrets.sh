@@ -70,8 +70,14 @@ ensure_baseline_real() {
 copy_target_app_token() {
   local name=target-app-baseline-token src=aqs-test dst=aqs-system
   if kubectl get secret "$name" -n "$dst" >/dev/null 2>&1; then
-    echo "secrets: $dst/$name ya existe; no se regenera"
-    return 0
+    # Si ya existe, debe llevar el mismo valor que el de aqs-test: si no, warm-app y go-reset
+    # discreparian y el baseline fallaria en silencio con 401 (U8-T04, F-06). No se regenera ni se imprime.
+    if [ "$(kubectl get secret "$name" -n "$dst" -o jsonpath='{.data.token}')" = \
+         "$(kubectl get secret "$name" -n "$src" -o jsonpath='{.data.token}')" ]; then
+      echo "secrets: $dst/$name ya existe con el mismo valor que $src; no se regenera"
+      return 0
+    fi
+    fail "$dst/$name y $src/$name tienen valores distintos; borra uno y vuelve a ejecutar"
   fi
   ensure_namespace "$dst"
   kubectl get secret "$name" -n "$src" -o json \

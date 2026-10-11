@@ -534,7 +534,7 @@ spec:
         - name: target-app-baseline
           secret:
             secretName: target-app-baseline-token
-            defaultMode: 0444
+            defaultMode: 0440
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

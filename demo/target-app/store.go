@@ -4,6 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // driver "pgx" para database/sql
@@ -28,7 +32,8 @@ var seedProducts = []struct {
 
 type store struct {
 	db       *sql.DB
-	oversell bool // TARGET_APP_BUG=oversell: el defecto sembrado (la invariante no se aplica)
+	oversell bool        // TARGET_APP_BUG=oversell: el defecto sembrado (la invariante no se aplica)
+	ready    atomic.Bool // true tras Migrate con exito; hasta entonces la app responde 503 en lo que toca la base
 }
 
 type Product struct {
@@ -44,24 +49,42 @@ type Order struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func openStore(ctx context.Context, dsn string, oversell bool) (*store, error) {
+// newStore no conecta: sql.Open solo prepara el pool. La conexion la reintenta Init.
+func newStore(dsn string, oversell bool) (*store, error) {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, err
 	}
-	pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	for {
-		if err := db.PingContext(pctx); err == nil {
-			break
-		} else if pctx.Err() != nil {
-			_ = db.Close()
-			return nil, err
-		}
-		time.Sleep(time.Second)
-	}
 	return &store{db: db, oversell: oversell}, nil
 }
+
+// Init intenta Migrate hasta tener exito o hasta que el contexto muera. No sale por una base lenta
+// (U8-T04, F-02): la app ya escucha y responde 503 mientras tanto.
+func (s *store) Init(ctx context.Context, log *slog.Logger) {
+	wait := 500 * time.Millisecond
+	for {
+		err := s.Migrate(ctx)
+		if err == nil {
+			s.ready.Store(true)
+			log.Info("base lista")
+			return
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		log.Warn("base no lista, reintento", "error", err.Error(), "espera", wait.String())
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+		if wait < 5*time.Second {
+			wait *= 2
+		}
+	}
+}
+
+func (s *store) Ready() bool { return s.ready.Load() }
 
 func (s *store) Close() error { return s.db.Close() }
 
@@ -129,18 +152,31 @@ func (s *store) Clean(ctx context.Context) error {
 }
 
 // Diff cuenta las filas que difieren del baseline: pedidos extra, productos de seed alterados o
-// ausentes, y productos extra. 0 = limpia.
+// ausentes, y productos extra. 0 = limpia. La semilla es seedProducts (ids 1..n tras RESTART IDENTITY),
+// asi que no hay una segunda copia de los valores en SQL (U8-T04, F-06).
 func (s *store) Diff(ctx context.Context) (int, error) {
-	const q = `
+	var values strings.Builder
+	args := make([]any, 0, 3*len(seedProducts))
+	ids := make([]string, 0, len(seedProducts))
+	for i, p := range seedProducts {
+		if i > 0 {
+			values.WriteString(", ")
+		}
+		n := 3 * i
+		fmt.Fprintf(&values, "($%d::bigint, $%d::text, $%d::int)", n+1, n+2, n+3)
+		args = append(args, int64(i+1), p.Name, p.Stock)
+		ids = append(ids, fmt.Sprint(i+1))
+	}
+	q := `
 SELECT
   (SELECT count(*) FROM orders)
   + (SELECT count(*)
-       FROM (VALUES (1::bigint, 'cafe', 10), (2::bigint, 'te', 5)) AS seed(id, name, stock)
+       FROM (VALUES ` + values.String() + `) AS seed(id, name, stock)
        LEFT JOIN products p ON p.id = seed.id
       WHERE p.id IS NULL OR p.name <> seed.name OR p.stock <> seed.stock)
-  + (SELECT count(*) FROM products WHERE id NOT IN (1, 2))`
+  + (SELECT count(*) FROM products WHERE id NOT IN (` + strings.Join(ids, ", ") + `))`
 	var n int
-	if err := s.db.QueryRowContext(ctx, q).Scan(&n); err != nil {
+	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {
 		return 0, err
 	}
 	return n, nil

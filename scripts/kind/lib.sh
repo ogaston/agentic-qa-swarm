@@ -88,10 +88,10 @@ all_images() {
       case " $AQS_IMAGES " in *" $name "*) sel+="$line"$'\n' ;; esac
     done <<<"$all"
     for n in $AQS_IMAGES; do
-      case "$sel" in *"$n "*) ;; *)
+      printf '%s\n' "$sel" | awk -v n="$n" '$1 == n { f = 1 } END { exit !f }' || {
         echo "AQS_IMAGES: '$n' no es una imagen de la plataforma ni de demo/" >&2
-        return 1 ;;
-      esac
+        return 1
+      }
     done
     all=$sel
   fi
