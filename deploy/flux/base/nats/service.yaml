@@ -1,0 +1,15 @@
+# Solo el puerto de cliente. El 8222 de monitorización no se expone por Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: nats
+spec:
+  selector:
+    app.kubernetes.io/name: nats
+  ports:
+    - name: client
+      port: 4222
+      targetPort: client

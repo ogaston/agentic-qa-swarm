@@ -20,6 +20,7 @@ spec:
       labels:
         app.kubernetes.io/name: ui-api
         aqs.io/tier: control-plane
+        aqs.io/nats-client: "true"
     spec:
       serviceAccountName: ui-api
       automountServiceAccountToken: false
@@ -74,6 +75,7 @@ spec:
       labels:
         app.kubernetes.io/name: go-intake
         aqs.io/tier: control-plane
+        aqs.io/nats-client: "true"
     spec:
       serviceAccountName: go-intake
       automountServiceAccountToken: false
@@ -131,6 +133,7 @@ spec:
       labels:
         app.kubernetes.io/name: go-run-controller
         aqs.io/tier: control-plane
+        aqs.io/nats-client: "true"
     spec:
       serviceAccountName: go-run-controller
       securityContext:
