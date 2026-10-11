@@ -680,3 +680,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U7 ola 3.
 
 ---
+
+## Construction — U7-T03 cerrada; despacho de U7-T04
+**Timestamp**: 2026-10-10T23:07:02-05:00
+**User Input**: "merged #85" / "merged #86"
+**AI Response**: "Se marca [x] U7-T3 (PR #86, VERDE en la ronda 2; la ronda 1 salió NO-VERDE por F-01: el baseline.sh de relleno incumplía el contrato de E-2). F-02 arbitrado por el orquestador: el relleno pasa a secrets.sh para no pisar un baseline real. C-106 cerrada (F-04). Candidata nueva C-107 (usuario MinIO de aqs-evidence-s3 sin aprovisionar); no bloquea U7-T04 porque MinIO en los agentes queda fuera. Se despacha U7-T04 desde origin/main acd980a."
+**Context**: Construction — U7 ola 4.
+
+---
