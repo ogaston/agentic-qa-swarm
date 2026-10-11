@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Politicas y validacion de manifiestos (U5-T15). Corre igual en local y en CI.
-# Construye los overlays dev y prod y ejecuta: kubeconform -strict, conftest verify,
-# conftest test --all-namespaces, conftest test --combine (regla de conjunto
+# Construye los overlays dev, prod y kind (U7-T03; kind no relaja ninguna politica) y ejecuta:
+# kubeconform -strict, conftest verify, conftest test --all-namespaces, conftest test --combine (regla de conjunto
 # default-deny) y promtool test rules. Ejecuta TODAS las comprobaciones aunque una
 # falle y sale distinto de 0 al final. Imprime "OK|FALLA <comprobacion> [overlay]".
 # Requiere docker; imagenes fijadas, como en las tareas de U5.
@@ -36,7 +36,7 @@ report() { # <rc> <comprobacion> [overlay]
   fi
 }
 
-overlays=(dev prod)
+overlays=(dev prod kind)
 # Para validar tambien deploy/flux/clusters (U5-T13), basta con crearlo: se anade solo si existe.
 if [ -d deploy/flux/clusters ]; then
   echo "AVISO deploy/flux/clusters existe pero no se valida en U5-T15" >&2
