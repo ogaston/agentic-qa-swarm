@@ -26,7 +26,7 @@ dk -v "$t":/k alpine:3.20 sh -c 'apk add -q age >/dev/null 2>&1 && age-keygen -o
 R=$(grep -o 'age1[0-9a-z]*' "$t/clave.txt")
 
 echo "== CA-2"
-(cd "$t" && BACKUP_ENDPOINT=https://s3.example.invalid BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s bash scripts/secrets/generate.sh prod "$R"); rc=$?
+(cd "$t" && BACKUP_ENDPOINT=https://s3.example.invalid BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s AGENTS_LLM_API_KEY=clave-de-prueba bash scripts/secrets/generate.sh prod "$R"); rc=$?
 echo "gen rc=$rc"
 n=$(find "$t"/deploy/flux/prod/secrets -name '*.sops.yaml' | wc -l)
 echo "$n"
@@ -35,12 +35,16 @@ lista=$(dk -v "$t":/w -w /w -e SOPS_AGE_KEY_FILE=/w/clave.txt --entrypoint sh "$
   | $YQ 'select(.kind == "Secret") | .metadata.namespace + "/" + .metadata.name + ":" + (((.data // {}) + (.stringData // {})) | keys | sort | join(","))' | sort)
 echo "$lista"
 check "gen rc" "$rc" 0
-check "6 archivos" "$n" 6
+check "10 archivos" "$n" 10
 check "contrato de Secrets" "$lista" "aqs-observability/grafana-admin:admin-password,admin-user
+aqs-system/agents-llm-key:api-key
 aqs-system/backup-target:access-key-id,bucket,endpoint,secret-access-key
+aqs-system/go-intake-webhook:secret
 aqs-system/minio-kms:kms-secret-key
 aqs-system/minio-root:root-password,root-user
 aqs-system/minio-tls:ca.crt,tls.crt,tls.key
+aqs-system/target-app-baseline-token:token
+aqs-test/target-app-baseline-token:token
 aqs-test/warm-db-credentials:password"
 
 echo "== CA-3"
@@ -53,17 +57,17 @@ e=$(dk -v "$t":/w -w /w -e SOPS_AGE_KEY_FILE=/w/clave.txt "$SOPS" decrypt --extr
 printf '%s\n%s\n%s\n%s\n%s\n' "$a" "$b" "$c" "$d" "$e"
 check "sin ENC[ (esperado 0)" "$a" 0
 check "valores en claro (esperado 0)" "$b" 0
-check "Secrets en build (esperado 6)" "$c" 6
+check "Secrets en build (esperado 10)" "$c" 10
 check "formato KMS (esperado 1)" "$d" 1
 check "SAN del certificado (esperado 1)" "$e" 1
 
-echo "== CA-4 (guardia sobre los 6 cifrados)"
+echo "== CA-4 (guardia sobre los 10 cifrados)"
 (cd "$t" && bash scripts/ci/check-secrets.sh); rc=$?
 echo "cifrados rc=$rc"
-check "guardia sobre cifrados" "$rc" 0
+check "guardia sobre cifrados (10)" "$rc" 0
 
 echo "== CA-7 (policies.sh completo sobre dev y prod generados)"
-(cd "$t" && BACKUP_ENDPOINT=https://s3.example.invalid BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s bash scripts/secrets/generate.sh dev "$R") > /dev/null
+(cd "$t" && BACKUP_ENDPOINT=https://s3.example.invalid BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s AGENTS_LLM_API_KEY=clave-de-prueba bash scripts/secrets/generate.sh dev "$R") > /dev/null
 (cd "$t" && bash scripts/ci/policies.sh > "$t2/pol.out" 2> "$t2/pol.err"); rc=$?
 echo "policies-generado rc=$rc"
 nvalid=$(sed -n 's/.*Valid: \([0-9][0-9]*\).*/\1/p' "$t2/pol.err" | tail -1)
@@ -83,13 +87,16 @@ echo "== negativas de generate.sh"
 cp -r "$t/." "$t2/"
 rm -f "$t2"/deploy/flux/prod/secrets/*.sops.yaml
 printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: []\n' > "$t2/deploy/flux/prod/secrets/kustomization.yaml"
-(cd "$t2" && env -u BACKUP_ENDPOINT BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s bash scripts/secrets/generate.sh prod "$R" 2> /dev/null); rc=$?
+(cd "$t2" && env -u BACKUP_ENDPOINT BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s AGENTS_LLM_API_KEY=clave-de-prueba bash scripts/secrets/generate.sh prod "$R" 2> /dev/null); rc=$?
 echo "sin BACKUP_ENDPOINT rc=$rc"
 restos=$(find "$t2"/deploy/flux/prod/secrets -type f -printf '%f ')
 echo "archivos tras fallo: $restos"
 check "sin BACKUP_ENDPOINT" "$rc" 2
 check "sin archivos tras fallo" "$restos" "kustomization.yaml "
-(cd "$t2" && BACKUP_ENDPOINT=e BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s bash scripts/secrets/generate.sh prod 2> /dev/null); rc=$?
+(cd "$t2" && env -u AGENTS_LLM_API_KEY BACKUP_ENDPOINT=e BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s bash scripts/secrets/generate.sh prod "$R" 2> /dev/null); rc=$?
+echo "sin AGENTS_LLM_API_KEY rc=$rc"
+check "sin AGENTS_LLM_API_KEY (F-01)" "$rc" 2
+(cd "$t2" && BACKUP_ENDPOINT=e BACKUP_BUCKET=b BACKUP_ACCESS_KEY_ID=a BACKUP_SECRET_ACCESS_KEY=s AGENTS_LLM_API_KEY=k bash scripts/secrets/generate.sh prod 2> /dev/null); rc=$?
 echo "sin destinatario rc=$rc"
 check "sin destinatario" "$rc" 2
 
