@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Genera y cifra con SOPS + age los 6 Secrets de la plataforma (U5-T14).
+# Genera y cifra con SOPS + age los Secrets generables de la plataforma (U5-T14; U8-T07 añade
+# go-intake-webhook y target-app-baseline-token, este último en aqs-test y aqs-system con el mismo valor).
 # Uso: BACKUP_ENDPOINT=.. BACKUP_BUCKET=.. BACKUP_ACCESS_KEY_ID=.. BACKUP_SECRET_ACCESS_KEY=.. \
 #        scripts/secrets/generate.sh <dev|prod> <age-recipient>
 # Lo ejecuta un humano. Los temporales viven en mktemp -d y se borran con trap.
@@ -49,6 +50,8 @@ docker run --rm --security-opt label=disable -v "$work/plain":/o "$ALPINE" sh -c
     openssl rand -hex 24 | tr -d "\n" > $n
   done
   printf "aqs-kms:%s" "$(openssl rand -base64 32 | tr -d "\n")" > kms
+  openssl rand -hex 32 | tr -d "\n" > go-intake-webhook-secret
+  openssl rand -hex 32 | tr -d "\n" > target-app-baseline-token
   openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=aqs-minio-ca" -keyout ca.key -out ca.crt 2>/dev/null
   openssl req -newkey rsa:2048 -nodes -subj "/CN=minio.aqs-system.svc" -keyout tls.key -out tls.csr 2>/dev/null
   printf "subjectAltName=DNS:minio.aqs-system.svc,DNS:minio.aqs-system.svc.cluster.local\n" > san.ext
@@ -59,11 +62,12 @@ docker run --rm --security-opt label=disable -v "$work/plain":/o "$ALPINE" sh -c
 block() { sed 's/^/      /' "$1"; } # indenta un PEM bajo un escalar de bloque
 scalar() { printf '%s' "$(cat "$1")"; }
 
-emit() { # <ns> <nombre> ; el cuerpo de stringData llega por stdin
+emit() { # <ns> <nombre> [<fichero>] ; el cuerpo de stringData llega por stdin
+  local f=${3:-$2}
   {
     printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: %s\n  namespace: %s\ntype: Opaque\nstringData:\n' "$2" "$1"
     cat
-  } > "$work/plain/$2.yaml"
+  } > "$work/plain/$f.yaml"
 }
 
 emit aqs-system minio-root <<Y
@@ -95,6 +99,17 @@ emit aqs-observability grafana-admin <<Y
   admin-user: admin
   admin-password: "$(scalar "$work/plain/grafana-admin-password")"
 Y
+# U8-T07: HMAC del webhook de GitHub (go-intake). Hay que copiar el mismo valor en la configuración del webhook de GitHub.
+emit aqs-system go-intake-webhook <<Y
+  secret: "$(scalar "$work/plain/go-intake-webhook-secret")"
+Y
+# U8-T07: token del listener de baseline de la app. Mismo valor en aqs-test (warm-app) y aqs-system (go-reset).
+emit aqs-test target-app-baseline-token <<Y
+  token: "$(scalar "$work/plain/target-app-baseline-token")"
+Y
+emit aqs-system target-app-baseline-token target-app-baseline-token-aqs-system <<Y
+  token: "$(scalar "$work/plain/target-app-baseline-token")"
+Y
 
 # Guarda: ningun archivo en claro puede ser accesible por grupo u otros (se comprueba justo antes de cifrar).
 if [ -n "$(find "$work" -perm /077)" ]; then
@@ -103,7 +118,7 @@ if [ -n "$(find "$work" -perm /077)" ]; then
 fi
 [ -z "${AQS_STAT_DEBUG:-}" ] || find "$work" -printf '%m %p\n' >&2
 
-names=(minio-root minio-kms minio-tls backup-target warm-db-credentials grafana-admin)
+names=(minio-root minio-kms minio-tls backup-target warm-db-credentials grafana-admin go-intake-webhook target-app-baseline-token target-app-baseline-token-aqs-system)
 for n in "${names[@]}"; do
   docker run --rm --security-opt label=disable -v "$work/plain":/in:ro "$SOPS" \
     encrypt --age "$recipient" --encrypted-regex '^(data|stringData)$' "/in/$n.yaml" > "$work/enc/$n.sops.yaml"

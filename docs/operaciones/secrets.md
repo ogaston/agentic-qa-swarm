@@ -4,8 +4,9 @@ El repo es **publico**: ningun secret entra en claro. Los Secrets de la app se c
 (`decryption: {provider: sops, secretRef: {name: sops-age}}` en `deploy/flux/clusters/<env>/aqs.yaml`).
 La clave privada age nunca entra al repo. Quien ejecuta estos pasos es un humano, no el agente.
 
-Secrets cubiertos (8): `minio-root`, `minio-kms`, `minio-tls`, `backup-target` (ns `aqs-system`),
-`warm-db-credentials` (`aqs-test`) y `grafana-admin` (`aqs-observability`) los genera `generate.sh` (seccion 3);
+Secrets cubiertos: `minio-root`, `minio-kms`, `minio-tls`, `backup-target` (ns `aqs-system`),
+`warm-db-credentials` (`aqs-test`), `grafana-admin` (`aqs-observability`), `go-intake-webhook` (`aqs-system`) y
+`target-app-baseline-token` (`aqs-test` y `aqs-system`, mismo valor) los genera `generate.sh` (seccion 3);
 `go-governance-service-token` y `go-identity-users` (ns `aqs-system`) se crean con el procedimiento de la seccion 6.
 
 ## 1. Generar la clave age
@@ -38,6 +39,17 @@ Los temporales van en `mktemp -d` y se borran al salir. Valores en `stringData`;
 Commitea los `*.sops.yaml` solo con una clave real y bajo revision humana. `scripts/ci/check-secrets.sh` (parte de
 `scripts/ci/policies.sh`) falla si algun Secret bajo `deploy/` no esta cifrado. No hay `.sops.yaml` en el repo: el
 destinatario siempre se pasa como argumento.
+
+Dos Secrets de U8-T07 necesitan un paso humano fuera del clúster:
+
+- `go-intake-webhook` (clave `secret`) es el HMAC del webhook de GitHub. El valor que genera el script (o el que el humano
+  cifre) debe copiarse también en la configuración del webhook del repositorio de GitHub; si no coincide, go-intake rechaza
+  las firmas. Un valor nuevo exige cambiarlo en los dos sitios a la vez.
+- `target-app-baseline-token` (clave `token`) va en `aqs-test` (warm-app) y en `aqs-system` (go-reset) con el mismo valor.
+  Si rotas uno, rota el otro en la misma operación; si no coinciden, el baseline falla con 401.
+
+Pendiente: la clave del proveedor del LLM (LiteLLM, U8-T09) todavía no tiene Secret definido en `generate.sh`. Su nombre y su
+clave los fija U8-T09; hasta entonces el humano no debe darla por cubierta por este script.
 
 ## 4. Rotar
 
