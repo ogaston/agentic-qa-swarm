@@ -11,6 +11,7 @@ kind: Kustomization
 # `$patch: delete` los objetos de observability y backup, uno por uno, por grupo/versión/kind/nombre.
 resources:
   - ../base
+  - kind-stubs.yaml
 patches:
   # --- observability: fuera en kind ---
   - target:
@@ -211,3 +212,41 @@ patches:
                 env:
                   - name: GOVERNANCE_ENV
                     value: dev
+  # --- E-2: huecos de arranque en kind (secretos y variables que los manifiestos base no dan) ---
+  - target:
+      kind: Deployment
+      name: go-intake
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: go-intake
+      spec:
+        template:
+          spec:
+            containers:
+              - name: go-intake
+                env:
+                  - name: GITHUB_WEBHOOK_SECRET
+                    valueFrom:
+                      secretKeyRef:
+                        name: go-intake-webhook
+                        key: secret
+  - target:
+      kind: Deployment
+      name: ui-api
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ui-api
+      spec:
+        template:
+          spec:
+            containers:
+              - name: ui-api
+                env:
+                  - name: UIAPI_AUTH
+                    value: identity
+                  - name: IDENTITY_URL
+                    value: http://go-identity.aqs-system.svc:8080

@@ -35,6 +35,7 @@ declare -A SECRET_NS=(
   [go-reset-service-token]=aqs-system
   [go-warm-manager-service-token]=aqs-system
   [go-identity-users]=aqs-system
+  [go-intake-webhook]=aqs-system
 )
 
 rand_hex() { openssl rand -hex "$1" | tr -d '\n'; }
@@ -103,6 +104,10 @@ gen_go_identity_users() { # key: users.json; contraseñas y mfa_secret a $state_
   chmod 600 "$state_dir/demo.txt" "$state_dir/admin.txt" "$state_dir/admin-mfa-secret.txt"
 }
 
+gen_go_intake_webhook() { # key: secret (HMAC del webhook de GitHub, go-intake)
+  rand_hex 32 > "$1/secret"
+}
+
 # Archivos de cada Secret: nombre del Secret -> función generadora.
 declare -A GENERATOR=(
   [minio-root]=gen_minio_root
@@ -114,6 +119,7 @@ declare -A GENERATOR=(
   [go-reset-service-token]=gen_service_token
   [go-warm-manager-service-token]=gen_service_token
   [go-identity-users]=gen_go_identity_users
+  [go-intake-webhook]=gen_go_intake_webhook
 )
 
 # --- 4. Creación ------------------------------------------------------------------------
