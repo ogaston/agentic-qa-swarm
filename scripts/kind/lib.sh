@@ -28,11 +28,12 @@ IMAGE_PREFIX=ghcr.io/ogaston/agentic-qa-swarm
 IMAGE_TAG=0.0.0
 
 # Imprime una línea «<nombre> <dir>» por imagen, tomando la lista de scripts/ci/list-services.sh
-# (no se escribe a mano). Exige 9 entradas. Si AQS_IMAGES está definida (nombres separados por
-# espacio), filtra a ese subconjunto y rechaza nombres desconocidos. Sale 1 con mensaje si algo falla.
+# (no se escribe a mano). Su número debe coincidir con los Dockerfile que hay bajo services/ y agents/,
+# contados por separado (U8-T03: ya no hay un número fijo). Si AQS_IMAGES está definida (nombres separados
+# por espacio), filtra a ese subconjunto y rechaza nombres desconocidos. Sale 1 con mensaje si algo falla.
 # Uso: images=$(platform_images "$root") || exit 1
 platform_images() {
-  local root=$1 list dir name n out="" count=0
+  local root=$1 list dir name n out="" count=0 expected=0
   local -a dirs=()
   list=$(cd "$root" && bash scripts/ci/list-services.sh) || {
     echo "no se pudo ejecutar scripts/ci/list-services.sh" >&2
@@ -42,8 +43,9 @@ platform_images() {
     dirs+=("$dir")
   done < <(jq -r '.[]' <<<"$list")
   count=${#dirs[@]}
-  if [ "$count" -ne 9 ]; then
-    echo "la lista de imágenes da $count entradas; se esperaban 9" >&2
+  expected=$(cd "$root" && ls -d services/*/Dockerfile agents/*/Dockerfile 2>/dev/null | wc -l)
+  if [ "$count" -eq 0 ] || [ "$count" -ne "$expected" ]; then
+    echo "la lista de imágenes da $count entradas; hay $expected Dockerfile bajo services/ y agents/" >&2
     return 1
   fi
   for dir in "${dirs[@]}"; do
