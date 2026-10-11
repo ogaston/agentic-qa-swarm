@@ -108,6 +108,9 @@ func execute(name string, args []string, getenv func(string) string, stepsVar, i
 	fs.StringVar(&flowID, "flow", "", "id del flujo")
 	fs.StringVar(&target, "target", "", "destino http(s)://host[:puerto]")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
 		return exitConfig
 	}
 	if fs.NArg() > 0 {

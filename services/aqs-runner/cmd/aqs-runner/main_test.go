@@ -225,3 +225,13 @@ func TestAyudaSaleCero(t *testing.T) {
 		t.Fatalf("subcomando desconocido rc=%d, quiero 2", rc)
 	}
 }
+
+func TestRehearseHelpSaleCero(t *testing.T) {
+	var out, errb bytes.Buffer
+	if rc := run([]string{"rehearse", "--help"}, envOf(nil), &out, &errb, &countingDoer{t: t}); rc != 0 {
+		t.Fatalf("rehearse --help rc=%d, quiero 0; stderr=%q", rc, errb.String())
+	}
+	if rc := run([]string{"http-steps", "-h"}, envOf(nil), &out, &errb, &countingDoer{t: t}); rc != 0 {
+		t.Fatalf("http-steps -h rc=%d, quiero 0", rc)
+	}
+}

@@ -129,7 +129,7 @@ BAD="http://127.0.0.1:$BAD_PORT"
 render "REHEARSAL_IMAGE=$IMG_REHEARSAL" "$GOOD" render-rehearsal-job >"$work/rehearse.yaml"
 rspec=$(job_spec "$work/rehearse.yaml")
 want='["rehearse","--run","r-1","--flow","f-1","--target","'"$GOOD"'"]'
-if [ "$(jq -c '.args' <<<"$rspec")" = "$want" ] && run_job "$rspec"; then
+if [ "$(jq -c '.args' <<<"$rspec")" = "$want" ] && run_job "$rspec" && grep -q '"ok":true' "$work/run.out"; then
   ok rehearse-args
 else
   bad rehearse-args
@@ -140,7 +140,7 @@ fi
 render "RUNNER_IMAGE=$IMG_RUNNER" "$GOOD" render-runner-job >"$work/runner.yaml"
 nspec=$(job_spec "$work/runner.yaml")
 want='["http-steps","--flow","f-1","--target","'"$GOOD"'"]'
-if [ "$(jq -c '.args' <<<"$nspec")" = "$want" ] && run_job "$nspec"; then
+if [ "$(jq -c '.args' <<<"$nspec")" = "$want" ] && run_job "$nspec" && grep -q '"ok":true' "$work/run.out"; then
   ok http-steps-args
 else
   bad http-steps-args
@@ -150,10 +150,14 @@ fi
 # 3) Paso que no cumple su expect_status: el Job de ensayo contra el servidor que responde 500 debe salir distinto de 0.
 render "REHEARSAL_IMAGE=$IMG_REHEARSAL" "$BAD" render-rehearsal-job >"$work/rehearse-bad.yaml"
 bspec=$(job_spec "$work/rehearse-bad.yaml")
-if run_job "$bspec"; then
-  bad paso-fallido-rc
-else
+brc=0
+run_job "$bspec" || brc=$?
+# Exige el código 1 de un paso fallido (no 125 de podman ni un pánico) y el resumen de ese paso en stdout.
+if [ "$brc" -eq 1 ] && grep -q '"status":500' "$work/run.out" && grep -q '"ok":false' "$work/run.out"; then
   ok paso-fallido-rc
+else
+  bad "paso-fallido-rc (rc=$brc)"
+  cat "$work/run.out" "$work/run.err" >&2 || true
 fi
 
 exit "$fail"
