@@ -720,3 +720,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U8 olas 1-2.
 
 ---
+
+## Construction — U8 ola 2 cerrada (T01, T02, T04, T06 fusionadas)
+**Timestamp**: 2026-10-11T12:10:00-05:00
+**User Input**: "continue"
+**AI Response**: "En origin/main ya están fusionadas U8-T1 (PR #96, VERDE en la ronda 3), U8-T2 (PR #98, VERDE en la ronda 2), U8-T4 (PR #97, VERDE en la ronda 2) y U8-T6 (PR #95, VERDE en la ronda 1). Se marcan [x] y se registran las candidatas C-110 a C-121 de sus informes. Siguen despachables U8-T05 (exige T04) y U8-T07 (exige T02 y T06); se despachan en paralelo. Ambas tocan control-plane.yaml: la que se fusione segunda rebasa."
+**Context**: Construction — U8 olas 2-3.
+
+---
