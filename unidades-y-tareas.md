@@ -170,8 +170,8 @@
 | U7-T1 | [x] | Clúster kind `aqs` sobre podman (imagen de nodo por digest), `kind-up`/`kind-down` idempotentes y guarda de contexto `kind-aqs` | US-M10 | `tareas/U7-T01-cluster-kind.md` |
 | U7-T2 | [x] | Construir con podman las 9 imágenes (`:0.0.0`, contexto igual que la CI) y cargarlas con `kind load image-archive` | US-M10 | `tareas/U7-T02-imagenes-locales.md` |
 | U7-T3 | [x] | Overlay `deploy/flux/kind` (sin observabilidad ni backups), Secrets aleatorios en el clúster, `deploy.sh` con espera de disponibilidad y overlay `kind` en `policies.sh` | US-M10, US-M8.1, US-M8.2 | `tareas/U7-T03-overlay-kind-y-despliegue.md` |
-| U7-T4 | [ ] | `kind-smoke.sh`: salud de los 7 servicios, login/inbox/warm reales, RBAC y NetworkPolicy aplicados (con prueba de sensibilidad) y pendientes P1/P2 declarados; runbook | US-M10, US-M8.1, US-M8.2, US-M1 | `tareas/U7-T04-humo-y-aislamiento.md` |
-| U7-T5 | [ ] | Dashboard (`vite preview`) contra la plataforma en kind: login → inbox → warm → logout por el origen del dashboard | S5 | `tareas/U7-T05-dashboard-contra-kind.md` |
+| U7-T4 | [x] | `kind-smoke.sh`: salud de los 7 servicios, login/inbox/warm reales, RBAC y NetworkPolicy aplicados (con prueba de sensibilidad) y pendientes P1/P2 declarados; runbook | US-M10, US-M8.1, US-M8.2, US-M1 | `tareas/U7-T04-humo-y-aislamiento.md` |
+| U7-T5 | [x] | Dashboard (`vite preview`) contra la plataforma en kind: login → inbox → warm → logout por el origen del dashboard | S5 | `tareas/U7-T05-dashboard-contra-kind.md` |
 
 > **Tareas redactadas (2026-10-10)**, a pedido del humano («can we use a cluster created with kind for this project? and run everything in docker/podman» → «yes, draft the U7 kind tasks»). Orden estrictamente secuencial T01 → T02 → T03 → T04 → T05; T05 exige además U6-T06. Decisiones tomadas al redactar (el humano puede revertirlas): kind con proveedor podman y un solo nodo; kindnet como CNI porque aplica NetworkPolicy; acceso solo por `kubectl port-forward` en loopback (sin `extraPortMappings` ni ingress); imágenes cargadas con `podman save` + `kind load image-archive` (sin registro local); el overlay referencia piezas de `base` para excluir `observability` y `backup`; Secrets generados por script y nunca versionados (no se usa SOPS en kind). **C-96 aprobada por el humano (2026-10-10)**: se autoriza a codificador y revisor a crear/destruir el clúster `aqs` y aplicar manifiestos solo en el contexto `kind-aqs`). Candidatas nuevas: C-96, C-97, C-98.
 
@@ -188,7 +188,7 @@
 |---|---|---|---|---|
 | U8-T1 | [ ] | NATS JetStream en `base`/kind (StatefulSet, stream `AQS_EVENTS`, NetworkPolicy, `nats-init`) | US-M1, US-M2 | `tareas/U8-T01-nats-jetstream.md` |
 | U8-T2 | [ ] | Transporte NATS en `go-intake`, `ui-api` y `go-run-controller` (`EVENTS_TRANSPORT=nats`, al menos una vez, dedupe por `event_id`) | US-M1, US-M2 | `tareas/U8-T02-transporte-nats-servicios.md` |
-| U8-T3 | [ ] | Imagen `aqs-runner` (`rehearse` y `http-steps` con la interfaz de los Jobs) y fin del `9` fijo en los scripts de kind | US-M5, US-M6 | `tareas/U8-T03-imagen-runner.md` |
+| U8-T3 | [x] | Imagen `aqs-runner` (`rehearse` y `http-steps` con la interfaz de los Jobs) y fin del `9` fijo en los scripts de kind | US-M5, US-M6 | `tareas/U8-T03-imagen-runner.md` |
 | U8-T4 | [ ] | App de referencia `demo/target-app` (pedidos, invariante de stock, bug sembrado) y `baseline.sh` real | US-M2, US-M3, US-M7.1 | `tareas/U8-T04-app-de-referencia.md` |
 | U8-T5 | [ ] | Agentes en el clúster, reporter sobre MinIO y usuario MinIO `aqs-evidence` con política mínima | US-M3, US-M4, US-M9 | `tareas/U8-T05-agentes-en-cluster.md` |
 | U8-T6 | [ ] | Fase `report` real en el controlador y fuente de flujos U3 cableada | US-M4, US-M9 | `tareas/U8-T06-fase-report-controlador.md` |
