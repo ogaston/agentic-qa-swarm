@@ -1,0 +1,23 @@
+{
+  "openapi": "3.0.3",
+  "info": {"title": "target-app", "version": "ref-v1", "description": "App de referencia del warm (U8-T04). Stock nunca negativo."},
+  "paths": {
+    "/health": {"get": {"summary": "Salud (incluye la base)", "responses": {"200": {"description": "ok"}, "503": {"description": "base caida"}}}},
+    "/products": {
+      "get": {"summary": "Lista productos", "responses": {"200": {"description": "lista de productos"}}},
+      "post": {
+        "summary": "Crea un producto",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["name", "stock"], "properties": {"name": {"type": "string"}, "stock": {"type": "integer", "minimum": 0}}}}}},
+        "responses": {"201": {"description": "creado"}, "400": {"description": "entrada invalida"}}
+      }
+    },
+    "/orders": {
+      "get": {"summary": "Lista pedidos", "responses": {"200": {"description": "lista de pedidos"}}},
+      "post": {
+        "summary": "Registra un pedido y descuenta stock",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["product_id", "qty"], "properties": {"product_id": {"type": "integer", "minimum": 1}, "qty": {"type": "integer", "minimum": 1}}}}}},
+        "responses": {"201": {"description": "creado"}, "404": {"description": "producto no existe"}, "409": {"description": "stock insuficiente"}}
+      }
+    }
+  }
+}

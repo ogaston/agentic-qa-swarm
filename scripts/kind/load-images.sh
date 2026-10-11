@@ -16,7 +16,7 @@ require_kind_context
 command -v podman >/dev/null 2>&1 || fail "falta 'podman' en el PATH"
 command -v kind >/dev/null 2>&1 || fail "falta 'kind' en el PATH"
 
-images=$(platform_images "$root") || fail "no se pudo obtener la lista de imágenes"
+images=$(all_images "$root") || fail "no se pudo obtener la lista de imágenes"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

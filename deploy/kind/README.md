@@ -69,9 +69,10 @@ bash scripts/kind/deploy.sh    # secrets.sh → kubectl apply -k deploy/flux/kin
 - **Prerrequisitos del despliegue:** `podman` (la imagen `go-identity:0.0.0` ya construida con `build-images.sh`:
   `secrets.sh` genera los hashes de `go-identity` con `podman run … hash-password`; sin podman no hay hash),
   `kubectl`, `openssl`, `jq` y `base32`. No se usa el Go del host.
-- `secrets.sh` crea también el ConfigMap `go-reset-baseline` de **relleno** (`aqs.io/kind-stub=true`) si no existe:
-  `clean` sale `0`, `verify` imprime `0`, `version` imprime `kind-stub`. No verifica nada: el reset verificado
-  en kind queda `PENDIENTE` (U7-T04). Si ya existe (p. ej. un baseline real aplicado a mano), no se toca.
+- `secrets.sh` crea el ConfigMap `go-reset-baseline` con el **baseline real** de la app de referencia
+  (`demo/target-app/baseline/baseline.sh`, U8-T04; sustituye al relleno `kind-stub` de U7-T03). Si existe con la
+  etiqueta `aqs.io/kind-stub` lo reemplaza; si existe sin ella (un baseline real aplicado a mano), no lo toca.
+  El Secret `target-app-baseline-token` se crea en `aqs-test` (warm-app) y se copia a `aqs-system` (go-reset).
 - `secrets.sh` descubre los Secrets desde `kubectl kustomize deploy/flux/kind`; si uno no está en su lista,
   falla con su nombre antes de crear nada.
 - `deploy.sh` imprime `OK|FALLA <objeto>` por cada comprobación y sale `0` solo si todas pasan. Exige el
