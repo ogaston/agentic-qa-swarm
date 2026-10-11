@@ -22,6 +22,8 @@ API JSON del inbox. Sin UI HTML ni Kubernetes.
 | `WARM_URL` | Opcional. URL `http(s)` de go-warm-manager para `GET /warm`. Sin ella, `/warm` responde `503 warm_unavailable`. Con ella es obligatoria `UIAPI_WARM_TOKEN_FILE` (si falta, no arranca). |
 | `UIAPI_WARM_TOKEN_FILE` | Archivo con el token de servicio del warm-manager. Se lee en cada llamada; nunca se pasa el valor por variable de entorno ni se registra. |
 | `UIAPI_EVENTS_FILE` | Outbox JSONL de go-intake (transicion, C-45). Tail desde el inicio, idempotente por `event_id`; evento invalido = descartado y contado. |
+| `EVENTS_TRANSPORT` | `file` (por defecto; usa `UIAPI_EVENTS_FILE` y `UIAPI_OUTBOX_FILE`) o `nats` (U8-T02: JetStream en `NATS_URL`). Con `nats`: al arrancar se reconstruye el inbox con un replay del stream `AQS_EVENTS`, luego consume `notify.created` con el durable `ui-api-inbox` (`AckExplicit`, `Ack` tras aplicar, `Term` si el evento no cumple el contrato) y publica `run.confirmed` con `Nats-Msg-Id` = `event_id`. |
+| `NATS_URL` | Con `EVENTS_TRANSPORT=nats`: `nats://host:puerto` (obligatoria). Sin conexión, `/readyz` da `nats: fail` y el servicio sigue arriba reintentando. |
 | `UIAPI_DATA_DIR` | Contiene `confirmations.jsonl` (solo-agregar, fsync por recibo). Una linea truncada no impide arrancar. |
 | `UIAPI_ALLOWED_ORIGINS` | Origenes CORS separados por coma; vacia = ninguno; `*` se rechaza. |
 | `UIAPI_RATE_LIMIT_RPS` / `_BURST` | Token bucket por IP (10 / 20). `429` + `Retry-After`. |

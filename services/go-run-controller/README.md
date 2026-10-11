@@ -28,6 +28,13 @@ Recorrido local sin clúster: `bash scripts/test/u2-demo-local.sh`; guion para d
   `Seen` y por `run_id` evita aplicarlo dos veces.
 - **Eventos de salida** (`RUN_OUTBOX_FILE`, `run.done`). Idempotente por `event_id`; solo cuentan las
   líneas completas, y un fallo de escritura deja el archivo como estaba.
+- **Transporte NATS** (`EVENTS_TRANSPORT=nats`, U8-T02; exige `NATS_URL` y no usa `RUN_EVENTS_FILE` ni
+  `RUN_OUTBOX_FILE`). Entrada: consumidor durable `go-run-controller-confirmed` sobre
+  `aqs.events.run.confirmed`, `AckExplicit`; `Ack` solo tras `Apply`, y sin `Ack` se reentrega tras 30 s.
+  Un evento que no cumple `contracts/events/run.confirmed.schema.json` se hace `Term` y no se aplica.
+  Salida: `run.done` a `aqs.events.run.done` con `Nats-Msg-Id` = `event_id` (la ventana de deduplicación
+  del stream es de 2 min). `rehearsal.*` no viaja por NATS: en modo `nats` el controlador no lo consume.
+  `/readyz` da `nats: fail` sin conexión. Por defecto (`file`) nada de lo anterior cambia.
 
 ## Garantías y límites
 

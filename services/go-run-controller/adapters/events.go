@@ -141,6 +141,24 @@ func OutEventID(typ, runID string) string {
 	return x[0:8] + "-" + x[8:12] + "-" + x[12:16] + "-" + x[16:20] + "-" + x[20:]
 }
 
+// runDoneLine arma el evento run.done (sin '\n'): el mismo JSON lo escriben el outbox de archivo y el
+// publicador NATS (U8-T02). Devuelve también su event_id determinista.
+func runDoneLine(ev runctl.OutEvent, at time.Time) (string, []byte, error) {
+	trace := ev.TraceID
+	if trace == "" {
+		trace = hex.EncodeToString([]byte(ev.RunID))
+	}
+	uris := ev.EvidenceURIs
+	if uris == nil {
+		uris = []string{}
+	}
+	id := OutEventID(ev.Type, ev.RunID)
+	line, err := json.Marshal(map[string]any{"event_id": id, "type": ev.Type, "version": 1,
+		"occurred_at": at.UTC().Format(time.RFC3339), "trace_id": trace,
+		"data": map[string]any{"run_id": ev.RunID, "evidence_uris": uris}})
+	return id, line, err
+}
+
 // Outbox escribe eventos del controlador (run.done) en RUN_OUTBOX_FILE, idempotente por event_id.
 // Solo cuentan como publicadas las líneas completas (con '\n'); un fallo de escritura devuelve el
 // archivo a su tamaño previo.
@@ -187,18 +205,7 @@ func (o *Outbox) Publish(_ context.Context, ev runctl.OutEvent) error {
 	if o.Now != nil {
 		now = o.Now
 	}
-	trace := ev.TraceID
-	if trace == "" {
-		trace = hex.EncodeToString([]byte(ev.RunID))
-	}
-	uris := ev.EvidenceURIs
-	if uris == nil {
-		uris = []string{}
-	}
-	id := OutEventID(ev.Type, ev.RunID)
-	line, err := json.Marshal(map[string]any{"event_id": id, "type": ev.Type, "version": 1,
-		"occurred_at": now().UTC().Format(time.RFC3339), "trace_id": trace,
-		"data": map[string]any{"run_id": ev.RunID, "evidence_uris": uris}})
+	id, line, err := runDoneLine(ev, now())
 	if err != nil {
 		return err
 	}

@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nats-io/nats.go/jetstream"
+
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/adapters"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/internal/httpapi"
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/internal/obs"
@@ -40,6 +42,7 @@ type config struct {
 	flowTimeout, runTimeout                          time.Duration
 	flowSource, u3URL, u3Workflow                    string // RUN_FLOW_SOURCE (""|u3|fake), U3_URL y U3_DEFAULT_WORKFLOW
 	reporterURL                                      string // REPORTER_URL (fase report, U8-T06)
+	transport, natsURL                               string // EVENTS_TRANSPORT (file|nats) y NATS_URL (U8-T02)
 }
 
 // parseSeconds lee una duración en segundos (vacío: def). Valor no numérico o <=0 es un error.
@@ -57,7 +60,7 @@ func parseSeconds(name, v string, def int) (time.Duration, error) {
 func loadConfig(env func(string) string) (config, error) {
 	c := config{namespace: env("RUN_TEST_NAMESPACE"), dataDir: env("RUN_DATA_DIR"), eventsFile: env("RUN_EVENTS_FILE"),
 		outboxFile: env("RUN_OUTBOX_FILE"), govURL: env("GOVERNANCE_URL"), govToken: env("GOVERNANCE_SERVICE_TOKEN"),
-		identityURL: env("IDENTITY_URL"), addr: env("LISTEN_ADDR")}
+		identityURL: env("IDENTITY_URL"), addr: env("LISTEN_ADDR"), transport: env("EVENTS_TRANSPORT"), natsURL: env("NATS_URL")}
 	if c.namespace == "" {
 		c.namespace = runctl.DefaultNamespace
 	}
@@ -65,9 +68,19 @@ func loadConfig(env func(string) string) (config, error) {
 	case "staging", "prod", "production", "default", "kube-system":
 		return c, errors.New("RUN_TEST_NAMESPACE no puede ser un namespace de staging/prod")
 	}
-	for _, m := range []struct{ n, v string }{{"RUN_DATA_DIR", c.dataDir}, {"RUN_EVENTS_FILE", c.eventsFile},
-		{"RUN_OUTBOX_FILE", c.outboxFile}, {"GOVERNANCE_URL", c.govURL}, {"GOVERNANCE_SERVICE_TOKEN", c.govToken},
-		{"IDENTITY_URL", c.identityURL}, {"LISTEN_ADDR", c.addr}} {
+	type kv = struct{ n, v string }
+	req := []kv{{"RUN_DATA_DIR", c.dataDir}}
+	switch c.transport {
+	case "", "file":
+		req = append(req, kv{"RUN_EVENTS_FILE", c.eventsFile}, kv{"RUN_OUTBOX_FILE", c.outboxFile})
+	case "nats":
+		req = append(req, kv{"NATS_URL", c.natsURL})
+	default:
+		return c, errors.New("EVENTS_TRANSPORT debe ser file o nats")
+	}
+	req = append(req, kv{"GOVERNANCE_URL", c.govURL}, kv{"GOVERNANCE_SERVICE_TOKEN", c.govToken},
+		kv{"IDENTITY_URL", c.identityURL}, kv{"LISTEN_ADDR", c.addr})
+	for _, m := range req {
 		if m.v == "" {
 			return c, fmt.Errorf("%s es obligatorio", m.n)
 		}
@@ -246,7 +259,24 @@ func run(log *slog.Logger, env func(string) string) error {
 			return err
 		}
 	}
-	cfg, err := buildConfig(c, cs, gate, store, &adapters.Outbox{Path: c.outboxFile}, logAlerter{log}, metrics, obs.NewRunnerMetrics(reg), log)
+	// Transporte de eventos (EVENTS_TRANSPORT): file por defecto (sin cambios) o nats (U8-T02).
+	var pub runctl.EventPublisher = &adapters.Outbox{Path: c.outboxFile}
+	var src runctl.EventSource = &adapters.FileSource{Path: c.eventsFile}
+	var transportChecks []obs.Check
+	if c.transport == "nats" {
+		nc, err := adapters.ConnectNATS(c.natsURL)
+		if err != nil {
+			return err
+		}
+		js, err := jetstream.New(nc)
+		if err != nil {
+			return err
+		}
+		pub = &adapters.NATSOutbox{JS: js}
+		src = &adapters.NATSSource{JS: js, Log: log}
+		transportChecks = []obs.Check{{Name: "nats", Fn: func(context.Context) error { return adapters.NATSReady(nc) }}}
+	}
+	cfg, err := buildConfig(c, cs, gate, store, pub, logAlerter{log}, metrics, obs.NewRunnerMetrics(reg), log)
 	if err != nil {
 		return err
 	}
@@ -254,8 +284,7 @@ func run(log *slog.Logger, env func(string) string) error {
 	if err != nil {
 		return err
 	}
-	src := &adapters.FileSource{Path: c.eventsFile}
-	checks := readyChecks(store, ctl)
+	checks := append(readyChecks(store, ctl), transportChecks...)
 	app := httpapi.New(store, httpapi.NewIdentityVerifier(strings.TrimRight(c.identityURL, "/")))
 	h := obs.Wrap(obs.Config{Service: serviceName, Log: log, Registry: reg, Metrics: obs.NewHTTPMetrics(reg, serviceName), Ready: checks,
 		Route: func(r *http.Request) string {
