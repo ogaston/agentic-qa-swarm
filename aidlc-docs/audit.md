@@ -648,3 +648,19 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — fin de U6.
 
 ---
+
+## Construction — U7-T01 cerrada; U7-T02 ronda 1 y errata de CA-4
+**Timestamp**: 2026-10-10T18:21:49-05:00
+**User Input**: "continue with U7-T02" / (respuesta a pregunta) "Errata: image: fields only (Recommended)"
+**AI Response**: "Se marca [x] U7-T1 (PR #81, VERDE). Se despacha U7-T02 (worktree desde origin/main 6dd7f2a). Ronda 1 del codificador: CA-1, CA-2, CA-3, CA-5 y CA-6 en verde; CA-4 da 3 porque `deploy/flux/base/control-plane.yaml:184-190` referencia `target-app`, `rehearsal` y `runner` como valores de entorno y no tienen Dockerfile. Decisión del humano: errata de CA-4 para comparar solo los campos `image:`. Candidatas nuevas: C-100 (imágenes de ejecución) y C-101 (nombre canónico de las imágenes en `ci.yml`)."
+**Context**: Construction — U7 ola 2.
+
+---
+
+## Construction — U7-T02 VERDE en la ronda 1
+**Timestamp**: 2026-10-10T18:33:12-05:00
+**User Input**: "yes, open the docs PR for U7-T1"
+**AI Response**: "El revisor da VERDE a U7-T02 en la ronda 1 (6 CA verificados con salida real; CA-4 con la errata). Se abre el PR #83 (depende de #82). El PR de documentación de U7-T1 ya era el #82; se le añade la candidata C-102 (F-01: `AQS_IMAGES` acepta subcadenas) y esta entrada en lugar de abrir otro PR."
+**Context**: Construction — U7 ola 2.
+
+---

@@ -62,9 +62,11 @@ Desde la raíz del worktree, con el clúster creado (`bash scripts/kind/kind-up.
 
 - [ ] **CA-4** — Las referencias coinciden con los manifiestos.
   ```bash
-  comm -23 <(grep -h -o -E 'ghcr\.io/ogaston/agentic-qa-swarm/[a-z-]+:0\.0\.0' deploy/flux/base/*.yaml | sort -u) <(podman exec aqs-control-plane crictl images -o json | grep -o -E 'ghcr\.io/ogaston/agentic-qa-swarm/[a-z-]+:0\.0\.0' | sort -u) | wc -l
+  comm -23 <(grep -h -E '^\s*(- )?image:\s*ghcr\.io/ogaston/agentic-qa-swarm/[a-z-]+:0\.0\.0' deploy/flux/base/*.yaml | grep -o -E 'ghcr\.io/ogaston/agentic-qa-swarm/[a-z-]+:0\.0\.0' | sort -u) <(podman exec aqs-control-plane crictl images -o json | grep -o -E 'ghcr\.io/ogaston/agentic-qa-swarm/[a-z-]+:0\.0\.0' | sort -u) | wc -l
   ```
-  Esperado: `0` (toda imagen propia que piden los manifiestos está en el nodo).
+  Esperado: `0` (toda imagen propia que piden los campos `image:` de los manifiestos está en el nodo).
+
+  > **Errata (2026-10-10, U7-T02 ronda 1, decidida por el humano):** el CA original comparaba todas las referencias de `deploy/flux/base/*.yaml` e incluía `target-app`, `rehearsal` y `runner` (`control-plane.yaml:184-190`, valores de `RUN_ARTIFACT_REF`, `REHEARSAL_IMAGE` y `RUNNER_IMAGE`), que no tienen Dockerfile en el repo; no podía dar `0`. Ahora compara solo los campos `image:` de los workloads. Las tres imágenes de ejecución quedan como candidata C-100.
 
 - [ ] **CA-5** — Subconjunto y guarda.
   ```bash
