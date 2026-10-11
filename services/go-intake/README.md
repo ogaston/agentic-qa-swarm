@@ -9,6 +9,8 @@ Recibe `POST /webhooks/github` (U1-T02/T03): verifica la firma HMAC, clasifica e
 | `GITHUB_WEBHOOK_SECRET` | **Obligatoria.** Secreto HMAC del webhook. |
 | `INTAKE_DATA_DIR` | **Obligatoria.** Contiene `notifications.jsonl`. |
 | `INTAKE_EVENTS_FILE` | **Obligatoria.** Outbox JSONL de `notify.created`. |
+| `EVENTS_TRANSPORT` | `file` (por defecto; usa `INTAKE_EVENTS_FILE`) o `nats` (U8-T02: publica `notify.created` en `aqs.events.notify.created` de JetStream con `Nats-Msg-Id` = `event_id`). |
+| `NATS_URL` | Con `EVENTS_TRANSPORT=nats`: `nats://host:puerto` (obligatoria). `/readyz` añade `nats` (falla sin conexión) y no mira el archivo de eventos. |
 | `ARTIFACT_REGISTRY` | Registro de imágenes para eventos de tag. |
 | `LISTEN_ADDR` | Por defecto `:8080`. |
 | `LOG_LEVEL` | `debug\|info\|warn\|error` (por defecto `info`). |

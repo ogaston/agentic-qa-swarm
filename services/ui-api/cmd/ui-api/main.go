@@ -8,8 +8,10 @@
 //	UIAPI_FAKE_TOKENS         con UIAPI_AUTH=fake: "token=id:rol,..."
 //	UIAPI_ALLOW_FAKE_AUTH     con UIAPI_AUTH=fake: debe ser "true"; ademas no arranca con UIAPI_ENV=prod
 //	UIAPI_ENV                 entorno (prod bloquea el verificador fake)
-//	UIAPI_OUTBOX_FILE         outbox JSONL donde se publica run.confirmed (obligatoria)
-//	UIAPI_EVENTS_FILE         outbox JSONL de go-intake (obligatoria)
+//	EVENTS_TRANSPORT          file (por defecto) | nats (JetStream, U8-T02)
+//	UIAPI_OUTBOX_FILE         con file: outbox JSONL donde se publica run.confirmed (obligatoria)
+//	UIAPI_EVENTS_FILE         con file: outbox JSONL de go-intake (obligatoria)
+//	NATS_URL                  con nats: nats://host:puerto (obligatoria)
 //	UIAPI_DATA_DIR            directorio del registro de confirmaciones (obligatoria)
 //	UIAPI_ALLOWED_ORIGINS     origenes CORS separados por coma (vacia = ninguno)
 //	UIAPI_RATE_LIMIT_RPS      por defecto 10
@@ -90,10 +92,10 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	eventsFile, dataDir := os.Getenv("UIAPI_EVENTS_FILE"), os.Getenv("UIAPI_DATA_DIR")
-	outboxFile := os.Getenv("UIAPI_OUTBOX_FILE")
-	if eventsFile == "" || dataDir == "" || outboxFile == "" {
-		return errors.New("UIAPI_EVENTS_FILE, UIAPI_DATA_DIR y UIAPI_OUTBOX_FILE son obligatorios")
+	dataDir := os.Getenv("UIAPI_DATA_DIR")
+	tr, err := transportFromEnv(log, dataDir, func() bool { return verifier != nil })
+	if err != nil {
+		return err
 	}
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
@@ -124,24 +126,27 @@ func run(log *slog.Logger) error {
 	if store.Skipped > 0 {
 		log.Warn("registro de confirmaciones: lineas ilegibles ignoradas", "count", store.Skipped)
 	}
-	pub := inbox.NewPublisher(store, inbox.NewOutbox(outboxFile), log)
-	h, err := newHandler(log, httpapi.Config{
+	pub := inbox.NewPublisher(store, tr.pub, log)
+	h, err := newHandlerReady(log, httpapi.Config{
 		Store: store, Verifier: verifier, Publisher: pub, AllowedOrigins: origins,
 		RateRPS: rps, RateBurst: burst, TrustProxy: os.Getenv("UIAPI_TRUST_PROXY") == "true",
 		WarmURL: os.Getenv("WARM_URL"), WarmTokenFile: os.Getenv("UIAPI_WARM_TOKEN_FILE"),
-	}, dataDir, eventsFile)
+	}, tr.ready)
 	if err != nil {
 		return err
 	}
 
-	sub := newSubscriber(log, eventsFile)
 	handle := func(ev inbox.NotifyCreated) { store.Apply(ev) }
-	if _, err := sub.Drain(handle); err != nil { // carga inicial antes de servir
-		return err
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go func() { _ = sub.Run(ctx, handle) }()
+	if tr.file != nil {
+		if _, err := tr.file.Drain(handle); err != nil { // carga inicial antes de servir
+			return err
+		}
+		go func() { _ = tr.file.Run(ctx, handle) }()
+	} else {
+		go func() { _ = tr.nats.Run(ctx, handle) }() // replay del stream y luego el durable, en segundo plano
+	}
 	go pub.Run(ctx, RepublishInterval) // al arrancar y cada 5 s: run.confirmed pendientes
 
 	srv := &http.Server{
@@ -170,6 +175,11 @@ func run(log *slog.Logger) error {
 // /metrics no pasan por el token, el limitador por IP ni las cabeceras de seguridad de la API
 // (excepción documentada en el README); el resto de las rutas sí.
 func newHandler(log *slog.Logger, cfg httpapi.Config, dataDir, eventsFile string) (http.Handler, error) {
+	return newHandlerReady(log, cfg, obs.ReadyChecks(dataDir, eventsFile, func() bool { return cfg.Verifier != nil }))
+}
+
+// newHandlerReady es newHandler con los chequeos de /readyz ya elegidos por el transporte.
+func newHandlerReady(log *slog.Logger, cfg httpapi.Config, ready []obs.Check) (http.Handler, error) {
 	reg := obs.NewRegistry()
 	httpMetrics := obs.NewHTTPMetrics(reg, serviceName)
 	// httpapi registra por Slog (con request_id y trace_id); su Logger clásico solo es el respaldo
@@ -186,5 +196,5 @@ func newHandler(log *slog.Logger, cfg httpapi.Config, dataDir, eventsFile string
 		return nil, err
 	}
 	return obs.Wrap(obs.Config{Service: serviceName, Log: log, Registry: reg, Metrics: httpMetrics,
-		Ready: obs.ReadyChecks(dataDir, eventsFile, func() bool { return cfg.Verifier != nil }), Route: httpapi.RoutePattern}, app), nil
+		Ready: ready, Route: httpapi.RoutePattern}, app), nil
 }

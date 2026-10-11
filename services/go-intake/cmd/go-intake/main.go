@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/githubsig"
 	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/intake"
 	"github.com/ogaston/agentic-qa-swarm/services/go-intake/internal/obs"
@@ -40,15 +42,16 @@ func run(log *slog.Logger) error {
 	if secret == "" {
 		return errors.New("GITHUB_WEBHOOK_SECRET es obligatorio")
 	}
-	dataDir, eventsFile := os.Getenv("INTAKE_DATA_DIR"), os.Getenv("INTAKE_EVENTS_FILE")
-	if dataDir == "" || eventsFile == "" {
-		return errors.New("INTAKE_DATA_DIR e INTAKE_EVENTS_FILE son obligatorios")
+	dataDir := os.Getenv("INTAKE_DATA_DIR")
+	pub, ready, err := publisherFromEnv(dataDir, []byte(secret))
+	if err != nil {
+		return err
 	}
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
 		addr = ":8080"
 	}
-	handler, err := newHandler(log, []byte(secret), dataDir, eventsFile, os.Getenv("ARTIFACT_REGISTRY"))
+	handler, err := newHandlerWith(log, []byte(secret), dataDir, os.Getenv("ARTIFACT_REGISTRY"), pub, ready)
 	if err != nil {
 		return err
 	}
@@ -76,9 +79,55 @@ func run(log *slog.Logger) error {
 	return nil
 }
 
-// newHandler arma la cadena completa: webhook + obs.Wrap, que sirve /healthz, /readyz y /metrics
-// (sin token) antes de la aplicación y añade identificadores, log de acceso y métricas HTTP.
+// publisherFromEnv elige el transporte de eventos (EVENTS_TRANSPORT): file (por defecto, outbox JSONL
+// de INTAKE_EVENTS_FILE) o nats (JetStream en NATS_URL, U8-T02). Devuelve el publicador y los
+// chequeos de /readyz de ese transporte.
+func publisherFromEnv(dataDir string, secret []byte) (intake.EventPublisher, []obs.Check, error) {
+	switch os.Getenv("EVENTS_TRANSPORT") {
+	case "", "file":
+		eventsFile := os.Getenv("INTAKE_EVENTS_FILE")
+		if dataDir == "" || eventsFile == "" {
+			return nil, nil, errors.New("INTAKE_DATA_DIR e INTAKE_EVENTS_FILE son obligatorios")
+		}
+		return intake.NewOutbox(eventsFile), obs.ReadyChecks(dataDir, eventsFile, secret), nil
+	case "nats":
+		if dataDir == "" {
+			return nil, nil, errors.New("INTAKE_DATA_DIR es obligatorio")
+		}
+		nc, err := intake.ConnectNATS(os.Getenv("NATS_URL"))
+		if err != nil {
+			return nil, nil, err
+		}
+		js, err := jetstream.New(nc)
+		if err != nil {
+			return nil, nil, err
+		}
+		return intake.NewNATSPublisher(js), natsReadyChecks(dataDir, secret, nc), nil
+	default:
+		return nil, nil, errors.New("EVENTS_TRANSPORT debe ser file o nats")
+	}
+}
+
+// natsReadyChecks son los chequeos de /readyz con NATS: los del servicio sin el del outbox de archivo,
+// más "nats" (falla sin conexión).
+func natsReadyChecks(dataDir string, secret []byte, nc *nats.Conn) []obs.Check {
+	var out []obs.Check
+	for _, c := range obs.ReadyChecks(dataDir, "", secret) {
+		if c.Name != "outbox" {
+			out = append(out, c)
+		}
+	}
+	return append(out, obs.Check{Name: "nats", Fn: func(context.Context) error { return intake.NATSReady(nc) }})
+}
+
+// newHandler arma la cadena completa con el transporte de archivo (firma histórica).
 func newHandler(log *slog.Logger, secret []byte, dataDir, eventsFile, artifactRegistry string) (http.Handler, error) {
+	return newHandlerWith(log, secret, dataDir, artifactRegistry, intake.NewOutbox(eventsFile), obs.ReadyChecks(dataDir, eventsFile, secret))
+}
+
+// newHandlerWith arma la cadena completa: webhook + obs.Wrap, que sirve /healthz, /readyz y /metrics
+// (sin token) antes de la aplicación y añade identificadores, log de acceso y métricas HTTP.
+func newHandlerWith(log *slog.Logger, secret []byte, dataDir, artifactRegistry string, pub intake.EventPublisher, ready []obs.Check) (http.Handler, error) {
 	store, err := intake.OpenJSONLStore(dataDir)
 	if err != nil {
 		return nil, err
@@ -89,7 +138,7 @@ func newHandler(log *slog.Logger, secret []byte, dataDir, eventsFile, artifactRe
 		Secret:    secret,
 		Verifier:  githubsig.HMACVerifier{},
 		Store:     store,
-		Publisher: intake.NewOutbox(eventsFile),
+		Publisher: pub,
 		Resolver:  intake.NewArtifactResolver(artifactRegistry),
 		Log:       log,
 		Metrics:   obs.NewIntake(reg),
@@ -98,5 +147,5 @@ func newHandler(log *slog.Logger, secret []byte, dataDir, eventsFile, artifactRe
 		return nil, err
 	}
 	return obs.Wrap(obs.Config{Service: serviceName, Log: log, Registry: reg, Metrics: httpMetrics,
-		Ready: obs.ReadyChecks(dataDir, eventsFile, secret), Route: intake.RoutePattern}, h), nil
+		Ready: ready, Route: intake.RoutePattern}, h), nil
 }

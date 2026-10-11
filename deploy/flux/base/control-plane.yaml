@@ -30,6 +30,10 @@ spec:
           env:
             - name: TZ
               value: UTC
+            - name: EVENTS_TRANSPORT
+              value: nats
+            - name: NATS_URL
+              value: nats://nats.aqs-system.svc:4222
           image: ghcr.io/ogaston/agentic-qa-swarm/ui-api:0.0.0
           ports:
             - name: http
@@ -85,6 +89,10 @@ spec:
           env:
             - name: TZ
               value: UTC
+            - name: EVENTS_TRANSPORT
+              value: nats
+            - name: NATS_URL
+              value: nats://nats.aqs-system.svc:4222
           image: ghcr.io/ogaston/agentic-qa-swarm/go-intake:0.0.0
           ports:
             - name: http
@@ -158,6 +166,10 @@ spec:
               value: /data/events.jsonl
             - name: RUN_OUTBOX_FILE
               value: /data/outbox.jsonl
+            - name: EVENTS_TRANSPORT
+              value: nats
+            - name: NATS_URL
+              value: nats://nats.aqs-system.svc:4222
             - name: RUN_MAX_PARALLEL_RUNNERS
               value: "3"
             - name: GOVERNANCE_URL
