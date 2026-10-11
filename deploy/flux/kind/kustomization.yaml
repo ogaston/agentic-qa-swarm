@@ -251,3 +251,19 @@ patches:
                     value: identity
                   - name: IDENTITY_URL
                     value: http://go-identity.aqs-system.svc:8080
+                  # E-3: configuración del warm (solo kind). Mismo token que acepta go-warm-manager.
+                  - name: WARM_URL
+                    value: http://go-warm-manager.aqs-system.svc:8080
+                  - name: UIAPI_WARM_TOKEN_FILE
+                    value: /etc/aqs/warm/token
+                volumeMounts:
+                  - name: warm-token
+                    mountPath: /etc/aqs/warm
+                    readOnly: true
+            volumes:
+              - name: warm-token
+                secret:
+                  secretName: go-warm-manager-service-token
+                  items:
+                    - key: token
+                      path: token
