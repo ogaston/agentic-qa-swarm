@@ -266,7 +266,7 @@ check secrets-no-en-logs secrets_no_en_logs
 # Ciclo de corrida: no se fuerza. Lo que no funciona en kind queda declarado, sin FALLA.
 echo "PENDIENTE webhook->notificacion->confirm->run.confirmed->controlador (P1: los eventos viajan por archivos en el disco de cada pod; no hay transporte entre pods)"
 echo "PENDIENTE planner/reporter (P2: los agentes no tienen Deployment; falta LiteLLM y egress limitado)"
-echo "PENDIENTE reset verificado (C-104: go-reset-baseline en kind es un relleno kind-stub que no verifica nada)"
+echo "reset verificado: cubierto por scripts/test/u8-target-app-kind.sh (U8-T04, baseline real de demo/target-app)"
 echo "PENDIENTE MinIO en agentes (P3: adaptadores S3 de los agentes; usuario de aqs-evidence-s3 sin aprovisionar, C-107)"
 
 if [ "$fail" -eq 0 ]; then

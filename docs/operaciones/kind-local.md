@@ -8,7 +8,7 @@ raíz del repositorio y no tocan otros clústeres (`aqs-poc`, `ckad`).
 
 ```bash
 bash scripts/kind/kind-up.sh        # crea el clúster aqs (o reutiliza) y deja kind-aqs
-bash scripts/kind/build-images.sh   # construye las 9 imágenes de la plataforma
+bash scripts/kind/build-images.sh   # construye las 10 imágenes: las 9 de la plataforma y `demo/target-app` (U8-T04)
 bash scripts/kind/load-images.sh    # carga las imágenes en el nodo con podman save + kind load
 bash scripts/kind/deploy.sh         # secrets.sh + kubectl apply -k deploy/flux/kind + espera de disponibilidad
 bash scripts/kind/kind-smoke.sh     # prueba de humo: port-forward en 127.0.0.1:18600-18606 y comprobaciones OK|FALLA
@@ -55,7 +55,7 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Estado del warm desde ui-api (`GET /warm`) | Funciona. Solo en kind: el overlay `deploy/flux/kind/` define `WARM_URL` y `UIAPI_WARM_TOKEN_FILE` (errata E-3 de U7-T04). En `base`, `dev` y `prod` el hueco sigue abierto (C-103) | `warm-estado` |
 | Ciclo de corrida webhook → notificación → confirm → run.confirmed → controlador | Pendiente | P1: los eventos viajan por archivos en el disco de cada pod |
 | Planner y reporter | Pendiente | P2: los agentes no tienen Deployment; falta LiteLLM y egress limitado |
-| Reset verificado del warm | Pendiente | C-104: `go-reset-baseline` en kind es un relleno `kind-stub` que no verifica nada |
+| Reset verificado del warm | Verificado (U8-T04) | `go-reset-baseline` es el baseline real de `demo/target-app`; `scripts/test/u8-target-app-kind.sh` ensucia la base, resetea y lee `GET /orders` vacío y `verify` 0 |
 | Evidencia en MinIO desde los agentes | Pendiente | P3 y C-107: el usuario de `aqs-evidence-s3` no está aprovisionado |
 
 El smoke imprime estos pendientes como `PENDIENTE <paso> (<motivo>)`; no cuentan como fallo.

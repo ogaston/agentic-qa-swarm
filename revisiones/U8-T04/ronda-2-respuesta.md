@@ -1,0 +1,9 @@
+# U8-T04 — respuesta de la ronda 2 al informe ronda-1
+
+F-01: Corregido en este commit: Service `warm-app` con puerto `baseline` 9090 (targetPort baseline) en deploy/flux/base/warm.yaml; `baseline.sh` con `wget -T` (10 s). Prueba: CA-3 verde en clúster nuevo (bitácora, ronda 2).
+F-02: Corregido en este commit: la app escucha ya, reintenta la base mientras viva el contexto y responde 503 en /health y datos hasta tener base. Rojo: binario de ronda 1 sale con exit=1 a los ~30 s sin base. Verde: `u8-target-app-local.sh` con el caso db-tarde (sigue viva, health 503, recupera health 200), rc=0. Deploy rc=0 en clúster nuevo.
+F-03: Fuera de alcance, decisión del orquestador (E-1): `superficie-con-orders` pasa a U8-T05 (C-107). Sustituido por `OK superficie-alcanzable` (go-warm-manager alcanza /openapi.json con /orders y /products) y `PENDIENTE superficie-con-orders (C-107, U8-T05)`.
+F-04: Corregido en este commit: el test ensucia la base, resetea y lee de vuelta GET /orders vacío y verify 0. Rojo con el reset final omitido (U8_RED_SKIP_FINAL_RESET=1): orders-vacio-tras-reset y verify-0-tras-reset FALLAN. Verde: los dos OK.
+F-05: Corregido en este commit: fsGroup 65532 en el pod warm-app y defaultMode 0440 en los dos montajes del token; no queda 0444.
+F-06: Corregido en este commit: kind-local.md (10 imágenes, reset verificado), kind-smoke.sh (mensaje), secrets.sh (compara valores si el Secret ya existe), lib.sh (AQS_IMAGES exacto), crypto/subtle, semilla única en Diff.
+  No corregido, justificado: sslmode=disable heredado (warm-db sin TLS; candidata); exposición :9090 por allow-same-namespace (candidata: NetworkPolicy acotada); dev/prod sin el Secret (bloqueado hasta U8-T07, no se aplica a Flux); GOTOOLCHAIN=auto (go.mod exige 1.26.9); espejo ECR de postgres (fijado por tag; candidata fijar digest).

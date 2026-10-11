@@ -63,3 +63,37 @@ platform_images() {
   done
   printf '%s' "$out"
 }
+
+# Imágenes de demo/*/ (U8-T04): cada directorio con Dockerfile, derivado del disco (no escrito a mano).
+# Misma forma que platform_images: «<nombre> <dir>» por línea.
+demo_images() {
+  local root=$1 d
+  for d in "$root"/demo/*/; do
+    d=${d%/}
+    [ -f "$d/Dockerfile" ] || continue
+    printf '%s demo/%s\n' "${d##*/}" "${d##*/}"
+  done
+}
+
+# all_images <root>: platform_images + demo_images. AQS_IMAGES filtra y valida contra el conjunto completo.
+all_images() {
+  local root=$1 plat dem all sel="" line name n
+  plat=$(AQS_IMAGES= platform_images "$root") || return 1
+  dem=$(demo_images "$root") || return 1
+  all="$plat"$'\n'"$dem"
+  if [ -n "${AQS_IMAGES:-}" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      name=${line%% *}
+      case " $AQS_IMAGES " in *" $name "*) sel+="$line"$'\n' ;; esac
+    done <<<"$all"
+    for n in $AQS_IMAGES; do
+      printf '%s\n' "$sel" | awk -v n="$n" '$1 == n { f = 1 } END { exit !f }' || {
+        echo "AQS_IMAGES: '$n' no es una imagen de la plataforma ni de demo/" >&2
+        return 1
+      }
+    done
+    all=$sel
+  fi
+  printf '%s' "$all"
+}

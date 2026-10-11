@@ -267,3 +267,9 @@ patches:
                   items:
                     - key: token
                       path: token
+# U8-T04: en kind el warm arranca con la app de referencia (demo/target-app), que sirve el baseline real en :9090.
+# nginx (base) no tiene ese listener: sin esto, el warm no puede resetearse de dirty a ready en un clúster nuevo.
+images:
+  - name: nginx
+    newName: ghcr.io/ogaston/agentic-qa-swarm/target-app
+    newTag: "0.0.0"

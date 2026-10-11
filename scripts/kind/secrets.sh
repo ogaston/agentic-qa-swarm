@@ -36,6 +36,7 @@ declare -A SECRET_NS=(
   [go-warm-manager-service-token]=aqs-system
   [go-identity-users]=aqs-system
   [go-intake-webhook]=aqs-system
+  [target-app-baseline-token]=aqs-test
 )
 
 # Namespace con apply (no create): así lleva last-applied-configuration y apply -k no avisa (F-04).
@@ -43,30 +44,46 @@ ensure_namespace() {
   kubectl create namespace "$1" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 }
 
-# ConfigMap go-reset-baseline de relleno para kind (errata E-2; F-01/F-02). Si ya existe, no se toca:
-# un baseline real aplicado a mano no se pisa. Contrato: clean -> 0; verify -> imprime 0; version -> kind-stub.
-ensure_baseline_stub() {
-  local ns=aqs-system name=go-reset-baseline dir="$work/go-reset-baseline"
+# ConfigMap go-reset-baseline con el baseline REAL de la app de referencia (U8-T04, C-104), leido de
+# demo/target-app/baseline/baseline.sh. Sustituye al relleno kind-stub de U7-T03 (etiqueta aqs.io/kind-stub).
+# Si el ConfigMap existe sin esa etiqueta (un baseline real aplicado a mano), no se toca.
+ensure_baseline_real() {
+  local ns=aqs-system name=go-reset-baseline src="$root/demo/target-app/baseline/baseline.sh" stub
+  [ -f "$src" ] || fail "falta el baseline de la app de referencia: $src"
   if kubectl get configmap "$name" -n "$ns" >/dev/null 2>&1; then
-    echo "secrets: $ns/configmap $name ya existe; no se toca"
-    return 0
+    stub=$(kubectl get configmap "$name" -n "$ns" -o jsonpath='{.metadata.labels.aqs\.io/kind-stub}')
+    if [ "$stub" != "true" ]; then
+      echo "secrets: $ns/configmap $name ya existe y no es relleno de kind; no se toca"
+      return 0
+    fi
+    kubectl delete configmap "$name" -n "$ns" >/dev/null || fail "no se pudo quitar el relleno kind-stub"
+    echo "secrets: $ns/configmap $name: relleno kind-stub sustituido por el baseline real"
   fi
   ensure_namespace "$ns"
-  mkdir "$dir"
-  cat > "$dir/baseline.sh" <<'SH'
-#!/bin/sh
-# Relleno de kind (U7-T03, errata E-2). NO verifica nada: el reset verificado queda PENDIENTE en kind.
-case "${1:-}" in
-  clean) exit 0 ;;
-  verify) echo 0 ;;
-  version) echo kind-stub ;;
-  *) echo "uso: baseline.sh clean|verify|version" >&2; exit 2 ;;
-esac
-SH
-  kubectl create configmap "$name" -n "$ns" --from-file=baseline.sh="$dir/baseline.sh" --dry-run=client -o yaml \
-    | kubectl label --local -f - aqs.io/kind-stub=true -o yaml \
-    | kubectl apply -f - >/dev/null
-  echo "secrets: $ns/configmap $name creado (relleno de kind, etiqueta aqs.io/kind-stub=true)"
+  kubectl create configmap "$name" -n "$ns" --from-file=baseline.sh="$src" --dry-run=client -o yaml \
+    | kubectl apply -f - >/dev/null || fail "no se pudo crear el ConfigMap $name"
+  echo "secrets: $ns/configmap $name creado (baseline real de demo/target-app)"
+}
+
+# Secret target-app-baseline-token: el token del listener de baseline de la app (aqs-test, warm-app) y
+# el que lee go-reset (aqs-system). Mismo valor en los dos namespaces; se copia sin imprimirlo.
+copy_target_app_token() {
+  local name=target-app-baseline-token src=aqs-test dst=aqs-system
+  if kubectl get secret "$name" -n "$dst" >/dev/null 2>&1; then
+    # Si ya existe, debe llevar el mismo valor que el de aqs-test: si no, warm-app y go-reset
+    # discreparian y el baseline fallaria en silencio con 401 (U8-T04, F-06). No se regenera ni se imprime.
+    if [ "$(kubectl get secret "$name" -n "$dst" -o jsonpath='{.data.token}')" = \
+         "$(kubectl get secret "$name" -n "$src" -o jsonpath='{.data.token}')" ]; then
+      echo "secrets: $dst/$name ya existe con el mismo valor que $src; no se regenera"
+      return 0
+    fi
+    fail "$dst/$name y $src/$name tienen valores distintos; borra uno y vuelve a ejecutar"
+  fi
+  ensure_namespace "$dst"
+  kubectl get secret "$name" -n "$src" -o json \
+    | jq --arg ns "$dst" '{apiVersion: "v1", kind: "Secret", type: .type, metadata: {name: .metadata.name, namespace: $ns}, data: .data}' \
+    | kubectl apply -f - >/dev/null || fail "no se pudo copiar $name a $dst"
+  echo "secrets: $dst/$name copiado desde $src"
 }
 
 rand_hex() { openssl rand -hex "$1" | tr -d '\n'; }
@@ -151,6 +168,7 @@ declare -A GENERATOR=(
   [go-warm-manager-service-token]=gen_service_token
   [go-identity-users]=gen_go_identity_users
   [go-intake-webhook]=gen_go_intake_webhook
+  [target-app-baseline-token]=gen_service_token
 )
 
 # --- 4. Creación ------------------------------------------------------------------------
@@ -175,6 +193,9 @@ for name in "${wanted[@]}"; do
   echo "secrets: $ns/$name creado"
 done
 
-ensure_baseline_stub
+for name in "${wanted[@]}"; do
+  if [ "$name" = target-app-baseline-token ]; then copy_target_app_token; fi
+done
+ensure_baseline_real
 
-echo "secrets: OK (${#wanted[@]} Secrets referenciados por deploy/flux/kind; ConfigMap go-reset-baseline de relleno)"
+echo "secrets: OK (${#wanted[@]} Secrets referenciados por deploy/flux/kind; ConfigMap go-reset-baseline real)"

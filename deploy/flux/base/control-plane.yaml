@@ -1,6 +1,7 @@
 # Secrets que un humano crea cifrados con SOPS (sin valores aqui; ns aqs-system): go-governance-service-token{token},
 # go-warm-manager-service-token{token}, go-reset-service-token{token}, aqs-evidence-s3{access-key,secret-key}.
 # ConfigMap que un humano aporta: go-reset-baseline{baseline.sh} (script de baseline de la app; contrato clean|verify|version).
+# Secret target-app-baseline-token{token} en aqs-system (go-reset) y aqs-test (warm-app): mismo valor (U8-T04).
 # El Role aqs-test-operator es compartido por go-run-controller, go-warm-manager y go-reset (separarlo por servicio: candidata).
 apiVersion: apps/v1
 kind: Deployment
@@ -482,6 +483,11 @@ spec:
               value: /etc/aqs/baseline/baseline.sh
             - name: RESET_BASELINE_VERSION
               value: v1
+            # baseline.sh (U8-T04) habla con la app del warm por su listener de baseline (:9090, token).
+            - name: TARGET_APP_BASELINE_URL
+              value: http://warm-app.aqs-test.svc:9090
+            - name: TARGET_APP_BASELINE_TOKEN_FILE
+              value: /etc/aqs/target-app-baseline/token
           image: ghcr.io/ogaston/agentic-qa-swarm/go-reset:0.0.0
           ports:
             - name: http
@@ -508,6 +514,9 @@ spec:
             - name: baseline
               mountPath: /etc/aqs/baseline
               readOnly: true
+            - name: target-app-baseline
+              mountPath: /etc/aqs/target-app-baseline
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -525,6 +534,10 @@ spec:
           configMap:
             name: go-reset-baseline
             defaultMode: 0555
+        - name: target-app-baseline
+          secret:
+            secretName: target-app-baseline-token
+            defaultMode: 0440
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
