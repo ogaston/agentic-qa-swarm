@@ -9,5 +9,6 @@ configMapGenerator:
     namespace: aqs-system
     files:
       - init-bucket.sh
+      - provision-user.sh
 generatorOptions:
   disableNameSuffixHash: true

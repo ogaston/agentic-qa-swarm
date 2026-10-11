@@ -13,6 +13,61 @@ spec:
         app.kubernetes.io/name: minio-init
     spec:
       restartPolicy: OnFailure
+      # Desviación aprobada por el orquestador (U8-T05): /usr/bin/mc de la misma imagen MinIO fijada por digest,
+      # en vez de minio/mc (no descargable aquí). Crea el usuario aqs-evidence con política limitada a evidence.
+      initContainers:
+        - name: provision-user
+          image: cgr.dev/chainguard/minio@sha256:9dcc028b309030afa86fc1fc8d93907ae373ea3fb75277cca3fc77e4645932b7
+          command:
+            - /bin/sh
+            - -c
+            - 'export MC_HOST_aqs="https://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@minio.aqs-system.svc:9000"; exec /bin/sh /scripts/provision-user.sh'
+          env:
+            - name: MC_CONFIG_DIR
+              value: /tmp/mc
+            - name: SSL_CERT_FILE
+              value: /etc/minio-ca/ca.crt
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root
+                  key: root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root
+                  key: root-password
+            - name: EVIDENCE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aqs-evidence-s3
+                  key: access-key
+            - name: EVIDENCE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aqs-evidence-s3
+                  key: secret-key
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: ca
+              mountPath: /etc/minio-ca
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
       containers:
         - name: init
           image: amazon/aws-cli:2.18.0
@@ -47,6 +102,8 @@ spec:
               cpu: 200m
               memory: 256Mi
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: scripts
           configMap:
             name: minio-init-script
