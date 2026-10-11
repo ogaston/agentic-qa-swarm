@@ -168,7 +168,7 @@
 | # | Hecho | Tarea | Historias | Comando de verificación |
 |---|---|---|---|---|
 | U7-T1 | [x] | Clúster kind `aqs` sobre podman (imagen de nodo por digest), `kind-up`/`kind-down` idempotentes y guarda de contexto `kind-aqs` | US-M10 | `tareas/U7-T01-cluster-kind.md` |
-| U7-T2 | [ ] | Construir con podman las 9 imágenes (`:0.0.0`, contexto igual que la CI) y cargarlas con `kind load image-archive` | US-M10 | `tareas/U7-T02-imagenes-locales.md` |
+| U7-T2 | [x] | Construir con podman las 9 imágenes (`:0.0.0`, contexto igual que la CI) y cargarlas con `kind load image-archive` | US-M10 | `tareas/U7-T02-imagenes-locales.md` |
 | U7-T3 | [ ] | Overlay `deploy/flux/kind` (sin observabilidad ni backups), Secrets aleatorios en el clúster, `deploy.sh` con espera de disponibilidad y overlay `kind` en `policies.sh` | US-M10, US-M8.1, US-M8.2 | `tareas/U7-T03-overlay-kind-y-despliegue.md` |
 | U7-T4 | [ ] | `kind-smoke.sh`: salud de los 7 servicios, login/inbox/warm reales, RBAC y NetworkPolicy aplicados (con prueba de sensibilidad) y pendientes P1/P2 declarados; runbook | US-M10, US-M8.1, US-M8.2, US-M1 | `tareas/U7-T04-humo-y-aislamiento.md` |
 | U7-T5 | [ ] | Dashboard (`vite preview`) contra la plataforma en kind: login → inbox → warm → logout por el origen del dashboard | S5 | `tareas/U7-T05-dashboard-contra-kind.md` |
