@@ -49,6 +49,28 @@ AQS_IMAGES="ui-api go-identity" bash scripts/kind/build-images.sh   # subconjunt
 - `load-images.sh` hace `podman save --format docker-archive` a un directorio temporal (borrado al salir) y `kind load image-archive --name aqs`.
 - No se publica en ningún registro ni se firma; eso lo hace la CI.
 
+## Despliegue de la plataforma (U7-T03)
+
+```bash
+bash scripts/kind/secrets.sh   # crea en kind-aqs los Secrets que referencia deploy/flux/kind (idempotente)
+bash scripts/kind/deploy.sh    # secrets.sh → kubectl apply -k deploy/flux/kind → rollout de cada Deployment/StatefulSet → Job minio-init
+```
+
+- `deploy/flux/kind/` es el overlay de la plataforma sin observabilidad ni backups (kind no trae los CRDs
+  de Flux ni de prometheus-operator, y el destino de backup es S3 externo). Usa `../base` completo y
+  borra con parches `$patch: delete` los objetos de `observability` y `backup`; la desviación respecto a
+  «piezas sueltas de base» y su motivo están en el comentario de `deploy/flux/kind/kustomization.yaml`.
+- Los Secrets los genera `secrets.sh` con valores aleatorios y nunca van al repo. Las contraseñas de los
+  usuarios demo `demo` (rol `user`) y `admin` (rol `admin`), y el `mfa_secret` del admin, quedan en
+  `${XDG_RUNTIME_DIR:-/tmp}/aqs-kind/` con permisos `600`.
+- `secrets.sh` descubre los Secrets desde `kubectl kustomize deploy/flux/kind`; si uno no está en su lista,
+  falla con su nombre antes de crear nada.
+- `deploy.sh` imprime `OK|FALLA <objeto>` por cada comprobación y sale `0` solo si todas pasan. Exige el
+  contexto `kind-aqs` (sale `3` en otro contexto). Un objeto con reinicios de pod cuenta como `FALLA`
+  aunque en un instante tenga una réplica `Ready`.
+- `scripts/ci/policies.sh` valida también el overlay `kind` (kubeconform estricto, conftest, default-deny)
+  sin relajar ninguna política.
+
 ## Advertencia
 
 El clúster `aqs` es efímero y local. Sus Secrets y datos no son de ningún entorno compartido.

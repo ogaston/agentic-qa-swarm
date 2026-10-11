@@ -1,0 +1,213 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Overlay para el clúster kind local (U7-T03).
+# Sin observabilidad ni backups: kind no trae los CRDs de Flux ni de prometheus-operator, y el destino
+# de backup es S3 externo. Los Secrets no van aquí: los crea scripts/kind/secrets.sh en el clúster.
+#
+# Desviación respecto a la tarea (ver bitacoras/U7-T03.md, «Decisión de diseño»): la tarea pide
+# referenciar piezas sueltas de ../base (namespaces.yaml, control-plane.yaml, warm.yaml). Kustomize,
+# con su cargador por defecto (LoadRestrictionsRootOnly), rechaza archivos fuera de la raíz del overlay,
+# y los enlaces simbólicos tampoco pasan. Por eso se referencia ../base entero y se borran con parches
+# `$patch: delete` los objetos de observability y backup, uno por uno, por grupo/versión/kind/nombre.
+resources:
+  - ../base
+patches:
+  # --- observability: fuera en kind ---
+  - target:
+      group: helm.toolkit.fluxcd.io
+      version: v2
+      kind: HelmRelease
+      name: kube-prometheus-stack
+    patch: |-
+      $patch: delete
+      apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      metadata:
+        name: kube-prometheus-stack
+  - target:
+      group: helm.toolkit.fluxcd.io
+      version: v2
+      kind: HelmRelease
+      name: loki
+    patch: |-
+      $patch: delete
+      apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      metadata:
+        name: loki
+  - target:
+      group: source.toolkit.fluxcd.io
+      version: v1
+      kind: HelmRepository
+      name: grafana
+    patch: |-
+      $patch: delete
+      apiVersion: source.toolkit.fluxcd.io/v1
+      kind: HelmRepository
+      metadata:
+        name: grafana
+  - target:
+      group: source.toolkit.fluxcd.io
+      version: v1
+      kind: HelmRepository
+      name: prometheus-community
+    patch: |-
+      $patch: delete
+      apiVersion: source.toolkit.fluxcd.io/v1
+      kind: HelmRepository
+      metadata:
+        name: prometheus-community
+  - target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: ServiceMonitor
+      name: aqs-control-plane
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: ServiceMonitor
+      metadata:
+        name: aqs-control-plane
+  - target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: PrometheusRule
+      name: aqs-rules
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: PrometheusRule
+      metadata:
+        name: aqs-rules
+  - target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: PrometheusRule
+      name: aqs-security-rules
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: PrometheusRule
+      metadata:
+        name: aqs-security-rules
+  - target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: PrometheusRule
+      name: aqs-u2-rules
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: PrometheusRule
+      metadata:
+        name: aqs-u2-rules
+  - target:
+      version: v1
+      kind: ConfigMap
+      name: aqs-dashboard
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: aqs-dashboard
+  - target:
+      version: v1
+      kind: ConfigMap
+      name: aqs-dashboard-u1
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: aqs-dashboard-u1
+  - target:
+      version: v1
+      kind: ConfigMap
+      name: aqs-dashboard-u4
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: aqs-dashboard-u4
+  - target:
+      version: v1
+      kind: Namespace
+      name: aqs-observability
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: aqs-observability
+  # --- backup: destino S3 externo, fuera en kind ---
+  - target:
+      group: batch
+      version: v1
+      kind: CronJob
+      name: evidence-backup
+    patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: evidence-backup
+  - target:
+      version: v1
+      kind: ConfigMap
+      name: evidence-backup-scripts
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: evidence-backup-scripts
+  - target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: PrometheusRule
+      name: aqs-backup-rules
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: PrometheusRule
+      metadata:
+        name: aqs-backup-rules
+  - target:
+      version: v1
+      kind: ServiceAccount
+      name: aqs-backup
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: aqs-backup
+  # --- reutilizados de deploy/flux/dev/kustomization.yaml ---
+  - target:
+      kind: Deployment
+      labelSelector: aqs.io/tier=control-plane
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 128Mi
+  - target:
+      kind: Deployment
+      name: go-governance
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: go-governance
+      spec:
+        template:
+          spec:
+            containers:
+              - name: go-governance
+                env:
+                  - name: GOVERNANCE_ENV
+                    value: dev
