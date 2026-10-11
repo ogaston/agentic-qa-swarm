@@ -696,3 +696,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U7 ola 4.
 
 ---
+
+## Construction — U7-T04 VERDE y redacción de U8 (producto demostrable)
+**Timestamp**: 2026-10-11T00:17:48-05:00
+**User Input**: "merged #88 and #89" / "cuanto falta?" / "osea solo falta T04 y T05 y ya terminaremos el projecto" / "okay entonces para p1, p2 y p3, ya estan todas las tareas escritas? se pueden paralelizar?" / "osea quiero saber que necesitamos para el MVP, necesito tener un producto completo funcional" / "- Te voy a pasar la clave de deepseek al final - La app que usaremos tambien la haremos al final - Lo de github lo haremos al final - crea un usuario tu para minIo, tu desicion  Necesito que la proxima Ola sea para finalizar y tener un producto capaz de ser presentado"
+**AI Response**: "U7-T04 sale VERDE en la ronda 2 (PR #90). Se redacta U8 — Producto demostrable (ciclo completo en kind), con 9 tareas en 5 olas: NATS (T01, T02), imagen aqs-runner (T03), app de referencia y baseline real (T04), agentes en el clúster con MinIO (T05), fase report en el controlador (T06), huecos de base C-103 (T07), ciclo de punta a punta kind-e2e (T08) y cierre con LLM real, app definitiva y webhook de GitHub (T09, con insumos del humano). C-107 decidida: usuario MinIO aqs-evidence con política mínima."
+**Context**: Construction — redacción de U8.
+
+---

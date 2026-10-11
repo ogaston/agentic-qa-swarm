@@ -175,6 +175,29 @@
 
 > **Tareas redactadas (2026-10-10)**, a pedido del humano («can we use a cluster created with kind for this project? and run everything in docker/podman» → «yes, draft the U7 kind tasks»). Orden estrictamente secuencial T01 → T02 → T03 → T04 → T05; T05 exige además U6-T06. Decisiones tomadas al redactar (el humano puede revertirlas): kind con proveedor podman y un solo nodo; kindnet como CNI porque aplica NetworkPolicy; acceso solo por `kubectl port-forward` en loopback (sin `extraPortMappings` ni ingress); imágenes cargadas con `podman save` + `kind load image-archive` (sin registro local); el overlay referencia piezas de `base` para excluir `observability` y `backup`; Secrets generados por script y nunca versionados (no se usa SOPS en kind). **C-96 aprobada por el humano (2026-10-10)**: se autoriza a codificador y revisor a crear/destruir el clúster `aqs` y aplicar manifiestos solo en el contexto `kind-aqs`). Candidatas nuevas: C-96, C-97, C-98.
 
+## U8 — Producto demostrable (ciclo completo en kind)
+
+- **Responsabilidad**: cerrar el producto para presentarlo: que un webhook de GitHub firmado recorra **todo** el ciclo en el clúster kind (inbox → confirmación humana → deploy sobre el warm → superficie → plan → ensayo → runners con evidencia en MinIO → reset verificado real → post-mortem) con lecturas de vuelta en cada fase. Reactiva P1 (NATS), P2 (agentes en el clúster) y P3 (evidencia en MinIO) del backlog post-MVP.
+- **Bounded context**: transversal (plataforma, ejecución e inteligencia). **Historias**: US-M1 a US-M10 de punta a punta.
+- **Desplegables**: NATS JetStream (`deploy/flux/base/nats/`), `services/aqs-runner/` (imagen de ensayo y runner), `demo/target-app/` (app de referencia con `baseline.sh` real), Deployments de `agent-planner`/`agent-reporter`, LiteLLM (T09), `scripts/kind/kind-e2e.sh`.
+- **Límites**: igual que U7 (solo `kind-aqs`, sin apply a dev/prod, Secrets solo en el clúster). La app de referencia es **reemplazable**: la app definitiva, la clave de DeepSeek y el webhook real de GitHub los aporta el humano al final (T09). Hasta entonces los agentes usan el LLM falso con fixtures en kind.
+- **Predecesoras**: U7 cerrada (U7-T04 y U7-T05).
+- **Salida**: `kind-e2e.sh` en verde con el camino feliz y con el bug sembrado detectado, y con todo real tras T09.
+
+| # | Hecho | Tarea | Historias | Comando de verificación |
+|---|---|---|---|---|
+| U8-T1 | [ ] | NATS JetStream en `base`/kind (StatefulSet, stream `AQS_EVENTS`, NetworkPolicy, `nats-init`) | US-M1, US-M2 | `tareas/U8-T01-nats-jetstream.md` |
+| U8-T2 | [ ] | Transporte NATS en `go-intake`, `ui-api` y `go-run-controller` (`EVENTS_TRANSPORT=nats`, al menos una vez, dedupe por `event_id`) | US-M1, US-M2 | `tareas/U8-T02-transporte-nats-servicios.md` |
+| U8-T3 | [ ] | Imagen `aqs-runner` (`rehearse` y `http-steps` con la interfaz de los Jobs) y fin del `9` fijo en los scripts de kind | US-M5, US-M6 | `tareas/U8-T03-imagen-runner.md` |
+| U8-T4 | [ ] | App de referencia `demo/target-app` (pedidos, invariante de stock, bug sembrado) y `baseline.sh` real | US-M2, US-M3, US-M7.1 | `tareas/U8-T04-app-de-referencia.md` |
+| U8-T5 | [ ] | Agentes en el clúster, reporter sobre MinIO y usuario MinIO `aqs-evidence` con política mínima | US-M3, US-M4, US-M9 | `tareas/U8-T05-agentes-en-cluster.md` |
+| U8-T6 | [ ] | Fase `report` real en el controlador y fuente de flujos U3 cableada | US-M4, US-M9 | `tareas/U8-T06-fase-report-controlador.md` |
+| U8-T7 | [ ] | Llevar a `base` los huecos que hoy solo cubre kind (C-103) | US-M1, US-M8.3 | `tareas/U8-T07-huecos-de-base.md` |
+| U8-T8 | [ ] | `kind-e2e.sh`: del webhook firmado al reporte, con reset verificado y bug sembrado detectado | US-M1…M10 | `tareas/U8-T08-ciclo-completo-kind.md` |
+| U8-T9 | [ ] | Con el humano: LiteLLM + DeepSeek, app definitiva y webhook real de GitHub | US-M1, US-M3, US-M4, US-M9 | `tareas/U8-T09-llm-app-y-github-reales.md` |
+
+> **Tareas redactadas (2026-10-11)**, a pedido del humano («Necesito que la próxima Ola sea para finalizar y tener un producto capaz de ser presentado»). Olas: **1** = T01 ∥ T03 ∥ T04; **2** = T02 (exige T01) ∥ T05 (exige T04) ∥ T06; **3** = T07 (exige T02 y T06); **4** = T08 (exige T01–T07); **5** = T09 (exige T08 y los tres insumos del humano). Máximo 3 en paralelo. T02, T05, T06 y T07 tocan `deploy/flux/base/control-plane.yaml`: se fusionan en orden y el siguiente rebasa. Decisiones tomadas al redactar (el humano puede revertirlas): **C-107** decidida por el humano («crea un usuario tú para MinIO, tu decisión») → usuario `aqs-evidence` con política limitada al bucket `evidence`, creado por `minio-init`; app de **referencia** propia para probar el ciclo hasta que llegue la definitiva; `baseline.sh` habla con endpoints de administración de la app (la imagen de `go-reset` solo trae `sh` y `wget`); fase `report` síncrona por HTTP desde el controlador (sin `report.ready` por NATS); solo `notify.created`, `run.confirmed` y `run.done` viajan por NATS (warm y reset se consultan por HTTP, como hoy). **El clúster `aqs` es uno solo en la máquina**: en una ola paralela, codificadores y revisores escriben y prueban en local a la vez, pero toda secuencia que use el clúster (`kind-up` … `kind-down`) se ejecuta dentro de `flock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock`, para que nunca haya dos a la vez.
+
 ## Cobertura historias → unidades (13/13 Must, 0 sin asignar)
 
 | Historia | Unidad(es) |
