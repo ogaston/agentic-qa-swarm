@@ -21,10 +21,10 @@ KO_POD=nats-netpol-ko
 CMD=(sh -c "cd /tmp && exec nats --server $URL --timeout 5s stream info AQS_EVENTS --json")
 
 fail=0
+# La guarda va ANTES del trap: con otro contexto no se arma la limpieza ni se toca ningún clúster.
+require_kind_context # sale 3 si el contexto no es kind-aqs
 cleanup() { kubectl delete pod "$OK_POD" "$KO_POD" -n "$NS" --ignore-not-found --wait=false >/dev/null 2>&1; }
 trap cleanup EXIT
-
-require_kind_context # sale 3 si el contexto no es kind-aqs
 
 # run_pod <nombre> [etiqueta]: crea el pod, espera a que termine y deja su código de salida en $rc.
 run_pod() {

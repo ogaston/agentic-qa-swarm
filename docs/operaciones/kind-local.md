@@ -59,3 +59,12 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Evidencia en MinIO desde los agentes | Pendiente | P3 y C-107: el usuario de `aqs-evidence-s3` no está aprovisionado |
 
 El smoke imprime estos pendientes como `PENDIENTE <paso> (<motivo>)`; no cuentan como fallo.
+
+## NATS JetStream (U8-T01)
+
+- `deploy/flux/base/nats/` despliega NATS con JetStream en `aqs-system` (una réplica, PVC) y el Job
+  `nats-init`, que crea el stream `AQS_EVENTS` (`aqs.events.>`). `scripts/kind/deploy.sh` espera el
+  StatefulSet y el Job (`OK|FALLA`).
+- Aislamiento: solo los pods con `aqs.io/nats-client: "true"` alcanzan el 4222. Para comprobarlo:
+  `bash scripts/kind/nats-netpol-check.sh` (exige el contexto `kind-aqs`).
+- Comprobación manual de lectura del stream: ver `deploy/flux/base/nats/README.md`.

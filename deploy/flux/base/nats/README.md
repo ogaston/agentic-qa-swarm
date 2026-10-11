@@ -44,12 +44,20 @@ Transporte de eventos de la plataforma (decisión C-45). Un StatefulSet `nats` d
 
 Los consumidores durables los crea cada servicio en U8-T02. No se crean aquí.
 
-## Comprobación manual
+## Comprobación manual (lectura del stream)
+
+Se usa un pod etiquetado como cliente permitido. Con `kubectl run --rm -i` la salida se pierde
+si el pod termina antes de adjuntarse (y el `rc=0` engaña), así que se espera a `Succeeded` y se
+lee con `kubectl logs`:
 
 ```bash
-kubectl -n aqs-system run nats-probe --rm -i --restart=Never --labels=aqs.io/nats-client=true \
+kubectl -n aqs-system run nats-probe --restart=Never --labels=aqs.io/nats-client=true \
   --image=docker.io/natsio/nats-box:0.14.5 -- \
   nats --server nats://nats.aqs-system.svc:4222 stream info AQS_EVENTS --json
+kubectl -n aqs-system wait --for=jsonpath='{.status.phase}'=Succeeded pod/nats-probe --timeout=120s
+kubectl -n aqs-system logs nats-probe | jq -r '.config.subjects[0], .config.duplicate_window'
+kubectl -n aqs-system delete pod nats-probe --ignore-not-found
 ```
 
-El pod de prueba lleva la etiqueta de cliente: sin ella, la NetworkPolicy lo bloquea.
+Sin la etiqueta, la NetworkPolicy bloquea el pod (timeout). Para la comprobación automática de
+aislamiento: `bash scripts/kind/nats-netpol-check.sh`.
