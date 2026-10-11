@@ -1,0 +1,20 @@
+# Solo los pods con la etiqueta aqs.io/nats-client=true hablan con NATS en 4222 (U8-T01, CA-4).
+# Quién la lleva: go-intake, ui-api y go-run-controller (en control-plane.yaml), y el Job nats-init.
+# El 8222 (monitorización) no aparece en ninguna regla: solo lo usan las sondas del propio pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nats-clients-only
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nats
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              aqs.io/nats-client: "true"
+      ports:
+        - {protocol: TCP, port: 4222}

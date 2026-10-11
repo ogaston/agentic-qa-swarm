@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Despliega deploy/flux/kind en el clúster kind `aqs` y espera a que todo esté disponible (U7-T03).
+# Despliega deploy/flux/kind en el clúster kind `aqs` y espera a que todo esté disponible (U7-T03; NATS en U8-T01).
 # Orden: guarda de contexto (kind-aqs, sale 3) → secrets.sh → kubectl apply -k deploy/flux/kind →
 # kubectl rollout status de cada Deployment y StatefulSet (300 s) → espera al Job minio-init.
 # Imprime «OK <objeto>» o «FALLA <objeto>» por cada comprobación; sale 0 solo si todas pasan, 1 si no.
@@ -37,8 +37,11 @@ available_ok() {
   esac
   # Reinicios de los pods del objeto (prefijo <nombre>-): un bucle de reinicios no está «disponible»,
   # aunque en un instante concreto tenga un pod Ready.
-  restarts=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq --arg p "$name-" \
-    '[.items[] | select(.metadata.name | startswith($p)) | (.status.containerStatuses // [])[] | .restartCount] | add // 0')
+  # StatefulSet: solo sus pods <nombre>-<ordinal> (un prefijo «nats-» contaría también el Job nats-init).
+  local re="^$name-"
+  [ "$kind" = statefulset ] && re="^$name-[0-9]+\$"
+  restarts=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq --arg re "$re" \
+    '[.items[] | select(.metadata.name | test($re)) | (.status.containerStatuses // [])[] | .restartCount] | add // 0')
   [ "${restarts:-0}" -eq 0 ] || return 1
   [ "${got:-0}" -ge "${want:-1}" ] && [ "${got:-0}" -gt 0 ]
 }
@@ -68,6 +71,11 @@ done
 
 kubectl wait --for=condition=complete job/minio-init -n aqs-system --timeout=300s >/dev/null 2>&1
 report $? "aqs-system/job/minio-init"
+
+# NATS (U8-T01): el StatefulSet ya entra en el bucle de rollout de aqs-system; además se espera al Job
+# que crea el stream AQS_EVENTS, para que los consumidores no arranquen contra un stream inexistente.
+kubectl wait --for=condition=complete job/nats-init -n aqs-system --timeout=300s >/dev/null 2>&1
+report $? "aqs-system/job/nats-init"
 
 if [ "$fail" -eq 0 ]; then
   echo "deploy: OK (overlay deploy/flux/kind en $KIND_CONTEXT)"
