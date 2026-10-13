@@ -1,7 +1,7 @@
 ---
 description: Implementa UNA tarea de UNA unidad en su propio worktree de git. Trabaja desde el archivo de la tarea y sus criterios de aceptacion, no desde una conversacion. Nunca fusiona, nunca escribe fuera de su worktree, nunca mueve el estado de la tarea.
 mode: subagent
-model: litellm/Qwen-3.8-Flash
+model: litellm/Qwen-3-Coder-Quantized
 permissions:
   - action: subagent
     resource: "*"
