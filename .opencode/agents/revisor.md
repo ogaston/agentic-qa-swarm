@@ -1,7 +1,7 @@
 ---
 description: Revision adversarial y exigente de evidencia sobre el diff de UNA tarea. Solo lectura sobre el codigo: corre las pruebas el mismo, nunca edita. Emite hallazgos con severidad (ROJO, NARANJA, AMARILLO) y un veredicto VERDE o NO-VERDE.
 mode: subagent
-model: together_ai/zai-org/GLM-5.3-Flash
+model: litellm/GLM-5.3-Flash
 permissions:
   - action: edit
     resource: "*"
