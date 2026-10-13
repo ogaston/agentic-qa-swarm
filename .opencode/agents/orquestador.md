@@ -1,7 +1,7 @@
 ---
 description: Sesion principal del loop del Modulo 6. Resuelve que tareas son despachables desde el grafo, despacha codificadores (en paralelo cuando el grafo lo permite), corre las rondas de revision, arbitra el empuje de vuelta y entrega en revision humana. No escribe codigo de implementacion y no juzga el trabajo.
 mode: primary
-model: deepseek/deepseek-flash
+model: litellm/Qwen-3.8-Flash
 permissions:
   - action: subagent
     resource: "*"
