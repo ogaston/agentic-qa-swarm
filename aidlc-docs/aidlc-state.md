@@ -3,10 +3,10 @@
 ## Project Information
 - **Project Type**: Greenfield
 - **Start Date**: 2026-09-12T02:35:55Z
-- **Current Stage**: CONSTRUCTION (Code Generation, por unidad) — activada por instrucción explícita el 2026-10-03. U5 terminada; U1 y U4 con tareas redactadas (`tareas/`); en curso U4. Artefactos de INCEPTION **realineados al modelo warm** el 2026-10-01.
+- **Current Stage**: CONSTRUCTION (Code Generation, por unidad) — activada por instrucción explícita el 2026-10-03. **Terminadas: U5, U1, U4, U2, U3, U6 y U7.** En curso: **U8 — Producto demostrable (ciclo completo en kind)**, con 7 de sus 9 tareas terminadas (T01–T07); pendientes T08 y T09. Estado al día el 2026-10-13. Artefactos de INCEPTION **realineados al modelo warm** el 2026-10-01.
 
 ## Workspace State
-- **Existing Code**: No (solo documentación: docs/, entradas/, specs/, mockups/)
+- **Existing Code**: Sí — monorepo en la raíz del workspace (`services/`, `agents/`, `contracts/`, `demo/`, `deploy/flux/<base|dev|prod|kind>`, `scripts/`, `policy/`, `.github/workflows/`), construido por unidades desde el 2026-10-03 y fusionado a `main`
 - **Reverse Engineering Needed**: No (greenfield)
 - **Workspace Root**: /home/omarjayg/Javeriana/topicos-especiales/agentic-qa-swarm
 
@@ -37,7 +37,16 @@
 - [x] Units Generation (`unit-of-work` + dependencias + story-map + planes U1-U5; **realineados a warm** — PUNTO DE PARADA)
 
 ### 🟢 CONSTRUCTION PHASE
-- Estado: **ACTIVA** desde 2026-10-03 por instrucción explícita del usuario. Etapas de diseño por unidad (Functional/NFR/Infrastructure Design) **omitidas**: el diseño de cada tarea vive en `tareas/U0X-T0N-*.md` (mismo criterio que en U5). Code Generation en curso por unidad; U5 terminada.
+- Estado: **ACTIVA** desde 2026-10-03 por instrucción explícita del usuario. Etapas de diseño por unidad (Functional/NFR/Infrastructure Design) **omitidas**: el diseño de cada tarea vive en `tareas/U0X-T0N-*.md` (mismo criterio que en U5). Code Generation en curso por unidad.
+- [x] U5 — Plataforma & GitOps
+- [x] U1 — Ingesta & Inbox
+- [x] U4 — Gobernanza & Identidad
+- [x] U2 — Orquestación & Warm Sandbox Lifecycle
+- [x] U3 — Agentes LLM
+- [x] U6 — Frontend web (S5, primera unidad post-MVP)
+- [x] U7 — Plataforma en kind local (podman)
+- [ ] U8 — Producto demostrable (ciclo completo en kind): T01–T07 hechas; pendientes T08 (`kind-e2e.sh` de punta a punta) y T09 (LiteLLM + DeepSeek, app definitiva y webhook real de GitHub, con insumos del humano)
+- [ ] Build and Test (etapa de la fase, tras cerrar U8)
 
 ### 🟡 OPERATIONS PHASE
 - Estado: **PLACEHOLDER** (no iniciado).

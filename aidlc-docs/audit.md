@@ -728,3 +728,11 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U8 olas 2-3.
 
 ---
+
+## Construction — U8 ola 2 cerrada (estado al día) y despacho de U8-T08
+**Timestamp**: 2026-10-13T14:48:57Z
+**User Input**: "hey, I want to know where we are in this project" / (respuesta a pregunta) "Poner al día estado + despachar U8-T8 (Recomendado)"
+**AI Response**: "El estado estaba desincronizado: en origin/main (0dda452) ya estaban fusionadas **U8-T5** (PR #101, VERDE en la ronda 1) y **U8-T7** (PR #100, NO-VERDE en la ronda 1 → VERDE en la ronda 2), pero la tabla de `unidades-y-tareas.md` seguía con `[ ]` y el audit no tenía la entrada de cierre de la ola. Se marcan [x] ambas, se registran las candidatas C-122 a C-125 de sus informes y se actualiza la nota de olas. Se crea el worktree `agentic-qa-swarm-wt-U8-T08` (rama `tarea/U8-T08`, base origin/main 0dda452) y se intenta despachar U8-T08 al codificador con el hash de la tarea `b6c0a367fdfb754b0838ca6fdea5c7fe1e5983e5`. **El despacho falla**: el modelo configurado para el codificador en `.opencode/agents/codificador.md` (`together_ai/Qwen/Qwen3.8-Flash`) no está disponible en el proveedor. El mismo problema afecta al revisor (`together_ai/zai-org/GLM-5.3-Flash`). Queda pendiente de decisión del humano el modelo con el que corre el loop. U8-T08 exige T01–T07 fusionadas (lo están) y no admite paralelismo: es el camino crítico restante junto con U8-T09."
+**Context**: Construction — U8 olas 2-4.
+
+---
