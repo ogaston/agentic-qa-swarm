@@ -3,6 +3,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from .errors import FlowValidationError
+
 TEMPLATE_PATH = Path(__file__).with_name("template.js")
 PLACEHOLDER = "__AQS_FLOW__"
 FLOW_PREFIX = "const FLOW = "
@@ -23,8 +25,21 @@ def flow_literal(flow: dict) -> str:
     return json.dumps(data, sort_keys=True, ensure_ascii=True)
 
 
+def k6_problem(flow: dict) -> str | None:
+    """Motivo por el que la plantilla k6 NO puede ejecutar fielmente el flujo, o None.
+    template.js no envía cuerpo (U8-T08b) ni implementa el modo sondeo: fail-closed, no se renderiza."""
+    if any("body" in s for s in flow.get("steps", [])):
+        return "paso con body: la plantilla k6 no envia cuerpo"
+    if flow.get("invariant_probe"):
+        return "invariant_probe: la plantilla k6 no implementa el modo sondeo"
+    return None
+
+
 def render_flow(plan: dict, flow: dict) -> str:
     """Puro: mismo plan/flujo -> mismos bytes. El plan solo entra como literal JSON."""
+    problem = k6_problem(flow)
+    if problem is not None:
+        raise FlowValidationError(flow.get("flow_id", ""), "k6", problem)
     template = load_template()
     return template.replace(PLACEHOLDER, flow_literal(flow), 1)
 

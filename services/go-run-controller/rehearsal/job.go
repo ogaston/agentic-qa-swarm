@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -99,6 +100,8 @@ func BuildJob(c Config, runID string, flow plan.Flow, attempt int) (*batchv1.Job
 						Env: []corev1.EnvVar{
 							{Name: "REHEARSAL_STEPS", Value: string(steps)},
 							{Name: "REHEARSAL_INVARIANT", Value: flow.Invariant},
+							// Solo el ensayo relaja el paso de sondeo a «ejecutable»; los runners siempre son estrictos.
+							{Name: "REHEARSAL_INVARIANT_PROBE", Value: strconv.FormatBool(flow.InvariantProbe)},
 						},
 						SecurityContext: &corev1.SecurityContext{ReadOnlyRootFilesystem: &ro, AllowPrivilegeEscalation: &f,
 							Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}},

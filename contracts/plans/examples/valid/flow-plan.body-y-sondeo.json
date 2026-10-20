@@ -1,0 +1,35 @@
+{
+  "run_id": "run-001",
+  "workflow": "ventas",
+  "flows": [
+    {
+      "flow_id": "f-sondeo-oversell",
+      "name": "sondeo: no vender mas stock del disponible",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/orders",
+          "body": {
+            "product_id": 1,
+            "qty": 11
+          },
+          "expect_status": 409
+        }
+      ],
+      "invariant": "el stock nunca es negativo",
+      "invariant_probe": true
+    },
+    {
+      "flow_id": "f-normal",
+      "name": "flujo normal sin cuerpo",
+      "steps": [
+        {
+          "method": "GET",
+          "path": "/orders",
+          "expect_status": 200
+        }
+      ],
+      "invariant": "el listado responde 200"
+    }
+  ]
+}

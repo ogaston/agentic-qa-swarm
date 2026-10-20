@@ -49,6 +49,10 @@
                   "type": "integer",
                   "minimum": 100,
                   "maximum": 599
+                },
+                "body": {
+                  "type": "object",
+                  "description": "Cuerpo JSON opcional del paso (solo objetos). Sin body no se envia cuerpo ni Content-Type."
                 }
               },
               "required": [
@@ -62,6 +66,11 @@
           "invariant": {
             "type": "string",
             "minLength": 1
+          },
+          "invariant_probe": {
+            "type": "boolean",
+            "default": false,
+            "description": "true si el flujo sondea una invariante (su fallo seria un hallazgo). El ensayo solo exige que sea ejecutable; los runners siempre exigen expect_status."
           }
         },
         "required": [

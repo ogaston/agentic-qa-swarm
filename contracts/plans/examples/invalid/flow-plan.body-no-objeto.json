@@ -1,0 +1,19 @@
+{
+  "run_id": "run-001",
+  "workflow": "ventas",
+  "flows": [
+    {
+      "flow_id": "f1",
+      "name": "flujo 1",
+      "steps": [
+        {
+          "method": "POST",
+          "path": "/orders",
+          "body": [1, 2],
+          "expect_status": 201
+        }
+      ],
+      "invariant": "el total coincide con la suma de lineas"
+    }
+  ]
+}

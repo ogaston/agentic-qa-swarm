@@ -3,6 +3,7 @@ package plan
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,5 +60,37 @@ func TestValidatorsAgreeWithContractExamples(t *testing.T) {
 	}
 	if n < 12+4 {
 		t.Fatalf("solo %d ejemplos recorridos", n)
+	}
+}
+
+// U8-T08b: body no objeto e invariant_probe mal ubicado o no booleano son rechazados por el decodificador
+// estricto o por ValidateFlowPlan; un body objeto y un invariant_probe booleano se aceptan.
+func TestValidateFlowPlanBodyEInvariantProbe(t *testing.T) {
+	const base = `{"run_id":"r-1","workflow":"w","flows":[{"flow_id":"f1","name":"n","invariant":"i",%s,"steps":[{"method":"POST","path":"/orders","expect_status":409%s}]}]}`
+	cases := []struct {
+		name string
+		json string
+		ok   bool
+	}{
+		{"body objeto", fmt.Sprintf(base, `"invariant_probe":true`, `,"body":{"qty":5}`), true},
+		{"sin campos nuevos", fmt.Sprintf(base, `"invariant_probe":false`, ``), true},
+		{"body array", fmt.Sprintf(base, `"invariant_probe":true`, `,"body":[5]`), false},
+		{"body null", fmt.Sprintf(base, `"invariant_probe":true`, `,"body":null`), false},
+		{"body escalar", fmt.Sprintf(base, `"invariant_probe":true`, `,"body":"x"`), false},
+		{"invariant_probe no booleano", fmt.Sprintf(base, `"invariant_probe":"si"`, ``), false},
+		{"invariant_probe en el paso", fmt.Sprintf(base, ``, `,"invariant_probe":true`), false},
+		{"body en el flujo", `{"run_id":"r-1","workflow":"w","flows":[{"flow_id":"f1","name":"n","invariant":"i","body":{"a":1},"steps":[{"method":"GET","path":"/x","expect_status":200}]}]}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var v FlowPlan
+			err := strictDecode([]byte(tc.json), &v)
+			if err == nil {
+				err = ValidateFlowPlan(v)
+			}
+			if (err == nil) != tc.ok {
+				t.Fatalf("err=%v, quería ok=%v", err, tc.ok)
+			}
+		})
 	}
 }
