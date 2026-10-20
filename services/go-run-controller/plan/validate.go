@@ -1,6 +1,8 @@
 package plan
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -12,6 +14,15 @@ var methods = map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": t
 func validMethod(m string) bool { return methods[m] }
 
 func validPath(p string) bool { return strings.HasPrefix(p, "/") }
+
+// validBody acepta ausencia (sin cuerpo) o un objeto JSON; arrays, escalares y null no.
+func validBody(b json.RawMessage) bool {
+	if len(b) == 0 {
+		return true
+	}
+	t := bytes.TrimSpace(b)
+	return len(t) > 0 && t[0] == '{' && json.Valid(t)
+}
 
 // ValidateFlowPlan replica contracts/plans/flow-plan.schema.json (la prueba lo contrasta con el
 // esquema real). Un plan vacío o roto es un error: el ensayo falla antes de crear ningún Job.
@@ -29,6 +40,9 @@ func ValidateFlowPlan(p FlowPlan) error {
 		for j, s := range f.Steps {
 			if !validMethod(s.Method) || !validPath(s.Path) || s.ExpectStatus < 100 || s.ExpectStatus > 599 {
 				return fmt.Errorf("flow-plan: paso %d.%d inválido", i, j)
+			}
+			if !validBody(s.Body) {
+				return fmt.Errorf("flow-plan: paso %d.%d: body debe ser un objeto JSON", i, j)
 			}
 		}
 	}
