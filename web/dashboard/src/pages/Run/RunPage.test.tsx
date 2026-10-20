@@ -6,7 +6,7 @@ import { server } from '../../test/server';
 import { TIMERS_FALSOS, avanzar, vaciar } from '../../test/tiempo';
 import { RunPage } from './RunPage';
 
-const ID = 'run-' + '0123456789abcdef'.repeat(2);
+const ID = 'run-0123456789abcdef';
 
 function setVisibilidad(valor: 'visible' | 'hidden') {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => valor });
@@ -49,7 +49,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const ID_B = 'run-' + 'b'.repeat(32);
+const ID_B = 'run-' + 'b'.repeat(16);
 
 function Saltar({ a }: { a: string }) {
   const navegar = useNavigate();
@@ -194,6 +194,16 @@ describe('RunPage', () => {
     await avanzar(3000);
     expect(screen.getByText('Corrida no encontrada')).toBeTruthy();
     expect(screen.queryByText('Mostrando la última lectura correcta.')).toBeNull();
+  });
+
+  it('id de 36 caracteres (formato viejo) no hace ninguna petición', async () => {
+    const viejo = 'run-' + '0123456789abcdef'.repeat(2);
+    const contador = respuestas('running');
+    renderRun(viejo);
+    await vaciar();
+    await avanzar(10_000);
+    expect(contador.peticiones).toBe(0);
+    expect(screen.getByText(/identificador de corrida no válido/i)).toBeTruthy();
   });
 
   it('muestra trace_id si viene', async () => {

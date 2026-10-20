@@ -170,7 +170,7 @@ func NotifyCreatedAt(at *rapid.Generator[time.Time]) *rapid.Generator[inbox.Noti
 func ConfirmationReceipt() *rapid.Generator[inbox.Receipt] {
 	return rapid.Custom(func(t *rapid.T) inbox.Receipt {
 		return inbox.Receipt{
-			RunID:          "run-" + rapid.StringMatching(`[0-9a-f]{32}`).Draw(t, "run"),
+			RunID:          "run-" + rapid.StringMatching(`[0-9a-f]{16}`).Draw(t, "run"),
 			NotificationID: "n-" + UUID().Draw(t, "nid"), ConfirmedBy: NonEmpty().Draw(t, "by"),
 			ConfirmedAt: Instant().Draw(t, "at").UTC().Truncate(time.Second),
 		}

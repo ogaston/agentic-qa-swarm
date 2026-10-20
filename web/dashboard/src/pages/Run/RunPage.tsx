@@ -7,7 +7,7 @@ import { usePolling } from '../../hooks/usePolling';
 
 type Run = components['schemas']['Run'];
 
-const ID_RUN = /^run-[0-9a-f]{32}$/;
+const ID_RUN = /^run-[0-9a-f]{16}$/;
 const INTERVALO_MS = 3000;
 const FASES = [
   { estado: 'confirmed', etiqueta: 'Confirmada' },

@@ -17,7 +17,7 @@ const PESTANAS: { estado: Estado; etiqueta: string; vacio: string }[] = [
 
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';
 const MSG_NO_EXISTE = 'La notificación ya no existe';
-const RUN_ID = /^run-[0-9a-f]{32}$/;
+const RUN_ID = /^run-[0-9a-f]{16}$/;
 
 /** Inbox: lista filtrable, detalle y confirmación explícita. Sin polling ni confirmaciones automáticas. */
 export function InboxPage() {

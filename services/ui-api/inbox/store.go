@@ -238,9 +238,11 @@ func (s *Store) appendRaw(b []byte) error {
 	return f.Close()
 }
 
-// newRunID genera "run-" + 32 hex (128 bits aleatorios).
+// newRunID genera "run-" + 16 hex (64 bits aleatorios, 20 caracteres). El tope de 32
+// de go-warm-manager (types.go:53) y el de 40 de los Jobs de go-reset obligan a un id corto;
+// 64 bits bastan para que las colisiones sean improbables a escala de corridas.
 func newRunID() (string, error) {
-	var b [16]byte
+	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", err
 	}
