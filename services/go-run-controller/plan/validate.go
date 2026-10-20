@@ -67,6 +67,12 @@ func ValidateSurface(s SurfaceArtifact) error {
 		if !validMethod(e.Method) || !validPath(e.Path) {
 			return errors.New("surface: endpoint inválido")
 		}
+		if len(e.RequestBody) > 0 {
+			var obj map[string]json.RawMessage
+			if json.Unmarshal(e.RequestBody, &obj) != nil || obj == nil {
+				return errors.New("surface: request_body no es un objeto JSON")
+			}
+		}
 	}
 	return nil
 }
