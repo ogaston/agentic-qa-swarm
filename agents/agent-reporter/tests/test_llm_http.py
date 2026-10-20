@@ -153,3 +153,41 @@ def test_llm_http_no_sigue_redirecciones(make, keyfile):
     with pytest.raises(LLMUnavailable):
         call(client(s, keyfile))
     assert len(s.requests) == 1
+
+
+GW = "10.20.30.40"  # IP literal privada de ejemplo (gateway de laboratorio)
+
+
+def test_http_gateway_rechazado_sin_variable():
+    with pytest.raises(ValueError):
+        check_base_url(f"http://{GW}:8000/v1")
+
+
+def test_http_gateway_aceptado_solo_con_host_exacto():
+    url = f"http://{GW}:8000/v1"
+    assert check_base_url(url, insecure_http_host=GW) == url
+    for bad in ("http://10.20.30.41:8000/v1", "http://api.example.com/v1", "http://8.8.8.8:8000/v1"):
+        with pytest.raises(ValueError):
+            check_base_url(bad, insecure_http_host=GW)
+    with pytest.raises(ValueError):
+        check_base_url("ftp://10.20.30.40/v1", insecure_http_host=GW)
+
+
+def test_http_publico_o_dns_rechazado_aunque_coincida_el_host():
+    with pytest.raises(ValueError):
+        check_base_url("http://8.8.8.8:8000/v1", insecure_http_host="8.8.8.8")
+    with pytest.raises(ValueError):
+        check_base_url("http://api.example.com/v1", insecure_http_host="api.example.com")
+
+
+def test_server_http_llm_gateway_solo_con_variable_y_host(tmp_path):
+    import pytest as _pt
+    from agent_reporter import server
+    key = tmp_path / "k"
+    key.write_text("x", encoding="utf-8")
+    base = {"LLM_PROVIDER": "http", "LLM_BASE_URL": f"http://{GW}:8000/v1", "LLM_MODEL": "m", "LLM_API_KEY_FILE": str(key)}
+    with _pt.raises(SystemExit):
+        server._http_llm(base)
+    with _pt.raises(SystemExit):
+        server._http_llm({**base, "LLM_ALLOW_INSECURE_HTTP": "true", "LLM_INSECURE_HTTP_HOST": GW})
+    assert server._http_llm({**base, "LLM_ALLOW_INSECURE_HTTP": "1", "LLM_INSECURE_HTTP_HOST": GW}) is not None

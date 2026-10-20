@@ -160,10 +160,16 @@ Insumos del humano, fuera del repo (modo 600): `${XDG_RUNTIME_DIR}/aqs-kind/deep
 
 Tope de salida 8000 y timeout 120 s: el modelo es de razonamiento y con `max_tokens` bajo el `content` llega vacío.
 
-**Bloqueo abierto (ronda 3).** El upstream responde por `http`. `agents/*/llm_http.py` (`check_base_url`) solo
-acepta `https` o loopback, así que el planner y el reporter fallan al arrancar con
-`configuracion LLM_PROVIDER=http invalida` y el rollout de kind no termina. Arreglarlo exige cambiar `agents/`
-(fuera del alcance de CA-4) o interponer un relay TLS en el clúster (componente nuevo). Esa decisión es del humano.
+**Excepción http (ronda 4, aprobada por el humano; solo kind).** El gateway del humano responde solo por `http`.
+`agents/*/llm_http.py` (`check_base_url`) sigue rechazando `http` por defecto (solo https o loopback). Solo se acepta
+`http` si se cumplen a la vez: `LLM_ALLOW_INSECURE_HTTP=1` (exacto), `LLM_INSECURE_HTTP_HOST` igual al host de la URL
+(Secret `llm-upstream`, clave `host`, que sale de `litellm.env`), y ese host es una IP literal privada. Un nombre DNS,
+una IP pública o cualquier otro host siguen rechazados. El overlay de kind pone la variable; base/dev/prod no.
+
+**Riesgo aceptado (ronda 4).** La clave del gateway viaja en claro por `http` dentro de la red privada del humano
+hacia `IP/32:puerto` (NetworkPolicy `agents-egress-upstream`). Aceptado solo para la demo local en kind, con la clave de
+prueba del humano. No es válido para dev, prod ni tráfico por redes compartidas. Mitigación: la política de egreso
+limita el destino y la clave no se imprime ni se escribe en el repo ni en logs.
 
 `scripts/kind/load-images.sh` ya no carga ninguna imagen de terceros. `kind-smoke.sh` comprueba que no hay claves
 en los logs de los agentes, que planner y reporter están disponibles con `LLM_PROVIDER=http`, y que el planner

@@ -189,8 +189,9 @@ gen_agents_llm_key() { # key: api-key
   tr -d ' \r\n' < "$deepseek_key" > "$1/api-key"
 }
 # Endpoint y modelo del gateway (U8-T09, ronda 3): salen de litellm.env. Se reaplican en cada ejecución.
-gen_llm_upstream() { # keys: base-url (http://IP:PUERTO/v1), model (nombre del modelo del gateway)
+gen_llm_upstream() { # keys: base-url (http://IP:PUERTO/v1), host (IP literal del gateway), model (modelo del gateway)
   printf 'http://%s:%s/v1' "$LITELLM_UPSTREAM_IP" "$LITELLM_UPSTREAM_PORT" > "$1/base-url"
+  printf '%s' "$LITELLM_UPSTREAM_IP" > "$1/host"
   printf '%s' "$LITELLM_UPSTREAM_MODEL" > "$1/model"
 }
 

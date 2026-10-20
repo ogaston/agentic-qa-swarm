@@ -62,10 +62,19 @@ def _http_llm(env: Mapping[str, str]) -> HttpLLM:
     base, model, key_file = env.get("LLM_BASE_URL", ""), env.get("LLM_MODEL", ""), env.get("LLM_API_KEY_FILE", "")
     if not base or not model or not key_file:
         raise ConfigError("LLM_PROVIDER=http requiere LLM_BASE_URL, LLM_MODEL y LLM_API_KEY_FILE")
+    # U8-T09 (ronda 4): opt-in explícito a http hacia UN host privado (kind). Por defecto, no.
+    insecure_host = _insecure_http_host(env)
     try:
-        return HttpLLM(base, model, key_file)
+        return HttpLLM(base, model, key_file, insecure_http_host=insecure_host)
     except (ValueError, OSError):
         raise ConfigError("configuracion LLM_PROVIDER=http invalida") from None
+
+
+def _insecure_http_host(env: Mapping[str, str]) -> str | None:
+    """Solo con LLM_ALLOW_INSECURE_HTTP=1 (exacto) y LLM_INSECURE_HTTP_HOST; si no, None."""
+    if env.get("LLM_ALLOW_INSECURE_HTTP", "") != "1":
+        return None
+    return env.get("LLM_INSECURE_HTTP_HOST", "") or None
 
 
 def _fake_llm(env: Mapping[str, str]) -> FakeLLM:

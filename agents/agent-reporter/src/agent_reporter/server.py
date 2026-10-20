@@ -124,8 +124,10 @@ def _http_llm(e):
     base, model, key_file = e.get("LLM_BASE_URL", ""), e.get("LLM_MODEL", ""), e.get("LLM_API_KEY_FILE", "")
     if not base or not model or not key_file:
         raise SystemExit("LLM_PROVIDER=http requiere LLM_BASE_URL, LLM_MODEL y LLM_API_KEY_FILE")
+    # U8-T09 (ronda 4): opt-in explícito a http hacia UN host privado (kind). Por defecto, no.
+    insecure_host = e.get("LLM_INSECURE_HTTP_HOST", "") or None if e.get("LLM_ALLOW_INSECURE_HTTP", "") == "1" else None
     try:
-        return HttpLLM(base, model, key_file)
+        return HttpLLM(base, model, key_file, insecure_http_host=insecure_host)
     except (ValueError, OSError):
         raise SystemExit("configuracion LLM_PROVIDER=http invalida") from None
 

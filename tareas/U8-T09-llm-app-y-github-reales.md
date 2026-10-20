@@ -67,9 +67,9 @@ Detalle:
 
 - [ ] **CA-4** — Alcance.
   ```bash
-  git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(deploy/flux/(base|kind)/|scripts/kind/|docs/operaciones/|demo/|bitacoras/U8-T09\.md|revisiones/U8-T09/)' | wc -l
+  git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(deploy/flux/(base|kind)/|scripts/kind/|docs/operaciones/|demo/|agents/|tareas/U8-T09-llm-app-y-github-reales\.md|bitacoras/U8-T09\.md|revisiones/U8-T09/)' | wc -l
   ```
-  Esperado: `0` y `0`.
+  Esperado: `0` y `0`. (Ronda 4: `agents/` entra en la lista solo por la excepción http de `check_base_url`, y la propia tarea, autorizado por el humano.)
 
 ---
 

@@ -272,6 +272,14 @@ patches:
                 key: model
           - name: LLM_API_KEY_FILE
             value: /etc/aqs/llm/api-key
+          # Opt-in de riesgo aceptado (ronda 4): http solo hacia el host exacto del gateway (Secret llm-upstream).
+          - name: LLM_ALLOW_INSECURE_HTTP
+            value: "1"
+          - name: LLM_INSECURE_HTTP_HOST
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: host
           - name: PLANNER_TIMEOUT_S
             value: "120"
           - name: PLANNER_MAX_INPUT_TOKENS
@@ -299,6 +307,14 @@ patches:
                 key: model
           - name: LLM_API_KEY_FILE
             value: /etc/aqs/llm/api-key
+          # Opt-in de riesgo aceptado (ronda 4): http solo hacia el host exacto del gateway (Secret llm-upstream).
+          - name: LLM_ALLOW_INSECURE_HTTP
+            value: "1"
+          - name: LLM_INSECURE_HTTP_HOST
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: host
           - name: REPORTER_TIMEOUT_S
             value: "120"
           - name: REPORTER_MAX_INPUT_TOKENS

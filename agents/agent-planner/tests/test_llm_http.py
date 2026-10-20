@@ -153,3 +153,29 @@ def test_llm_http_no_sigue_redirecciones(make, keyfile):
     with pytest.raises(LLMUnavailable):
         call(client(s, keyfile))
     assert len(s.requests) == 1
+
+
+GW = "10.20.30.40"  # IP literal privada de ejemplo (gateway de laboratorio)
+
+
+def test_http_gateway_rechazado_sin_variable():
+    # Sin el opt-in explícito, http hacia un host no loopback sigue rechazado.
+    with pytest.raises(ValueError):
+        check_base_url(f"http://{GW}:8000/v1")
+
+
+def test_http_gateway_aceptado_solo_con_host_exacto():
+    url = f"http://{GW}:8000/v1"
+    assert check_base_url(url, insecure_http_host=GW) == url
+    for bad in (f"http://10.20.30.41:8000/v1", "http://api.example.com/v1", "http://8.8.8.8:8000/v1"):
+        with pytest.raises(ValueError):
+            check_base_url(bad, insecure_http_host=GW)
+    with pytest.raises(ValueError):
+        check_base_url("ftp://10.20.30.40/v1", insecure_http_host=GW)
+
+
+def test_http_publico_o_dns_rechazado_aunque_coincida_el_host():
+    with pytest.raises(ValueError):
+        check_base_url("http://8.8.8.8:8000/v1", insecure_http_host="8.8.8.8")
+    with pytest.raises(ValueError):
+        check_base_url("http://api.example.com/v1", insecure_http_host="api.example.com")
