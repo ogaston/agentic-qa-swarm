@@ -263,8 +263,51 @@ secrets_no_en_logs() {
 }
 check secrets-no-en-logs secrets_no_en_logs
 
-# Ciclo de corrida: no se fuerza. Lo que no funciona en kind queda declarado, sin FALLA.
-echo "PENDIENTE webhook->notificacion->confirm->run.confirmed->controlador (P1: los eventos viajan por archivos en el disco de cada pod; no hay transporte entre pods)"
+# 8. Ciclo de corrida (U8-T08): el transporte de eventos entre pods (NATS, U8-T01/T06) y la puerta
+# humana ya funcionan en kind. Se comprueba aquí la cadena completa hasta la corrida creada en el
+# controlador: webhook firmado -> 202 -> notificación `pending` en el inbox de ui-api -> confirmación
+# -> corrida creada en go-run-controller. El ciclo de punta a punta (deploy sobre el warm, superficie,
+# plan, ensayo, runners con evidencia en MinIO, reset verificado y reporte) lo cubre
+# scripts/kind/kind-e2e.sh (U8-T08). La corrida creada no se espera ni se borra: el controlador no
+# expone borrado y el humo no la fuerza más allá de comprobar que existe.
+ciclo_webhook_confirm_corrida() {
+  local secret sig body code delivery notif run_id i after
+  secret=$(kubectl get secret go-intake-webhook -n "$NS_SYS" -o jsonpath='{.data.secret}' | base64 -d) || return 1
+  [ -n "$secret" ] || { echo "el secret go-intake-webhook está vacío"; return 1; }
+  delivery=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'smoke-%s-%s' "$$" "$(date +%s)")
+  # `after` debe ser un SHA (40 hex): el intake valida el payload del push (invalid_payload si no).
+  after=$(printf '%s' "smoke-$(date +%s%N)-$$-$RANDOM" | sha1sum | cut -c1-40)
+  jq -n --arg a "$after" \
+    '{ref:"refs/heads/main", after:$a, repository:{full_name:"ogaston/agentic-qa-swarm"}}' >"$work/hook.json" || return 1
+  body=$(cat "$work/hook.json")
+  sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" -hex | awk '{print $2}')"
+  code=$(curl -s -o "$work/hook.out" -w '%{http_code}' --max-time 15 \
+    -H 'Content-Type: application/json' -H "X-Hub-Signature-256: $sig" -H 'X-GitHub-Event: push' \
+    -H "X-GitHub-Delivery: $delivery" --data "$body" \
+    "http://127.0.0.1:$P_INTAKE/webhooks/github") || code=000
+  [ "$code" = 202 ] || { echo "POST /webhooks/github respondió $code (se esperaba 202)"; return 1; }
+  notif=$(jq -r '.id // empty' "$work/hook.out")
+  [ -n "$notif" ] && [ "$notif" != null ] || { echo "el 202 no trae la notificación"; return 1; }
+  expect_http 200 "http://127.0.0.1:$P_UI/notifications" -H "Authorization: Bearer $TOKEN" || return 1
+  jq -e --arg n "$notif" '[.[] | select(.id == $n and .state == "pending")] | length == 1' "$work/body" >/dev/null || {
+    echo "la notificación $notif no quedó pending en el inbox (transporte intake->ui-api)"; return 1
+  }
+  expect_http 201 "http://127.0.0.1:$P_UI/notifications/$notif/confirm" \
+    -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    --data '{"flows":["happy-path"]}' || return 1
+  run_id=$(jq -r '.run_id // empty' "$work/body")
+  [ -n "$run_id" ] && [ "$run_id" != null ] || { echo "el 201 de confirmación no trae run_id"; return 1; }
+  for i in $(seq 1 15); do
+    code=$(curl -s -o "$work/run.out" -w '%{http_code}' --max-time 10 -H "Authorization: Bearer $TOKEN" \
+      "http://127.0.0.1:$P_RUN/runs/$run_id") || code=000
+    [ "$code" = 200 ] && return 0
+    sleep 1
+  done
+  echo "la corrida $run_id no aparece en el controlador (GET /runs -> $code)"
+  return 1
+}
+check ciclo-webhook-confirm-corrida ciclo_webhook_confirm_corrida
+
 echo "PENDIENTE planner/reporter con LLM real (U8-T09: en kind usan LLM falso; LiteLLM no está desplegado; cubierto por scripts/test/u8-agents-kind.sh)"
 echo "reset verificado: cubierto por scripts/test/u8-target-app-kind.sh (U8-T04, baseline real de demo/target-app)"
 echo "usuario MinIO de los agentes: cubierto por scripts/test/u8-minio-user-kind.sh (U8-T05, C-107)"

@@ -37,6 +37,11 @@ si ninguna falla. Las comprobaciones son:
   como testigo: lo bloquea el ingress de `aqs-system` aunque no haya políticas en `aqs-test`.
 - `secrets-no-en-logs`: los logs de los 7 Deployments no contienen `password_hash`,
   `$argon2id$`, tokens de servicio ni la contraseña demo.
+- `ciclo-webhook-confirm-corrida` (U8-T08): la cadena de control de punta a punta ya funciona en
+  kind: webhook de GitHub **firmado** (HMAC) a go-intake → `202` → la notificación `pending` en el
+  inbox de ui-api (transporte de eventos entre pods, U8-T01/U8-T06) → confirmación por ui-api → la
+  corrida existe en go-run-controller. El ciclo completo (deploy sobre el warm, superficie, plan,
+  ensayo, runners, reset y reporte) lo cubre `scripts/kind/kind-e2e.sh` (ver «Demo de punta a punta»).
 
 La sensibilidad de la comprobación de red se verifica borrando las NetworkPolicy de `aqs-test`:
 `netpol-sin-egress-test` debe pasar a `FALLA` y la línea `FALLA` nombra el testigo alcanzable
@@ -53,12 +58,86 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | NetworkPolicy de aqs-test aplicada (kindnet) | Funciona | `netpol-*` |
 | Logs sin secretos | Funciona | `secrets-no-en-logs` |
 | Estado del warm desde ui-api (`GET /warm`) | Funciona. Solo en kind: el overlay `deploy/flux/kind/` define `WARM_URL` y `UIAPI_WARM_TOKEN_FILE` (errata E-3 de U7-T04). En `base`, `dev` y `prod` el hueco sigue abierto (C-103) | `warm-estado` |
-| Ciclo de corrida webhook → notificación → confirm → run.confirmed → controlador | Pendiente | P1: los eventos viajan por archivos en el disco de cada pod |
-| Planner y reporter en el clúster | Funciona con LLM falso (U8-T05). Sin LiteLLM ni clave real (U8-T09); el ciclo completo no está conectado (U8-T06) | `scripts/test/u8-agents-kind.sh` (`planner-plan-valido`, `reporter-lee-minio`, `otro-pod-bloqueado`) |
+| Ciclo de control: webhook → notificación → confirm → corrida creada en el controlador | Funciona (U8-T01/U8-T06) | `ciclo-webhook-confirm-corrida` de `kind-smoke.sh` |
+| Ciclo completo hasta el reporte, camino feliz (`--bug off`: deploy, superficie, plan, ensayo, runners, evidencia, reset, reporte) | Funciona (U8-T08, ronda 2), con las precondiciones de la sección «Demo de punta a punta» | `scripts/kind/kind-e2e.sh --bug off` |
+| Bug sembrado detectado en la corrida (`--bug oversell`) | Funciona (U8-T08 ronda 3, con U8-T08b): el paso `POST /orders` lleva `body` (`qty` 11 sobre stock 10), el flujo es `invariant_probe: true` (en el ensayo basta con que sea ejecutable) y el defecto se activa antes de los runners | `scripts/kind/kind-e2e.sh --bug oversell` |
+| Planner y reporter en el clúster | Funciona con LLM falso (U8-T05). Sin LiteLLM ni clave real (U8-T09); el ciclo completo lo ejerce `scripts/kind/kind-e2e.sh` (U8-T08) | `scripts/test/u8-agents-kind.sh` (`planner-plan-valido`, `reporter-lee-minio`, `otro-pod-bloqueado`) |
 | Reset verificado del warm | Verificado (U8-T04) | `go-reset-baseline` es el baseline real de `demo/target-app`; `scripts/test/u8-target-app-kind.sh` ensucia la base, resetea y lee `GET /orders` vacío y `verify` 0 |
 | Evidencia en MinIO desde los agentes | Funciona (U8-T05). El usuario `aqs-evidence` lo crea `minio-init` con política solo sobre `evidence` | `scripts/test/u8-minio-user-kind.sh` (`put-evidence`, `get-evidence`, `sin-admin`, `otro-bucket-denegado`) |
 
 El smoke imprime estos pendientes como `PENDIENTE <paso> (<motivo>)`; no cuentan como fallo.
+
+## Demo de punta a punta (U8-T08)
+
+`scripts/kind/kind-e2e.sh` recorre el ciclo completo sobre la plataforma ya desplegada en `kind-aqs`
+y lee el estado del **sistema** en cada fase (nunca su propio log): `GET /runs/{id}` y `GET /warm` en
+ui-api, `GET /deploys/{id}` en go-warm-manager, los Jobs etiquetados `aqs.io/run-id=<run>` y los
+objetos de `s3://evidence/runs/<run>/` listados con el usuario `aqs-evidence`.
+
+```bash
+bash scripts/kind/kind-e2e.sh --bug off         # camino feliz: veredicto `sin-hallazgos`
+bash scripts/kind/kind-e2e.sh --bug oversell    # bug sembrado en la app de referencia: veredicto `bug`
+bash scripts/kind/kind-e2e.sh --sin-confirmar   # puerta humana: sin confirmar no nace corrida
+```
+
+Guion de presentación (qué mostrar en cada paso; para verlo en el dashboard, arrancarlo con
+`dashboard-up.sh` —vite en `127.0.0.1:18610`— antes de lanzar el e2e):
+
+| Paso | En el script | Qué mostrar |
+|---|---|---|
+| 1. Webhook firmado | `POST /webhooks/github` a go-intake con `X-Hub-Signature-256` (HMAC del secreto `go-intake-webhook`) | El `202` con la `notification.id` (una firma inválida da `401`) |
+| 2. Inbox | `GET /notifications` en ui-api | La notificación en el inbox, en estado `pending` |
+| 3. Confirmación humana | `POST /notifications/{id}/confirm` | El recibo con el `run_id`; en el dashboard, la corrida que arranca |
+| 4. Deploy sobre el warm | `GET /deploys/{run_id}` en go-warm-manager | La app de referencia en `aqs-test` (`kubectl -n aqs-test get pods`) |
+| 5. Superficie externa | `POST /surface` en go-warm-manager | Los endpoints inferidos |
+| 6. Plan y ensayo | `GET /runs/{run_id}`; Jobs con `aqs.io/phase=rehearse` | La fase `rehearsing` y el ensayo |
+| 7. Runners con evidencia | Jobs con `aqs.io/phase=run`; `flow-*/logs.txt` y `flow-*/result.json` en MinIO | Los flujos ejecutados y su evidencia |
+| 8. Reset verificado | `GET /warm` → `state=ready` y `reset_verified=true` | El warm limpio tras la corrida |
+| 9. Reporte | `report-*.json` en MinIO y `verdict` en `GET /runs/{id}` | El veredicto y los hallazgos (con `evidence_uris` reales) |
+
+Salida: una línea `OK <comprobación>` o `FALLA <comprobación>` por paso; el código de salida es 0 solo
+si no hay ninguna `FALLA` (en el camino feliz y en `--sin-confirmar`, el primer `FALLA` corta). El
+camino feliz imprime al menos 12 `OK`; `--bug oversell` debe imprimir `OK veredicto-bug` y
+`OK hallazgo-cita-invariante-y-evidencia`, cada `evidence_uri` del hallazgo existente en MinIO;
+`--sin-confirmar` debe imprimir `OK sin-confirmar-no-crea-corrida`.
+
+Higiene: el e2e usa `127.0.0.1:18615-18619` (el humo usa `18600-18606` y el dashboard
+`18600`/`18601`/`18603` + vite en `18610`: sin solape, para poder correr la demo con el dashboard
+arriba), cierra sus port-forwards
+siempre, borra sus pods efímeros, revierte el `TARGET_APP_BUG` del warm y restaura las fixtures de
+los agentes. La evidencia y las corridas registradas **no** se borran: el controlador no expone
+borrado y la evidencia es el resultado. El lock `${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock` serializa lo
+que toca el clúster (ver la nota del final de este documento).
+
+**Precondiciones que el e2e aplica en un clúster recién desplegado** (medidas en vivo; ninguna la
+hace el ciclo por sí solo):
+
+- **Warm verificado** (`warm_prepare`): un warm nuevo nace con `reset_verified=false` y el gate de
+  `confirmed → warm_ready` lo rechaza. Si `GET /warm` no está `ready`+verificado, el e2e pide un
+  reset inicial a go-reset (`POST /resets`, token `go-reset-service-token`) y lo comprueba.
+- **Política `workflows`** (`gov_policy_seed`): `go-governance` arranca con `policies.jsonl` vacío y
+  deniega todo workflow. El e2e da de alta el `U3_DEFAULT_WORKFLOW` del controlador (`happy-path`)
+  como lo haría el admin: login de `admin` con OTP (secreto local de `scripts/kind/secrets.sh`) y
+  `PUT /policies/workflows`, sin borrar lo que ya hubiera. Es idempotente.
+- **Ventana del planner** (`planner_pause_wait`): el controlador llama a `/v1/plan` en cuanto el warm
+  tiene superficie, y la fixture del planner depende del `run_id`. El e2e pausa el controlador tras
+  el `POST /deploys`, obtiene deploy, superficie y fixture sin él, y lo reanuda (reanudar en
+  `deploying` es seguro: `WarmClient.Deploy` no reenvía el deploy).
+
+**Cómo se detecta el defecto de `oversell` (U8-T08 ronda 3, con U8-T08b):**
+
+- El plan del escenario trae un paso `POST /orders` con `body` `{"product_id":1,"qty":11}` (stock
+  inicial 10, `demo/target-app/store.go`) y `expect_status: 409`, en un flujo con
+  `invariant_probe: true`. Sin defecto la app responde 409 (`insufficient_stock`); con
+  `TARGET_APP_BUG=oversell` responde 201 porque se omite la comprobación de stock.
+- El defecto se aplica al deployment `warm-app` **después del deploy y antes de reanudar el
+  controlador**. Si se aplicara tras el ensayo llegaría tarde: el controlador lanza los runners en
+  cuanto terminan los Jobs de ensayo (medido en la ronda 3: runner creado a 15:45:55Z, pod con el
+  defecto a 15:46:47Z, y el runner recibió 409 del pod sano).
+- El ensayo solo exige que el flujo de sondeo sea ejecutable (estado < 500): 201 y 409 valen. Los
+  runners son estrictos: con el defecto fallan en `flow-1`, y el reporte declara `bug` citando esa
+  evidencia real (`runs/<run>/flow-1/result.json`).
+- La reversión del defecto (`$patch: delete` de `TARGET_APP_BUG`) se hace siempre en el trap.
 
 ## NATS JetStream (U8-T01)
 
