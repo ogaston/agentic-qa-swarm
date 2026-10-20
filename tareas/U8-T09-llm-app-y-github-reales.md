@@ -2,21 +2,31 @@
 
 **Unidad:** U8 — Producto demostrable (ciclo completo en kind)
 **Historias que implementa:** US-M1 (evento real de GitHub), US-M3/M4/M9 con modelo real; decisiones C-82 y C-83.
-**Depende de:** U8-T08 **fusionada** y tres insumos del humano: (1) la clave de DeepSeek, (2) la app definitiva (repo o imagen) con su contrato de baseline, (3) cómo llega GitHub al clúster (túnel o reenvío). **No despachable hasta tener los tres.** **Ola 5**. **Tope: 3 rondas**.
+**Depende de:** U8-T08 **fusionada** y tres insumos del humano, **entregados el 2026-10-20** (ver «Insumos del humano»). **Ola 5**. **Tope: 3 rondas**.
 
 ---
+
+## Insumos del humano (2026-10-20)
+
+1. **Proveedor LLM:** gateway LiteLLM del humano, compatible con OpenAI, alcanzable desde el host por la red privada del humano. Modelo **`Deepseek-V4-Flash`** (el nombre `deepseek/deepseek-flash` da 403). Es un modelo de razonamiento: con `max_tokens` bajo deja `content` vacío, así que planner y reporter fijan un tope holgado y fallan con error claro si `content` llega vacío.
+2. **App definitiva:** la app objetivo que ya existe (U8-T04, `docs/operaciones/app-objetivo.md`); su baseline es el actual.
+3. **Webhook de GitHub:** túnel **`cloudflared`** (instalado en el host) a un port-forward del inbox.
+
+**Nada de la red del humano entra al repo.** La clave está en `${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key` y la dirección del gateway en `${XDG_RUNTIME_DIR}/aqs-kind/litellm.env` (modo `600`, variables `LITELLM_UPSTREAM_IP`, `LITELLM_UPSTREAM_PORT`, `LITELLM_UPSTREAM_MODEL`). `scripts/kind/secrets.sh` lee ambos y los materializa en un Secret/ConfigMap creado en el clúster; los manifiestos del repo solo llevan marcadores. El codificador no imprime esos valores ni los escribe en bitácoras, informes o logs.
+
+**Egress (sustituye a «443 del proveedor»):** LiteLLM sale solo a `<LITELLM_UPSTREAM_IP>/32:<LITELLM_UPSTREAM_PORT>`; la NetworkPolicy se renderiza en `scripts/kind/` con esos valores locales. Planner y reporter siguen hablando solo con LiteLLM y MinIO.
 
 ## Alcance
 
 **Dentro** (una línea, concreta):
 
-> Desplegar LiteLLM en `aqs-system` (imagen fijada, config con `deepseek/deepseek-chat`, clave solo como archivo de Secret creado en el clúster y nunca en el repo, único componente con egress al proveedor), pasar planner y reporter a `LLM_PROVIDER=http` en kind, apuntar `RUN_ARTIFACT_REF` y el baseline a la app definitiva, y recibir un evento real de GitHub; repetir `kind-e2e.sh` con todo real.
+> Desplegar LiteLLM en `aqs-system` (imagen fijada, config con el modelo y el upstream leídos de `litellm.env` (API compatible con OpenAI), clave solo como archivo de Secret creado en el clúster y nunca en el repo, único componente con egress al proveedor), pasar planner y reporter a `LLM_PROVIDER=http` en kind, apuntar `RUN_ARTIFACT_REF` y el baseline a la app definitiva, y recibir un evento real de GitHub; repetir `kind-e2e.sh` con todo real.
 
 Detalle:
 
 - La clave la entrega el humano fuera del repo; `scripts/kind/secrets.sh` la lee de un archivo local (`${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key`, modo `600`) y crea el Secret. Nunca en la salida ni en logs (comprobado como en `kind-smoke`).
-- NetworkPolicy: egress de LiteLLM solo a 443 del proveedor; planner/reporter solo a LiteLLM y MinIO (C-83).
-- Webhook de GitHub: según lo que elija el humano (túnel tipo `smee`/`cloudflared` a un port-forward, o reenvío firmado desde un script); se documenta el paso exacto.
+- NetworkPolicy: egress de LiteLLM solo a la IP/puerto de `litellm.env`; planner/reporter solo a LiteLLM y MinIO (C-83).
+- Webhook de GitHub: según lo que elija el humano (túnel `cloudflared` a un port-forward del inbox); se documenta el paso exacto.
 - Se mide y se anota el costo de tokens de una corrida de demo (P4 queda candidata).
 
 **Fuera**:
