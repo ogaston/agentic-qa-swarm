@@ -205,7 +205,7 @@ func onlyOccurredAtWrong(schema *jsonschema.Schema, m map[string]any) bool {
 	return gen.ValidateJSON(schema, raw) == nil
 }
 
-var runIDRE = regexp.MustCompile(`^run-[0-9a-f]{32}$`)
+var runIDRE = regexp.MustCompile(`^run-[0-9a-f]{16}$`)
 
 type fileRecord struct {
 	inbox.Receipt
@@ -624,7 +624,7 @@ func TestPBT_Fixed_NotificationAndReceiptJSON(t *testing.T) {
 			t.Fatalf("%+v %v", back, err)
 		}
 	}
-	r := inbox.Receipt{RunID: "run-" + strings.Repeat("0", 32), NotificationID: "n-1", ConfirmedBy: "u", ConfirmedAt: time.Unix(1700000000, 0).UTC()}
+	r := inbox.Receipt{RunID: "run-" + strings.Repeat("0", 16), NotificationID: "n-1", ConfirmedBy: "u", ConfirmedAt: time.Unix(1700000000, 0).UTC()}
 	raw, _ := json.Marshal(r)
 	var back inbox.Receipt
 	if err := json.Unmarshal(raw, &back); err != nil || !back.ConfirmedAt.Equal(r.ConfirmedAt) || back.RunID != r.RunID {

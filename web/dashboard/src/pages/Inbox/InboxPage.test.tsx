@@ -54,7 +54,7 @@ const rechazada: Notification = {
 };
 
 const recibo: ConfirmationReceipt = {
-  run_id: 'run-0123456789abcdef0123456789abcdef',
+  run_id: 'run-0123456789abcdef',
   notification_id: 'n-1',
   confirmed_by: 'ana',
   confirmed_at: '2026-10-10T12:00:00Z',
@@ -352,6 +352,18 @@ describe('Inbox confirma', () => {
     const user = await abrirInbox([
       listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
       http.post(CONFIRM, () => HttpResponse.json({ ...recibo, run_id: '..' }, { status: 201 })),
+    ]);
+    const dialogo = await abrirPanel(user, 'acme/api');
+    await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));
+    expect(await screen.findByText(/no se pudo abrir la corrida/)).toBeTruthy();
+    expect(currentLocation()).toBe('/inbox');
+  });
+
+  it('201 con run_id de 36 caracteres (formato viejo) no navega y avisa', async () => {
+    const viejo = 'run-' + '0123456789abcdef'.repeat(2);
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
+      http.post(CONFIRM, () => HttpResponse.json({ ...recibo, run_id: viejo }, { status: 201 })),
     ]);
     const dialogo = await abrirPanel(user, 'acme/api');
     await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));

@@ -74,7 +74,7 @@ func TestConfirmPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(r.RunID, "run-") || len(r.RunID) != 36 || r.ConfirmedBy != "u1" {
+	if !strings.HasPrefix(r.RunID, "run-") || len(r.RunID) != 20 || r.ConfirmedBy != "u1" {
 		t.Fatalf("recibo: %+v", r)
 	}
 	if _, err := s.Confirm("a", "u2", []string{"x"}); err != ErrAlreadyConfirmed {
