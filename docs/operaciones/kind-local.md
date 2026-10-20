@@ -61,7 +61,7 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Ciclo de control: webhook → notificación → confirm → corrida creada en el controlador | Funciona (U8-T01/U8-T06) | `ciclo-webhook-confirm-corrida` de `kind-smoke.sh` |
 | Ciclo completo hasta el reporte, camino feliz (`--bug off`: deploy, superficie, plan, ensayo, runners, evidencia, reset, reporte) | Funciona (U8-T08, ronda 2), con las precondiciones de la sección «Demo de punta a punta» | `scripts/kind/kind-e2e.sh --bug off` |
 | Bug sembrado detectado en la corrida (`--bug oversell`) | Funciona (U8-T08 ronda 3, con U8-T08b): el paso `POST /orders` lleva `body` (`qty` 11 sobre stock 10), el flujo es `invariant_probe: true` (en el ensayo basta con que sea ejecutable) y el defecto se activa antes de los runners | `scripts/kind/kind-e2e.sh --bug oversell` |
-| Planner y reporter en el clúster | Funciona con LLM real vía LiteLLM (U8-T09): `LLM_PROVIDER=http` en kind; el LLM falso queda solo en `scripts/test/` | `llm-real-configurado`, `litellm-egress-acotado` en `kind-smoke.sh`; `kind-e2e.sh` |
+| Planner y reporter en el clúster | Funciona con LLM real del gateway del humano (U8-T09, ronda 3): `LLM_PROVIDER=http` en kind, sin proxy en el clúster; el LLM falso queda solo en `scripts/test/` | `llm-real-configurado`, `llm-egress-acotado` en `kind-smoke.sh`; `kind-e2e.sh` (bloqueado por `check_base_url`, ver la sección) |
 | Reset verificado del warm | Verificado (U8-T04) | `go-reset-baseline` es el baseline real de `demo/target-app`; `scripts/test/u8-target-app-kind.sh` ensucia la base, resetea y lee `GET /orders` vacío y `verify` 0 |
 | Evidencia en MinIO desde los agentes | Funciona (U8-T05). El usuario `aqs-evidence` lo crea `minio-init` con política solo sobre `evidence` | `scripts/test/u8-minio-user-kind.sh` (`put-evidence`, `get-evidence`, `sin-admin`, `otro-bucket-denegado`) |
 
@@ -139,40 +139,39 @@ hace el ciclo por sí solo):
   evidencia real (`runs/<run>/flow-1/result.json`).
 - La reversión del defecto (`$patch: delete` de `TARGET_APP_BUG`) se hace siempre en el trap.
 
-## LLM real y LiteLLM (U8-T09)
+## LLM real del gateway del humano (U8-T09, ronda 3)
 
-LiteLLM (`ghcr.io/berriai/litellm:v1.106.0`, fijada en `deploy/flux/kind/litellm.yaml`) corre en `aqs-system`
-como proxy compatible con OpenAI hacia el gateway del humano. Es el único componente con egress al
-proveedor.
+Desde la ronda 3 no hay proxy en el clúster: el gateway del humano ya es un LiteLLM y se usa como endpoint
+compatible con OpenAI. Planner y reporter lo llaman directamente (`LLM_PROVIDER=http`). Ningún componente del
+clúster tiene egress al proveedor salvo los agentes, y solo hacia `IP/32:puerto` del gateway.
 
-Insumos del humano, fuera del repo (modo 600): `${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key` y
+Insumos del humano, fuera del repo (modo 600): `${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key` (la clave) y
 `${XDG_RUNTIME_DIR}/aqs-kind/litellm.env` (variables `LITELLM_UPSTREAM_IP`, `LITELLM_UPSTREAM_PORT`,
 `LITELLM_UPSTREAM_MODEL`). `scripts/kind/secrets.sh` los valida antes de tocar el clúster y crea:
 
-- Secret `litellm-upstream` (`config.yaml` con el modelo y la dirección del upstream; `upstream-api-key`).
-  Se reaplica en cada ejecución.
-- Secret `agents-llm-key` (`api-key`): clave maestra de LiteLLM, con prefijo `sk-`. Planner y reporter la
-  presentan como Bearer.
-- Secret `litellm-tls` (`ca.crt`, `tls.crt`, `tls.key`): TLS del servicio. Los agentes exigen https
-  (`agents/*/llm_http.py`), así que confían en `ca.crt` con `SSL_CERT_FILE`.
-- NetworkPolicy `litellm-egress-upstream`, renderizada en el clúster con `IP/32` y puerto de `litellm.env`
-  (no va al repo). El overlay pone `litellm-egress-default-deny`.
+- Secret `agents-llm-key` (`api-key`): la clave del gateway, copiada de `deepseek.key`. Planner y reporter la
+  montan en `/etc/aqs/llm/api-key` (`LLM_API_KEY_FILE`) y la presentan como Bearer. Se reaplica en cada ejecución.
+- Secret `llm-upstream` (`base-url` = `http://IP:PUERTO/v1`, `model` = `LITELLM_UPSTREAM_MODEL`). Planner y
+  reporter leen `LLM_BASE_URL` y `LLM_MODEL` de aquí (`secretKeyRef`), así que ni la IP ni el nombre del modelo
+  van al repo. Se reaplica en cada ejecución.
+- NetworkPolicy `agents-egress-upstream`, renderizada en el clúster con `IP/32` y el puerto de `litellm.env`
+  (no va al repo). Se aplica a `agent-planner` y `agent-reporter`, y es aditiva a las de `deploy/flux/base/agents.yaml`
+  (DNS, y MinIO del reporter). El resto del egreso sigue cerrado por `default-deny`.
 
-Planner y reporter usan `LLM_BASE_URL=https://litellm.aqs-system.svc:4000/v1` y `LLM_MODEL=aqs-llm` (alias de
-la config de LiteLLM; el nombre del modelo del proveedor no sale del Secret). Tope de salida 8000 y timeout
-120 s: el modelo es de razonamiento y con `max_tokens` bajo el `content` llega vacío.
+Tope de salida 8000 y timeout 120 s: el modelo es de razonamiento y con `max_tokens` bajo el `content` llega vacío.
 
-`scripts/kind/load-images.sh` descarga y carga la imagen de LiteLLM. `kind-smoke.sh` comprueba que no hay
-claves en los logs de LiteLLM y de los agentes, que planner y reporter tienen `LLM_PROVIDER=http` y que
-LiteLLM no alcanza `1.1.1.1:443`.
+**Bloqueo abierto (ronda 3).** El upstream responde por `http`. `agents/*/llm_http.py` (`check_base_url`) solo
+acepta `https` o loopback, así que el planner y el reporter fallan al arrancar con
+`configuracion LLM_PROVIDER=http invalida` y el rollout de kind no termina. Arreglarlo exige cambiar `agents/`
+(fuera del alcance de CA-4) o interponer un relay TLS en el clúster (componente nuevo). Esa decisión es del humano.
 
-**Limitaciones conocidas.** El `base` de `deploy/flux/base/agents.yaml` usa `LLM_BASE_URL=http://...`, que
-`check_base_url` rechaza (solo https o loopback). Solo kind está corregido. La medición de tokens por corrida
-no es posible: ni LiteLLM sin base de datos ni los agentes persisten el `usage` (candidata).
+`scripts/kind/load-images.sh` ya no carga ninguna imagen de terceros. `kind-smoke.sh` comprueba que no hay claves
+en los logs de los agentes, que planner y reporter están disponibles con `LLM_PROVIDER=http`, y que el planner
+alcanza el gateway y no alcanza `1.1.1.1:443`.
 
-**Webhook de GitHub real.** El paso del humano (port-forward de go-intake, túnel `cloudflared`, secreto del
-webhook y push real) está en `docs/operaciones/webhook-github-cloudflared.md`. Comprobación:
-`bash scripts/kind/github-webhook-check.sh <sha-40>`.
+**Limitaciones conocidas.** El `base` de `deploy/flux/base/agents.yaml` sigue con `LLM_BASE_URL=http://litellm...`
+y permite egreso a un pod `litellm` que en kind no existe; base/dev/prod lo arreglan otra tarea (candidata).
+La medición de tokens por corrida no es posible: los agentes no persisten el `usage` (candidata).
 
 ## NATS JetStream (U8-T01)
 
@@ -210,7 +209,7 @@ El dashboard no corre dentro del clúster (sin imagen, Deployment ni ingress; C-
 
 `agent-planner` y `agent-reporter` corren como Deployments en `aqs-system` (`deploy/flux/base/agents.yaml`),
 con Service `:8080`, sondas, `securityContext` endurecido y NetworkPolicy: solo `go-run-controller` les habla;
-el egreso es DNS, LiteLLM (`litellm.aqs-system.svc:4000`) y, el reporter, MinIO.
+el egreso es DNS, el gateway del humano (solo `IP/32:puerto` de `litellm.env`, política `agents-egress-upstream`) y, el reporter, MinIO.
 
 - **LLM en kind:** el overlay `deploy/flux/kind/` pone `LLM_PROVIDER=fake` con `PLANNER_ALLOW_FAKE=true` y
   `REPORTER_ALLOW_FAKE=1` (nunca `*_ENV=prod`). Los fixtures salen de ConfigMaps del overlay:
@@ -234,7 +233,7 @@ el egreso es DNS, LiteLLM (`litellm.aqs-system.svc:4000`) y, el reporter, MinIO.
   del planner, `agents/agent-planner/.venv`; otro intérprete con `U8_AGENTS_PY`).
 - Un pod sin la etiqueta de `go-run-controller` no llega a los agentes: el fallo es un timeout de conexión
   (la NetworkPolicy descarta), no un fallo de DNS.
-- Fuera de alcance: LiteLLM y la clave real (U8-T09), la llamada del controlador al reporter (U8-T06) y
+- Fuera de alcance: el gateway del humano y la clave real (U8-T09), la llamada del controlador al reporter (U8-T06) y
   el evento `report.ready` por NATS.
 
 Los comandos que tocan `aqs` se ejecutan dentro de `flock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock`

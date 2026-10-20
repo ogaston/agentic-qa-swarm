@@ -11,8 +11,6 @@ kind: Kustomization
 # `$patch: delete` los objetos de observability y backup, uno por uno, por grupo/versión/kind/nombre.
 resources:
   - ../base
-  # U8-T09: LiteLLM (proxy hacia el gateway del humano). Solo kind; ver litellm.yaml.
-  - litellm.yaml
 # U8-T05: fixtures del LLM falso de los agentes (nombres sin sufijo de hash: los referencian los parches).
 configMapGenerator:
   - name: agents-fixtures-planner
@@ -247,10 +245,10 @@ patches:
       - op: add
         path: /metadata/namespace
         value: aqs-system
-  # --- U8-T09: agentes en kind con LLM REAL: LLM_PROVIDER=http hacia LiteLLM (litellm.yaml). ---
-  # https obligatorio (agents/*/llm_http.py): el CA de litellm-tls se confía con SSL_CERT_FILE (la
-  # biblioteca estándar de Python lo respeta). LLM_MODEL es el alias `aqs-llm` de la config de LiteLLM:
-  # el nombre del modelo del proveedor vive en el Secret litellm-upstream, no en el repo.
+  # --- U8-T09 (ronda 3): agentes en kind con LLM REAL. Sin proxy en el clúster: el endpoint es el gateway
+  # compatible con OpenAI del humano (litellm.env). LLM_BASE_URL y LLM_MODEL salen del Secret llm-upstream y la
+  # clave del archivo del Secret agents-llm-key; los crea scripts/kind/secrets.sh. Ni la IP ni el modelo van al repo.
+  # Upstream http: agents/*/llm_http.py lo rechaza (solo https o loopback). Ver bitácora U8-T09, ronda 3.
   # Modelo de razonamiento: content llega vacío con max_tokens bajo, así que el tope de salida es holgado
   # y el timeout, mayor que el de los agentes con LLM falso.
   - target:
@@ -263,35 +261,23 @@ patches:
           - name: LLM_PROVIDER
             value: http
           - name: LLM_BASE_URL
-            value: https://litellm.aqs-system.svc:4000/v1
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: base-url
           - name: LLM_MODEL
-            value: aqs-llm
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: model
           - name: LLM_API_KEY_FILE
             value: /etc/aqs/llm/api-key
-          - name: SSL_CERT_FILE
-            value: /etc/aqs/litellm-ca/ca.crt
           - name: PLANNER_TIMEOUT_S
             value: "120"
           - name: PLANNER_MAX_INPUT_TOKENS
             value: "16000"
           - name: PLANNER_MAX_OUTPUT_TOKENS
             value: "8000"
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts/-
-        value:
-          name: litellm-ca
-          mountPath: /etc/aqs/litellm-ca
-          readOnly: true
-      - op: add
-        path: /spec/template/spec/volumes/-
-        value:
-          name: litellm-ca
-          secret:
-            secretName: litellm-tls
-            defaultMode: 0444
-            items:
-              - key: ca.crt
-                path: ca.crt
   - target:
       kind: Deployment
       name: agent-reporter
@@ -302,13 +288,17 @@ patches:
           - name: LLM_PROVIDER
             value: http
           - name: LLM_BASE_URL
-            value: https://litellm.aqs-system.svc:4000/v1
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: base-url
           - name: LLM_MODEL
-            value: aqs-llm
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: model
           - name: LLM_API_KEY_FILE
             value: /etc/aqs/llm/api-key
-          - name: SSL_CERT_FILE
-            value: /etc/aqs/litellm-ca/ca.crt
           - name: REPORTER_TIMEOUT_S
             value: "120"
           - name: REPORTER_MAX_INPUT_TOKENS
@@ -327,22 +317,6 @@ patches:
             value: /etc/aqs/evidence/secret-key
           - name: S3_CA_FILE
             value: /etc/aqs/minio-ca/ca.crt
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts/-
-        value:
-          name: litellm-ca
-          mountPath: /etc/aqs/litellm-ca
-          readOnly: true
-      - op: add
-        path: /spec/template/spec/volumes/-
-        value:
-          name: litellm-ca
-          secret:
-            secretName: litellm-tls
-            defaultMode: 0444
-            items:
-              - key: ca.crt
-                path: ca.crt
 # U8-T04: en kind el warm arranca con la app de referencia (demo/target-app), que sirve el baseline real en :9090.
 # nginx (base) no tiene ese listener: sin esto, el warm no puede resetearse de dirty a ready en un clúster nuevo.
 images:
