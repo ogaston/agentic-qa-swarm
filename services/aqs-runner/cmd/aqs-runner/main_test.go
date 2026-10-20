@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -437,6 +439,80 @@ func TestBodyNoObjetoYProbeInvalidoRechazanSinPeticiones(t *testing.T) {
 			}
 			if d.calls.Load() != 0 {
 				t.Fatalf("hubo %d peticiones", d.calls.Load())
+			}
+		})
+	}
+}
+
+// cuerpoDeEsquema genera el cuerpo minimo valido del requestBody application/json de POST /orders
+// de demo/target-app/openapi.json: cada propiedad required entera toma su minimum (U8-T09a CA-4).
+func cuerpoDeEsquema(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "demo", "target-app", "openapi.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Paths map[string]struct {
+			Post struct {
+				RequestBody struct {
+					Content struct {
+						JSON struct {
+							Schema struct {
+								Required   []string `json:"required"`
+								Properties map[string]struct {
+									Type    string `json:"type"`
+									Minimum *int   `json:"minimum"`
+								} `json:"properties"`
+							} `json:"schema"`
+						} `json:"application/json"`
+					} `json:"content"`
+				} `json:"requestBody"`
+			} `json:"post"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	sch := doc.Paths["/orders"].Post.RequestBody.Content.JSON.Schema
+	body := map[string]int{}
+	for _, k := range sch.Required {
+		p := sch.Properties[k]
+		if p.Type != "integer" || p.Minimum == nil {
+			t.Fatalf("propiedad %s no entera con minimum en el esquema", k)
+		}
+		body[k] = *p.Minimum
+	}
+	out, _ := json.Marshal(body)
+	return string(out)
+}
+
+// CA-4: un plan con el cuerpo del esquema deja pasar el flujo POST /orders sano (201, salida 0);
+// sin body el mismo paso recibe 400 y el runner sale 1 (par falla-pasa).
+func TestOrdersCuerpoFlujoSanoContraTargetApp(t *testing.T) {
+	cuerpo := cuerpoDeEsquema(t)
+	for _, tc := range []struct {
+		name     string
+		steps    string
+		wantExit int
+		wantCode int
+	}{
+		{"con cuerpo del esquema", `[{"method":"POST","path":"/orders","body":` + cuerpo + `,"expect_status":201}]`, exitOK, 201},
+		{"sin cuerpo", `[{"method":"POST","path":"/orders","expect_status":201}]`, exitFailed, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(ordersHandler(false, nil))
+			defer srv.Close()
+			var out bytes.Buffer
+			code := run([]string{"http-steps", "--flow", "f-orders", "--target", srv.URL},
+				envOf(map[string]string{"RUNNER_STEPS": tc.steps, "RUNNER_INVARIANT": "el stock nunca es negativo"}),
+				&out, &bytes.Buffer{}, newClient(stepTimeout))
+			if code != tc.wantExit {
+				t.Fatalf("salida %d, quería %d; stdout=%s", code, tc.wantExit, out.String())
+			}
+			rs := parseLines(t, out.Bytes())
+			if len(rs) != 1 || rs[0].Status != tc.wantCode {
+				t.Fatalf("resultado %+v, quería estado %d", rs, tc.wantCode)
 			}
 		})
 	}

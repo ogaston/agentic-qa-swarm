@@ -1,0 +1,13 @@
+{
+  "run_id": "run-001",
+  "base_url": "https://warm.example.test",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/orders",
+      "request_body": {"type": "object"},
+      "content_type": "application/json"
+    }
+  ],
+  "source": "openapi"
+}

@@ -2,6 +2,7 @@ package warmmanager_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -123,6 +124,11 @@ func TestValidateSurfaceMatchesSchema(t *testing.T) {
 		"source desconocido":  mut(func(s *wm.SurfaceArtifact) { s.Source = "otro" }),
 		"endpoints ausentes":  mut(func(s *wm.SurfaceArtifact) { s.Endpoints = nil }),
 		"endpoints vacios ok": mut(func(s *wm.SurfaceArtifact) { s.Endpoints = []wm.Endpoint{} }),
+		"request_body objeto": mut(func(s *wm.SurfaceArtifact) {
+			s.Endpoints[0].RequestBody = json.RawMessage(`{"type":"object","required":["qty"]}`)
+		}),
+		"request_body no objeto": mut(func(s *wm.SurfaceArtifact) { s.Endpoints[0].RequestBody = json.RawMessage(`[1]`) }),
+		"request_body cadena":    mut(func(s *wm.SurfaceArtifact) { s.Endpoints[0].RequestBody = json.RawMessage(`"qty"`) }),
 	}
 	for n, sa := range cases {
 		t.Run(n, func(t *testing.T) {

@@ -30,6 +30,10 @@
           "path": {
             "type": "string",
             "pattern": "^/"
+          },
+          "request_body": {
+            "type": "object",
+            "description": "Esquema JSON del cuerpo application/json de la operacion (opcional). Sin el, el endpoint no declara cuerpo."
           }
         },
         "required": [
