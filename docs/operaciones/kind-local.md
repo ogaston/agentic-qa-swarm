@@ -61,7 +61,7 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Ciclo de control: webhook → notificación → confirm → corrida creada en el controlador | Funciona (U8-T01/U8-T06) | `ciclo-webhook-confirm-corrida` de `kind-smoke.sh` |
 | Ciclo completo hasta el reporte, camino feliz (`--bug off`: deploy, superficie, plan, ensayo, runners, evidencia, reset, reporte) | Funciona (U8-T08, ronda 2), con las precondiciones de la sección «Demo de punta a punta» | `scripts/kind/kind-e2e.sh --bug off` |
 | Bug sembrado detectado en la corrida (`--bug oversell`) | Funciona (U8-T08 ronda 3, con U8-T08b): el paso `POST /orders` lleva `body` (`qty` 11 sobre stock 10), el flujo es `invariant_probe: true` (en el ensayo basta con que sea ejecutable) y el defecto se activa antes de los runners | `scripts/kind/kind-e2e.sh --bug oversell` |
-| Planner y reporter en el clúster | Funciona con LLM real del gateway del humano (U8-T09, ronda 3): `LLM_PROVIDER=http` en kind, sin proxy en el clúster; el LLM falso queda solo en `scripts/test/` | `llm-real-configurado`, `llm-egress-acotado` en `kind-smoke.sh`; `kind-e2e.sh` (bloqueado por `check_base_url`, ver la sección) |
+| Planner y reporter en el clúster | Funciona con LLM real del gateway del humano (U8-T09, ronda 3): `LLM_PROVIDER=http` en kind, sin proxy en el clúster; el LLM falso queda solo en `scripts/test/` | `llm-real-configurado`, `llm-egress-acotado` en `kind-smoke.sh`; `kind-e2e.sh` (pasa con LLM real: CA-2 de U8-T09, rondas 4-5; los pasos `planner-fixture` y `reporter-fixture` salen omitidos) |
 | Reset verificado del warm | Verificado (U8-T04) | `go-reset-baseline` es el baseline real de `demo/target-app`; `scripts/test/u8-target-app-kind.sh` ensucia la base, resetea y lee `GET /orders` vacío y `verify` 0 |
 | Evidencia en MinIO desde los agentes | Funciona (U8-T05). El usuario `aqs-evidence` lo crea `minio-init` con política solo sobre `evidence` | `scripts/test/u8-minio-user-kind.sh` (`put-evidence`, `get-evidence`, `sin-admin`, `otro-bucket-denegado`) |
 
@@ -105,7 +105,7 @@ Higiene: el e2e usa `127.0.0.1:18615-18619` (el humo usa `18600-18606` y el dash
 `18600`/`18601`/`18603` + vite en `18610`: sin solape, para poder correr la demo con el dashboard
 arriba), cierra sus port-forwards
 siempre, borra sus pods efímeros, revierte el `TARGET_APP_BUG` del warm y restaura las fixtures de
-los agentes. La evidencia y las corridas registradas **no** se borran: el controlador no expone
+los agentes solo si las tocó (con LLM real no las toca). La evidencia y las corridas registradas **no** se borran: el controlador no expone
 borrado y la evidencia es el resultado. El lock `${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock` serializa lo
 que toca el clúster (ver la nota del final de este documento).
 
@@ -119,7 +119,7 @@ hace el ciclo por sí solo):
   deniega todo workflow. El e2e da de alta el `U3_DEFAULT_WORKFLOW` del controlador (`happy-path`)
   como lo haría el admin: login de `admin` con OTP (secreto local de `scripts/kind/secrets.sh`) y
   `PUT /policies/workflows`, sin borrar lo que ya hubiera. Es idempotente.
-- **Ventana del planner** (`planner_pause_wait`): el controlador llama a `/v1/plan` en cuanto el warm
+- **Ventana del planner** (`planner_pause_wait`, solo con LLM falso: con LLM real el paso `planner-fixture` se omite): el controlador llama a `/v1/plan` en cuanto el warm
   tiene superficie, y la fixture del planner depende del `run_id`. El e2e pausa el controlador tras
   el `POST /deploys`, obtiene deploy, superficie y fixture sin él, y lo reanuda (reanudar en
   `deploying` es seguro: `WarmClient.Deploy` no reenvía el deploy).
@@ -163,7 +163,7 @@ Tope de salida 8000 y timeout 120 s: el modelo es de razonamiento y con `max_tok
 **Excepción http (ronda 4, aprobada por el humano; solo kind).** El gateway del humano responde solo por `http`.
 `agents/*/llm_http.py` (`check_base_url`) sigue rechazando `http` por defecto (solo https o loopback). Solo se acepta
 `http` si se cumplen a la vez: `LLM_ALLOW_INSECURE_HTTP=1` (exacto), `LLM_INSECURE_HTTP_HOST` igual al host de la URL
-(Secret `llm-upstream`, clave `host`, que sale de `litellm.env`), y ese host es una IP literal privada. Un nombre DNS,
+(Secret `llm-upstream`, clave `host`, que sale de `litellm.env`), y ese host es una IP privada (RFC 1918, CGNAT 100.64.0.0/10 o ULA fd00::/8; no link-local, no especificada ni multicast). Un nombre DNS,
 una IP pública o cualquier otro host siguen rechazados. El overlay de kind pone la variable; base/dev/prod no.
 
 **Riesgo aceptado (ronda 4).** La clave del gateway viaja en claro por `http` dentro de la red privada del humano
@@ -174,6 +174,10 @@ limita el destino y la clave no se imprime ni se escribe en el repo ni en logs.
 `scripts/kind/load-images.sh` ya no carga ninguna imagen de terceros. `kind-smoke.sh` comprueba que no hay claves
 en los logs de los agentes, que planner y reporter están disponibles con `LLM_PROVIDER=http`, y que el planner
 alcanza el gateway y no alcanza `1.1.1.1:443`.
+
+**Costo en tokens (no medido, U8-T09 ronda 5, F-02).** Los agentes no persisten el `usage` del LLM y los logs del reporter
+tampoco lo registran, así que no hay cifra de tokens por corrida de demo. Queda como tarea candidata P4 (persistir `usage`),
+sujeta a que el humano la acepte; no se implementa en esta tarea.
 
 **Limitaciones conocidas.** El `base` de `deploy/flux/base/agents.yaml` sigue con `LLM_BASE_URL=http://litellm...`
 y permite egreso a un pod `litellm` que en kind no existe; base/dev/prod lo arreglan otra tarea (candidata).
@@ -217,8 +221,11 @@ El dashboard no corre dentro del clúster (sin imagen, Deployment ni ingress; C-
 con Service `:8080`, sondas, `securityContext` endurecido y NetworkPolicy: solo `go-run-controller` les habla;
 el egreso es DNS, el gateway del humano (solo `IP/32:puerto` de `litellm.env`, política `agents-egress-upstream`) y, el reporter, MinIO.
 
-- **LLM en kind:** el overlay `deploy/flux/kind/` pone `LLM_PROVIDER=fake` con `PLANNER_ALLOW_FAKE=true` y
-  `REPORTER_ALLOW_FAKE=1` (nunca `*_ENV=prod`). Los fixtures salen de ConfigMaps del overlay:
+- **LLM en kind (estado final, U8-T09 ronda 5):** el overlay `deploy/flux/kind/` pone `LLM_PROVIDER=http` en planner y
+  reporter (LLM real del gateway, la excepción http de arriba). Los ConfigMaps de fixtures siguen en el overlay pero **no se montan**.
+  **Qué depende de fixtures falsas:** solo `scripts/test/u8-agents-kind.sh` (asume `PLANNER_ALLOW_FAKE`/`REPORTER_ALLOW_FAKE`)
+  y los pasos `planner-fixture` y `reporter-fixture` del e2e, que con LLM real se omiten con un aviso. El resto del guion de
+  la demo (ensayo, runners, reset, reporte en MinIO, veredicto) corre con el modelo real. Las fixtures, si se usan, son:
   - `agents-fixtures-planner`: la superficie de la app de referencia (`demo/target-app`) y el plan esperado.
   - `agents-fixtures-reporter`: el prompt exacto de la evidencia sembrada de `bug-ecom-01` y su respuesta.
     Se regenera con `PYTHONPATH=agents/agent-reporter/src agents/agent-reporter/.venv/bin/python scripts/kind/gen_agent_fixtures.py > deploy/flux/kind/agents/reporter/fixtures.json`.

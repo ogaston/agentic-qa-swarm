@@ -203,3 +203,25 @@ def test_http_cgnat_sin_bandera_rechazado():
 def test_http_cgnat_host_distinto_al_configurado_rechazado():
     with pytest.raises(ValueError):
         check_base_url("http://100.64.0.1:8000/v1", insecure_http_host="100.64.0.2")
+
+
+# U8-T09 (ronda 5, F-03): la excepción http solo admite IP privadas de verdad. Link-local (metadatos de nube
+# 169.254/16, fe80::/10), no especificadas (0.0.0.0, ::) y multicast quedan rechazadas aunque sean el host exacto.
+@pytest.mark.parametrize("host", ["169.254.169.254", "169.254.0.1", "0.0.0.0", "224.0.0.1", "fe80::1", "::", "ff02::1"])
+def test_http_link_local_no_especificada_multicast_rechazadas(host):
+    with pytest.raises(ValueError):
+        check_base_url(f"http://[{host}]:8000/v1" if ":" in host else f"http://{host}:8000/v1", insecure_http_host=host)
+
+
+# Lo que se acepta hoy se mantiene: RFC 1918, IPv6 ULA (fd00::/8) y CGNAT, siempre con host exacto.
+@pytest.mark.parametrize("host", ["10.1.2.3", "172.16.0.5", "192.168.1.9", "fd00::1"])
+def test_http_privada_rfc1918_y_ula_aceptadas_con_host_exacto(host):
+    url = f"http://[{host}]:8000/v1" if ":" in host else f"http://{host}:8000/v1"
+    assert check_base_url(url, insecure_http_host=host) == url
+
+
+# LLM_ALLOW_INSECURE_HTTP=1 sin host (vacío o None) no abre ninguna excepción.
+@pytest.mark.parametrize("host", ["", None])
+def test_http_host_vacio_o_none_rechazado(host):
+    with pytest.raises(ValueError):
+        check_base_url(f"http://{GW}:8000/v1", insecure_http_host=host)

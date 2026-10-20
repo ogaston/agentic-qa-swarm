@@ -55,3 +55,9 @@ def test_config_http_gateway_con_variable_y_host_aceptado(tmp_path):
 def test_config_http_gateway_variable_distinta_de_1_rechazado(tmp_path):
     with pytest.raises(ConfigError):
         load_config(_http_env(tmp_path, LLM_ALLOW_INSECURE_HTTP="true", LLM_INSECURE_HTTP_HOST="10.20.30.40"))
+
+
+# U8-T09 (ronda 5): LLM_ALLOW_INSECURE_HTTP=1 con LLM_INSECURE_HTTP_HOST vacío no abre la excepción http.
+def test_config_http_gateway_variable_con_host_vacio_rechazado(tmp_path):
+    with pytest.raises(ConfigError):
+        load_config(_http_env(tmp_path, LLM_ALLOW_INSECURE_HTTP="1", LLM_INSECURE_HTTP_HOST=""))
