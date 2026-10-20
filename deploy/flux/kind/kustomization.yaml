@@ -11,6 +11,8 @@ kind: Kustomization
 # `$patch: delete` los objetos de observability y backup, uno por uno, por grupo/versión/kind/nombre.
 resources:
   - ../base
+  # U8-T09: LiteLLM (proxy hacia el gateway del humano). Solo kind; ver litellm.yaml.
+  - litellm.yaml
 # U8-T05: fixtures del LLM falso de los agentes (nombres sin sufijo de hash: los referencian los parches).
 configMapGenerator:
   - name: agents-fixtures-planner
@@ -225,9 +227,9 @@ patches:
                     value: dev
   # El ConfigMap go-reset-baseline de relleno lo crea scripts/kind/secrets.sh (no está en el overlay,
   # para que apply -k no pise un baseline real aplicado a mano).
-  # --- U8-T05: agentes en kind con LLM falso (sin clave ni LiteLLM). Nunca con *_ENV=prod. ---
-  # Fixtures: planner = superficie de la app de referencia (target-app.json); reporter = prompt de la
-  # evidencia sembrada de bug-ecom-01 (generado por scripts/kind/gen_agent_fixtures.py).
+  # Fixtures del LLM falso (U8-T05): planner = superficie de la app de referencia (target-app.json);
+  # reporter = prompt de la evidencia sembrada (gen_agent_fixtures.py). Desde U8-T09 los agentes ya no las
+  # montan (LLM real); los ConfigMaps siguen existiendo para scripts/test/ y scripts/kind/kind-e2e.sh.
   # Los ConfigMaps generados no llevan namespace (el generador no lo admite): sin esto caerían en «default».
   - target:
       version: v1
@@ -245,6 +247,12 @@ patches:
       - op: add
         path: /metadata/namespace
         value: aqs-system
+  # --- U8-T09: agentes en kind con LLM REAL: LLM_PROVIDER=http hacia LiteLLM (litellm.yaml). ---
+  # https obligatorio (agents/*/llm_http.py): el CA de litellm-tls se confía con SSL_CERT_FILE (la
+  # biblioteca estándar de Python lo respeta). LLM_MODEL es el alias `aqs-llm` de la config de LiteLLM:
+  # el nombre del modelo del proveedor vive en el Secret litellm-upstream, no en el repo.
+  # Modelo de razonamiento: content llega vacío con max_tokens bajo, así que el tope de salida es holgado
+  # y el timeout, mayor que el de los agentes con LLM falso.
   - target:
       kind: Deployment
       name: agent-planner
@@ -253,23 +261,37 @@ patches:
         path: /spec/template/spec/containers/0/env
         value:
           - name: LLM_PROVIDER
-            value: fake
-          - name: PLANNER_ALLOW_FAKE
-            value: "true"
-          - name: U3_FAKE_SURFACES_DIR
-            value: /etc/aqs/fixtures/surfaces
+            value: http
+          - name: LLM_BASE_URL
+            value: https://litellm.aqs-system.svc:4000/v1
+          - name: LLM_MODEL
+            value: aqs-llm
+          - name: LLM_API_KEY_FILE
+            value: /etc/aqs/llm/api-key
+          - name: SSL_CERT_FILE
+            value: /etc/aqs/litellm-ca/ca.crt
+          - name: PLANNER_TIMEOUT_S
+            value: "120"
+          - name: PLANNER_MAX_INPUT_TOKENS
+            value: "16000"
+          - name: PLANNER_MAX_OUTPUT_TOKENS
+            value: "8000"
       - op: add
         path: /spec/template/spec/containers/0/volumeMounts/-
         value:
-          name: fixtures
-          mountPath: /etc/aqs/fixtures/surfaces
+          name: litellm-ca
+          mountPath: /etc/aqs/litellm-ca
           readOnly: true
       - op: add
         path: /spec/template/spec/volumes/-
         value:
-          name: fixtures
-          configMap:
-            name: agents-fixtures-planner
+          name: litellm-ca
+          secret:
+            secretName: litellm-tls
+            defaultMode: 0444
+            items:
+              - key: ca.crt
+                path: ca.crt
   - target:
       kind: Deployment
       name: agent-reporter
@@ -278,11 +300,21 @@ patches:
         path: /spec/template/spec/containers/0/env
         value:
           - name: LLM_PROVIDER
-            value: fake
-          - name: REPORTER_ALLOW_FAKE
-            value: "1"
-          - name: REPORTER_FAKE_FIXTURES
-            value: /etc/aqs/fixtures/fixtures.json
+            value: http
+          - name: LLM_BASE_URL
+            value: https://litellm.aqs-system.svc:4000/v1
+          - name: LLM_MODEL
+            value: aqs-llm
+          - name: LLM_API_KEY_FILE
+            value: /etc/aqs/llm/api-key
+          - name: SSL_CERT_FILE
+            value: /etc/aqs/litellm-ca/ca.crt
+          - name: REPORTER_TIMEOUT_S
+            value: "120"
+          - name: REPORTER_MAX_INPUT_TOKENS
+            value: "16000"
+          - name: REPORTER_MAX_OUTPUT_TOKENS
+            value: "8000"
           - name: REPORTER_EVIDENCE
             value: s3
           - name: EVIDENCE_BUCKET
@@ -298,15 +330,19 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/volumeMounts/-
         value:
-          name: fixtures
-          mountPath: /etc/aqs/fixtures
+          name: litellm-ca
+          mountPath: /etc/aqs/litellm-ca
           readOnly: true
       - op: add
         path: /spec/template/spec/volumes/-
         value:
-          name: fixtures
-          configMap:
-            name: agents-fixtures-reporter
+          name: litellm-ca
+          secret:
+            secretName: litellm-tls
+            defaultMode: 0444
+            items:
+              - key: ca.crt
+                path: ca.crt
 # U8-T04: en kind el warm arranca con la app de referencia (demo/target-app), que sirve el baseline real en :9090.
 # nginx (base) no tiene ese listener: sin esto, el warm no puede resetearse de dirty a ready en un clúster nuevo.
 images:

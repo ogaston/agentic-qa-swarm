@@ -248,10 +248,19 @@ secrets_no_en_logs() {
   done
   v=$(sed -n 2p "$STATE_DIR/demo.txt" 2>/dev/null) || v=""
   [ -n "$v" ] && printf '%s\n' "$v" >>"$pats"
+  # U8-T09: clave maestra de LiteLLM y clave del proveedor (nunca deben aparecer en logs).
+  v=$(kubectl get secret agents-llm-key -n "$NS_SYS" -o jsonpath='{.data.api-key}' | base64 -d) || return 1
+  [ -n "$v" ] && printf '%s\n' "$v" >>"$pats"
+  v=$(kubectl get secret litellm-upstream -n "$NS_SYS" -o jsonpath='{.data.upstream-api-key}' | base64 -d) || return 1
+  [ -n "$v" ] && printf '%s\n' "$v" >>"$pats"
   # shellcheck disable=SC2016  # patrón literal: el $ no debe expandirse
   printf '%s\n' 'password_hash' '$argon2id$' >>"$pats"
   : >"$logs"
   for svc in "${SERVICES[@]}"; do
+    kubectl logs "deploy/$svc" -n "$NS_SYS" --all-containers >>"$logs" 2>&1 || { echo "kubectl logs deploy/$svc falló"; return 1; }
+  done
+  # U8-T09: LiteLLM y los agentes con LLM real también están en el alcance de este control.
+  for svc in litellm agent-planner agent-reporter; do
     kubectl logs "deploy/$svc" -n "$NS_SYS" --all-containers >>"$logs" 2>&1 || { echo "kubectl logs deploy/$svc falló"; return 1; }
   done
   # F-04: cero líneas en total no demuestra ausencia de secretos; sería un falso OK.
@@ -308,7 +317,29 @@ ciclo_webhook_confirm_corrida() {
 }
 check ciclo-webhook-confirm-corrida ciclo_webhook_confirm_corrida
 
-echo "PENDIENTE planner/reporter con LLM real (U8-T09: en kind usan LLM falso; LiteLLM no está desplegado; cubierto por scripts/test/u8-agents-kind.sh)"
+# 9. LLM real (U8-T09): LiteLLM disponible; planner y reporter con LLM_PROVIDER=http; y el egreso de LiteLLM
+# está acotado al upstream: desde su pod, 1.1.1.1:443 no debe responder. Precondición: Python responde en el pod.
+llm_real_configurado() {
+  local n d p
+  n=$(kubectl get deploy litellm -n "$NS_SYS" -o jsonpath='{.status.availableReplicas}' 2>/dev/null) || n=""
+  [ "${n:-0}" -ge 1 ] || { echo "deploy/litellm sin réplicas disponibles"; return 1; }
+  for d in agent-planner agent-reporter; do
+    p=$(kubectl get deploy "$d" -n "$NS_SYS" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LLM_PROVIDER")].value}') || p=""
+    [ "$p" = http ] || { echo "deploy/$d LLM_PROVIDER=${p:-vacío} (se espera http)"; return 1; }
+  done
+}
+check llm-real-configurado llm_real_configurado
+
+litellm_egress_acotado() {
+  kubectl exec deploy/litellm -n "$NS_SYS" -- python3 -c 'print("ok")' >/dev/null 2>&1 \
+    || { echo "no se puede ejecutar python3 en deploy/litellm (precondición)"; return 1; }
+  if kubectl exec deploy/litellm -n "$NS_SYS" -- python3 -c 'import socket; socket.create_connection(("1.1.1.1", 443), timeout=5)' >/dev/null 2>&1; then
+    echo "deploy/litellm alcanza 1.1.1.1:443: el egreso no está acotado al upstream"
+    return 1
+  fi
+}
+check litellm-egress-acotado litellm_egress_acotado
+
 echo "reset verificado: cubierto por scripts/test/u8-target-app-kind.sh (U8-T04, baseline real de demo/target-app)"
 echo "usuario MinIO de los agentes: cubierto por scripts/test/u8-minio-user-kind.sh (U8-T05, C-107)"
 

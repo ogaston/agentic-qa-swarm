@@ -38,7 +38,32 @@ declare -A SECRET_NS=(
   [go-intake-webhook]=aqs-system
   [target-app-baseline-token]=aqs-test
   [agents-llm-key]=aqs-system
+  [litellm-tls]=aqs-system
+  [litellm-upstream]=aqs-system
 )
+
+# --- U8-T09: insumos del humano (fuera del repo). Se validan ANTES de tocar el clúster y sus valores
+# nunca se imprimen: los errores nombran la variable, no su contenido.
+litellm_env="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind/litellm.env"
+deepseek_key="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind/deepseek.key"
+LITELLM_UPSTREAM_IP="" LITELLM_UPSTREAM_PORT="" LITELLM_UPSTREAM_MODEL=""
+
+# Lee una variable de litellm.env sin evaluar el archivo (no se ejecuta como shell).
+litellm_var() {
+  grep -E "^$1=" "$litellm_env" | tail -n1 | cut -d= -f2- | tr -d '\r'
+}
+
+check_litellm_inputs() {
+  [ -f "$litellm_env" ] || fail "falta $litellm_env (insumo del humano, modo 600)"
+  [ -f "$deepseek_key" ] || fail "falta $deepseek_key (insumo del humano, modo 600)"
+  [ -s "$deepseek_key" ] || fail "$deepseek_key está vacío"
+  LITELLM_UPSTREAM_IP=$(litellm_var LITELLM_UPSTREAM_IP)
+  LITELLM_UPSTREAM_PORT=$(litellm_var LITELLM_UPSTREAM_PORT)
+  LITELLM_UPSTREAM_MODEL=$(litellm_var LITELLM_UPSTREAM_MODEL)
+  [[ "$LITELLM_UPSTREAM_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail "LITELLM_UPSTREAM_IP ausente o no es IPv4 literal en litellm.env"
+  [[ "$LITELLM_UPSTREAM_PORT" =~ ^[0-9]{1,5}$ ]] || fail "LITELLM_UPSTREAM_PORT ausente o no numérico en litellm.env"
+  [[ "$LITELLM_UPSTREAM_MODEL" =~ ^[A-Za-z0-9._/-]+$ ]] || fail "LITELLM_UPSTREAM_MODEL ausente o con caracteres no válidos en litellm.env"
+}
 
 # Namespace con apply (no create): así lleva last-applied-configuration y apply -k no avisa (F-04).
 ensure_namespace() {
@@ -104,6 +129,9 @@ for name in "${wanted[@]}"; do
   [ -n "${SECRET_NS[$name]:-}" ] || fail "el Secret '$name' lo referencia deploy/flux/kind y no está en la lista que sabe crear"
 done
 
+# Insumos del humano (U8-T09): validados antes de crear nada.
+check_litellm_inputs
+
 # --- 3. Generadores (escriben en $1, un directorio privado) --------------------------------
 gen_minio_root() { # keys: root-user, root-password
   printf 'aqs-minio' > "$1/root-user"
@@ -156,8 +184,56 @@ gen_go_identity_users() { # key: users.json; contraseñas y mfa_secret a $state_
 gen_go_intake_webhook() { # key: secret (HMAC del webhook de GitHub, go-intake)
   rand_hex 32 > "$1/secret"
 }
-gen_agents_llm_key() { # key: api-key (U8-T05). En kind los agentes usan LLM_PROVIDER=fake y no la leen: valor de relleno.
-  rand_hex 32 > "$1/api-key"
+gen_agents_llm_key() { # key: api-key. Clave maestra de LiteLLM (U8-T09): planner y reporter la presentan como Bearer.
+  printf 'sk-%s' "$(rand_hex 24)" > "$1/api-key"
+}
+gen_litellm_tls() { # keys: ca.crt, tls.crt, tls.key (SAN del servicio litellm en aqs-system, U8-T09)
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=aqs-kind-litellm-ca" \
+    -keyout "$1/ca.key" -out "$1/ca.crt" >/dev/null 2>&1
+  openssl req -newkey rsa:2048 -nodes -subj "/CN=litellm.aqs-system.svc" \
+    -keyout "$1/tls.key" -out "$1/tls.csr" >/dev/null 2>&1
+  printf 'subjectAltName=DNS:litellm.aqs-system.svc,DNS:litellm.aqs-system.svc.cluster.local\n' > "$1/san.ext"
+  openssl x509 -req -in "$1/tls.csr" -CA "$1/ca.crt" -CAkey "$1/ca.key" -CAcreateserial \
+    -days 825 -extfile "$1/san.ext" -out "$1/tls.crt" >/dev/null 2>&1
+  rm -f "$1/ca.key" "$1/tls.csr" "$1/san.ext" "$1/ca.srl"
+}
+# Se reaplica en cada ejecución (ver el bucle de creación): sus valores vienen de los insumos del humano.
+gen_litellm_upstream() { # keys: config.yaml (modelo y upstream, sin clave), upstream-api-key (clave del proveedor)
+  tr -d ' \r\n' < "$deepseek_key" > "$1/upstream-api-key"
+  cat > "$1/config.yaml" <<EOF
+model_list:
+  - model_name: aqs-llm
+    litellm_params:
+      model: openai/${LITELLM_UPSTREAM_MODEL}
+      api_base: http://${LITELLM_UPSTREAM_IP}:${LITELLM_UPSTREAM_PORT}/v1
+      api_key: os.environ/UPSTREAM_API_KEY
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+EOF
+}
+
+# NetworkPolicy de egreso de LiteLLM al upstream: IP/32 y puerto de litellm.env. Se aplica al clúster y NO
+# se escribe en el repo. kubectl apply -k no la poda (no está en el overlay).
+render_litellm_egress() {
+  kubectl apply -f - >/dev/null <<EOF || fail "no se pudo aplicar la NetworkPolicy litellm-egress-upstream"
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: litellm-egress-upstream
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: ${LITELLM_UPSTREAM_IP}/32
+      ports:
+        - {protocol: TCP, port: ${LITELLM_UPSTREAM_PORT}}
+EOF
+  echo "secrets: aqs-system/networkpolicy litellm-egress-upstream renderizada desde litellm.env (IP/32 y puerto locales)"
 }
 
 # Archivos de cada Secret: nombre del Secret -> función generadora.
@@ -174,12 +250,15 @@ declare -A GENERATOR=(
   [go-intake-webhook]=gen_go_intake_webhook
   [target-app-baseline-token]=gen_service_token
   [agents-llm-key]=gen_agents_llm_key
+  [litellm-tls]=gen_litellm_tls
+  [litellm-upstream]=gen_litellm_upstream
 )
 
 # --- 4. Creación ------------------------------------------------------------------------
 for name in "${wanted[@]}"; do
   ns=${SECRET_NS[$name]}
-  if kubectl get secret "$name" -n "$ns" >/dev/null 2>&1; then
+  # litellm-upstream sale de litellm.env y deepseek.key: se reaplica siempre para que un cambio de insumo llegue.
+  if [ "$name" != litellm-upstream ] && kubectl get secret "$name" -n "$ns" >/dev/null 2>&1; then
     echo "secrets: $ns/$name ya existe; no se regenera"
     continue
   fi
@@ -197,6 +276,8 @@ for name in "${wanted[@]}"; do
     | kubectl apply -f - >/dev/null
   echo "secrets: $ns/$name creado"
 done
+
+render_litellm_egress
 
 for name in "${wanted[@]}"; do
   if [ "$name" = target-app-baseline-token ]; then copy_target_app_token; fi

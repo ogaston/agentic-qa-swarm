@@ -61,7 +61,7 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Ciclo de control: webhook → notificación → confirm → corrida creada en el controlador | Funciona (U8-T01/U8-T06) | `ciclo-webhook-confirm-corrida` de `kind-smoke.sh` |
 | Ciclo completo hasta el reporte, camino feliz (`--bug off`: deploy, superficie, plan, ensayo, runners, evidencia, reset, reporte) | Funciona (U8-T08, ronda 2), con las precondiciones de la sección «Demo de punta a punta» | `scripts/kind/kind-e2e.sh --bug off` |
 | Bug sembrado detectado en la corrida (`--bug oversell`) | Funciona (U8-T08 ronda 3, con U8-T08b): el paso `POST /orders` lleva `body` (`qty` 11 sobre stock 10), el flujo es `invariant_probe: true` (en el ensayo basta con que sea ejecutable) y el defecto se activa antes de los runners | `scripts/kind/kind-e2e.sh --bug oversell` |
-| Planner y reporter en el clúster | Funciona con LLM falso (U8-T05). Sin LiteLLM ni clave real (U8-T09); el ciclo completo lo ejerce `scripts/kind/kind-e2e.sh` (U8-T08) | `scripts/test/u8-agents-kind.sh` (`planner-plan-valido`, `reporter-lee-minio`, `otro-pod-bloqueado`) |
+| Planner y reporter en el clúster | Funciona con LLM real vía LiteLLM (U8-T09): `LLM_PROVIDER=http` en kind; el LLM falso queda solo en `scripts/test/` | `llm-real-configurado`, `litellm-egress-acotado` en `kind-smoke.sh`; `kind-e2e.sh` |
 | Reset verificado del warm | Verificado (U8-T04) | `go-reset-baseline` es el baseline real de `demo/target-app`; `scripts/test/u8-target-app-kind.sh` ensucia la base, resetea y lee `GET /orders` vacío y `verify` 0 |
 | Evidencia en MinIO desde los agentes | Funciona (U8-T05). El usuario `aqs-evidence` lo crea `minio-init` con política solo sobre `evidence` | `scripts/test/u8-minio-user-kind.sh` (`put-evidence`, `get-evidence`, `sin-admin`, `otro-bucket-denegado`) |
 
@@ -138,6 +138,41 @@ hace el ciclo por sí solo):
   runners son estrictos: con el defecto fallan en `flow-1`, y el reporte declara `bug` citando esa
   evidencia real (`runs/<run>/flow-1/result.json`).
 - La reversión del defecto (`$patch: delete` de `TARGET_APP_BUG`) se hace siempre en el trap.
+
+## LLM real y LiteLLM (U8-T09)
+
+LiteLLM (`ghcr.io/berriai/litellm:v1.106.0`, fijada en `deploy/flux/kind/litellm.yaml`) corre en `aqs-system`
+como proxy compatible con OpenAI hacia el gateway del humano. Es el único componente con egress al
+proveedor.
+
+Insumos del humano, fuera del repo (modo 600): `${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key` y
+`${XDG_RUNTIME_DIR}/aqs-kind/litellm.env` (variables `LITELLM_UPSTREAM_IP`, `LITELLM_UPSTREAM_PORT`,
+`LITELLM_UPSTREAM_MODEL`). `scripts/kind/secrets.sh` los valida antes de tocar el clúster y crea:
+
+- Secret `litellm-upstream` (`config.yaml` con el modelo y la dirección del upstream; `upstream-api-key`).
+  Se reaplica en cada ejecución.
+- Secret `agents-llm-key` (`api-key`): clave maestra de LiteLLM, con prefijo `sk-`. Planner y reporter la
+  presentan como Bearer.
+- Secret `litellm-tls` (`ca.crt`, `tls.crt`, `tls.key`): TLS del servicio. Los agentes exigen https
+  (`agents/*/llm_http.py`), así que confían en `ca.crt` con `SSL_CERT_FILE`.
+- NetworkPolicy `litellm-egress-upstream`, renderizada en el clúster con `IP/32` y puerto de `litellm.env`
+  (no va al repo). El overlay pone `litellm-egress-default-deny`.
+
+Planner y reporter usan `LLM_BASE_URL=https://litellm.aqs-system.svc:4000/v1` y `LLM_MODEL=aqs-llm` (alias de
+la config de LiteLLM; el nombre del modelo del proveedor no sale del Secret). Tope de salida 8000 y timeout
+120 s: el modelo es de razonamiento y con `max_tokens` bajo el `content` llega vacío.
+
+`scripts/kind/load-images.sh` descarga y carga la imagen de LiteLLM. `kind-smoke.sh` comprueba que no hay
+claves en los logs de LiteLLM y de los agentes, que planner y reporter tienen `LLM_PROVIDER=http` y que
+LiteLLM no alcanza `1.1.1.1:443`.
+
+**Limitaciones conocidas.** El `base` de `deploy/flux/base/agents.yaml` usa `LLM_BASE_URL=http://...`, que
+`check_base_url` rechaza (solo https o loopback). Solo kind está corregido. La medición de tokens por corrida
+no es posible: ni LiteLLM sin base de datos ni los agentes persisten el `usage` (candidata).
+
+**Webhook de GitHub real.** El paso del humano (port-forward de go-intake, túnel `cloudflared`, secreto del
+webhook y push real) está en `docs/operaciones/webhook-github-cloudflared.md`. Comprobación:
+`bash scripts/kind/github-webhook-check.sh <sha-40>`.
 
 ## NATS JetStream (U8-T01)
 

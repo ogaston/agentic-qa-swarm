@@ -1,0 +1,166 @@
+# LiteLLM en aqs-system (U8-T09): proxy compatible con OpenAI hacia el gateway del humano.
+# Único componente con egress al proveedor. Solo overlay kind: base/dev/prod no lo despliegan todavía.
+#
+# Secretos (los crea scripts/kind/secrets.sh; el repo no lleva valores):
+#   - agents-llm-key   (clave `api-key`): clave maestra que presentan planner y reporter; LiteLLM la valida.
+#   - litellm-upstream (claves `config.yaml` y `upstream-api-key`): config con el modelo y la dirección del
+#                      upstream (leídos de ${XDG_RUNTIME_DIR}/aqs-kind/litellm.env) y la clave del proveedor.
+#   - litellm-tls      (claves `ca.crt`, `tls.crt`, `tls.key`): TLS en el servicio. El planner y el reporter
+#                      exigen https (agents/*/llm_http.py: http solo hacia loopback), así que confían en ca.crt
+#                      vía SSL_CERT_FILE.
+# Egreso: deny-all aquí; scripts/kind/secrets.sh añade la NetworkPolicy `litellm-egress-upstream` (IP/32 y
+# puerto del upstream) renderizada en el clúster, sin escribirla en el repo.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: litellm
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: litellm
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: litellm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: litellm
+    spec:
+      serviceAccountName: litellm
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        # Los Secrets se montan con modo 0440: el grupo 65532 debe poder leerlos.
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: litellm
+          # Imagen fijada por versión (no latest). Subir la versión exige revisar la config y el CA-2.
+          image: ghcr.io/berriai/litellm:v1.106.0
+          args:
+            - --config
+            - /etc/litellm/config.yaml
+            - --port
+            - "4000"
+            - --ssl_keyfile_path
+            - /etc/aqs/litellm-tls/tls.key
+            - --ssl_certfile_path
+            - /etc/aqs/litellm-tls/tls.crt
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agents-llm-key
+                  key: api-key
+            - name: UPSTREAM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-upstream
+                  key: upstream-api-key
+            - name: HOME
+              value: /tmp
+            # Sin consultas a Internet al arrancar (mapa de costos local; sin telemetría).
+            - name: LITELLM_LOCAL_MODEL_COST_MAP
+              value: "True"
+            - name: LITELLM_TELEMETRY
+              value: "False"
+            - name: DISABLE_SCHEMA_UPDATE
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 4000
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: upstream
+              mountPath: /etc/litellm
+              readOnly: true
+            - name: tls
+              mountPath: /etc/aqs/litellm-tls
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: upstream
+          secret:
+            secretName: litellm-upstream
+            defaultMode: 0440
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: tls
+          secret:
+            secretName: litellm-tls
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: aqs-system
+  labels:
+    app.kubernetes.io/name: litellm
+spec:
+  selector:
+    app.kubernetes.io/name: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+---
+# Egreso denegado por defecto del pod de LiteLLM. La regla al upstream la añade scripts/kind/secrets.sh
+# (NetworkPolicy litellm-egress-upstream, IP/32 y puerto leídos de litellm.env). Sin ella, LiteLLM no sale.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: litellm-egress-default-deny
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  policyTypes: [Egress]
