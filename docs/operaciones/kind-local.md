@@ -59,7 +59,8 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Logs sin secretos | Funciona | `secrets-no-en-logs` |
 | Estado del warm desde ui-api (`GET /warm`) | Funciona. Solo en kind: el overlay `deploy/flux/kind/` define `WARM_URL` y `UIAPI_WARM_TOKEN_FILE` (errata E-3 de U7-T04). En `base`, `dev` y `prod` el hueco sigue abierto (C-103) | `warm-estado` |
 | Ciclo de control: webhook → notificación → confirm → corrida creada en el controlador | Funciona (U8-T01/U8-T06) | `ciclo-webhook-confirm-corrida` de `kind-smoke.sh` |
-| Ciclo completo hasta el reporte (deploy sobre el warm, superficie, plan, ensayo, runners, evidencia, reset, reporte) | **No** en este clúster: se detiene en la fase `deploy` con `400 invalid_run_id` (desajuste de `run_id` entre ui-api y go-warm-manager; candidata de U8-T08) | `scripts/kind/kind-e2e.sh` |
+| Ciclo completo hasta el reporte, camino feliz (`--bug off`: deploy, superficie, plan, ensayo, runners, evidencia, reset, reporte) | Funciona (U8-T08, ronda 2), con las precondiciones de la sección «Demo de punta a punta» | `scripts/kind/kind-e2e.sh --bug off` |
+| Bug sembrado detectado en la corrida (`--bug oversell`) | **No** con el contrato actual: el ensayo ejecuta el mismo plan contra el warm limpio, y su flujo que debe fallar (`POST /orders` sin cuerpo) rompe el ensayo antes de los runners. El defecto solo se activa con un cuerpo JSON (`qty`) que `contracts/plans/flow-plan.schema.json` no puede expresar (`additionalProperties: false`). Candidata de U8-T08 | `scripts/kind/kind-e2e.sh --bug oversell` (FALLA en `ensayo-job` y siguientes) |
 | Planner y reporter en el clúster | Funciona con LLM falso (U8-T05). Sin LiteLLM ni clave real (U8-T09); el ciclo completo lo ejerce `scripts/kind/kind-e2e.sh` (U8-T08) | `scripts/test/u8-agents-kind.sh` (`planner-plan-valido`, `reporter-lee-minio`, `otro-pod-bloqueado`) |
 | Reset verificado del warm | Verificado (U8-T04) | `go-reset-baseline` es el baseline real de `demo/target-app`; `scripts/test/u8-target-app-kind.sh` ensucia la base, resetea y lee `GET /orders` vacío y `verify` 0 |
 | Evidencia en MinIO desde los agentes | Funciona (U8-T05). El usuario `aqs-evidence` lo crea `minio-init` con política solo sobre `evidence` | `scripts/test/u8-minio-user-kind.sh` (`put-evidence`, `get-evidence`, `sin-admin`, `otro-bucket-denegado`) |
@@ -108,12 +109,28 @@ los agentes. La evidencia y las corridas registradas **no** se borran: el contro
 borrado y la evidencia es el resultado. El lock `${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock` serializa lo
 que toca el clúster (ver la nota del final de este documento).
 
-**Limitación actual en kind (bloquea CA-1 y CA-2 de U8-T08):** el controlador se detiene en la fase
-`deploy`. `ui-api` acuña el `run_id` como `run-` + 32 hex (**36** caracteres, `inbox/store.go`) y
-`go-warm-manager` lo valida con un tope de **32** (`types.go`, `runIDRe`), así que responde
-`400 {"error":"invalid_run_id"}` y la corrida pasa a `failed`. Hasta corregir ese desajuste (fuera
-del alcance de U8-T08; se registra como candidata), el ciclo no llega a superficie/plan/ensayo/
-runners/reset/reporte y los `FALLA` de CA-1/CA-2 quedan documentados.
+**Precondiciones que el e2e aplica en un clúster recién desplegado** (medidas en vivo; ninguna la
+hace el ciclo por sí solo):
+
+- **Warm verificado** (`warm_prepare`): un warm nuevo nace con `reset_verified=false` y el gate de
+  `confirmed → warm_ready` lo rechaza. Si `GET /warm` no está `ready`+verificado, el e2e pide un
+  reset inicial a go-reset (`POST /resets`, token `go-reset-service-token`) y lo comprueba.
+- **Política `workflows`** (`gov_policy_seed`): `go-governance` arranca con `policies.jsonl` vacío y
+  deniega todo workflow. El e2e da de alta el `U3_DEFAULT_WORKFLOW` del controlador (`happy-path`)
+  como lo haría el admin: login de `admin` con OTP (secreto local de `scripts/kind/secrets.sh`) y
+  `PUT /policies/workflows`, sin borrar lo que ya hubiera. Es idempotente.
+- **Ventana del planner** (`planner_pause_wait`): el controlador llama a `/v1/plan` en cuanto el warm
+  tiene superficie, y la fixture del planner depende del `run_id`. El e2e pausa el controlador tras
+  el `POST /deploys`, obtiene deploy, superficie y fixture sin él, y lo reanuda (reanudar en
+  `deploying` es seguro: `WarmClient.Deploy` no reenvía el deploy).
+
+**Limitación de contrato (bloquea CA-2 de U8-T08, candidata):** el escenario `--bug oversell` no puede
+completarse con el contrato actual. El defecto de `demo/target-app` solo se activa con un
+`POST /orders` con cuerpo JSON (`qty`, `main.go:173`), y `flow-plan` no tiene campo de cuerpo
+(`additionalProperties: false`). El ensayo ejecuta el plan contra el warm limpio antes de activar el
+defecto, así que el flujo que debe fallar hace fallar el ensayo y la corrida nunca llega a runners.
+El e2e lo reporta como `FALLA`; no fabrica el veredicto. Arreglarlo exige cambiar `contracts/` y el
+runner (fuera del alcance de U8-T08).
 
 ## NATS JetStream (U8-T01)
 

@@ -17,10 +17,12 @@
 #
 # Escenarios:
 #   --bug off        ciclo nominal; veredicto sin hallazgos (todos los flujos pasan).
-#   --bug oversell   la app demo se parchea con TARGET_APP_BUG=oversell ANTES de los runners
-#                    (deployment warm-app de aqs-test; se revierte SIEMPRE con trap). El plan
-#                    tiene >=1 flujo que falla y el reporter deterministico lo correlaciona como
-#                    hallazgo que cita la invariante de stock y enlaza la evidencia real.
+#   --bug oversell   la app demo se parchea con TARGET_APP_BUG=oversell DESPUES del ensayo
+#                    (deployment warm-app de aqs-test; se revierte SIEMPRE con trap). BLOQUEADO
+#                    POR CONTRATO (U8-T08 ronda 2, candidata): el defecto solo se activa con un
+#                    POST /orders con cuerpo JSON (qty), que flow-plan no expresa; y el flujo que
+#                    debe fallar hace fallar el ensayo, que corre el mismo plan antes del defecto.
+#                    Este escenario imprime FALLA en ensayo-job y siguientes; no fabrica el veredicto.
 #   --sin-confirmar  webhook valido, NINGUNA confirmacion: la notificacion sigue `pending` en el
 #                    inbox, no hay recibo y no nace ningun Job de corrida.
 #
@@ -88,6 +90,8 @@ P_IDENTITY=18616
 P_UI=18617
 P_RUN=18618
 P_WARM=18619
+P_RESET=18620   # solo para el reset inicial del warm (warm_prepare); go-reset no se expone fuera
+P_GOV=18621     # solo para dar de alta la politica workflows (gov_policy_seed)
 DEMO_USER=demo
 PLAZO_SIN_CONFIRMAR=${PLAZO_SIN_CONFIRMAR:-30}
 
@@ -125,6 +129,7 @@ PF_RUN_PID=""
 MC_POD=""
 PROBE_POD=""
 BUG_PATCHED=0
+CTRL_PAUSED=0
 BUG_PREV=""
 BUG_PREV_SET=0
 FIXTURES_DIRTY=""
@@ -188,6 +193,11 @@ cleanup() {
         -p '{"spec":{"template":{"spec":{"containers":[{"name":"warm-app","env":[{"name":"TARGET_APP_BUG","$patch":"delete"}]}]}}}}' >/dev/null 2>&1 || true
     fi
     kcx -n "$NS_TEST" rollout status deployment/"$WARM_DEPLOY" --timeout=120s >/dev/null 2>&1 || true
+  fi
+  # el controlador no puede quedar pausado (0 replicas) si el escenario se corta en la ventana del planner
+  if [ "$CTRL_PAUSED" = 1 ]; then
+    kcx -n "$NS_SYS" scale deploy/go-run-controller --replicas=1 >/dev/null 2>&1 || true
+    CTRL_PAUSED=0
   fi
   [ -n "$FIXTURES_DIRTY" ] && restore_fixtures
   [ -n "$MC_POD" ] && pod_down "$NS_SYS" "$MC_POD"
@@ -337,6 +347,94 @@ inbox_check() { # la notificacion del webhook esta en el inbox, en estado pendin
   local st
   st=$(jq -r --arg n "$NOTIF_ID" '[.[] | select(.id == $n)][0].state' "$work/inbox.json")
   [ "$st" = pending ] || { echo "la notificacion $NOTIF_ID no esta pending (state=$st)"; return 1; }
+}
+
+# --- precondicion: warm verificado (U8-T08, ronda 2) -----------------------------
+# Un warm recien desplegado nace con reset_verified=false: go-reset solo lo pone en true al cerrar
+# un reset exitoso (services/go-reset/internal/core/service.go:172). El gate de confirmed->warm_ready
+# exige reset_verified=true (services/go-run-controller/runctl), asi que sin un reset inicial toda
+# corrida muere en `confirmed` (medido en vivo: «hechos exigidos no cumplidos: reset_verified=false»).
+# Este paso hace SOLO lo necesario: si GET /warm ya esta ready+verificado no toca nada; si no, pide
+# el mismo reset que el ciclo haria al cerrar una corrida (POST /resets a go-reset, token
+# go-reset-service-token) y exige reset_verified=true y state=ready al volver a leer /warm.
+warm_prepare() {
+  expect_http 200 "http://127.0.0.1:$P_UI/warm" -H "Authorization: Bearer $TOKEN" || return 1
+  if [ "$(jq -r '.state // empty' "$work/body")" = ready ] && [ "$(jq -r '.reset_verified // empty' "$work/body")" = true ]; then
+    echo "warm ya ready y verificado; no hace falta reset inicial"
+    return 0
+  fi
+  local rtok rid code
+  rtok=$(kcx -n "$NS_SYS" get secret go-reset-service-token -o jsonpath='{.data.token}' 2>/dev/null | base64 -d)
+  [ -n "$rtok" ] || { echo "secret go-reset-service-token vacio"; return 1; }
+  pf go-reset "$P_RESET" || return 1
+  wait_pf "$P_RESET" || return 1
+  rid="run-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+  code=$(curl -sS -o "$work/reset.json" -w '%{http_code}' --max-time 300 -X POST \
+    -H "Authorization: Bearer $rtok" -H 'Content-Type: application/json' \
+    -d "{\"run_id\":\"$rid\"}" "http://127.0.0.1:$P_RESET/resets") || code=000
+  [ "$code" = 200 ] || { echo "POST /resets (reset inicial) respondio $code: $(head -c 300 "$work/reset.json")"; return 1; }
+  jq -e '.reset_verified == true' "$work/reset.json" >/dev/null || {
+    echo "reset inicial sin reset_verified=true: $(head -c 300 "$work/reset.json")"; return 1
+  }
+  expect_http 200 "http://127.0.0.1:$P_UI/warm" -H "Authorization: Bearer $TOKEN" || return 1
+  [ "$(jq -r '.state // empty' "$work/body")" = ready ] || { echo "warm tras el reset inicial no esta ready: $(head -c 200 "$work/body")"; return 1; }
+  [ "$(jq -r '.reset_verified // empty' "$work/body")" = true ] || { echo "GET /warm tras el reset inicial: reset_verified!=true: $(head -c 200 "$work/body")"; return 1; }
+}
+
+# --- precondicion: politica `workflows` de go-governance (U8-T08, ronda 2) ----------
+# En kind, go-governance arranca con policies.jsonl VACIO (0 bytes, medido): ninguna corrida pasa la
+# fase run («workflow "happy-path" no está en la política workflows»). El workflow de la corrida es
+# U3_DEFAULT_WORKFLOW del controlador. Se da de alta como lo haria el admin: login de `admin` con OTP
+# (secreto local de scripts/kind/secrets.sh, TOTP RFC 6238 SHA-1 a 6 digitos) y PUT /policies/workflows
+# con el workflow anadido a los que ya hubiera. Idempotente: si ya esta, no escribe. Las credenciales
+# no se imprimen ni salen en la linea de comandos del curl (van por fichero).
+totp_now() { # <secreto base32>: codigo TOTP actual (stdlib de python, sin dependencias)
+  python3 -I -c '
+import base64, hashlib, hmac, struct, sys, time
+s = sys.argv[1].strip().upper().rstrip("=")
+s += "=" * (-len(s) % 8)
+h = hmac.new(base64.b32decode(s), struct.pack(">Q", int(time.time()) // 30), hashlib.sha1).digest()
+o = h[-1] & 0x0F
+print("%06d" % ((struct.unpack(">I", h[o:o + 4])[0] & 0x7FFFFFFF) % 1000000))' "$1"
+}
+
+gov_policy_seed() {
+  local wf pw secret tok code existing merged try
+  wf=$(workflow_default)
+  pw=$(sed -n 2p "$STATE_DIR/admin.txt" 2>/dev/null) || pw=""
+  secret=$(sed -n 1p "$STATE_DIR/admin-mfa-secret.txt" 2>/dev/null) || secret=""
+  [ -n "$pw" ] && [ -n "$secret" ] || { echo "faltan credenciales de admin en $STATE_DIR (scripts/kind/secrets.sh)"; return 1; }
+  pf go-governance "$P_GOV" || return 1
+  wait_pf "$P_GOV" || return 1
+  # login admin: un codigo TOTP solo vale una vez por ventana (lastOTP en go-identity); un reintento
+  # espera la siguiente ventana de 30 s si el primero cayo por reutilizacion.
+  tok=""
+  for try in 1 2; do
+    jq -n --arg p "$pw" --arg o "$(totp_now "$secret")" '{username: "admin", password: $p, otp: $o}' >"$work/admin-login.json" || return 1
+    code=$(curl -sS -o "$work/admin-login.out" -w '%{http_code}' --max-time 15 \
+      -H 'Content-Type: application/json' --data @"$work/admin-login.json" "http://127.0.0.1:$P_IDENTITY/auth/login") || code=000
+    if [ "$code" = 200 ]; then tok=$(jq -r '.token // empty' "$work/admin-login.out"); break; fi
+    sleep 31
+  done
+  rm -f "$work/admin-login.json"
+  [ -n "$tok" ] || { echo "login de admin fallo (ultimo $code): $(head -c 200 "$work/admin-login.out")"; return 1; }
+  code=$(curl -sS -o "$work/pol.json" -w '%{http_code}' --max-time 15 -H "Authorization: Bearer $tok" \
+    "http://127.0.0.1:$P_GOV/policies/workflows") || code=000
+  case "$code" in
+    200) existing=$(jq -c '.value.workflows // []' "$work/pol.json") ;;
+    404) existing='[]' ;;
+    *) echo "GET /policies/workflows -> $code: $(head -c 200 "$work/pol.json")"; return 1 ;;
+  esac
+  if jq -e --arg w "$wf" 'any(.[]; .name == $w)' <<<"$existing" >/dev/null; then
+    echo "politica workflows ya contiene $wf"
+    return 0
+  fi
+  merged=$(jq -c --arg w "$wf" '. + [{name: $w, complexity: "low", max_runs_per_day: 1000, timeout_seconds: 3600, requires_approval: false}]' <<<"$existing") || return 1
+  jq -n --argjson ws "$merged" '{value: {workflows: $ws}}' >"$work/policy-workflows.json" || return 1
+  code=$(curl -sS -o "$work/pol-put.json" -w '%{http_code}' --max-time 15 -X PUT -H "Authorization: Bearer $tok" \
+    -H 'Content-Type: application/json' --data @"$work/policy-workflows.json" "http://127.0.0.1:$P_GOV/policies/workflows") || code=000
+  [ "$code" = 200 ] || { echo "PUT /policies/workflows -> $code: $(head -c 200 "$work/pol-put.json")"; return 1; }
+  echo "politica workflows: alta de $wf (version $(jq -r '.version // "?"' "$work/pol-put.json"))"
 }
 
 confirm_notification() {
@@ -507,10 +605,28 @@ else:
     ]
 
 plan = {"run_id": run, "workflow": wf, "flows": flows}
-doc = [{"surface": surface, "workflow": wf, "plan": plan}]
+# Forma que espera agent_planner.fakes.surfaces.register_surfaces: UN objeto por archivo (no una
+# lista). Con una lista, doc["surface"] lanza TypeError, config.py lo convierte en ConfigError y el
+# planner entra en CrashLoopBackOff (medido en vivo en U8-T08 ronda 2).
+doc = {"surface": surface, "workflow": wf, "plan": plan}
 Path(out).write_text(json.dumps(doc, ensure_ascii=True, indent=2) + "\n")
 PY
   [ -s "$work/planner-fixture.json" ] || { echo "no se genero la fixture del planner"; return 1; }
+}
+
+# wait_no_terminating <etiqueta> [segundos]: espera a que no quede ningun pod de esa etiqueta en
+# Terminating. `rollout status` da por bueno el rollout en cuanto la replica nueva esta Ready, pero la
+# vieja sigue en el Service un rato: medido en vivo (U8-T08 ronda 2), el /v1/plan de la corrida caia
+# en la replica vieja con la fixture anterior y respondia llm_unavailable.
+wait_no_terminating() {
+  local sel=$1 secs=${2:-120} i=0 left
+  while [ "$i" -lt "$secs" ]; do
+    left=$(kcx -n "$NS_SYS" get pods -l "$sel" -o jsonpath='{range .items[?(@.metadata.deletionTimestamp)]}{.metadata.name}{" "}{end}' 2>/dev/null)
+    [ -z "$left" ] && return 0
+    i=$((i + 1)); sleep 1
+  done
+  echo "pods con $sel aun en Terminating tras ${secs}s: $left"
+  return 1
 }
 
 apply_planner_fixture() {
@@ -520,6 +636,7 @@ apply_planner_fixture() {
   FIXTURES_DIRTY="$FIXTURES_DIRTY agents-fixtures-planner"
   kcx -n "$NS_SYS" rollout restart deploy/agent-planner >/dev/null || return 1
   kcx -n "$NS_SYS" rollout status deploy/agent-planner --timeout=180s >/dev/null || return 1
+  wait_no_terminating app.kubernetes.io/name=agent-planner 120 || return 1
 }
 
 # Envoltorio para `check`: las funciones corren en ESTE shell (con sus globales), no en un `bash -c`.
@@ -540,7 +657,18 @@ ensayo_job_ok() { jobs_phase_done rehearse; }
 
 # --- MinIO (mc dentro de un pod; usuario de agentes aqs-evidence) --------------
 minio_up() { [ -n "$MC_POD" ] && return 0; MC_POD=$MC_POD_N; mc_pod_up "$NS_SYS" "$MC_POD_N"; }
-minio_ls() { mc_as aqs "$MC_POD" ls --recursive "m/evidence/runs/$RUN_ID/" 2>/dev/null | awk '{print $NF}' | sed "s|^m/evidence/||" | grep -v '/$' | grep .; }
+# `mc ls --recursive <prefijo>/` imprime la ruta RELATIVA al prefijo (medido: «flow-1/logs.txt»); se
+# normaliza a la clave completa «runs/<run>/flow-1/logs.txt» que usan download_evidence y los checks.
+minio_ls() {
+  local k
+  mc_as aqs "$MC_POD" ls --recursive "m/evidence/runs/$RUN_ID/" 2>/dev/null | awk '{print $NF}' | grep -v '/$' | grep . |
+    while IFS= read -r k; do
+      case "$k" in
+        runs/*) printf '%s\n' "$k" ;;
+        *) printf 'runs/%s/%s\n' "$RUN_ID" "$k" ;;
+      esac
+    done
+}
 
 evidence_ok() {
   minio_up || return 1
@@ -618,16 +746,39 @@ apply_reporter_fixture() {
   FIXTURES_DIRTY="$FIXTURES_DIRTY agents-fixtures-reporter"
   kcx -n "$NS_SYS" rollout restart deploy/agent-reporter >/dev/null || return 1
   kcx -n "$NS_SYS" rollout status deploy/agent-reporter --timeout=180s >/dev/null || return 1
+  wait_no_terminating app.kubernetes.io/name=agent-reporter 120 || return 1
 }
 
 pause_controller() {
   kcx -n "$NS_SYS" scale deploy/go-run-controller --replicas=0 >/dev/null || return 1
+  CTRL_PAUSED=1
   kcx -n "$NS_SYS" wait --for=delete pod -l app.kubernetes.io/name=go-run-controller --timeout=120s >/dev/null 2>&1 || true
 }
 resume_controller() {
   kcx -n "$NS_SYS" scale deploy/go-run-controller --replicas=1 >/dev/null || return 1
+  CTRL_PAUSED=0
   kcx -n "$NS_SYS" rollout status deploy/go-run-controller --timeout=180s >/dev/null || return 1
 }
+
+# Ventana del planner (U8-T08, ronda 2). El controlador llama a U3 (/v1/plan) en cuanto el warm
+# tiene superficie: la fase infer es un POST /surface y la fase rehearse lanza el plan enseguida
+# (medido: la llamada llegaba antes de que existiera la fixture del planner, que depende del run_id).
+# Solucion: tras el POST /deploys del controlador, se pausa el controlador; el deploy, la superficie
+# y la fixture se obtienen SIN el controlador (warm-manager es asincrono); luego se reanuda. Reanudar
+# en `deploying` es seguro: WarmClient.Deploy no reenvia POST /deploys si el deploy ya existe.
+planner_pause_wait() {
+  local i=0 code=000
+  while [ "$i" -lt 120 ]; do
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -H "Authorization: Bearer $WARM_TOKEN" \
+      "http://127.0.0.1:$P_WARM/deploys/$RUN_ID") || code=000
+    [ "$code" = 200 ] && break
+    i=$((i + 2)); sleep 2
+  done
+  [ "$code" = 200 ] || { echo "el controlador no emitio el deploy de $RUN_ID en 120s (ultimo $code)"; return 1; }
+  pause_controller || { echo "no se pudo pausar el controlador"; return 1; }
+}
+
+resume_after_planner() { resume_controller && pf_run_restart; }
 
 # Ventana del reporter: con la evidencia ya escrita, pausa el controlador, baja la evidencia,
 # genera y aplica la fixture del reporter y SIEMPRE reanuda (aunque algo falle, el controlador
@@ -676,7 +827,8 @@ bug_apply() { patch_warm_bug && bug_active; }
 # debe estar `ready` con `reset_verified=true` REAL. Sin atarlo al estado de la corrida, un warm ya
 # limpio de una corrida previa daria un OK trivial.
 reset_verified() {
-  run_get || return 1
+  # el reset ocurre en `resetting`: se espera a que la corrida pase a reporting/done antes de leer el warm
+  wait_state 240 reporting done || return 1
   local rs
   rs=$(run_state)
   case "$rs" in
@@ -788,6 +940,8 @@ if [ "$SIN_CONFIRMAR" = 1 ]; then
   exit 1
 fi
 
+check politica-workflow gov_policy_seed
+check warm-verificado warm_prepare
 check confirm confirm_notification
 if [ "$fail" != 0 ] || [ -z "$RUN_ID" ]; then
   echo "kind-e2e: sin confirmacion no hay ciclo (checks OK=${CHECKS_OK})"
@@ -795,9 +949,11 @@ if [ "$fail" != 0 ] || [ -z "$RUN_ID" ]; then
 fi
 
 # deploy (fase deploy sobre el warm) -> infer -> rehearse -> run -> reset -> report -> done
+check ventana-planner planner_pause_wait
 check deploy deploy_done 300
 check superficie warm_surface 180
 check planner-fixture planner_fixture_apply
+check reanuda-controlador resume_after_planner
 check plan wait_state 240 running resetting reporting done
 check ensayo wait_state 240 running resetting reporting done
 check ensayo-job ensayo_job_ok
