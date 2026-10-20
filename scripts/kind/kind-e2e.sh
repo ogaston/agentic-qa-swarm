@@ -17,12 +17,15 @@
 #
 # Escenarios:
 #   --bug off        ciclo nominal; veredicto sin hallazgos (todos los flujos pasan).
-#   --bug oversell   la app demo se parchea con TARGET_APP_BUG=oversell DESPUES del ensayo
-#                    (deployment warm-app de aqs-test; se revierte SIEMPRE con trap). BLOQUEADO
-#                    POR CONTRATO (U8-T08 ronda 2, candidata): el defecto solo se activa con un
-#                    POST /orders con cuerpo JSON (qty), que flow-plan no expresa; y el flujo que
-#                    debe fallar hace fallar el ensayo, que corre el mismo plan antes del defecto.
-#                    Este escenario imprime FALLA en ensayo-job y siguientes; no fabrica el veredicto.
+#   --bug oversell   la app demo se parchea con TARGET_APP_BUG=oversell (deployment warm-app de
+#                    aqs-test; se revierte SIEMPRE con trap) DESPUES del deploy y ANTES del ensayo,
+#                    dentro de la ventana en la que el controlador esta pausado. Asi el defecto
+#                    esta activo cuando corren los runners (el controlador los lanza nada mas
+#                    acabar el ensayo; parchear despues del ensayo llegaba tarde: medido en U8-T08
+#                    ronda 3). El flujo de sondeo (invariant_probe: true, U8-T08b) solo exige en
+#                    el ensayo que sea ejecutable (estado < 500: 201 o 409 valen); los runners son
+#                    estrictos (expect_status 409) y con el defecto fallan en flow-1: el reporte
+#                    declara `bug` citando esa evidencia. No se fabrica el veredicto.
 #   --sin-confirmar  webhook valido, NINGUNA confirmacion: la notificacion sigue `pending` en el
 #                    inbox, no hay recibo y no nace ningun Job de corrida.
 #
@@ -579,8 +582,11 @@ surface = json.loads(Path(surf_path).read_text())
 has = {(e["method"], e["path"]) for e in surface.get("endpoints", [])}
 def pick(*pairs):
     return [{"method": m, "path": p} for m, p in pairs if (m, p) in has]
-def step(m, p, expect):
-    return {"method": m, "path": p, "expect_status": expect}
+def step(m, p, expect, body=None):
+    s = {"method": m, "path": p, "expect_status": expect}
+    if body is not None:  # U8-T08b: cuerpo JSON opcional (objeto)
+        s["body"] = body
+    return s
 
 if bug == "off":
     # Flujos que PASAN: solo lecturas GET 200 (el runner no envia cuerpos, asi que un POST
@@ -594,12 +600,19 @@ if bug == "off":
          "steps": [step("GET", "/orders", 200)]},
     ]
 else:
-    # --bug oversell: >=1 flujo que FALLA. Se pide 201 a un POST sin cuerpo (la app responde 400),
-    # de modo que el flujo no pasa y el reporter puede declarar `bug` con flujo fallido.
+    # --bug oversell (U8-T08 ronda 3, con U8-T08b): el flujo sondea la invariante «el stock nunca es
+    # negativo». Pide un pedido con qty=11 sobre un stock de 10: la app sana responde 409 y la app con
+    # el defecto (TARGET_APP_BUG=oversell, aplicado tras el ensayo) responde 201.
+    # - invariant_probe=true: el ENSAYO solo exige que el paso sea ejecutable (estado < 500), para que
+    #   el sondeo no mate el ensayo antes de los runners.
+    # - Los runners son estrictos (expect_status 409): con el defecto el flujo falla en flow-1 y el
+    #   reporter declara `bug` citando esa evidencia.
+    order = {"product_id": 1, "qty": 11}
     fails = pick(("POST", "/orders")) or [{"method": "POST", "path": "/orders"}]
     flows = [
-        {"flow_id": "flow-1", "name": "el pedido se crea", "invariant": "el stock nunca es negativo tras una orden",
-         "steps": [step(fails[0]["method"], fails[0]["path"], 201)]},
+        {"flow_id": "flow-1", "name": "el pedido no supera el stock", "invariant": "el stock nunca es negativo tras una orden",
+         "invariant_probe": True,
+         "steps": [step(fails[0]["method"], fails[0]["path"], 409, order)]},
         {"flow_id": "flow-2", "name": "el health responde", "invariant": "GET /health responde 200",
          "steps": [step("GET", "/health", 200)]},
     ]
@@ -618,10 +631,10 @@ PY
 # Terminating. `rollout status` da por bueno el rollout en cuanto la replica nueva esta Ready, pero la
 # vieja sigue en el Service un rato: medido en vivo (U8-T08 ronda 2), el /v1/plan de la corrida caia
 # en la replica vieja con la fixture anterior y respondia llm_unavailable.
-wait_no_terminating() {
-  local sel=$1 secs=${2:-120} i=0 left
+wait_no_terminating() { # <selector> [segundos] [namespace=NS_SYS]
+  local sel=$1 secs=${2:-120} ns=${3:-$NS_SYS} i=0 left
   while [ "$i" -lt "$secs" ]; do
-    left=$(kcx -n "$NS_SYS" get pods -l "$sel" -o jsonpath='{range .items[?(@.metadata.deletionTimestamp)]}{.metadata.name}{" "}{end}' 2>/dev/null)
+    left=$(kcx -n "$ns" get pods -l "$sel" -o jsonpath='{range .items[?(@.metadata.deletionTimestamp)]}{.metadata.name}{" "}{end}' 2>/dev/null)
     [ -z "$left" ] && return 0
     i=$((i + 1)); sleep 1
   done
@@ -810,6 +823,9 @@ patch_warm_bug() {
     -p '{"spec":{"template":{"spec":{"containers":[{"name":"warm-app","env":[{"name":"TARGET_APP_BUG","value":"oversell"}]}]}}}}' >/dev/null || return 1
   BUG_PATCHED=1
   kcx -n "$NS_TEST" rollout status deployment/"$WARM_DEPLOY" --timeout=180s >/dev/null || return 1
+  # `rollout status` da por bueno en cuanto la replica nueva esta Ready; la vieja (sin defecto) sigue
+  # en el Service unos segundos. Se espera a que termine antes de seguir.
+  wait_no_terminating app.kubernetes.io/name=warm-app 120 "$NS_TEST" || return 1
 }
 
 bug_active() {
@@ -890,12 +906,16 @@ hallazgo_cita_invariante_y_evidencia() {
   jq -e '.findings[0].invariant | test("stock")' "$work/report.json" >/dev/null || {
     echo "el hallazgo no cita la invariante de stock: $(jq -c '.findings[0].invariant' "$work/report.json" 2>/dev/null)"; return 1
   }
-  local uri key
-  uri=$(jq -r '.findings[0].evidence_uris[0] // empty' "$work/report.json")
-  [ -n "$uri" ] && [ "$uri" != null ] || { echo "el hallazgo no cita evidence_uri"; return 1; }
-  key=${uri#s3://evidence/}
+  local uri key n=0
   minio_up || return 1
-  mc_as aqs "$MC_POD" stat "m/evidence/$key" >/dev/null || { echo "evidence_uri inexistente en MinIO: $uri"; return 1; }
+  # Cada evidence_uri citada por el hallazgo debe existir en MinIO (no solo la primera).
+  while IFS= read -r uri; do
+    [ -n "$uri" ] && [ "$uri" != null ] || continue
+    n=$((n + 1))
+    key=${uri#s3://evidence/}
+    mc_as aqs "$MC_POD" stat "m/evidence/$key" >/dev/null || { echo "evidence_uri inexistente en MinIO: $uri"; return 1; }
+  done < <(jq -r '.findings[0].evidence_uris[]? // empty' "$work/report.json")
+  [ "$n" -ge 1 ] || { echo "el hallazgo no cita evidence_uri"; return 1; }
 }
 
 # --- puerta humana (--sin-confirmar) -------------------------------------------
@@ -952,15 +972,17 @@ fi
 check ventana-planner planner_pause_wait
 check deploy deploy_done 300
 check superficie warm_surface 180
+# El defecto va ANTES de reanudar el controlador (que aun esta pausado aqui): el ensayo y los runners
+# corren con la app ya defectuosa. Parchearlo tras el ensayo llega tarde: el controlador lanza los
+# runners en cuanto terminan los Jobs de ensayo (medido: runner a 15:45:55Z, defecto a 15:46:47Z).
+if [ "$BUG" = oversell ]; then
+  check bug-activo bug_apply
+fi
 check planner-fixture planner_fixture_apply
 check reanuda-controlador resume_after_planner
 check plan wait_state 240 running resetting reporting done
 check ensayo wait_state 240 running resetting reporting done
 check ensayo-job ensayo_job_ok
-
-if [ "$BUG" = oversell ]; then
-  check bug-activo bug_apply
-fi
 
 check runners wait_state 300 resetting reporting done
 check evidencia-en-minio evidence_ok

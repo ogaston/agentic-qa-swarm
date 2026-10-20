@@ -60,7 +60,7 @@ testigo no depende de Internet; `1.1.1.1:443` queda como segundo testigo externo
 | Estado del warm desde ui-api (`GET /warm`) | Funciona. Solo en kind: el overlay `deploy/flux/kind/` define `WARM_URL` y `UIAPI_WARM_TOKEN_FILE` (errata E-3 de U7-T04). En `base`, `dev` y `prod` el hueco sigue abierto (C-103) | `warm-estado` |
 | Ciclo de control: webhook → notificación → confirm → corrida creada en el controlador | Funciona (U8-T01/U8-T06) | `ciclo-webhook-confirm-corrida` de `kind-smoke.sh` |
 | Ciclo completo hasta el reporte, camino feliz (`--bug off`: deploy, superficie, plan, ensayo, runners, evidencia, reset, reporte) | Funciona (U8-T08, ronda 2), con las precondiciones de la sección «Demo de punta a punta» | `scripts/kind/kind-e2e.sh --bug off` |
-| Bug sembrado detectado en la corrida (`--bug oversell`) | **No** con el contrato actual: el ensayo ejecuta el mismo plan contra el warm limpio, y su flujo que debe fallar (`POST /orders` sin cuerpo) rompe el ensayo antes de los runners. El defecto solo se activa con un cuerpo JSON (`qty`) que `contracts/plans/flow-plan.schema.json` no puede expresar (`additionalProperties: false`). Candidata de U8-T08 | `scripts/kind/kind-e2e.sh --bug oversell` (FALLA en `ensayo-job` y siguientes) |
+| Bug sembrado detectado en la corrida (`--bug oversell`) | Funciona (U8-T08 ronda 3, con U8-T08b): el paso `POST /orders` lleva `body` (`qty` 11 sobre stock 10), el flujo es `invariant_probe: true` (en el ensayo basta con que sea ejecutable) y el defecto se activa antes de los runners | `scripts/kind/kind-e2e.sh --bug oversell` |
 | Planner y reporter en el clúster | Funciona con LLM falso (U8-T05). Sin LiteLLM ni clave real (U8-T09); el ciclo completo lo ejerce `scripts/kind/kind-e2e.sh` (U8-T08) | `scripts/test/u8-agents-kind.sh` (`planner-plan-valido`, `reporter-lee-minio`, `otro-pod-bloqueado`) |
 | Reset verificado del warm | Verificado (U8-T04) | `go-reset-baseline` es el baseline real de `demo/target-app`; `scripts/test/u8-target-app-kind.sh` ensucia la base, resetea y lee `GET /orders` vacío y `verify` 0 |
 | Evidencia en MinIO desde los agentes | Funciona (U8-T05). El usuario `aqs-evidence` lo crea `minio-init` con política solo sobre `evidence` | `scripts/test/u8-minio-user-kind.sh` (`put-evidence`, `get-evidence`, `sin-admin`, `otro-bucket-denegado`) |
@@ -124,13 +124,20 @@ hace el ciclo por sí solo):
   el `POST /deploys`, obtiene deploy, superficie y fixture sin él, y lo reanuda (reanudar en
   `deploying` es seguro: `WarmClient.Deploy` no reenvía el deploy).
 
-**Limitación de contrato (bloquea CA-2 de U8-T08, candidata):** el escenario `--bug oversell` no puede
-completarse con el contrato actual. El defecto de `demo/target-app` solo se activa con un
-`POST /orders` con cuerpo JSON (`qty`, `main.go:173`), y `flow-plan` no tiene campo de cuerpo
-(`additionalProperties: false`). El ensayo ejecuta el plan contra el warm limpio antes de activar el
-defecto, así que el flujo que debe fallar hace fallar el ensayo y la corrida nunca llega a runners.
-El e2e lo reporta como `FALLA`; no fabrica el veredicto. Arreglarlo exige cambiar `contracts/` y el
-runner (fuera del alcance de U8-T08).
+**Cómo se detecta el defecto de `oversell` (U8-T08 ronda 3, con U8-T08b):**
+
+- El plan del escenario trae un paso `POST /orders` con `body` `{"product_id":1,"qty":11}` (stock
+  inicial 10, `demo/target-app/store.go`) y `expect_status: 409`, en un flujo con
+  `invariant_probe: true`. Sin defecto la app responde 409 (`insufficient_stock`); con
+  `TARGET_APP_BUG=oversell` responde 201 porque se omite la comprobación de stock.
+- El defecto se aplica al deployment `warm-app` **después del deploy y antes de reanudar el
+  controlador**. Si se aplicara tras el ensayo llegaría tarde: el controlador lanza los runners en
+  cuanto terminan los Jobs de ensayo (medido en la ronda 3: runner creado a 15:45:55Z, pod con el
+  defecto a 15:46:47Z, y el runner recibió 409 del pod sano).
+- El ensayo solo exige que el flujo de sondeo sea ejecutable (estado < 500): 201 y 409 valen. Los
+  runners son estrictos: con el defecto fallan en `flow-1`, y el reporte declara `bug` citando esa
+  evidencia real (`runs/<run>/flow-1/result.json`).
+- La reversión del defecto (`$patch: delete` de `TARGET_APP_BUG`) se hace siempre en el trap.
 
 ## NATS JetStream (U8-T01)
 
