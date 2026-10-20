@@ -153,3 +153,87 @@ def test_llm_http_no_sigue_redirecciones(make, keyfile):
     with pytest.raises(LLMUnavailable):
         call(client(s, keyfile))
     assert len(s.requests) == 1
+
+
+GW = "10.20.30.40"  # IP literal privada de ejemplo (gateway de laboratorio)
+
+
+def test_http_gateway_rechazado_sin_variable():
+    with pytest.raises(ValueError):
+        check_base_url(f"http://{GW}:8000/v1")
+
+
+def test_http_gateway_aceptado_solo_con_host_exacto():
+    url = f"http://{GW}:8000/v1"
+    assert check_base_url(url, insecure_http_host=GW) == url
+    for bad in ("http://10.20.30.41:8000/v1", "http://api.example.com/v1", "http://8.8.8.8:8000/v1"):
+        with pytest.raises(ValueError):
+            check_base_url(bad, insecure_http_host=GW)
+    with pytest.raises(ValueError):
+        check_base_url("ftp://10.20.30.40/v1", insecure_http_host=GW)
+
+
+def test_http_publico_o_dns_rechazado_aunque_coincida_el_host():
+    with pytest.raises(ValueError):
+        check_base_url("http://8.8.8.8:8000/v1", insecure_http_host="8.8.8.8")
+    with pytest.raises(ValueError):
+        check_base_url("http://api.example.com/v1", insecure_http_host="api.example.com")
+
+
+def test_server_http_llm_gateway_solo_con_variable_y_host(tmp_path):
+    import pytest as _pt
+    from agent_reporter import server
+    key = tmp_path / "k"
+    key.write_text("x", encoding="utf-8")
+    base = {"LLM_PROVIDER": "http", "LLM_BASE_URL": f"http://{GW}:8000/v1", "LLM_MODEL": "m", "LLM_API_KEY_FILE": str(key)}
+    with _pt.raises(SystemExit):
+        server._http_llm(base)
+    with _pt.raises(SystemExit):
+        server._http_llm({**base, "LLM_ALLOW_INSECURE_HTTP": "true", "LLM_INSECURE_HTTP_HOST": GW})
+    assert server._http_llm({**base, "LLM_ALLOW_INSECURE_HTTP": "1", "LLM_INSECURE_HTTP_HOST": GW}) is not None
+
+
+# U8-T09 (ronda 4, autorizado por el humano 2026-10-20): CGNAT/Tailscale 100.64.0.0/10 (RFC 6598) es aceptable
+# solo con la excepción http acotada (LLM_ALLOW_INSECURE_HTTP=1 + host exacto). Sin bandera, sigue rechazado.
+@pytest.mark.parametrize("host", ["100.64.0.1", "100.127.255.254"])
+def test_http_cgnat_aceptado_con_host_exacto(host):
+    url = f"http://{host}:8000/v1"
+    assert check_base_url(url, insecure_http_host=host) == url
+
+
+@pytest.mark.parametrize("host", ["100.63.255.255", "100.128.0.0"])
+def test_http_fuera_de_cgnat_rechazado(host):
+    with pytest.raises(ValueError):
+        check_base_url(f"http://{host}:8000/v1", insecure_http_host=host)
+
+
+def test_http_cgnat_sin_bandera_rechazado():
+    with pytest.raises(ValueError):
+        check_base_url("http://100.64.0.1:8000/v1")
+
+
+def test_http_cgnat_host_distinto_al_configurado_rechazado():
+    with pytest.raises(ValueError):
+        check_base_url("http://100.64.0.1:8000/v1", insecure_http_host="100.64.0.2")
+
+
+# U8-T09 (ronda 5, F-03): la excepción http solo admite IP privadas de verdad. Link-local (metadatos de nube
+# 169.254/16, fe80::/10), no especificadas (0.0.0.0, ::) y multicast quedan rechazadas aunque sean el host exacto.
+@pytest.mark.parametrize("host", ["169.254.169.254", "169.254.0.1", "0.0.0.0", "224.0.0.1", "fe80::1", "::", "ff02::1"])
+def test_http_link_local_no_especificada_multicast_rechazadas(host):
+    with pytest.raises(ValueError):
+        check_base_url(f"http://[{host}]:8000/v1" if ":" in host else f"http://{host}:8000/v1", insecure_http_host=host)
+
+
+# Lo que se acepta hoy se mantiene: RFC 1918, IPv6 ULA (fd00::/8) y CGNAT, siempre con host exacto.
+@pytest.mark.parametrize("host", ["10.1.2.3", "172.16.0.5", "192.168.1.9", "fd00::1"])
+def test_http_privada_rfc1918_y_ula_aceptadas_con_host_exacto(host):
+    url = f"http://[{host}]:8000/v1" if ":" in host else f"http://{host}:8000/v1"
+    assert check_base_url(url, insecure_http_host=host) == url
+
+
+# LLM_ALLOW_INSECURE_HTTP=1 sin host (vacío o None) no abre ninguna excepción.
+@pytest.mark.parametrize("host", ["", None])
+def test_http_host_vacio_o_none_rechazado(host):
+    with pytest.raises(ValueError):
+        check_base_url(f"http://{GW}:8000/v1", insecure_http_host=host)

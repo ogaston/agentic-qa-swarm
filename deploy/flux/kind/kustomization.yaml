@@ -225,9 +225,9 @@ patches:
                     value: dev
   # El ConfigMap go-reset-baseline de relleno lo crea scripts/kind/secrets.sh (no está en el overlay,
   # para que apply -k no pise un baseline real aplicado a mano).
-  # --- U8-T05: agentes en kind con LLM falso (sin clave ni LiteLLM). Nunca con *_ENV=prod. ---
-  # Fixtures: planner = superficie de la app de referencia (target-app.json); reporter = prompt de la
-  # evidencia sembrada de bug-ecom-01 (generado por scripts/kind/gen_agent_fixtures.py).
+  # Fixtures del LLM falso (U8-T05): planner = superficie de la app de referencia (target-app.json);
+  # reporter = prompt de la evidencia sembrada (gen_agent_fixtures.py). Desde U8-T09 los agentes ya no las
+  # montan (LLM real); los ConfigMaps siguen existiendo solo para scripts/test/ y los pasos omitidos del e2e.
   # Los ConfigMaps generados no llevan namespace (el generador no lo admite): sin esto caerían en «default».
   - target:
       version: v1
@@ -245,6 +245,13 @@ patches:
       - op: add
         path: /metadata/namespace
         value: aqs-system
+  # --- U8-T09 (ronda 3): agentes en kind con LLM REAL. Sin proxy en el clúster: el endpoint es el gateway
+  # compatible con OpenAI del humano (litellm.env). LLM_BASE_URL y LLM_MODEL salen del Secret llm-upstream y la
+  # clave del archivo del Secret agents-llm-key; los crea scripts/kind/secrets.sh. Ni la IP ni el modelo van al repo.
+  # Upstream http: agents/*/llm_http.py lo rechaza salvo la excepción acotada (LLM_ALLOW_INSECURE_HTTP=1 + host exacto
+  # de IP privada; ver docs/operaciones/kind-local.md, U8-T09 rondas 3-5).
+  # Modelo de razonamiento: content llega vacío con max_tokens bajo, así que el tope de salida es holgado
+  # y el timeout, mayor que el de los agentes con LLM falso.
   - target:
       kind: Deployment
       name: agent-planner
@@ -253,23 +260,33 @@ patches:
         path: /spec/template/spec/containers/0/env
         value:
           - name: LLM_PROVIDER
-            value: fake
-          - name: PLANNER_ALLOW_FAKE
-            value: "true"
-          - name: U3_FAKE_SURFACES_DIR
-            value: /etc/aqs/fixtures/surfaces
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts/-
-        value:
-          name: fixtures
-          mountPath: /etc/aqs/fixtures/surfaces
-          readOnly: true
-      - op: add
-        path: /spec/template/spec/volumes/-
-        value:
-          name: fixtures
-          configMap:
-            name: agents-fixtures-planner
+            value: http
+          - name: LLM_BASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: base-url
+          - name: LLM_MODEL
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: model
+          - name: LLM_API_KEY_FILE
+            value: /etc/aqs/llm/api-key
+          # Opt-in de riesgo aceptado (ronda 4): http solo hacia el host exacto del gateway (Secret llm-upstream).
+          - name: LLM_ALLOW_INSECURE_HTTP
+            value: "1"
+          - name: LLM_INSECURE_HTTP_HOST
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: host
+          - name: PLANNER_TIMEOUT_S
+            value: "120"
+          - name: PLANNER_MAX_INPUT_TOKENS
+            value: "16000"
+          - name: PLANNER_MAX_OUTPUT_TOKENS
+            value: "8000"
   - target:
       kind: Deployment
       name: agent-reporter
@@ -278,11 +295,33 @@ patches:
         path: /spec/template/spec/containers/0/env
         value:
           - name: LLM_PROVIDER
-            value: fake
-          - name: REPORTER_ALLOW_FAKE
+            value: http
+          - name: LLM_BASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: base-url
+          - name: LLM_MODEL
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: model
+          - name: LLM_API_KEY_FILE
+            value: /etc/aqs/llm/api-key
+          # Opt-in de riesgo aceptado (ronda 4): http solo hacia el host exacto del gateway (Secret llm-upstream).
+          - name: LLM_ALLOW_INSECURE_HTTP
             value: "1"
-          - name: REPORTER_FAKE_FIXTURES
-            value: /etc/aqs/fixtures/fixtures.json
+          - name: LLM_INSECURE_HTTP_HOST
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: host
+          - name: REPORTER_TIMEOUT_S
+            value: "120"
+          - name: REPORTER_MAX_INPUT_TOKENS
+            value: "16000"
+          - name: REPORTER_MAX_OUTPUT_TOKENS
+            value: "8000"
           - name: REPORTER_EVIDENCE
             value: s3
           - name: EVIDENCE_BUCKET
@@ -295,18 +334,6 @@ patches:
             value: /etc/aqs/evidence/secret-key
           - name: S3_CA_FILE
             value: /etc/aqs/minio-ca/ca.crt
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts/-
-        value:
-          name: fixtures
-          mountPath: /etc/aqs/fixtures
-          readOnly: true
-      - op: add
-        path: /spec/template/spec/volumes/-
-        value:
-          name: fixtures
-          configMap:
-            name: agents-fixtures-reporter
 # U8-T04: en kind el warm arranca con la app de referencia (demo/target-app), que sirve el baseline real en :9090.
 # nginx (base) no tiene ese listener: sin esto, el warm no puede resetearse de dirty a ready en un clúster nuevo.
 images:

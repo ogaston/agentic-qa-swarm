@@ -14,18 +14,20 @@
 
 **Nada de la red del humano entra al repo.** La clave está en `${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key` y la dirección del gateway en `${XDG_RUNTIME_DIR}/aqs-kind/litellm.env` (modo `600`, variables `LITELLM_UPSTREAM_IP`, `LITELLM_UPSTREAM_PORT`, `LITELLM_UPSTREAM_MODEL`). `scripts/kind/secrets.sh` lee ambos y los materializa en un Secret/ConfigMap creado en el clúster; los manifiestos del repo solo llevan marcadores. El codificador no imprime esos valores ni los escribe en bitácoras, informes o logs.
 
-**Egress (sustituye a «443 del proveedor»):** LiteLLM sale solo a `<LITELLM_UPSTREAM_IP>/32:<LITELLM_UPSTREAM_PORT>`; la NetworkPolicy se renderiza en `scripts/kind/` con esos valores locales. Planner y reporter siguen hablando solo con LiteLLM y MinIO.
+**Egress (sustituye a «443 del proveedor»):** planner y reporter salen solo a `<LITELLM_UPSTREAM_IP>/32:<LITELLM_UPSTREAM_PORT>` (el gateway del humano, que ya es un LiteLLM), más DNS y, el reporter, MinIO; la NetworkPolicy se renderiza en `scripts/kind/` con esos valores locales.
+
+**Decisión de diseño (ronda 3, humano):** no se despliega un proxy LiteLLM en el clúster. El gateway del humano se usa directamente como endpoint compatible con OpenAI: `LLM_PROVIDER=http` en planner y reporter, con `LLM_BASE_URL` y `LLM_MODEL` leídos de un Secret (`llm-upstream`) y la clave como archivo de Secret (`agents-llm-key`), ambos creados por `scripts/kind/secrets.sh`.
 
 ## Alcance
 
 **Dentro** (una línea, concreta):
 
-> Desplegar LiteLLM en `aqs-system` (imagen fijada, config con el modelo y el upstream leídos de `litellm.env` (API compatible con OpenAI), clave solo como archivo de Secret creado en el clúster y nunca en el repo, único componente con egress al proveedor), pasar planner y reporter a `LLM_PROVIDER=http` en kind, apuntar `RUN_ARTIFACT_REF` y el baseline a la app definitiva, y recibir un evento real de GitHub; repetir `kind-e2e.sh` con todo real.
+> Pasar planner y reporter a `LLM_PROVIDER=http` en kind apuntando directamente al gateway del humano (endpoint compatible con OpenAI leído de `litellm.env`; modelo y clave como Secrets creados en el clúster, nunca en el repo; egreso de planner y reporter acotado a ese `IP/32:puerto`, sin proxy en el clúster), apuntar `RUN_ARTIFACT_REF` y el baseline a la app definitiva, y recibir un evento real de GitHub; repetir `kind-e2e.sh` con todo real.
 
 Detalle:
 
-- La clave la entrega el humano fuera del repo; `scripts/kind/secrets.sh` la lee de un archivo local (`${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key`, modo `600`) y crea el Secret. Nunca en la salida ni en logs (comprobado como en `kind-smoke`).
-- NetworkPolicy: egress de LiteLLM solo a la IP/puerto de `litellm.env`; planner/reporter solo a LiteLLM y MinIO (C-83).
+- La clave la entrega el humano fuera del repo; `scripts/kind/secrets.sh` la lee de un archivo local (`${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key`, modo `600`) y crea el Secret `agents-llm-key`. Nunca en la salida ni en logs (comprobado como en `kind-smoke`).
+- NetworkPolicy: egress de planner/reporter solo a la IP/puerto de `litellm.env` (además de DNS y, el reporter, MinIO) (C-83).
 - Webhook de GitHub: según lo que elija el humano (túnel `cloudflared` a un port-forward del inbox); se documenta el paso exacto.
 - Se mide y se anota el costo de tokens de una corrida de demo (P4 queda candidata).
 
@@ -45,12 +47,11 @@ Detalle:
 
 ## Criterios de aceptación
 
-- [ ] **CA-1** — LiteLLM disponible y la clave fuera del repo y de los logs.
+- [ ] **CA-1** — Sin claves en git ni en logs, y planner y reporter disponibles con LLM real.
   ```bash
-  kubectl -n aqs-system get deploy litellm -o jsonpath='{.status.availableReplicas}'; echo
-  git grep -c -i -E 'sk-[a-z0-9]{20,}' | wc -l; bash scripts/kind/kind-smoke.sh 2>&1 | grep -E '^(OK|FALLA) secrets-no-en-logs'
+  git grep -c -i -E 'sk-[a-z0-9]{20,}' | wc -l; bash scripts/kind/kind-smoke.sh 2>&1 | grep -E '^(OK|FALLA) (secrets-no-en-logs|llm-real-configurado)'
   ```
-  Esperado: `1`, `0` y `OK secrets-no-en-logs`.
+  Esperado: `0`, `OK secrets-no-en-logs` y `OK llm-real-configurado`.
 
 - [ ] **CA-2** — Ciclo completo con modelo real y app definitiva.
   ```bash
@@ -66,9 +67,9 @@ Detalle:
 
 - [ ] **CA-4** — Alcance.
   ```bash
-  git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(deploy/flux/(base|kind)/|scripts/kind/|docs/operaciones/|demo/|bitacoras/U8-T09\.md|revisiones/U8-T09/)' | wc -l
+  git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(deploy/flux/(base|kind)/|scripts/kind/|docs/operaciones/|demo/|agents/|tareas/U8-T09-llm-app-y-github-reales\.md|bitacoras/U8-T09\.md|revisiones/U8-T09/)' | wc -l
   ```
-  Esperado: `0` y `0`.
+  Esperado: `0` y `0`. (Ronda 4: `agents/` entra en la lista solo por la excepción http de `check_base_url`, y la propia tarea, autorizado por el humano.)
 
 ---
 

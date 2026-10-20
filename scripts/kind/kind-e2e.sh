@@ -180,6 +180,14 @@ expect_http() { # <codigo> <url> [args curl...]: cuerpo en $work/body
 
 kcx() { kubectl --context "$KIND_CONTEXT" "$@"; }
 
+# U8-T09: con LLM real (agent-reporter con LLM_PROVIDER=http) las fixtures del LLM falso no aplican: el
+# planner decide con el modelo real y el reporter lee su evidencia de MinIO por sí mismo. Se omiten los
+# dos pasos `planner-fixture` y `reporter-fixture` con un aviso (no cuentan como OK).
+llm_provider_real() {
+  [ "$(kcx -n "$NS_SYS" get deploy agent-reporter \
+       -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LLM_PROVIDER")].value}' 2>/dev/null)" = http ]
+}
+
 # --- limpieza (CA-4: no deja NADA colgado; corre con o sin fallo) ------------
 cleanup() {
   local rc=$?
@@ -978,7 +986,11 @@ check superficie warm_surface 180
 if [ "$BUG" = oversell ]; then
   check bug-activo bug_apply
 fi
-check planner-fixture planner_fixture_apply
+if llm_provider_real; then
+  echo "omitido planner-fixture: LLM real (U8-T09), el planner no usa fixture"
+else
+  check planner-fixture planner_fixture_apply
+fi
 check reanuda-controlador resume_after_planner
 check plan wait_state 240 running resetting reporting done
 check ensayo wait_state 240 running resetting reporting done
@@ -988,9 +1000,16 @@ check runners wait_state 300 resetting reporting done
 check evidencia-en-minio evidence_ok
 
 # ventana del reporter: pausar el controlador, bajar evidencia, generar y aplicar la fixture
-check reporter-fixture reporter_window
+if llm_provider_real; then
+  echo "omitido reporter-fixture: LLM real (U8-T09), el reporter lee su evidencia de MinIO"
+else
+  check reporter-fixture reporter_window
+fi
 
 check reset-verificado reset_verified
+# La fase report puede seguir en curso aunque el warm ya este verificado: se espera a `done` (U8-T09: con
+# LLM real el reporte tarda mas que con el falso; sin esta espera report_uri aun no existe).
+check run-terminado wait_state 300 done
 check reporte-en-minio report_uri_ok
 
 if [ "$BUG" = oversell ]; then

@@ -32,4 +32,5 @@ while read -r name dir; do
     || fail "kind load image-archive falló para $ref"
   rm -f "$archive"
 done <<<"$images"
+
 echo "load-images: OK"

@@ -248,10 +248,20 @@ secrets_no_en_logs() {
   done
   v=$(sed -n 2p "$STATE_DIR/demo.txt" 2>/dev/null) || v=""
   [ -n "$v" ] && printf '%s\n' "$v" >>"$pats"
+  # U8-T09 (ronda 3): clave del gateway (agents-llm-key) y endpoint del gateway (llm-upstream): nunca deben
+  # aparecer en logs. El endpoint lleva la IP del gateway; el patrón solo vive en $work, no se imprime.
+  v=$(kubectl get secret agents-llm-key -n "$NS_SYS" -o jsonpath='{.data.api-key}' | base64 -d) || return 1
+  [ -n "$v" ] && printf '%s\n' "$v" >>"$pats"
+  v=$(kubectl get secret llm-upstream -n "$NS_SYS" -o jsonpath='{.data.base-url}' | base64 -d) || return 1
+  [ -n "$v" ] && printf '%s\n' "$v" >>"$pats"
   # shellcheck disable=SC2016  # patrón literal: el $ no debe expandirse
   printf '%s\n' 'password_hash' '$argon2id$' >>"$pats"
   : >"$logs"
   for svc in "${SERVICES[@]}"; do
+    kubectl logs "deploy/$svc" -n "$NS_SYS" --all-containers >>"$logs" 2>&1 || { echo "kubectl logs deploy/$svc falló"; return 1; }
+  done
+  # U8-T09: los agentes con LLM real también están en el alcance de este control.
+  for svc in agent-planner agent-reporter; do
     kubectl logs "deploy/$svc" -n "$NS_SYS" --all-containers >>"$logs" 2>&1 || { echo "kubectl logs deploy/$svc falló"; return 1; }
   done
   # F-04: cero líneas en total no demuestra ausencia de secretos; sería un falso OK.
@@ -308,7 +318,41 @@ ciclo_webhook_confirm_corrida() {
 }
 check ciclo-webhook-confirm-corrida ciclo_webhook_confirm_corrida
 
-echo "PENDIENTE planner/reporter con LLM real (U8-T09: en kind usan LLM falso; LiteLLM no está desplegado; cubierto por scripts/test/u8-agents-kind.sh)"
+# 9. LLM real (U8-T09, ronda 3): planner y reporter disponibles con LLM_PROVIDER=http. El egreso de los agentes
+# está acotado al gateway: desde el pod del planner, el gateway (host:puerto de LLM_BASE_URL, leído dentro del pod
+# y sin imprimirse) debe responder, y 1.1.1.1:443 no. Precondición: Python responde en el pod.
+llm_real_configurado() {
+  # Mira el POD Ready (no la especificación del Deployment: falso positivo de U8-T09 r3).
+  local d pod ready p
+  for d in agent-planner agent-reporter; do
+    pod=$(kubectl get pods -n "$NS_SYS" -l "app.kubernetes.io/name=$d" \
+      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null \
+      | awk '$2 == "True" { print $1; exit }')
+    [ -n "$pod" ] || { echo "deploy/$d sin pod Ready"; return 1; }
+    ready=$(kubectl get pod "$pod" -n "$NS_SYS" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null) || ready=""
+    [ "$ready" = True ] || { echo "pod/$pod no está Ready"; return 1; }
+    p=$(kubectl get pod "$pod" -n "$NS_SYS" -o jsonpath='{.spec.containers[0].env[?(@.name=="LLM_PROVIDER")].value}' 2>/dev/null) || p=""
+    [ "$p" = http ] || { echo "pod/$pod LLM_PROVIDER=${p:-vacío} (se espera http)"; return 1; }
+  done
+}
+check llm-real-configurado llm_real_configurado
+
+llm_egress_acotado() {
+  kubectl exec deploy/agent-planner -n "$NS_SYS" -- python3 -c 'print("ok")' >/dev/null 2>&1 \
+    || { echo "no se puede ejecutar python3 en deploy/agent-planner (precondición)"; return 1; }
+  kubectl exec deploy/agent-planner -n "$NS_SYS" -- python3 -c '
+import os, socket
+from urllib.parse import urlsplit
+u = urlsplit(os.environ["LLM_BASE_URL"])
+socket.create_connection((u.hostname, u.port or 80), timeout=5).close()' >/dev/null 2>&1 \
+    || { echo "el planner no alcanza el gateway (control positivo del egreso)"; return 1; }
+  if kubectl exec deploy/agent-planner -n "$NS_SYS" -- python3 -c 'import socket; socket.create_connection(("1.1.1.1", 443), timeout=5)' >/dev/null 2>&1; then
+    echo "deploy/agent-planner alcanza 1.1.1.1:443: el egreso no está acotado al gateway"
+    return 1
+  fi
+}
+check llm-egress-acotado llm_egress_acotado
+
 echo "reset verificado: cubierto por scripts/test/u8-target-app-kind.sh (U8-T04, baseline real de demo/target-app)"
 echo "usuario MinIO de los agentes: cubierto por scripts/test/u8-minio-user-kind.sh (U8-T05, C-107)"
 

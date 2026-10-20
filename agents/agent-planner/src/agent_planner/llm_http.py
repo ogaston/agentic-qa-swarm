@@ -26,15 +26,38 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
-def check_base_url(url: str) -> str:
-    """https en cualquier host; http solo hacia loopback. Otro caso: ValueError."""
+def _is_private_ip_literal(host: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False  # un nombre DNS no es un host aceptable para http en claro
+    # U8-T09 ronda 5 (F-03): ip.is_private es más ancho que «red privada» (incluye 169.254/16 y fe80::/10, metadatos
+    # de nube, y 0.0.0.0/::). Se excluyen link-local, no especificadas, multicast y loopback.
+    if ip.is_link_local or ip.is_unspecified or ip.is_multicast or ip.is_loopback:
+        return False
+    # 100.64.0.0/10 (RFC 6598, Tailscale): autorizado por el humano el 2026-10-20 para el gateway de kind.
+    cgnat = ip.version == 4 and ip in ipaddress.ip_network("100.64.0.0/10")
+    return ip.is_private or cgnat
+
+
+def check_base_url(url: str, insecure_http_host: str | None = None) -> str:
+    """https en cualquier host; http solo hacia loopback. Otro caso: ValueError.
+
+    Excepción explícita (U8-T09, ronda 4): con `insecure_http_host` (llega de LLM_INSECURE_HTTP_HOST, solo si
+    LLM_ALLOW_INSECURE_HTTP=1 en el overlay de kind), http también se acepta hacia ESE host exacto, y solo si
+    es una IP literal privada. Cualquier otro host http sigue rechazado. Riesgo aceptado: clave en claro por la
+    red privada del gateway del humano; solo demo local (ver docs/operaciones/kind-local.md).
+    """
     u = urlsplit(url)
     host = u.hostname or ""
     if u.scheme == "https" and host:
         return url.rstrip("/")
     if u.scheme == "http" and host and _is_loopback(host):
         return url.rstrip("/")
-    raise ValueError("LLM_BASE_URL debe ser https (http solo hacia loopback)")
+    if (u.scheme == "http" and host and insecure_http_host
+            and host == insecure_http_host and _is_private_ip_literal(host)):
+        return url.rstrip("/")
+    raise ValueError("LLM_BASE_URL debe ser https (http solo hacia loopback o al host de LLM_INSECURE_HTTP_HOST)")
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -43,8 +66,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class HttpLLM:
-    def __init__(self, base_url: str, model: str, api_key_file: str | Path) -> None:
-        self._base = check_base_url(base_url)
+    def __init__(self, base_url: str, model: str, api_key_file: str | Path,
+                 insecure_http_host: str | None = None) -> None:
+        self._base = check_base_url(base_url, insecure_http_host)
         if not model:
             raise ValueError("LLM_MODEL no configurado")
         self._model = model
