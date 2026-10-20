@@ -31,7 +31,9 @@ def _is_private_ip_literal(host: str) -> bool:
         ip = ipaddress.ip_address(host)
     except ValueError:
         return False  # un nombre DNS no es un host aceptable para http en claro
-    return ip.is_private and not ip.is_loopback
+    # 100.64.0.0/10 (RFC 6598, Tailscale): autorizado por el humano el 2026-10-20 para el gateway de kind.
+    cgnat = ip.version == 4 and ip in ipaddress.ip_network("100.64.0.0/10")
+    return (ip.is_private or cgnat) and not ip.is_loopback
 
 
 def check_base_url(url: str, insecure_http_host: str | None = None) -> str:

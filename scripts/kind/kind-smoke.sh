@@ -326,8 +326,8 @@ llm_real_configurado() {
   local d pod ready p
   for d in agent-planner agent-reporter; do
     pod=$(kubectl get pods -n "$NS_SYS" -l "app.kubernetes.io/name=$d" \
-      -o jsonpath='{range .items[?(@.status.conditions[?(@.type=="Ready")].status=="True")]}{.metadata.name}{"\n"}{end}' 2>/dev/null \
-      | head -n 1)
+      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null \
+      | awk '$2 == "True" { print $1; exit }')
     [ -n "$pod" ] || { echo "deploy/$d sin pod Ready"; return 1; }
     ready=$(kubectl get pod "$pod" -n "$NS_SYS" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null) || ready=""
     [ "$ready" = True ] || { echo "pod/$pod no está Ready"; return 1; }

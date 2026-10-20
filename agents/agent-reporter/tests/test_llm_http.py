@@ -191,3 +191,27 @@ def test_server_http_llm_gateway_solo_con_variable_y_host(tmp_path):
     with _pt.raises(SystemExit):
         server._http_llm({**base, "LLM_ALLOW_INSECURE_HTTP": "true", "LLM_INSECURE_HTTP_HOST": GW})
     assert server._http_llm({**base, "LLM_ALLOW_INSECURE_HTTP": "1", "LLM_INSECURE_HTTP_HOST": GW}) is not None
+
+
+# U8-T09 (ronda 4, autorizado por el humano 2026-10-20): CGNAT/Tailscale 100.64.0.0/10 (RFC 6598) es aceptable
+# solo con la excepción http acotada (LLM_ALLOW_INSECURE_HTTP=1 + host exacto). Sin bandera, sigue rechazado.
+@pytest.mark.parametrize("host", ["100.64.0.1", "100.127.255.254"])
+def test_http_cgnat_aceptado_con_host_exacto(host):
+    url = f"http://{host}:8000/v1"
+    assert check_base_url(url, insecure_http_host=host) == url
+
+
+@pytest.mark.parametrize("host", ["100.63.255.255", "100.128.0.0"])
+def test_http_fuera_de_cgnat_rechazado(host):
+    with pytest.raises(ValueError):
+        check_base_url(f"http://{host}:8000/v1", insecure_http_host=host)
+
+
+def test_http_cgnat_sin_bandera_rechazado():
+    with pytest.raises(ValueError):
+        check_base_url("http://100.64.0.1:8000/v1")
+
+
+def test_http_cgnat_host_distinto_al_configurado_rechazado():
+    with pytest.raises(ValueError):
+        check_base_url("http://100.64.0.1:8000/v1", insecure_http_host="100.64.0.2")
