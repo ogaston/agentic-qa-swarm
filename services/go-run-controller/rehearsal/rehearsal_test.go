@@ -328,3 +328,29 @@ func TestResultFailedCounterWithoutConditionIsFailed(t *testing.T) {
 		t.Fatalf("%+v %v", out, err)
 	}
 }
+
+// U8-T08b: el cuerpo del paso y la marca invariant_probe llegan intactos al proceso de ensayo.
+func TestBuildJobPropagaCuerpoEInvariantProbe(t *testing.T) {
+	f := goodFlow()
+	f.InvariantProbe = true
+	f.Steps[0].Body = []byte(`{"product_id":1,"qty":5}`)
+	j, err := BuildJob(cfg(), "r-1", f, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{}
+	for _, e := range j.Spec.Template.Spec.Containers[0].Env {
+		env[e.Name] = e.Value
+	}
+	if env["REHEARSAL_INVARIANT_PROBE"] != "true" {
+		t.Fatalf("REHEARSAL_INVARIANT_PROBE = %q, quería true", env["REHEARSAL_INVARIANT_PROBE"])
+	}
+	var steps []map[string]any
+	if err := json.Unmarshal([]byte(env["REHEARSAL_STEPS"]), &steps); err != nil {
+		t.Fatal(err)
+	}
+	b, ok := steps[0]["body"].(map[string]any)
+	if !ok || b["qty"] != float64(5) {
+		t.Fatalf("REHEARSAL_STEPS no lleva el cuerpo del paso: %s", env["REHEARSAL_STEPS"])
+	}
+}

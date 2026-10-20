@@ -1,19 +1,25 @@
 // Package plan define los tipos Go de los contratos U2<->U3 (contracts/plans).
 package plan
 
-// Step es una llamada HTTP esperada de un flujo.
+import "encoding/json"
+
+// Step es una llamada HTTP esperada de un flujo. Body es opcional: si está, es un objeto JSON
+// (contracts/plans/flow-plan.schema.json, $defs de paso); sin él no se envía cuerpo.
 type Step struct {
-	Method       string `json:"method"`
-	Path         string `json:"path"`
-	ExpectStatus int    `json:"expect_status"`
+	Method       string          `json:"method"`
+	Path         string          `json:"path"`
+	ExpectStatus int             `json:"expect_status"`
+	Body         json.RawMessage `json:"body,omitempty"`
 }
 
-// Flow es un flujo QA con su invariante de negocio.
+// Flow es un flujo QA con su invariante de negocio. InvariantProbe (opcional, false por defecto) marca
+// un flujo que sondea una invariante: el ensayo solo exige que sea ejecutable, no que cumpla expect_status.
 type Flow struct {
-	FlowID    string `json:"flow_id"`
-	Name      string `json:"name"`
-	Steps     []Step `json:"steps"`
-	Invariant string `json:"invariant"`
+	FlowID         string `json:"flow_id"`
+	Name           string `json:"name"`
+	Steps          []Step `json:"steps"`
+	Invariant      string `json:"invariant"`
+	InvariantProbe bool   `json:"invariant_probe,omitempty"`
 }
 
 // FlowPlan es el plan de flujos de entrada (contracts/plans/flow-plan.schema.json).

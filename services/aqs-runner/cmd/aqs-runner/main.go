@@ -1,8 +1,11 @@
 // aqs-runner ejecuta los pasos HTTP de un flujo contra el warm. Es la imagen que usan los Jobs de
-// go-run-controller: `rehearse` (Job de ensayo, lee REHEARSAL_STEPS y REHEARSAL_INVARIANT) y
-// `http-steps` (Job runner, lee RUNNER_STEPS y RUNNER_INVARIANT). Sin LLM, sin credenciales y sin
-// egress más allá de --target. Sale 0 si todos los pasos cumplen su expect_status, 1 si algún paso
-// no, y 2 si la configuración es inválida (en ese caso no se hace ninguna petición).
+// go-run-controller: `rehearse` (Job de ensayo, lee REHEARSAL_STEPS, REHEARSAL_INVARIANT y
+// REHEARSAL_INVARIANT_PROBE) y `http-steps` (Job runner, lee RUNNER_STEPS y RUNNER_INVARIANT). Sin LLM,
+// sin credenciales y sin egress más allá de --target. Sale 0 si todos los pasos cumplen su expect_status,
+// 1 si algún paso no, y 2 si la configuración es inválida (en ese caso no se hace ninguna petición).
+// Excepción del ensayo (U8-T08b): con REHEARSAL_INVARIANT_PROBE=true el flujo es de sondeo y cada paso
+// solo debe ser ejecutable (respuesta HTTP sin error de red ni timeout, y estado < 500). Los runners
+// (http-steps) siempre exigen expect_status.
 package main
 
 import (
@@ -28,11 +31,13 @@ const (
 	maxBodyRead = 64 << 10
 )
 
-// step es el contrato de plan.Step (services/go-run-controller/plan/plan.go).
+// step es el contrato de plan.Step (services/go-run-controller/plan/plan.go). Body es opcional y debe ser
+// un objeto JSON; sin él no se envía cuerpo ni Content-Type.
 type step struct {
-	Method       string `json:"method"`
-	Path         string `json:"path"`
-	ExpectStatus int    `json:"expect_status"`
+	Method       string          `json:"method"`
+	Path         string          `json:"path"`
+	ExpectStatus int             `json:"expect_status"`
+	Body         json.RawMessage `json:"body,omitempty"`
 }
 
 // result es el resumen JSON por paso que sale en stdout (una línea por paso).
@@ -45,6 +50,7 @@ type result struct {
 	ExpectStatus int    `json:"expect_status"`
 	Status       int    `json:"status"` // 0 si no hubo respuesta
 	OK           bool   `json:"ok"`
+	Probe        bool   `json:"probe,omitempty"` // paso de un flujo de sondeo del ensayo: OK significa «ejecutable»
 	Error        string `json:"error,omitempty"`
 }
 
@@ -135,6 +141,14 @@ func execute(name string, args []string, getenv func(string) string, stepsVar, i
 		fmt.Fprintf(stderr, "%s: falta %s\n", name, invVar)
 		return exitConfig
 	}
+	probe := false
+	if name == "rehearse" {
+		probe, err = parseProbe(getenv("REHEARSAL_INVARIANT_PROBE"))
+		if err != nil {
+			fmt.Fprintf(stderr, "%s: REHEARSAL_INVARIANT_PROBE: %v\n", name, err)
+			return exitConfig
+		}
+	}
 	steps, err := parseSteps(getenv(stepsVar))
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %s: %v\n", name, stepsVar, err)
@@ -154,7 +168,7 @@ func execute(name string, args []string, getenv func(string) string, stepsVar, i
 	enc := json.NewEncoder(stdout)
 	failed := false
 	for i, s := range steps {
-		r := runStep(do, s, urls[i])
+		r := runStep(do, s, urls[i], probe)
 		r.FlowID, r.Invariant, r.Step = flowID, invariant, i+1
 		if !r.OK {
 			failed = true
@@ -168,6 +182,18 @@ func execute(name string, args []string, getenv func(string) string, stepsVar, i
 		return exitFailed
 	}
 	return exitOK
+}
+
+// parseProbe acepta vacío o false (flujo normal) y true (flujo de sondeo); cualquier otro valor es configuración inválida.
+func parseProbe(raw string) (bool, error) {
+	switch strings.TrimSpace(raw) {
+	case "", "false":
+		return false, nil
+	case "true":
+		return true, nil
+	default:
+		return false, fmt.Errorf("valor %q no es true ni false", raw)
+	}
 }
 
 // parseTarget exige http(s) con host y sin query, fragmento ni credenciales; devuelve la base sin barra final.
@@ -209,9 +235,17 @@ func parseSteps(raw string) ([]step, error) {
 			return nil, fmt.Errorf("paso %d: la ruta %q debe empezar por /", i+1, s.Path)
 		case s.ExpectStatus < 100 || s.ExpectStatus > 599:
 			return nil, fmt.Errorf("paso %d: expect_status %d fuera de 100..599", i+1, s.ExpectStatus)
+		case len(s.Body) > 0 && !isJSONObject(s.Body):
+			return nil, fmt.Errorf("paso %d: body debe ser un objeto JSON", i+1)
 		}
 	}
 	return steps, nil
+}
+
+// isJSONObject exige un objeto JSON válido (no array, escalar ni null).
+func isJSONObject(b json.RawMessage) bool {
+	t := bytes.TrimSpace(b)
+	return len(t) > 0 && t[0] == '{' && json.Valid(t)
 }
 
 // stepURL une la base y la ruta, y exige que el host resultante sea el del destino.
@@ -231,16 +265,23 @@ func stepURL(base, path string) (string, error) {
 	return full, nil
 }
 
-func runStep(do doer, s step, target string) result {
-	r := result{Method: s.Method, Path: s.Path, ExpectStatus: s.ExpectStatus}
+func runStep(do doer, s step, target string, probe bool) result {
+	r := result{Method: s.Method, Path: s.Path, ExpectStatus: s.ExpectStatus, Probe: probe}
 	ctx, cancel := context.WithTimeout(context.Background(), stepTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, s.Method, target, bytes.NewReader(nil))
+	var body io.Reader = bytes.NewReader(nil)
+	if len(s.Body) > 0 {
+		body = bytes.NewReader(s.Body)
+	}
+	req, err := http.NewRequestWithContext(ctx, s.Method, target, body)
 	if err != nil {
 		r.Error = err.Error()
 		return r
 	}
 	req.Header.Set("User-Agent", "aqs-runner/0.0.0")
+	if len(s.Body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	resp, err := do.Do(req)
 	if err != nil {
 		r.Error = err.Error()
@@ -249,6 +290,15 @@ func runStep(do doer, s step, target string) result {
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBodyRead))
 	r.Status = resp.StatusCode
+	if probe {
+		// Sondeo: basta con una respuesta del servicio que no sea error de servidor. El 4xx o el 2xx
+		// distinto de expect_status es precisamente lo que el runner evaluará como hallazgo.
+		r.OK = resp.StatusCode < 500
+		if !r.OK {
+			r.Error = fmt.Sprintf("sondeo no ejecutable: recibido %d", resp.StatusCode)
+		}
+		return r
+	}
 	r.OK = resp.StatusCode == s.ExpectStatus
 	if !r.OK {
 		r.Error = fmt.Sprintf("esperado %d, recibido %d", s.ExpectStatus, resp.StatusCode)
