@@ -333,7 +333,7 @@ func TestResultFailedCounterWithoutConditionIsFailed(t *testing.T) {
 func TestBuildJobPropagaCuerpoEInvariantProbe(t *testing.T) {
 	f := goodFlow()
 	f.InvariantProbe = true
-	f.Steps[0].Body = []byte(`{"product_id":1,"qty":5}`)
+	f.Steps[0].Body = []byte(`{"product_id":1,"qty":11}`)
 	j, err := BuildJob(cfg(), "r-1", f, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -350,7 +350,7 @@ func TestBuildJobPropagaCuerpoEInvariantProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, ok := steps[0]["body"].(map[string]any)
-	if !ok || b["qty"] != float64(5) {
+	if !ok || b["qty"] != float64(11) {
 		t.Fatalf("REHEARSAL_STEPS no lleva el cuerpo del paso: %s", env["REHEARSAL_STEPS"])
 	}
 }

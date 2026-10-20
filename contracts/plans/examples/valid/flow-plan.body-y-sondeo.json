@@ -11,7 +11,7 @@
           "path": "/orders",
           "body": {
             "product_id": 1,
-            "qty": 5
+            "qty": 11
           },
           "expect_status": 409
         }

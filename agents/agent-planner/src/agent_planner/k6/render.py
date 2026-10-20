@@ -3,6 +3,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from .errors import FlowValidationError
+
 TEMPLATE_PATH = Path(__file__).with_name("template.js")
 PLACEHOLDER = "__AQS_FLOW__"
 FLOW_PREFIX = "const FLOW = "
@@ -37,7 +39,7 @@ def render_flow(plan: dict, flow: dict) -> str:
     """Puro: mismo plan/flujo -> mismos bytes. El plan solo entra como literal JSON."""
     problem = k6_problem(flow)
     if problem is not None:
-        raise ValueError(f"flujo no renderizable en k6: {problem}")
+        raise FlowValidationError(flow.get("flow_id", ""), "k6", problem)
     template = load_template()
     return template.replace(PLACEHOLDER, flow_literal(flow), 1)
 

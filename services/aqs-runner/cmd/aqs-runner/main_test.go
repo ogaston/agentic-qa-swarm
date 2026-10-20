@@ -239,6 +239,9 @@ func TestRehearseHelpSaleCero(t *testing.T) {
 
 // --- U8-T08b: cuerpo JSON en los pasos e invariant_probe en el ensayo ---
 
+// seedStockProducto1 es el stock inicial del producto 1 en el baseline (demo/target-app/store.go:24-31).
+const seedStockProducto1 = 10
+
 // recibidos guarda lo que el servidor de prueba vio en la última petición.
 type recibidos struct {
 	body        string
@@ -247,8 +250,10 @@ type recibidos struct {
 	path        string
 }
 
-// ordersHandler replica POST /orders de demo/target-app/main.go:170-186 y store.go:244 (sin base de datos):
-// validación de cuerpo, stock 2 para el producto 1, y el defecto oversell que omite la comprobación de stock.
+// ordersHandler replica POST /orders de demo/target-app/main.go:170-186 y store.go:244 (sin base de datos).
+// Stock inicial del producto 1 = 10, el baseline real de demo/target-app/store.go:24-31 (seedProducts: {"cafe", 10}).
+// Sin el defecto, PlaceOrder rechaza con 409 si stock < qty (store.go:244); con oversell se omite esa comprobación.
+// No descuenta stock entre peticiones: cada prueba necesita solo la primera venta.
 func ordersHandler(oversell bool, last *recibidos) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if last != nil {
@@ -274,7 +279,7 @@ func ordersHandler(oversell bool, last *recibidos) http.Handler {
 			w.WriteHeader(400) // invalid_body
 			return
 		}
-		if !oversell && in.Qty > 2 {
+		if !oversell && in.Qty > seedStockProducto1 {
 			w.WriteHeader(409) // insufficient_stock
 			return
 		}
@@ -284,7 +289,7 @@ func ordersHandler(oversell bool, last *recibidos) http.Handler {
 
 // Rojo primero (CA-4): con el contrato actual el paso no puede enviar qty, así que el defecto no se activa.
 func TestOversellDefectoAlcanzableConCuerpo(t *testing.T) {
-	const flow = `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":5},"expect_status":409}]`
+	const flow = `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":11},"expect_status":409}]`
 	for _, tc := range []struct {
 		name     string
 		oversell bool
@@ -315,7 +320,7 @@ func TestBodyEnviaJSONConContentType(t *testing.T) {
 	var last recibidos
 	srv := httptest.NewServer(ordersHandler(true, &last))
 	defer srv.Close()
-	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":5},"expect_status":201}]`
+	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":11},"expect_status":201}]`
 	var out bytes.Buffer
 	if code := run([]string{"http-steps", "--flow", "f", "--target", srv.URL},
 		envOf(map[string]string{"RUNNER_STEPS": steps, "RUNNER_INVARIANT": "i"}), &out, &bytes.Buffer{}, newClient(stepTimeout)); code != exitOK {
@@ -325,7 +330,7 @@ func TestBodyEnviaJSONConContentType(t *testing.T) {
 		t.Fatalf("Content-Type %q, quería application/json", last.contentType)
 	}
 	var got map[string]any
-	if err := json.Unmarshal([]byte(last.body), &got); err != nil || got["qty"] != float64(5) || got["product_id"] != float64(1) {
+	if err := json.Unmarshal([]byte(last.body), &got); err != nil || got["qty"] != float64(11) || got["product_id"] != float64(1) {
 		t.Fatalf("cuerpo recibido %q no es el JSON del paso (err=%v)", last.body, err)
 	}
 }
@@ -379,28 +384,28 @@ func TestRehearseEstrictoFlujoNormalEstadoDistintoSale1(t *testing.T) {
 }
 
 func TestRehearseSondeoEstadoDistintoMenorA500Sale0(t *testing.T) {
-	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":5},"expect_status":409}]`
+	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":11},"expect_status":409}]`
 	if code := rehearseCase(t, fixedDoer{status: 201}, steps, "true"); code != exitOK {
 		t.Fatalf("salida %d, quería 0", code)
 	}
 }
 
 func TestRehearseSondeo5xxSale1(t *testing.T) {
-	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":5},"expect_status":409}]`
+	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":11},"expect_status":409}]`
 	if code := rehearseCase(t, fixedDoer{status: 500}, steps, "true"); code != exitFailed {
 		t.Fatalf("salida %d, quería 1", code)
 	}
 }
 
 func TestRehearseSondeoErrorDeRedSale1(t *testing.T) {
-	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":5},"expect_status":409}]`
+	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":11},"expect_status":409}]`
 	if code := rehearseCase(t, fixedDoer{err: http.ErrHandlerTimeout}, steps, "true"); code != exitFailed {
 		t.Fatalf("salida %d, quería 1", code)
 	}
 }
 
 func TestRehearseEstrictoHTTPStepsSinCambioConSondeo(t *testing.T) {
-	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":5},"expect_status":409}]`
+	steps := `[{"method":"POST","path":"/orders","body":{"product_id":1,"qty":11},"expect_status":409}]`
 	for _, probe := range []string{"", "true"} {
 		var out bytes.Buffer
 		m := map[string]string{"RUNNER_STEPS": steps, "RUNNER_INVARIANT": "i"}

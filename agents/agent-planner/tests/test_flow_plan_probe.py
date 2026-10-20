@@ -22,7 +22,7 @@ def run(p):
 
 def plan_con_sondeo():
     p = copy.deepcopy(good_plan())
-    p["flows"][0]["steps"][0]["body"] = {"product_id": 1, "qty": 5}
+    p["flows"][0]["steps"][0]["body"] = {"product_id": 1, "qty": 11}
     p["flows"][0]["invariant_probe"] = True
     return p
 
@@ -80,11 +80,12 @@ def test_prompt_documenta_body_e_invariant_probe():
 
 
 def test_render_k6_falla_cerrado_con_body_o_sondeo():
+    from agent_planner.k6.errors import FlowValidationError
     from agent_planner.k6.render import render_flow as rf
     p = plan_con_sondeo()
-    with pytest.raises(ValueError, match="body"):
+    with pytest.raises(FlowValidationError, match="body"):
         rf(p, p["flows"][0])
     q = copy.deepcopy(good_plan())
     q["flows"][0]["invariant_probe"] = True
-    with pytest.raises(ValueError, match="invariant_probe"):
+    with pytest.raises(FlowValidationError, match="invariant_probe"):
         rf(q, q["flows"][0])
