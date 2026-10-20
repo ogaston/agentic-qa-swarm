@@ -322,12 +322,17 @@ check ciclo-webhook-confirm-corrida ciclo_webhook_confirm_corrida
 # está acotado al gateway: desde el pod del planner, el gateway (host:puerto de LLM_BASE_URL, leído dentro del pod
 # y sin imprimirse) debe responder, y 1.1.1.1:443 no. Precondición: Python responde en el pod.
 llm_real_configurado() {
-  local d p n
+  # Mira el POD Ready (no la especificación del Deployment: falso positivo de U8-T09 r3).
+  local d pod ready p
   for d in agent-planner agent-reporter; do
-    n=$(kubectl get deploy "$d" -n "$NS_SYS" -o jsonpath='{.status.availableReplicas}' 2>/dev/null) || n=""
-    [ "${n:-0}" -ge 1 ] || { echo "deploy/$d sin réplicas disponibles"; return 1; }
-    p=$(kubectl get deploy "$d" -n "$NS_SYS" -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="LLM_PROVIDER")].value}') || p=""
-    [ "$p" = http ] || { echo "deploy/$d LLM_PROVIDER=${p:-vacío} (se espera http)"; return 1; }
+    pod=$(kubectl get pods -n "$NS_SYS" -l "app.kubernetes.io/name=$d" \
+      -o jsonpath='{range .items[?(@.status.conditions[?(@.type=="Ready")].status=="True")]}{.metadata.name}{"\n"}{end}' 2>/dev/null \
+      | head -n 1)
+    [ -n "$pod" ] || { echo "deploy/$d sin pod Ready"; return 1; }
+    ready=$(kubectl get pod "$pod" -n "$NS_SYS" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null) || ready=""
+    [ "$ready" = True ] || { echo "pod/$pod no está Ready"; return 1; }
+    p=$(kubectl get pod "$pod" -n "$NS_SYS" -o jsonpath='{.spec.containers[0].env[?(@.name=="LLM_PROVIDER")].value}' 2>/dev/null) || p=""
+    [ "$p" = http ] || { echo "pod/$pod LLM_PROVIDER=${p:-vacío} (se espera http)"; return 1; }
   done
 }
 check llm-real-configurado llm_real_configurado
