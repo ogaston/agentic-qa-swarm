@@ -537,6 +537,25 @@ func cuerpoMinimo(t *testing.T, eps []endpoint) map[string]int {
 // (almacen en memoria, TARGET_APP_STORE=memoria). Con el cuerpo del plan: 201 y salida 0. Sin cuerpo,
 // el mismo paso recibe 400 y el runner sale 1 (par falla-pasa).
 func TestOrdersCuerpoFlujoSanoContraTargetApp(t *testing.T) {
+	py := os.Getenv("AQS_PLANNER_PYTHON")
+	if py == "" {
+		t.Skip("CA-4 OMITIDA: define AQS_PLANNER_PYTHON con un Python que tenga jsonschema (deps del planner); ver bitacoras/U8-T09a.md")
+	}
+	chk := exec.Command(py, "-c", "import jsonschema")
+	done := make(chan error, 1)
+	if err := chk.Start(); err != nil {
+		t.Fatalf("AQS_PLANNER_PYTHON=%q no ejecutable: %v", py, err)
+	}
+	go func() { done <- chk.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("AQS_PLANNER_PYTHON=%q no importa jsonschema: %v", py, err)
+		}
+	case <-time.After(2 * time.Second):
+		_ = chk.Process.Kill()
+		t.Fatalf("AQS_PLANNER_PYTHON=%q tardó más de 2 s en importar jsonschema", py)
+	}
 	raiz := repoRaiz(t)
 	dir := t.TempDir()
 
@@ -595,10 +614,6 @@ func TestOrdersCuerpoFlujoSanoContraTargetApp(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(fixDir, "pedido.json"), fix, 0o600); err != nil {
 		t.Fatal(err)
-	}
-	py := os.Getenv("AQS_PLANNER_PYTHON")
-	if py == "" {
-		py = "python3"
 	}
 	pport := puertoLibre(t)
 	pl := exec.Command(py, "-m", "agent_planner")

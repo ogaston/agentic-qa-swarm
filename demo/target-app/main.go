@@ -49,6 +49,10 @@ func loadConfig() (config, error) {
 	if c.DatabaseURL == "" && !c.StoreMem {
 		return c, errors.New("falta DATABASE_URL")
 	}
+	if c.StoreMem && c.DatabaseURL != "" {
+		// Con almacen en memoria Diff es siempre 0: una verificacion de reset seria trivial. Se rechaza.
+		return c, errors.New("TARGET_APP_STORE=memoria no admite DATABASE_URL (solo pruebas)")
+	}
 	if c.BaselineTokFile == "" {
 		return c, errors.New("falta BASELINE_TOKEN_FILE")
 	}
@@ -77,6 +81,7 @@ func main() {
 
 	var st appStore
 	if cfg.StoreMem {
+		log.Warn("almacen en memoria (solo pruebas): Diff siempre 0, no verifica reset", "store", "memoria")
 		st = newMemStore(cfg.Bug == "oversell")
 	} else {
 		db, err := newStore(cfg.DatabaseURL, cfg.Bug == "oversell")
