@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -444,67 +447,202 @@ func TestBodyNoObjetoYProbeInvalidoRechazanSinPeticiones(t *testing.T) {
 	}
 }
 
-// cuerpoDeEsquema genera el cuerpo minimo valido del requestBody application/json de POST /orders
-// de demo/target-app/openapi.json: cada propiedad required entera toma su minimum (U8-T09a CA-4).
-func cuerpoDeEsquema(t *testing.T) string {
+// repoRaiz es la raiz del monorepo desde services/aqs-runner/cmd/aqs-runner.
+func repoRaiz(t *testing.T) string {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "demo", "target-app", "openapi.json"))
+	r, err := filepath.Abs(filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var doc struct {
-		Paths map[string]struct {
-			Post struct {
-				RequestBody struct {
-					Content struct {
-						JSON struct {
-							Schema struct {
-								Required   []string `json:"required"`
-								Properties map[string]struct {
-									Type    string `json:"type"`
-									Minimum *int   `json:"minimum"`
-								} `json:"properties"`
-							} `json:"schema"`
-						} `json:"application/json"`
-					} `json:"content"`
-				} `json:"requestBody"`
-			} `json:"post"`
-		} `json:"paths"`
-	}
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		t.Fatal(err)
-	}
-	sch := doc.Paths["/orders"].Post.RequestBody.Content.JSON.Schema
-	body := map[string]int{}
-	for _, k := range sch.Required {
-		p := sch.Properties[k]
-		if p.Type != "integer" || p.Minimum == nil {
-			t.Fatalf("propiedad %s no entera con minimum en el esquema", k)
-		}
-		body[k] = *p.Minimum
-	}
-	out, _ := json.Marshal(body)
-	return string(out)
+	return r
 }
 
-// CA-4: un plan con el cuerpo del esquema deja pasar el flujo POST /orders sano (201, salida 0);
-// sin body el mismo paso recibe 400 y el runner sale 1 (par falla-pasa).
+// puertoLibre pide un puerto TCP libre en loopback.
+func puertoLibre(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	return strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+}
+
+// esperarHTTP espera a que la URL responda 200 (arranque de un proceso hijo).
+func esperarHTTP(t *testing.T, url string) {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if resp, err := http.Get(url); err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("%s no respondió 200 a tiempo", url)
+}
+
+// arrancar lanza un proceso hijo que se detiene al terminar la prueba.
+func arrancar(t *testing.T, cmd *exec.Cmd) {
+	t.Helper()
+	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+}
+
+type endpoint struct {
+	Method      string          `json:"method"`
+	Path        string          `json:"path"`
+	RequestBody json.RawMessage `json:"request_body,omitempty"`
+}
+
+// cuerpoMinimo genera el cuerpo valido del request_body inferido: cada propiedad required entera
+// toma su minimum. Es la regla que el planner debe cumplir para POST con request_body.
+func cuerpoMinimo(t *testing.T, eps []endpoint) map[string]int {
+	t.Helper()
+	for _, e := range eps {
+		if e.Method != "POST" || e.Path != "/orders" {
+			continue
+		}
+		var sch struct {
+			Required   []string `json:"required"`
+			Properties map[string]struct {
+				Type    string `json:"type"`
+				Minimum *int   `json:"minimum"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(e.RequestBody, &sch); err != nil {
+			t.Fatalf("request_body de POST /orders no interpretable: %v", err)
+		}
+		body := map[string]int{}
+		for _, k := range sch.Required {
+			p := sch.Properties[k]
+			if p.Type != "integer" || p.Minimum == nil {
+				t.Fatalf("propiedad %s no entera con minimum", k)
+			}
+			body[k] = *p.Minimum
+		}
+		return body
+	}
+	t.Fatal("la superficie no tiene POST /orders")
+	return nil
+}
+
+// CA-4: superficie inferida del OpenAPI servido por demo/target-app (parseOpenAPI), plan del planner
+// con LLM falso para esa superficie, y ejecucion del flujo contra el handler REAL de demo/target-app
+// (almacen en memoria, TARGET_APP_STORE=memoria). Con el cuerpo del plan: 201 y salida 0. Sin cuerpo,
+// el mismo paso recibe 400 y el runner sale 1 (par falla-pasa).
 func TestOrdersCuerpoFlujoSanoContraTargetApp(t *testing.T) {
-	cuerpo := cuerpoDeEsquema(t)
+	raiz := repoRaiz(t)
+	dir := t.TempDir()
+
+	// 1. Binario real de demo/target-app.
+	bin := filepath.Join(dir, "target-app")
+	build := exec.Command("go", "build", "-o", bin, ".")
+	build.Dir = filepath.Join(raiz, "demo", "target-app")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build de target-app: %v\n%s", err, out)
+	}
+	tok := filepath.Join(dir, "baseline.tok")
+	if err := os.WriteFile(tok, []byte("tok-u8t09a"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	appPort, basePort := puertoLibre(t), puertoLibre(t)
+	app := "http://127.0.0.1:" + appPort
+	app0 := exec.Command(bin)
+	app0.Env = append(os.Environ(), "TARGET_APP_STORE=memoria", "LISTEN_ADDR=127.0.0.1:"+appPort,
+		"BASELINE_LISTEN_ADDR=127.0.0.1:"+basePort, "BASELINE_TOKEN_FILE="+tok)
+	arrancar(t, app0)
+	esperarHTTP(t, app+"/health")
+
+	// 2. Superficie: el OpenAPI que sirve la app, inferido con parseOpenAPI (go-warm-manager).
+	resp, err := http.Get(app + "/openapi.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	inf := exec.Command("go", "run", "./cmd/openapi-endpoints")
+	inf.Dir = filepath.Join(raiz, "services", "go-warm-manager")
+	inf.Stdin = bytes.NewReader(doc)
+	var infOut, infErr bytes.Buffer
+	inf.Stdout, inf.Stderr = &infOut, &infErr
+	if err := inf.Run(); err != nil {
+		t.Fatalf("inferencia de superficie: %v: %s", err, infErr.String())
+	}
+	var eps []endpoint
+	if err := json.Unmarshal(infOut.Bytes(), &eps); err != nil {
+		t.Fatal(err)
+	}
+	surface := map[string]any{"run_id": "run-u8t09a", "base_url": app, "endpoints": eps, "source": "openapi"}
+
+	// 3. Plan del planner con LLM falso: el fixture es la respuesta del LLM para esta superficie.
+	const workflow = "pedido"
+	cuerpo := cuerpoMinimo(t, eps)
+	plan := map[string]any{"run_id": "run-u8t09a", "workflow": workflow, "flows": []any{map[string]any{
+		"flow_id": "crear-pedido", "name": "crear pedido",
+		"steps":     []any{map[string]any{"method": "POST", "path": "/orders", "body": cuerpo, "expect_status": 201}},
+		"invariant": "el stock nunca es negativo",
+	}}}
+	fix, _ := json.Marshal(map[string]any{"surface": surface, "workflow": workflow, "plan": plan})
+	fixDir := filepath.Join(dir, "fixtures")
+	if err := os.Mkdir(fixDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fixDir, "pedido.json"), fix, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	py := os.Getenv("AQS_PLANNER_PYTHON")
+	if py == "" {
+		py = "python3"
+	}
+	pport := puertoLibre(t)
+	pl := exec.Command(py, "-m", "agent_planner")
+	pl.Dir = filepath.Join(raiz, "agents", "agent-planner")
+	pl.Env = append(os.Environ(), "PYTHONPATH="+filepath.Join(raiz, "agents", "agent-planner", "src"),
+		"PLANNER_HOST=127.0.0.1", "PLANNER_PORT="+pport, "LLM_PROVIDER=fake", "PLANNER_ALLOW_FAKE=true",
+		"U3_FAKE_SURFACES_DIR="+fixDir)
+	arrancar(t, pl)
+	planner := "http://127.0.0.1:" + pport
+	esperarHTTP(t, planner+"/healthz")
+	req, _ := json.Marshal(map[string]any{"surface": surface, "workflow": workflow})
+	pr, err := http.Post(planner+"/v1/plan", "application/json", bytes.NewReader(req))
+	if err != nil {
+		t.Fatal(err)
+	}
+	planOut, _ := io.ReadAll(pr.Body)
+	_ = pr.Body.Close()
+	if pr.StatusCode != http.StatusOK {
+		t.Fatalf("el planner rechazó el plan: %d %s", pr.StatusCode, planOut)
+	}
+	var got struct {
+		Flows []struct {
+			Steps []json.RawMessage `json:"steps"`
+		} `json:"flows"`
+	}
+	if err := json.Unmarshal(planOut, &got); err != nil || len(got.Flows) != 1 || len(got.Flows[0].Steps) != 1 {
+		t.Fatalf("plan devuelto inesperado: %s (%v)", planOut, err)
+	}
+	stepWithBody := string(got.Flows[0].Steps[0])
+
+	// 4. Ejecucion contra el handler real: con el cuerpo del plan, y sin el (sensibilidad).
+	stepNoBody := `{"method":"POST","path":"/orders","expect_status":201}`
 	for _, tc := range []struct {
 		name     string
 		steps    string
 		wantExit int
 		wantCode int
 	}{
-		{"con cuerpo del esquema", `[{"method":"POST","path":"/orders","body":` + cuerpo + `,"expect_status":201}]`, exitOK, 201},
-		{"sin cuerpo", `[{"method":"POST","path":"/orders","expect_status":201}]`, exitFailed, 400},
+		{"con body del plan", "[" + stepWithBody + "]", exitOK, 201},
+		{"sin body", "[" + stepNoBody + "]", exitFailed, 400},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			srv := httptest.NewServer(ordersHandler(false, nil))
-			defer srv.Close()
 			var out bytes.Buffer
-			code := run([]string{"http-steps", "--flow", "f-orders", "--target", srv.URL},
+			code := run([]string{"http-steps", "--flow", "crear-pedido", "--target", app},
 				envOf(map[string]string{"RUNNER_STEPS": tc.steps, "RUNNER_INVARIANT": "el stock nunca es negativo"}),
 				&out, &bytes.Buffer{}, newClient(stepTimeout))
 			if code != tc.wantExit {

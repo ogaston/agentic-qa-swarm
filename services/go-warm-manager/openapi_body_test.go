@@ -73,3 +73,19 @@ func TestOpenAPIRequestBodyAusenteOExternoNoRompe(t *testing.T) {
 		}
 	}
 }
+
+// U8-T09a F-03: $ref en la RAIZ del esquema del requestBody -> el endpoint sale sin cuerpo.
+// $ref ANIDADO -> el esquema se conserva tal cual (no se resuelve); el planner exige body sin comprobarlo.
+func TestOpenAPIRequestBodyRefRaizVersusAnidado(t *testing.T) {
+	raiz := `{"openapi":"3.0.0","paths":{"/a":{"post":{"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/X"}}}}}}}}`
+	anidado := `{"openapi":"3.0.0","paths":{"/a":{"post":{"requestBody":{"content":{"application/json":{"schema":{"type":"object","required":["id"],"properties":{"id":{"$ref":"#/components/schemas/Id"}}}}}}}}}}`
+	sa := inferir(t, raiz)
+	if e, _ := hallar(sa, "POST", "/a"); len(e.RequestBody) != 0 {
+		t.Fatalf("$ref en la raiz debe salir sin cuerpo: %s", e.RequestBody)
+	}
+	sa = inferir(t, anidado)
+	e, ok := hallar(sa, "POST", "/a")
+	if !ok || !strings.Contains(string(e.RequestBody), `"$ref":"#/components/schemas/Id"`) {
+		t.Fatalf("$ref anidado debe conservarse sin resolver: %s", e.RequestBody)
+	}
+}

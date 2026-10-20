@@ -5,6 +5,7 @@ import json
 import re
 
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError, UnknownType
 
 from .errors import Limits, PlanRejected
 from .schemas_loader import validator
@@ -36,7 +37,11 @@ def _check_body(st: dict, request_body, i: int, j: int) -> None:
         raise PlanRejected(f"body_requerido:{i}/{j}")
     if not _checkable(request_body):
         return  # degradacion documentada: el esquema no se puede comprobar sin resolver referencias
-    err = next(Draft202012Validator(request_body).iter_errors(st["body"]), None)
+    try:
+        Draft202012Validator.check_schema(request_body)
+        err = next(Draft202012Validator(request_body).iter_errors(st["body"]), None)
+    except (SchemaError, UnknownType):
+        return  # esquema que el validador no soporta: no se comprueba, nunca es error de ejecucion
     if err is not None:
         where = "/".join(str(p) for p in err.absolute_path) or "raiz"
         raise PlanRejected(f"body_invalido:{i}/{j}:{where}:{err.validator}")

@@ -536,6 +536,8 @@ func parseOpenAPI(body []byte) ([]Endpoint, bool) {
 // openAPIRequestBody extrae el esquema JSON de requestBody (application/json) de una operacion.
 // Sin requestBody, sin application/json, con esquema ausente, no objeto o con $ref (local o externo)
 // devuelve nil: el endpoint sale sin cuerpo y la inferencia no falla. No resuelve referencias.
+// Un $ref ANIDADO dentro del esquema (p. ej. properties.id.$ref) se conserva tal cual: el planner
+// exige body para ese endpoint pero no comprueba el cuerpo (ver validate.py _checkable).
 func openAPIRequestBody(op json.RawMessage) json.RawMessage {
 	var o struct {
 		RequestBody struct {

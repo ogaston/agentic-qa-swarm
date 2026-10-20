@@ -73,3 +73,17 @@ def test_validate_body_schema_no_comprobable_no_es_error():
     surf = surface_rb({"$ref": "https://otro.example/orden.json"})
     p = plan_con_body({"cualquier": "cosa"})
     assert run(p, surf) == p
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "foo"},  # tipo desconocido: UnknownType al validar
+        {"type": "integer", "minimum": "uno"},  # SchemaError: minimum no numerico (metaesquema)
+    ],
+)
+def test_validate_body_esquema_no_soportado_degrada_a_no_comprobar(schema):
+    # U8-T09a F-02: un request_body que el validador no soporta no es error de ejecucion; no se comprueba.
+    surf = surface_rb(schema)
+    p = plan_con_body({"cualquier": "cosa"})
+    assert run(p, surf) == p

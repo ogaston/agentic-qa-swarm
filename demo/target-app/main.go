@@ -31,6 +31,7 @@ type config struct {
 	BaselineAddr    string
 	BaselineTokFile string
 	Bug             string
+	StoreMem        bool // TARGET_APP_STORE=memoria: almacen en memoria (pruebas), sin base de datos
 }
 
 func loadConfig() (config, error) {
@@ -40,8 +41,12 @@ func loadConfig() (config, error) {
 		BaselineAddr:    envOr("BASELINE_LISTEN_ADDR", ":9090"),
 		BaselineTokFile: os.Getenv("BASELINE_TOKEN_FILE"),
 		Bug:             os.Getenv("TARGET_APP_BUG"),
+		StoreMem:        os.Getenv("TARGET_APP_STORE") == "memoria",
 	}
-	if c.DatabaseURL == "" {
+	if os.Getenv("TARGET_APP_STORE") != "" && !c.StoreMem {
+		return c, errors.New("TARGET_APP_STORE desconocido: " + os.Getenv("TARGET_APP_STORE"))
+	}
+	if c.DatabaseURL == "" && !c.StoreMem {
 		return c, errors.New("falta DATABASE_URL")
 	}
 	if c.BaselineTokFile == "" {
@@ -70,22 +75,26 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	st, err := newStore(cfg.DatabaseURL, cfg.Bug == "oversell")
-	if err != nil {
-		log.Error("dsn invalido", "error", err.Error())
-		os.Exit(2)
+	var st appStore
+	if cfg.StoreMem {
+		st = newMemStore(cfg.Bug == "oversell")
+	} else {
+		db, err := newStore(cfg.DatabaseURL, cfg.Bug == "oversell")
+		if err != nil {
+			log.Error("dsn invalido", "error", err.Error())
+			os.Exit(2)
+		}
+		defer db.Close()
+		// La app escucha ya y reintenta la base mientras viva el contexto (U8-T04, F-02).
+		go db.Init(ctx, log)
+		st = db
 	}
-	defer st.Close()
 
 	tok, err := readToken(cfg.BaselineTokFile)
 	if err != nil {
 		log.Error("token de baseline", "error", err.Error())
 		os.Exit(2)
 	}
-
-	// La app escucha ya y reintenta la base mientras viva el contexto (U8-T04, F-02). Hasta tener base,
-	// /health y las rutas de datos responden 503.
-	go st.Init(ctx, log)
 
 	srv := &http.Server{Addr: cfg.ListenAddr, Handler: gate(st, appMux(st)), ReadHeaderTimeout: 5 * time.Second}
 	base := &http.Server{Addr: cfg.BaselineAddr, Handler: baselineMux(st, tok), ReadHeaderTimeout: 5 * time.Second}
@@ -109,7 +118,7 @@ func main() {
 
 // gate responde 503 a todo lo que depende de la base hasta que Init termine. "/" y /openapi.json son
 // estaticos y siempre responden (la sonda de readiness de warm-app usa "/").
-func gate(st *store, next http.Handler) http.Handler {
+func gate(st appStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if st.Ready() || r.URL.Path == "/" || r.URL.Path == "/openapi.json" {
 			next.ServeHTTP(w, r)
@@ -119,7 +128,19 @@ func gate(st *store, next http.Handler) http.Handler {
 	})
 }
 
-func appMux(st *store) http.Handler {
+// appStore es el almacen que usa el handler real: el de Postgres (store) o el de memoria (memStore).
+type appStore interface {
+	Ready() bool
+	Ping(ctx context.Context) error
+	ListProducts(ctx context.Context) ([]Product, error)
+	CreateProduct(ctx context.Context, name string, stock int) (Product, error)
+	ListOrders(ctx context.Context) ([]Order, error)
+	PlaceOrder(ctx context.Context, productID int64, qty int) (Order, error)
+	Clean(ctx context.Context) error
+	Diff(ctx context.Context) (int, error)
+}
+
+func appMux(st appStore) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"service": "target-app", "version": "ref-v1"})
@@ -192,7 +213,7 @@ func appMux(st *store) http.Handler {
 }
 
 // baselineMux: todo exige Authorization: Bearer <token>. Sin token o con token ajeno, 401.
-func baselineMux(st *store, token string) http.Handler {
+func baselineMux(st appStore, token string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /__aqs/baseline/clean", func(w http.ResponseWriter, r *http.Request) {
 		if err := st.Clean(r.Context()); err != nil {
