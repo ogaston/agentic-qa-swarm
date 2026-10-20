@@ -4,6 +4,9 @@ from __future__ import annotations
 import json
 import re
 
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError, UnknownType
+
 from .errors import Limits, PlanRejected
 from .schemas_loader import validator
 
@@ -12,6 +15,36 @@ FLOW_ID_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?")
 
 def _bad_const(_):
     raise ValueError("constante no JSON")
+
+
+BODY_METHODS = {"POST", "PUT", "PATCH"}
+
+
+def _checkable(schema) -> bool:
+    """Un esquema con $ref (local o externo) no se resuelve aqui (sin red): no se comprueba el cuerpo."""
+    if isinstance(schema, dict):
+        return "$ref" not in schema and all(_checkable(v) for v in schema.values())
+    if isinstance(schema, list):
+        return all(_checkable(v) for v in schema)
+    return True
+
+
+def _check_body(st: dict, request_body, i: int, j: int) -> None:
+    """Con request_body en la superficie, un paso POST/PUT/PATCH debe llevar body conforme."""
+    if request_body is None or st["method"] not in BODY_METHODS:
+        return
+    if "body" not in st:
+        raise PlanRejected(f"body_requerido:{i}/{j}")
+    if not _checkable(request_body):
+        return  # degradacion documentada: el esquema no se puede comprobar sin resolver referencias
+    try:
+        Draft202012Validator.check_schema(request_body)
+        err = next(Draft202012Validator(request_body).iter_errors(st["body"]), None)
+    except (SchemaError, UnknownType):
+        return  # esquema que el validador no soporta: no se comprueba, nunca es error de ejecucion
+    if err is not None:
+        where = "/".join(str(p) for p in err.absolute_path) or "raiz"
+        raise PlanRejected(f"body_invalido:{i}/{j}:{where}:{err.validator}")
 
 
 def parse_and_validate(text: str, surface: dict, workflow: str, limits: Limits) -> dict:
@@ -34,6 +67,7 @@ def parse_and_validate(text: str, surface: dict, workflow: str, limits: Limits) 
     if len(flows) > limits.max_flows:
         raise PlanRejected("demasiados_flujos")
     observed = {(e["method"], e["path"]) for e in surface["endpoints"]}
+    surface_bodies = {(e["method"], e["path"]): e["request_body"] for e in surface["endpoints"] if "request_body" in e}
     seen = set()
     for i, fl in enumerate(flows):
         fid = fl["flow_id"]
@@ -47,4 +81,5 @@ def parse_and_validate(text: str, surface: dict, workflow: str, limits: Limits) 
         for j, st in enumerate(fl["steps"]):
             if (st["method"], st["path"]) not in observed:
                 raise PlanRejected(f"endpoint_no_observado:{i}/{j}")
+            _check_body(st, surface_bodies.get((st["method"], st["path"])), i, j)
     return plan

@@ -411,8 +411,9 @@ type SurfaceArtifact struct {
 
 // Endpoint es un par método/ruta.
 type Endpoint struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
+	Method      string          `json:"method"`
+	Path        string          `json:"path"`
+	RequestBody json.RawMessage `json:"request_body,omitempty"`
 }
 
 var openAPIPaths = []string{"/openapi.json", "/v3/api-docs", "/swagger.json"}
@@ -517,9 +518,9 @@ func parseOpenAPI(body []byte) ([]Endpoint, bool) {
 		if !strings.HasPrefix(p, "/") {
 			continue
 		}
-		for m := range ops {
+		for m, raw := range ops {
 			if M, ok := methods[strings.ToLower(m)]; ok {
-				eps = append(eps, Endpoint{Method: M, Path: p})
+				eps = append(eps, Endpoint{Method: M, Path: p, RequestBody: openAPIRequestBody(raw)})
 			}
 		}
 	}
@@ -530,6 +531,36 @@ func parseOpenAPI(body []byte) ([]Endpoint, bool) {
 		return eps[i].Method < eps[j].Method
 	})
 	return eps, true
+}
+
+// openAPIRequestBody extrae el esquema JSON de requestBody (application/json) de una operacion.
+// Sin requestBody, sin application/json, con esquema ausente, no objeto o con $ref (local o externo)
+// devuelve nil: el endpoint sale sin cuerpo y la inferencia no falla. No resuelve referencias.
+// Un $ref ANIDADO dentro del esquema (p. ej. properties.id.$ref) se conserva tal cual: el planner
+// exige body para ese endpoint pero no comprueba el cuerpo (ver validate.py _checkable).
+func openAPIRequestBody(op json.RawMessage) json.RawMessage {
+	var o struct {
+		RequestBody struct {
+			Content map[string]struct {
+				Schema json.RawMessage `json:"schema"`
+			} `json:"content"`
+		} `json:"requestBody"`
+	}
+	if json.Unmarshal(op, &o) != nil {
+		return nil
+	}
+	media, ok := o.RequestBody.Content["application/json"]
+	if !ok {
+		return nil
+	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(media.Schema, &obj) != nil || obj == nil {
+		return nil
+	}
+	if _, ref := obj["$ref"]; ref {
+		return nil
+	}
+	return media.Schema
 }
 
 var _ = errors.Is

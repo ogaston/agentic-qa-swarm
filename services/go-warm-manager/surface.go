@@ -1,6 +1,7 @@
 package warmmanager
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -33,6 +34,12 @@ func ValidateSurface(sa SurfaceArtifact) error {
 		}
 		if !pathRe.MatchString(e.Path) {
 			return fmt.Errorf("surface: path %q no empieza con /", e.Path)
+		}
+		if len(e.RequestBody) > 0 {
+			var obj map[string]json.RawMessage
+			if json.Unmarshal(e.RequestBody, &obj) != nil || obj == nil {
+				return fmt.Errorf("surface: request_body de %s %s no es un objeto JSON", e.Method, e.Path)
+			}
 		}
 	}
 	if sa.Source != "openapi" && sa.Source != "probe" {

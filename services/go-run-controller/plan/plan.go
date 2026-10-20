@@ -31,8 +31,9 @@ type FlowPlan struct {
 
 // Endpoint es un endpoint externo descubierto.
 type Endpoint struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
+	Method      string          `json:"method"`
+	Path        string          `json:"path"`
+	RequestBody json.RawMessage `json:"request_body,omitempty"`
 }
 
 // SurfaceArtifact es la superficie externa inferida.

@@ -1,0 +1,23 @@
+{
+  "run_id": "run-001",
+  "base_url": "https://warm.example.test",
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/orders"
+    },
+    {
+      "method": "POST",
+      "path": "/orders",
+      "request_body": {
+        "type": "object",
+        "required": ["product_id", "qty"],
+        "properties": {
+          "product_id": {"type": "integer", "minimum": 1},
+          "qty": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  ],
+  "source": "openapi"
+}
