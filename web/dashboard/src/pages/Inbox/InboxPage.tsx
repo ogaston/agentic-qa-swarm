@@ -67,6 +67,8 @@ export function InboxPage() {
   const cargar = useCallback(async (porEstado: Estado) => {
     const id = ++peticion.current;
     setErrorLista(null);
+    // Sin contadores de la carga anterior mientras esta llega.
+    setConteos({});
     try {
       const datos = await apiFetch<Notification[]>(`/api/notifications?state=${porEstado}`);
       if (id !== peticion.current) return;
@@ -383,6 +385,7 @@ export function InboxPage() {
       {seleccionada !== null ? (
         <section aria-label="Detalle de la notificación" className="card card-pad detail">
           <h2>Detalle</h2>
+          <div className="stack">
           <dl className="kv-list">
             <dt>Repositorio</dt>
             <dd>{seleccionada.repo}</dd>
@@ -402,12 +405,13 @@ export function InboxPage() {
             <dd>{seleccionada.state}</dd>
           </dl>
           {seleccionada.state === 'pending' ? (
-            <p>
+            <div>
               <button ref={disparadorRef} type="button" className="btn btn-primary" onClick={abrirPanel}>
                 Revisar y confirmar
               </button>
-            </p>
+            </div>
           ) : null}
+          </div>
         </section>
       ) : null}
 
