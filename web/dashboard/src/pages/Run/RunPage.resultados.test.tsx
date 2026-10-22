@@ -239,4 +239,73 @@ describe('RunPage: plan de flujos', () => {
     await vaciar();
     expect(screen.getByText('Plan aún no disponible.')).toBeTruthy();
   });
+
+  it('failed abierto directamente pide el plan una vez y muestra «Flujos ejecutados»', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('failed')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    renderRun();
+    await vaciar();
+    await avanzar(10_000);
+    expect(plan.n).toBe(1);
+    expect(screen.getByText('Flujos ejecutados')).toBeTruthy();
+    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
+  });
+
+  it('failed llegando desde rehearsing pide el plan y lo muestra', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('rehearsing'), corrida('failed')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    renderRun();
+    await vaciar();
+    await avanzar(3000);
+    expect(plan.n).toBe(1);
+    expect(screen.getByText('Flujos ejecutados')).toBeTruthy();
+    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
+  });
+
+  it('failed sin plan muestra «Plan aún no disponible»', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('failed')]);
+    ruta(`/api/runs/${ID}/plan`, [error(404, 'plan_not_ready')]);
+    renderRun();
+    await vaciar();
+    expect(screen.getByText('Plan aún no disponible.')).toBeTruthy();
+  });
+
+  it('404 de reports con otro código muestra «Sin acceso al informe»', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('done', { verdict: 'bug' })]);
+    ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    ruta(`/api/reports/${ID}`, [error(404, 'not_found')]);
+    renderRun();
+    await vaciar();
+    expect(screen.getByText('Sin acceso al informe.')).toBeTruthy();
+  });
+
+  it('error de red en reports muestra el aviso con «Reintentar»', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('done', { verdict: 'bug' })]);
+    ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    server.use(http.get(`/api/reports/${ID}`, () => HttpResponse.error()));
+    renderRun();
+    await vaciar();
+    expect(screen.getByRole('alert').textContent).toMatch(/No se pudo cargar el informe/);
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeTruthy();
+  });
+
+  it('error genérico de reports usa el aviso común de error', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('done', { verdict: 'bug' })]);
+    ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    ruta(`/api/reports/${ID}`, [error(400, 'invalid_run')]);
+    renderRun();
+    await vaciar();
+    expect(screen.getByText('invalid_run')).toBeTruthy();
+  });
+
+  it('502 en el plan muestra «Reintentar» y lo vuelve a pedir', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('rehearsing')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [error(502, 'bad_gateway'), { json: { ...planCon, run_id: ID } }]);
+    renderRun();
+    await vaciar();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeTruthy();
+    await pulsar('Reintentar');
+    expect(plan.n).toBe(2);
+    expect(screen.getByText('Flujos ejecutados')).toBeTruthy();
+  });
 });
