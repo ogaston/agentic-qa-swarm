@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Recorrido del dashboard contra la plataforma en kind `aqs` (U7-T05), todo a través del origen del
 # dashboard (vite preview en 127.0.0.1:18610). Las comprobaciones curl solo llegan a :18610.
-# Imprime «OK|FALLA <comprobación>» por cada una y «PENDIENTE <paso> (<motivo>)» para lo que depende de
-# P1 (confirmar y seguir la corrida). Sale 0 solo si ninguna falla. Siempre para la pila (trap).
+# Imprime «OK|FALLA <comprobación>» por cada una y «PENDIENTE <paso> (<motivo>)» si el paso no se puede
+# comprobar en este clúster (p. ej. sin LLM real). Sale 0 solo si ninguna falla. Siempre para la pila (trap).
+# reporte-visible (U9-T03): notificación de prueba por webhook firmado (go-intake, port-forward propio de
+# este script), confirmación por el origen del dashboard, seguimiento de la corrida hasta done y
+# GET /api/reports/{run} por el origen con verdict.
 # Las contraseñas y tokens viven en un directorio 700 propio y nunca se imprimen.
 # shellcheck disable=SC2317  # las funciones de comprobación se invocan indirectamente (check)
 set -uo pipefail
@@ -15,6 +18,8 @@ cd "$root" || exit 1
 require_kind_context # sale 3 si el contexto no es kind-aqs (antes de crear nada)
 
 ORIGIN=http://127.0.0.1:18610
+P_INTAKE=18604
+NS_SYS=aqs-system
 work=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/aqs-dash-smoke.XXXXXX") || exit 1
 chmod 700 "$work"
 fail=0
@@ -22,6 +27,7 @@ FAIL_SUFFIX=""
 
 cleanup() {
   trap '' INT TERM
+  if [ -s "$work/pf-intake.pid" ]; then kill "$(cat "$work/pf-intake.pid")" 2>/dev/null; fi
   bash "$root/scripts/kind/dashboard-down.sh" >/dev/null 2>&1
   rm -rf "$work"
 }
@@ -141,9 +147,81 @@ check warm-estado warm_estado
 check sin-token-401 sin_token_401
 check logout-invalida-token logout_invalida_token
 
-# Confirmar y seguir la corrida depende de P1 (los eventos viajan por archivos en el disco de cada pod).
-echo "PENDIENTE confirmar-y-seguir-corrida (P1)"
-echo "    motivo: P1, los eventos viajan por archivos en el disco de cada pod; no hay transporte entre pods"
+# reporte-visible: solo si hay LLM real configurado; si no, PENDIENTE con su motivo.
+# Notificación de prueba: webhook push firmado a go-intake (el origen del dashboard no lo expone).
+webhook_de_prueba() {
+  local secret sha delivery sig body code
+  (kubectl port-forward --address 127.0.0.1 -n "$NS_SYS" svc/go-intake "$P_INTAKE:8080" \
+    >"$work/pf-intake.log" 2>&1 & echo $! >"$work/pf-intake.pid")
+  local i
+  for i in $(seq 1 30); do
+    curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$P_INTAKE/healthz" && break
+    sleep 1
+  done
+  curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$P_INTAKE/healthz" || { echo "port-forward go-intake no responde /healthz"; return 1; }
+  secret=$(kubectl -n "$NS_SYS" get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d) || return 1
+  [ -n "$secret" ] || { echo "secret go-intake-webhook vacio"; return 1; }
+  sha=$(printf '%s' "smoke-$(date +%s%N)-$$-$RANDOM" | sha1sum | cut -c1-40)
+  delivery=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'd-%s-%s' "$$" "$(date +%s%N)")
+  jq -n --arg a "$sha" '{ref:"refs/heads/main", after:$a, repository:{full_name:"ogaston/agentic-qa-swarm"}}' >"$work/hook.json" || return 1
+  body=$(cat "$work/hook.json")
+  sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" -hex | awk '{print $2}')"
+  code=$(curl -sS -o "$work/hook.out" -w '%{http_code}' --max-time 15 \
+    -H 'Content-Type: application/json' -H "X-Hub-Signature-256: $sig" -H "X-GitHub-Event: push" \
+    -H "X-GitHub-Delivery: $delivery" --data "$body" "http://127.0.0.1:$P_INTAKE/webhooks/github") || code=000
+  [ "$code" = 202 ] || { echo "POST /webhooks/github respondio $code (esperaba 202)"; return 1; }
+  NOTIF_SMOKE=$(jq -r '.id // empty' "$work/hook.out")
+  [ -n "$NOTIF_SMOKE" ] && [ "$NOTIF_SMOKE" != null ] || { echo "el 202 no trae notification.id"; return 1; }
+}
+
+# Sigue GET /api/runs/{run} por el origen hasta done (cada 10 s, 20 min como mucho). Un 404 en los
+# primeros 2 min es normal: la corrida tarda un instante en aparecer en el controlador tras la confirmación.
+seguir_hasta_done() {
+  local run=$1 i st code
+  for i in $(seq 1 120); do
+    code=$(curl -s -o "$work/body" -w '%{http_code}' --max-time 10 \
+      -H "Authorization: Bearer $(cat "$work/token")" "$ORIGIN/api/runs/$run") || code=000
+    if [ "$code" = 404 ] && [ "$i" -le 12 ]; then
+      sleep 10
+      continue
+    fi
+    [ "$code" = 200 ] || { echo "GET /api/runs/$run -> $code: $(head -c 200 "$work/body")"; return 1; }
+    st=$(jq -r '.state // empty' "$work/body")
+    rm -f "$work/body"
+    case "$st" in
+      done) return 0 ;;
+      failed) echo "la corrida $run quedo en failed"; return 1 ;;
+    esac
+    sleep 10
+  done
+  echo "la corrida $run no llego a done en 20 min (ultimo estado: ${st:-?})"
+  return 1
+}
+
+reporte_visible() {
+  local notif run
+  # El check de logout invalida el token anterior: se entra de nuevo con el usuario demo.
+  login || return 1
+  webhook_de_prueba || return 1
+  notif=$NOTIF_SMOKE
+  jq -n '{flows: ["happy-path"]}' >"$work/confirm.json" || return 1
+  http 201 "$ORIGIN/api/notifications/$notif/confirm" -H "Authorization: Bearer $(cat "$work/token")" \
+    -H 'Content-Type: application/json' --data @"$work/confirm.json" || return 1
+  run=$(jq -r '.run_id // empty' "$work/body")
+  rm -f "$work/body"
+  [ -n "$run" ] && [ "$run" != null ] || { echo "la confirmacion no devuelve run_id"; return 1; }
+  seguir_hasta_done "$run" || return 1
+  http 200 "$ORIGIN/api/reports/$run" -H "Authorization: Bearer $(cat "$work/token")" || return 1
+  jq -e '.verdict | IN("bug", "sin-hallazgos", "inconcluso")' "$work/body" >/dev/null \
+    || { echo "GET /api/reports/$run sin verdict valido"; return 1; }
+  rm -f "$work/body"
+}
+
+if kubectl -n "$NS_SYS" get secret agents-llm-key >/dev/null 2>&1; then
+  check reporte-visible reporte_visible
+else
+  echo "PENDIENTE reporte-visible (sin LLM real: falta el secret $NS_SYS/agents-llm-key)"
+fi
 
 if [ "$fail" -eq 0 ]; then
   echo "dashboard-smoke: OK (sin FALLA; pendiente declarado arriba)"
