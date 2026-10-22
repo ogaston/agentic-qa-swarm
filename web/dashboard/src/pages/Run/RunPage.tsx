@@ -235,7 +235,6 @@ function Fases({ actual, hechasHasta }: { actual: number; hechasHasta: number })
         return (
           <li
             key={fase.estado}
-            className={`phase phase-${estado}`}
             data-fase={fase.estado}
             data-fase-estado={estado}
             aria-current={esActual ? 'step' : undefined}

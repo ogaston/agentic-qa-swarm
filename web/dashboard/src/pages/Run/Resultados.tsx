@@ -9,20 +9,20 @@ type FlowPlan = components['schemas']['FlowPlan'];
 type Verdict = NonNullable<components['schemas']['Run']['verdict']>;
 
 const VEREDICTOS: Record<Verdict, { etiqueta: string; descripcion: string; clase: string }> = {
-  bug: { etiqueta: 'Bug', descripcion: 'Se encontraron fallos de lógica de negocio.', clase: 'badge-danger' },
+  bug: { etiqueta: 'Veredicto: bug', descripcion: 'Se encontraron fallos de lógica de negocio.', clase: 'badge-danger' },
   'sin-hallazgos': {
-    etiqueta: 'Sin hallazgos',
+    etiqueta: 'Veredicto: sin-hallazgos',
     descripcion: 'Ningún flujo incumplió una invariante.',
     clase: 'badge-ok',
   },
   inconcluso: {
-    etiqueta: 'Inconcluso',
+    etiqueta: 'Veredicto: inconcluso',
     descripcion: 'La corrida no permite afirmar ni descartar fallos.',
     clase: 'badge-warn',
   },
 };
 
-/** Insignia del veredicto: el texto dice cuál es; el color solo refuerza. */
+/** Insignia del veredicto como en el mockup («Veredicto: bug»): el texto dice cuál es; el color solo refuerza. */
 export function Veredicto({ verdict }: { verdict: Verdict }) {
   const v = VEREDICTOS[verdict];
   return (

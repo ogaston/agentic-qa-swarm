@@ -130,7 +130,7 @@ describe('RunPage fidelidad: estados', () => {
     renderRun();
     await vaciar();
     const badge = document.querySelector('[data-veredicto="bug"]');
-    expect(badge?.textContent).toBe('Bug');
+    expect(badge?.textContent).toBe('Veredicto: bug');
     expect(badge?.classList.contains('badge-danger')).toBe(true);
     const pm = within(screen.getByRole('region', { name: 'Informe post-mortem' }));
     expect(pm.getByText('Dos flujos fallidos')).toBeTruthy();
@@ -149,7 +149,7 @@ describe('RunPage fidelidad: estados', () => {
     renderRun();
     await vaciar();
     const badge = document.querySelector('[data-veredicto="sin-hallazgos"]');
-    expect(badge?.textContent).toBe('Sin hallazgos');
+    expect(badge?.textContent).toBe('Veredicto: sin-hallazgos');
     expect(badge?.classList.contains('badge-ok')).toBe(true);
     expect(screen.getByText('No se encontraron hallazgos en esta corrida.')).toBeTruthy();
   });
@@ -161,7 +161,7 @@ describe('RunPage fidelidad: estados', () => {
     renderRun();
     await vaciar();
     const badge = document.querySelector('[data-veredicto="inconcluso"]');
-    expect(badge?.textContent).toBe('Inconcluso');
+    expect(badge?.textContent).toBe('Veredicto: inconcluso');
     expect(badge?.classList.contains('badge-warn')).toBe(true);
   });
 
@@ -199,5 +199,18 @@ describe('RunPage fidelidad: plan de flujos plegable', () => {
     expect(esperado.classList.contains('badge-warn')).toBe(true);
     const cuerpo = document.querySelector('pre.json-body');
     expect(cuerpo?.textContent).toBe(JSON.stringify({ product_id: 1, qty: 11 }, null, 2));
+  });
+
+  it('ninguna insignia depende solo del color: todas llevan texto (método, esperado, veredicto, estado)', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('done', { verdict: 'bug' })]);
+    ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    ruta(`/api/reports/${ID}`, [{ json: { ...informeDosHallazgos, run_id: ID } }]);
+    renderRun();
+    await vaciar();
+    const insignias = Array.from(document.querySelectorAll('span.badge'));
+    expect(insignias.length).toBeGreaterThan(5);
+    for (const b of insignias) {
+      expect((b.textContent ?? '').trim().length).toBeGreaterThan(0);
+    }
   });
 });

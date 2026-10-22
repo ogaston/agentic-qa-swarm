@@ -919,9 +919,15 @@ dl.kv-list {
   font-size: 13px;
 }
 
+/* Restablece lo que la regla global `dl dt` (etiquetas de tabla) impone a las etiquetas de la lista de pares:
+   el mockup las pone en 13 px, minúscula y sin centrar (U10-T03, F-02). */
 dl.kv-list dt {
   color: var(--text-faint);
   font-weight: 600;
+  font-size: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  align-self: stretch;
   padding-top: 2px;
 }
 
