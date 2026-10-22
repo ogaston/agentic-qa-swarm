@@ -1,4 +1,7 @@
-/* Hoja principal del dashboard (U9-T04). Los colores y medidas salen de tokens.css (DESIGN.md §2). */
+/* Hoja principal del dashboard (U9-T04). Los colores y medidas salen de tokens.css (DESIGN.md §2).
+ * Las primitivas visuales (cabecera, encabezados, tarjetas, insignias, botones, KPI, diálogo) son
+ * las del mockup mockups/swarm-mock.html (U10-T01); src/styles/paridad.test.ts exige que sus
+ * medidas y nombres de clase coincidan. */
 @import './styles/tokens.css';
 
 *,
@@ -96,17 +99,17 @@ a:hover {
   color: var(--text-muted);
 }
 
-/* ---------- Cabecera ---------- */
+/* ---------- Cabecera (ProtectedLayout, mockup Azia: 60 px) ---------- */
 
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 40;
+.az-header {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }
 
-.app-header-inner {
+.az-header-inner {
   max-width: 1140px;
   margin: 0 auto;
   padding: 0 24px;
@@ -114,81 +117,128 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 20px;
-}
-
-.app-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.app-wordmark {
-  font-size: 1.375rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: var(--accent-text);
-}
-
-.app-wordmark::after {
-  content: ".";
-  color: var(--accent);
-}
-
-.app-brand-tag {
-  border-left: 1px solid var(--border);
-  padding-left: 10px;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.app-nav {
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
   flex-wrap: wrap;
 }
 
-.app-nav a {
-  display: inline-flex;
-  align-items: center;
-  height: 60px;
-  padding: 0 14px;
-  color: var(--text-muted);
-  font-weight: 600;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 120ms ease, border-color 120ms ease;
-}
-
-.app-nav a:hover {
-  color: var(--text);
+.az-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   text-decoration: none;
 }
 
-.app-nav a[aria-current="page"] {
+.az-logo {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--accent-text);
+  line-height: 1;
+}
+
+.az-brand-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+}
+
+.az-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 60px;
+}
+
+.az-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.az-nav-link svg {
+  width: 15px;
+  height: 15px;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.az-nav-link:hover {
+  color: var(--accent-text);
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+.az-nav-link.active {
   color: var(--accent-text);
   border-bottom-color: var(--accent);
 }
 
-.app-session {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.az-nav-link.active svg {
+  color: var(--accent-text);
 }
 
-.app-principal {
+.az-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.az-session-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.az-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
   font-weight: 700;
 }
 
-.app-role {
-  font-size: 0.6875rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.az-principal {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.az-principal strong {
+  display: block;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.az-principal span {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* Iconos del selector de tema: el sol se oculta con tema oscuro y la luna fuera de él. */
+:root[data-theme="dark"] .theme-icon-sun {
+  display: none;
+}
+
+:root:not([data-theme="dark"]) .theme-icon-moon {
+  display: none;
 }
 
 /* ---------- Página y cabeceras de vista ---------- */
@@ -201,6 +251,69 @@ main.page {
 
 main.page-narrow {
   max-width: 420px;
+}
+
+/* Contenedor de página del mockup (rejilla de 1140 px con relleno 28/24/64). */
+.az-container {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+}
+
+.az-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.az-page-title h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.az-page-title p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.az-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
+.az-meta-item {
+  padding: 2px 18px;
+  border-left: 1px solid var(--border);
+}
+
+.az-meta-item:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.az-meta-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  display: block;
+}
+
+.az-meta-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 2px;
+  display: block;
 }
 
 .page-header {
@@ -236,8 +349,123 @@ main.page-narrow {
   padding: 12px 0;
 }
 
-/* ---------- Tarjetas, avisos e insignias ---------- */
+/* ---------- Barra de subnavegación (pestañas y enlaces de acción del mockup) ---------- */
 
+.az-subbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.az-tablist {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.az-tab {
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 0.12s ease;
+}
+
+.az-tab:first-child {
+  padding-left: 0;
+}
+
+.az-tab:last-child {
+  border-right: 0;
+}
+
+.az-tab:hover {
+  color: var(--text);
+}
+
+.az-tab[aria-selected="true"],
+.az-tab.active {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.az-subbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.az-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 0;
+  border-left: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.az-action-link:first-child {
+  border-left: 0;
+}
+
+.az-action-link:hover {
+  color: var(--accent-text);
+}
+
+.az-action-link svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Pestañas de la vista actual (migran a .az-tablist en T02–T04). */
+.tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  font: inherit;
+  font-weight: 600;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.tab:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent);
+}
+
+.tab:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- Tarjetas, KPI, rejillas y avisos ---------- */
+
+/* Relleno y margen heredados de las vistas actuales (U9-T04). El mockup no los declara en .card:
+ * su relleno es .card-pad. Se retiran cuando T02–T04 migren las vistas. */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -245,6 +473,99 @@ main.page-narrow {
   box-shadow: var(--shadow);
   padding: 16px;
   margin-bottom: 16px;
+}
+
+.card-pad {
+  padding: 20px 22px;
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.card-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.kpi-box {
+  padding: 16px 18px;
+  margin-bottom: 0;
+}
+
+.kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.kpi-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.kpi-val {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.kpi-bar {
+  height: 4px;
+  background: var(--surface-3);
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+/* El relleno es decorativo; color declarado para que el contraste de la hoja lo cubra. */
+.kpi-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.grid-main-side {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.stack > *,
+.grid-main-side > *,
+.kpi-strip > * {
+  margin-bottom: 0;
 }
 
 .table-wrap {
@@ -269,46 +590,82 @@ main.page-narrow {
   border-left-width: 3px;
 }
 
-.badge {
-  display: inline-block;
-  border: 1px solid currentColor;
+.alert-box {
+  padding: 12px 16px;
   border-radius: var(--radius-sm);
-  padding: 1px 8px;
-  font-size: 0.6875rem;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.alert-danger {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.alert-warn {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* Insignias: semántica con texto visible, nunca solo color (mockup). */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1.5;
+  line-height: 1.4;
   white-space: nowrap;
 }
 
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .badge-ok {
-  color: var(--ok);
   background: var(--ok-soft);
+  color: var(--ok);
 }
 
 .badge-warn {
-  color: var(--warn);
   background: var(--warn-soft);
+  color: var(--warn);
 }
 
 .badge-danger {
-  color: var(--danger);
   background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge-accent {
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .badge-info {
-  color: var(--info);
   background: var(--info-soft);
+  color: var(--info);
 }
 
 .badge-teal {
-  color: var(--teal);
   background: var(--teal-soft);
+  color: var(--teal);
 }
 
 .badge-neutral {
-  color: var(--text-muted);
   background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
 }
 
 .verdict strong.badge {
@@ -319,15 +676,25 @@ main.page-narrow {
 
 .btn {
   font: inherit;
-  font-size: 0.8125rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 16px;
+  font-size: 12.5px;
   font-weight: 600;
   border-radius: var(--radius-sm);
-  padding: 6px 14px;
+  white-space: nowrap;
   cursor: pointer;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
   transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--text-faint);
 }
 
 .btn:disabled {
@@ -360,8 +727,66 @@ main.page-narrow {
 }
 
 .btn-sm {
-  padding: 3px 10px;
-  font-size: 0.75rem;
+  padding: 5px 11px;
+  font-size: 12px;
+}
+
+/* Botón solo icono (selector de tema y similares). */
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  border: none;
+  background: transparent;
+}
+
+.btn-icon:hover {
+  color: var(--text);
+  background: var(--surface-2);
+  border: none;
+}
+
+.btn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Controles segmentados del mockup. */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.segmented button {
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 5px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.segmented button:last-child {
+  border-right: 0;
+}
+
+.segmented button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.segmented button.active {
+  background: var(--surface-3);
+  color: var(--text);
 }
 
 .form {
@@ -390,6 +815,35 @@ main.page-narrow {
   width: 100%;
 }
 
+/* Campo de formulario del mockup (login y similares). */
+.form-field {
+  margin-bottom: 14px;
+}
+
+.form-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+
+.form-field input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.login-wrap {
+  max-width: 420px;
+  margin: 36px auto;
+}
+
 .fieldset {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -405,40 +859,6 @@ main.page-narrow {
   gap: 6px;
   color: var(--text);
   font-weight: 400;
-}
-
-/* ---------- Pestañas ---------- */
-
-.tabs {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.tab {
-  font: inherit;
-  font-weight: 600;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-muted);
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease;
-}
-
-.tab:hover:not(:disabled) {
-  color: var(--text);
-}
-
-.tab[aria-selected="true"] {
-  color: var(--accent-text);
-  border-bottom-color: var(--accent);
-}
-
-.tab:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 /* ---------- Tablas ---------- */
@@ -495,6 +915,29 @@ dl dd {
   overflow-wrap: anywhere;
 }
 
+/* Lista de pares del mockup (kv-list). */
+dl.kv-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  row-gap: 10px;
+  column-gap: 12px;
+  font-size: 13px;
+}
+
+dl.kv-list dt {
+  color: var(--text-faint);
+  font-weight: 600;
+  padding-top: 2px;
+}
+
+dl.kv-list dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+  word-break: break-all;
+}
+
 .detail {
   margin-top: 16px;
 }
@@ -511,6 +954,32 @@ dl dd {
   box-shadow: var(--modal-shadow);
   max-height: calc(100% - 32px);
   overflow: auto;
+}
+
+/* Diálogo del mockup: fondo de velo y caja con borde plano. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 20, 31, 0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.modal-backdrop.open {
+  display: flex;
+}
+
+.modal-dialog {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
 }
 
 /* ---------- Línea de tiempo de la corrida ---------- */
@@ -633,16 +1102,26 @@ dl dd {
   }
 }
 
+/* ---------- Rejilla del mockup en tableta y móvil ---------- */
+
+@media (max-width: 860px) {
+  .kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid-main-side {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- Pantallas estrechas (375 px sin desbordamiento horizontal de página) ---------- */
 
 @media (max-width: 620px) {
-  .app-header-inner {
-    padding: 8px 16px;
+  .az-header-inner {
     gap: 8px 12px;
   }
 
-  .app-nav a {
-    height: 44px;
+  .az-nav-link {
     padding: 0 10px;
   }
 
@@ -709,8 +1188,27 @@ dl dd {
 }
 
 @media (max-width: 520px) {
-  .app-brand-tag {
-    display: none;
+  .az-header-inner {
+    padding: 10px 16px;
+  }
+
+  .az-container {
+    padding: 18px 16px 48px;
+  }
+
+  .kpi-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .az-meta-item {
+    border-left: 0;
+    padding-left: 0;
+    padding-right: 16px;
+  }
+
+  dl.kv-list {
+    grid-template-columns: 1fr;
+    row-gap: 4px;
   }
 
   .card {
