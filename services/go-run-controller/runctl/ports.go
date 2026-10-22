@@ -2,6 +2,7 @@ package runctl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 )
 
@@ -70,6 +71,7 @@ type Run struct {
 	Started      map[string]int  `json:"started,omitempty"`     // lanzamientos iniciados por fase (se persiste ANTES de lanzar; tope 3)
 	HandedOff    map[string]bool `json:"handed_off,omitempty"`  // fases cuyo handoff ya se emitió (a lo sumo uno)
 	Launched     map[string]bool `json:"launched,omitempty"`    // fase ya lanzada con éxito en el estado actual
+	Plan         json.RawMessage `json:"plan,omitempty"`        // FlowPlan validado de la corrida (ver StoredPlans)
 }
 
 func (r Run) clone() Run {
@@ -81,6 +83,7 @@ func (r Run) clone() Run {
 	c.Launched = copyMap(r.Launched)
 	c.Started = copyMap(r.Started)
 	c.HandedOff = copyMap(r.HandedOff)
+	c.Plan = append(json.RawMessage(nil), r.Plan...)
 	return c
 }
 

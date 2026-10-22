@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** FlowPlan guardado de la corrida. Nunca vuelve a pedirlo al planner; lo ensayado es lo ejecutado. */
+        get: operations["getRunPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports/{run}": {
         parameters: {
             query?: never;
@@ -267,6 +284,31 @@ export interface components {
         Error: {
             code: string;
             message: string;
+        };
+        /** @description Copia fiel de contracts/plans/flow-plan.schema.json (plan de flujos de una corrida). */
+        FlowPlan: {
+            run_id: string;
+            workflow: string;
+            flows: components["schemas"]["FlowPlanFlow"][];
+        };
+        FlowPlanFlow: {
+            flow_id: string;
+            name: string;
+            steps: components["schemas"]["FlowPlanStep"][];
+            invariant: string;
+            /**
+             * @description true si el flujo sondea una invariante (su fallo seria un hallazgo).
+             * @default false
+             */
+            invariant_probe: boolean;
+        };
+        FlowPlanStep: {
+            /** @enum {string} */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            path: string;
+            expect_status: number;
+            /** @description Cuerpo JSON opcional del paso (solo objetos). Sin body no se envia cuerpo ni Content-Type. */
+            body?: Record<string, never>;
         };
         Session: {
             principal_id: string;
@@ -545,6 +587,31 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    getRunPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description FlowPlan de la corrida. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlowPlan"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
         };
     };
     getReport: {

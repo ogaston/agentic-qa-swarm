@@ -375,6 +375,7 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 			r.Verdict, r.ReportURI = res.Verdict, res.ReportURI
 		} else {
 			uris, err := k.c.Phases.Launch(ctx, phase, r.clone())
+			k.adoptPlan(&r) // StoredPlans guarda el plan dentro de Launch: no lo pisa el save de abajo
 			if err != nil {
 				return k.phaseFailed(ctx, r, phase, err.Error())
 			}
@@ -462,6 +463,14 @@ func (k *Controller) phaseFailed(ctx context.Context, r Run, phase, reason strin
 		return nil
 	}
 	return k.exhaust(ctx, r, phase, reason)
+}
+
+// adoptPlan copia el plan que el lanzador acaba de persistir en la corrida. Drive trabaja con una copia
+// tomada antes de Launch; sin esto el save posterior borraría Run.Plan.
+func (k *Controller) adoptPlan(r *Run) {
+	if cur, ok := k.c.Store.Get(r.ID); ok {
+		r.Plan = cur.Plan
+	}
 }
 
 // runnersStep avanza los runners. Devuelve done=true cuando la evidencia de TODOS los flujos está
