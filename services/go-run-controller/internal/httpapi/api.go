@@ -83,20 +83,27 @@ type RunView struct {
 // New devuelve el handler de la aplicación.
 func New(store runctl.RunStore, v TokenVerifier) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /runs/{id}", func(w http.ResponseWriter, r *http.Request) {
+	// auth escribe la respuesta de error y devuelve false si la petición no está autenticada.
+	auth := func(w http.ResponseWriter, r *http.Request) bool {
 		const p = "Bearer "
 		h := r.Header.Get("Authorization")
 		if len(h) <= len(p) || h[:len(p)] != p {
 			writeErr(w, http.StatusUnauthorized, "unauthenticated")
-			return
+			return false
 		}
 		switch err := v.Verify(r.Context(), h[len(p):]); {
 		case errors.Is(err, ErrUnauthenticated):
 			writeErr(w, http.StatusUnauthorized, "unauthenticated")
-			return
+			return false
 		case err != nil:
 			w.Header().Set("Retry-After", "10")
 			writeErr(w, http.StatusServiceUnavailable, "identity_unavailable")
+			return false
+		}
+		return true
+	}
+	mux.HandleFunc("GET /runs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !auth(w, r) {
 			return
 		}
 		run, ok := store.Get(r.PathValue("id"))
@@ -105,6 +112,27 @@ func New(store runctl.RunStore, v TokenVerifier) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, RunView{ID: run.ID, State: run.State, TraceID: run.TraceID, Verdict: run.Verdict, ReportURI: run.ReportURI})
+	})
+	// GET /runs/{id}/plan devuelve el FlowPlan guardado; nunca llama al planner.
+	mux.HandleFunc("GET /runs/{id}/plan", func(w http.ResponseWriter, r *http.Request) {
+		if !auth(w, r) {
+			return
+		}
+		run, ok := store.Get(r.PathValue("id"))
+		if !ok {
+			writeErr(w, http.StatusNotFound, "run_not_found")
+			return
+		}
+		if len(run.Plan) == 0 {
+			writeErr(w, http.StatusNotFound, "plan_not_ready")
+			return
+		}
+		fp, err := runctl.DecodeStoredPlan(run.Plan, run.ID)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "plan_invalid")
+			return
+		}
+		writeJSON(w, http.StatusOK, fp)
 	})
 	return mux
 }

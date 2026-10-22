@@ -889,6 +889,22 @@ run_verdict_nonempty() { # GET /runs/{id} del controlador expone el veredicto
   [ -n "$v" ] && [ "$v" != null ] || { echo "GET /runs no expone verdict"; return 1; }
 }
 
+# GET /runs/{id}/plan: el plan guardado valida contra contracts/plans/flow-plan.schema.json (mismo ajv que
+# contracts/validate.sh) y tiene un Job de runner por flujo (runner-<run>-<flow>).
+plan_inspectable() {
+  local code n j
+  code=$(curl -sS -o "$work/plan.json" -w '%{http_code}' --max-time 10 \
+    -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:$P_RUN/runs/$RUN_ID/plan") || code=000
+  [ "$code" = 200 ] || { echo "GET /runs/$RUN_ID/plan -> $code: $(head -c 200 "$work/plan.json")"; return 1; }
+  npx --yes -p ajv-cli@5.0.0 -p ajv-formats@3.0.1 ajv validate --spec=draft2020 -c ajv-formats \
+    -s "$root/contracts/plans/flow-plan.schema.json" -d "$work/plan.json" >"$work/plan-ajv.out" 2>&1 \
+    || { echo "el plan no valida contra flow-plan.schema.json: $(head -c 300 "$work/plan-ajv.out")"; return 1; }
+  jq -e --arg r "$RUN_ID" '.run_id == $r' "$work/plan.json" >/dev/null || { echo "run_id del plan no coincide con $RUN_ID"; return 1; }
+  n=$(jq '.flows | length' "$work/plan.json")
+  j=$(kcx -n "$NS_TEST" get jobs -l "aqs.io/run-id=$RUN_ID,aqs.io/phase=run" -o name 2>/dev/null | grep -c "runner-$RUN_ID-" || true)
+  [ "$n" = "$j" ] || { echo "flujos del plan=$n, Jobs runner-$RUN_ID-* =$j"; return 1; }
+}
+
 report_present() {
   [ -s "$work/report.json" ] || { echo "no hay reporte bajado de MinIO (reporte-en-minio fallo antes)"; return 1; }
 }
@@ -1026,6 +1042,7 @@ check reset-verificado reset_verified
 # La fase report puede seguir en curso aunque el warm ya este verificado: se espera a `done` (U8-T09: con
 # LLM real el reporte tarda mas que con el falso; sin esta espera report_uri aun no existe).
 check run-terminado wait_state 300 done
+check plan-inspectable plan_inspectable
 check reporte-en-minio report_uri_ok
 check reporte-en-ui-api reporte_en_ui_api
 check reporte-inexistente-404 reporte_inexistente_404

@@ -134,6 +134,21 @@ paths:
               schema: {$ref: '#/components/schemas/Run'}
         '401': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /runs/{id}/plan:
+    get:
+      operationId: getRunPlan
+      summary: FlowPlan guardado de la corrida. Nunca vuelve a pedirlo al planner; lo ensayado es lo ejecutado.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: FlowPlan de la corrida.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FlowPlan'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
   /reports/{run}:
     get:
       operationId: getReport
@@ -357,6 +372,45 @@ components:
       properties:
         code: {type: string}
         message: {type: string}
+    FlowPlan:
+      description: Copia fiel de contracts/plans/flow-plan.schema.json (plan de flujos de una corrida).
+      type: object
+      required: [run_id, workflow, flows]
+      additionalProperties: false
+      properties:
+        run_id: {type: string, minLength: 1}
+        workflow: {type: string, minLength: 1}
+        flows:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/FlowPlanFlow'}
+    FlowPlanFlow:
+      type: object
+      required: [flow_id, name, steps, invariant]
+      additionalProperties: false
+      properties:
+        flow_id: {type: string, minLength: 1}
+        name: {type: string, minLength: 1}
+        steps:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/FlowPlanStep'}
+        invariant: {type: string, minLength: 1}
+        invariant_probe:
+          type: boolean
+          default: false
+          description: true si el flujo sondea una invariante (su fallo seria un hallazgo).
+    FlowPlanStep:
+      type: object
+      required: [method, path, expect_status]
+      additionalProperties: false
+      properties:
+        method: {type: string, enum: [GET, POST, PUT, PATCH, DELETE]}
+        path: {type: string, pattern: '^/'}
+        expect_status: {type: integer, minimum: 100, maximum: 599}
+        body:
+          type: object
+          description: Cuerpo JSON opcional del paso (solo objetos). Sin body no se envia cuerpo ni Content-Type.
     Session:
       type: object
       required: [principal_id, role, session_id, expires_at]

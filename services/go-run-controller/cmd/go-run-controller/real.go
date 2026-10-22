@@ -87,13 +87,15 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 	if c.flowSource == "u3" && !u3 {
 		return base, errors.New("RUN_FLOW_SOURCE=u3: no se pudo crear el adaptador de U3")
 	}
-	l := &rehearsal.Launcher{Kube: rehearsal.ClientGo{CS: cs, NS: c.namespace}, Plans: flows,
+	// Ensayo y runners leen el mismo FlowPlan guardado en la corrida (U9-T02); el planner se llama una vez.
+	plans := runctl.StoredPlans{Store: store, Next: flows}
+	l := &rehearsal.Launcher{Kube: rehearsal.ClientGo{CS: cs, NS: c.namespace}, Plans: plans,
 		Cfg: rehearsal.Config{Namespace: c.namespace, Image: c.rehearsalImage, ServiceAccount: c.rehearsalSA, TargetURL: c.rehearsalTarget}}
 	ev, err := runner.NewS3(c.evEndpoint, c.evBucket, c.evAccessFile, c.evSecretFile)
 	if err != nil {
 		return base, err
 	}
-	rl := &runner.Launcher{Kube: runner.ClientGo{CS: cs, NS: c.namespace}, Plans: flows, Exec: runner.HTTPStepsExecutor{Target: c.rehearsalTarget},
+	rl := &runner.Launcher{Kube: runner.ClientGo{CS: cs, NS: c.namespace}, Plans: plans, Exec: runner.HTTPStepsExecutor{Target: c.rehearsalTarget},
 		Evidence: ev, Gate: gate, Policy: runner.StaticPolicy{L: runner.Limits{FlowTimeout: c.flowTimeout, RunTimeout: c.runTimeout}},
 		MaxParallel: c.maxParallel, Obs: rm, Log: log,
 		Cfg: runner.Config{Namespace: c.namespace, Image: c.runnerImage, ServiceAccount: c.runnerSA}}
