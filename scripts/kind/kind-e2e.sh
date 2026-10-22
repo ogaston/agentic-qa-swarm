@@ -84,7 +84,7 @@ else
   echo "kind-e2e: AVISO: $LOCKFILE esta tomado por residuos del bringup (fd heredado a los contenedores de kind); se continua sin el" >&2
 fi
 
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind"
+STATE_DIR="$AQS_KIND_RUNTIME_DIR"  # efímeros (trabajo, venvs); insumos en AQS_KIND_STATE_DIR (U9-T05)
 NS_SYS=aqs-system
 NS_TEST=aqs-test
 WARM_DEPLOY=warm-app   # deployment del entorno warm (deploy/flux/base/warm.yaml)
@@ -122,7 +122,7 @@ if [ "$SIN_CONFIRMAR" = 1 ] && [ "$BUG" != off ]; then
   echo "--sin-confirmar excluye --bug oversell" >&2; exit 2
 fi
 
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind"
+STATE_DIR="$AQS_KIND_RUNTIME_DIR"  # efímeros (trabajo, venvs); insumos en AQS_KIND_STATE_DIR (U9-T05)
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 work=$(mktemp -d "${STATE_DIR}/aqs-e2e.XXXXXX") || exit 1
 chmod 700 "$work"
@@ -308,8 +308,8 @@ pf_run_restart() {
 # --- auth demo ---------------------------------------------------------------
 auth_token() {
   local pw
-  pw=$(sed -n 2p "$STATE_DIR/demo.txt" 2>/dev/null) || pw=""
-  [ -n "$pw" ] || { echo "no hay contrasena demo en $STATE_DIR/demo.txt (scripts/kind/secrets.sh)"; return 1; }
+  pw=$(sed -n 2p "$AQS_KIND_STATE_DIR/demo.txt" 2>/dev/null) || pw=""
+  [ -n "$pw" ] || { echo "no hay contrasena demo en $AQS_KIND_STATE_DIR/demo.txt (scripts/kind/secrets.sh)"; return 1; }
   jq -n --arg u "$DEMO_USER" --arg p "$pw" '{username: $u, password: $p}' >"$work/login.json" || return 1
   expect_http 200 "http://127.0.0.1:$P_IDENTITY/auth/login" -H 'Content-Type: application/json' --data @"$work/login.json" || return 1
   TOKEN=$(jq -r '.token // empty' "$work/body")
@@ -412,9 +412,9 @@ print("%06d" % ((struct.unpack(">I", h[o:o + 4])[0] & 0x7FFFFFFF) % 1000000))' "
 gov_policy_seed() {
   local wf pw secret tok code existing merged try
   wf=$(workflow_default)
-  pw=$(sed -n 2p "$STATE_DIR/admin.txt" 2>/dev/null) || pw=""
-  secret=$(sed -n 1p "$STATE_DIR/admin-mfa-secret.txt" 2>/dev/null) || secret=""
-  [ -n "$pw" ] && [ -n "$secret" ] || { echo "faltan credenciales de admin en $STATE_DIR (scripts/kind/secrets.sh)"; return 1; }
+  pw=$(sed -n 2p "$AQS_KIND_STATE_DIR/admin.txt" 2>/dev/null) || pw=""
+  secret=$(sed -n 1p "$AQS_KIND_STATE_DIR/admin-mfa-secret.txt" 2>/dev/null) || secret=""
+  [ -n "$pw" ] && [ -n "$secret" ] || { echo "faltan credenciales de admin en $AQS_KIND_STATE_DIR (scripts/kind/secrets.sh)"; return 1; }
   pf go-governance "$P_GOV" || return 1
   wait_pf "$P_GOV" || return 1
   # login admin: un codigo TOTP solo vale una vez por ventana (lastOTP en go-identity); un reintento

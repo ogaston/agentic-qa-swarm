@@ -19,7 +19,6 @@ NS_SYS=aqs-system
 NS_TEST=aqs-test
 PROBE=aqs-smoke-probe
 PROBE_IMAGE=busybox:1.37.0
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind"
 P_IDENTITY=18600
 P_UI=18601
 P_INTAKE=18602
@@ -107,11 +106,11 @@ for svc in "${SERVICES[@]}"; do
   check "readyz-$svc" expect_http 200 "http://127.0.0.1:${PORT[$svc]}/readyz"
 done
 
-# 2. Login del usuario demo (contraseña de $STATE_DIR/demo.txt, línea 2) y sesión con rol user.
+# 2. Login del usuario demo (contraseña de $AQS_KIND_STATE_DIR/demo.txt, línea 2) y sesión con rol user.
 login_demo() {
   local pw body="$work/login.json" resp="$work/login.resp" sess="$work/session.json" code role
-  pw=$(sed -n 2p "$STATE_DIR/demo.txt" 2>/dev/null) || pw=""
-  [ -n "$pw" ] || { echo "no hay contraseña demo en $STATE_DIR/demo.txt (ver scripts/kind/secrets.sh)"; return 1; }
+  pw=$(sed -n 2p "$AQS_KIND_STATE_DIR/demo.txt" 2>/dev/null) || pw=""
+  [ -n "$pw" ] || { echo "no hay contraseña demo en $AQS_KIND_STATE_DIR/demo.txt (ver scripts/kind/secrets.sh)"; return 1; }
   jq -n --arg u demo --arg p "$pw" '{username: $u, password: $p}' >"$body" || return 1
   code=$(curl -s -o "$resp" -w '%{http_code}' --max-time 10 -H 'Content-Type: application/json' \
     --data @"$body" "http://127.0.0.1:$P_IDENTITY/auth/login") || code=000
@@ -246,7 +245,7 @@ secrets_no_en_logs() {
     v=$(kubectl get secret "$s-service-token" -n "$NS_SYS" -o jsonpath='{.data.token}' | base64 -d) || return 1
     [ -n "$v" ] && printf '%s\n' "$v" >>"$pats"
   done
-  v=$(sed -n 2p "$STATE_DIR/demo.txt" 2>/dev/null) || v=""
+  v=$(sed -n 2p "$AQS_KIND_STATE_DIR/demo.txt" 2>/dev/null) || v=""
   [ -n "$v" ] && printf '%s\n' "$v" >>"$pats"
   # U8-T09 (ronda 3): clave del gateway (agents-llm-key) y endpoint del gateway (llm-upstream): nunca deben
   # aparecer en logs. El endpoint lleva la IP del gateway; el patrón solo vive en $work, no se imprime.

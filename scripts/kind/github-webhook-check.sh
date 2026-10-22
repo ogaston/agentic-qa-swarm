@@ -23,7 +23,6 @@ cd "$root" || exit 1
 NS_SYS=aqs-system
 P_UI=18625
 P_IDENTITY=18626
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind"
 TIMEOUT_S="${WEBHOOK_TIMEOUT_S:-600}"
 BRANCH="${WEBHOOK_BRANCH:-main}"
 
@@ -68,8 +67,8 @@ for i in $(seq 1 60); do
 done
 
 # 3. Login del usuario demo (la contraseña no sale del archivo de estado).
-pw=$(sed -n 2p "$STATE_DIR/demo.txt" 2>/dev/null) || pw=""
-[ -n "$pw" ] || fail_msg "no hay contraseña demo en $STATE_DIR/demo.txt (ejecuta scripts/kind/secrets.sh)"
+pw=$(sed -n 2p "$AQS_KIND_STATE_DIR/demo.txt" 2>/dev/null) || pw=""
+[ -n "$pw" ] || fail_msg "no hay contraseña demo en $AQS_KIND_STATE_DIR/demo.txt (ejecuta scripts/kind/secrets.sh)"
 jq -n --arg u demo --arg p "$pw" '{username: $u, password: $p}' >"$work/login.json" || fail_msg "no se pudo preparar el login"
 code=$(curl -s -o "$work/login.resp" -w '%{http_code}' --max-time 10 -H 'Content-Type: application/json' \
   --data @"$work/login.json" "http://127.0.0.1:$P_IDENTITY/auth/login") || code=000

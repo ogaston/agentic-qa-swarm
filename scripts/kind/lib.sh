@@ -215,3 +215,48 @@ pod_down() {
   shift
   kubectl delete pod "$@" -n "$ns" --ignore-not-found --wait=true --timeout=120s >/dev/null 2>&1 || true
 }
+
+# --- U9-T05 (C-127): insumos persistentes fuera de tmpfs -----------------------------------------
+# Insumos del humano y credenciales demo: AQS_KIND_STATE_DIR (fuera del repo, sobrevive al reinicio).
+# Efímeros (pids, trabajo temporal, venvs) y los locks se quedan en AQS_KIND_RUNTIME_DIR / XDG_RUNTIME_DIR.
+AQS_KIND_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind"
+AQS_KIND_STATE_DIR="${AQS_KIND_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/aqs-kind}"
+AQS_KIND_INSUMOS="litellm.env deepseek.key demo.txt admin.txt admin-mfa-secret.txt"
+
+# Crea el directorio de insumos con modo 700 (idempotente).
+kind_state_init() {
+  mkdir -p "$AQS_KIND_STATE_DIR" && chmod 700 "$AQS_KIND_STATE_DIR"
+}
+
+# Migración única: si un insumo falta en el directorio nuevo y existe en el antiguo (tmpfs), lo mueve y avisa.
+kind_state_migrate() {
+  local f
+  for f in $AQS_KIND_INSUMOS; do
+    if [ ! -e "$AQS_KIND_STATE_DIR/$f" ] && [ -f "$AQS_KIND_RUNTIME_DIR/$f" ]; then
+      kind_state_init || return 1
+      mv "$AQS_KIND_RUNTIME_DIR/$f" "$AQS_KIND_STATE_DIR/$f" && chmod 600 "$AQS_KIND_STATE_DIR/$f" || return 1
+      echo "aqs-kind: $f migrado de $AQS_KIND_RUNTIME_DIR a $AQS_KIND_STATE_DIR (una sola vez)" >&2
+    fi
+  done
+  return 0
+}
+
+# Comprueba permisos: directorio 700 y cada fichero 600. Nombra el archivo infractor, nunca su contenido.
+kind_state_check() {
+  local f mode rc=0
+  [ -d "$AQS_KIND_STATE_DIR" ] || return 0
+  mode=$(stat -c %a "$AQS_KIND_STATE_DIR")
+  if [ "$mode" != 700 ]; then
+    echo "aqs-kind: el directorio $AQS_KIND_STATE_DIR tiene modo $mode (se espera 700)" >&2
+    rc=1
+  fi
+  for f in "$AQS_KIND_STATE_DIR"/*; do
+    [ -f "$f" ] || continue
+    mode=$(stat -c %a "$f")
+    if [ "$mode" != 600 ]; then
+      echo "aqs-kind: $(basename "$f") tiene modo $mode (se espera 600)" >&2
+      rc=1
+    fi
+  done
+  return $rc
+}
