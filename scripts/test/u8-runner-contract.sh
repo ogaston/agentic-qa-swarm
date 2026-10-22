@@ -89,7 +89,7 @@ start_server() { # <puerto> <status>
 
 render() { # <image-var-name>=<valor> <target> <subcomando> — imprime el Job como YAML
   local img_kv=$1 target=$2 sub=$3
-  # GOTOOLCHAIN=auto: el go.mod pide 1.26.9; un Go local más viejo lo descarga en vez de fallar.
+  # GOTOOLCHAIN=auto: el go.mod pide 1.26.10; un Go local más viejo lo descarga en vez de fallar.
   (cd "$root/services/go-run-controller" && env "$img_kv" REHEARSAL_TARGET_URL="$target" \
     GOTOOLCHAIN="${GOTOOLCHAIN:-auto}" go run ./cmd/go-run-controller "$sub" --run r-1 --flow f-1)
 }

@@ -1,5 +1,5 @@
 # App de referencia del warm (U8-T04). Contexto = demo/target-app/. Sin latest: el tag se fija al construir.
-FROM golang:1.26.9-alpine3.24 AS build
+FROM golang:1.26.10-alpine3.24 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
