@@ -1,1298 +1,2118 @@
+<!DOCTYPE html>
+<!--
+  EXPLORATORY & REFERENCE UI MOCKUP (AZIA ANALYTICS STYLE GUIDE)
+  Alineado 1:1 con las vistas, contratos y estados reales del MVP/Demo (U6 + U9):
+    1. /inbox      — InboxPage (pestañas Pendientes/Confirmadas/Rechazadas, tabla, detalle y diálogo Confirmar corrida)
+    2. /runs/:id   — RunPage (9 fases del contrato, veredicto, informe post-mortem y FlowPlan plegable)
+    3. /runs       — RunsPage («Mis corridas» — recibos ConfirmationReceipt)
+    4. /warm       — WarmPage (4 estados del warm, reset_verified, baseline_version, warm_id)
+    5. /login      — LoginPage (usuario, contraseña, OTP opcional de 6 dígitos, estados 401/429/503)
+  Guía de diseño detallada en DESIGN.md. Sin CDN externos (cumple CSP default-src 'self').
+-->
+<html lang="es" data-theme="light">
+<head>
 <meta charset="UTF-8">
-<title>Agentic QA Swarm</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic QA Swarm — UI Mockup (MVP / Demo)</title>
 <style>
-  :root{
-    --bg:#f3f4f6; --surface:#ffffff; --surface-2:#eceef2; --surface-3:#e2e5eb;
-    --border:#d7dbe2; --text:#14171c; --text-muted:#5b6270; --text-faint:#8a90a0;
-    --accent:#5457d6; --accent-soft:#eceeff; --accent-text:#3f42c9;
-    --ok:#0f9d84; --ok-soft:#e3f6f2;
-    --warn:#b8790e; --warn-soft:#faf0dd;
-    --danger:#d33d4a; --danger-soft:#fbe6e8;
-    --shadow: 0 1px 2px rgba(20,23,28,.04), 0 8px 24px rgba(20,23,28,.06);
-    --radius: 12px;
+  :root,
+  :root[data-theme="light"] {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --surface-2: #f1f4f8;
+    --surface-3: #e5e9f2;
+    --border: #cdd4e0;
+    --border-subtle: #e2e8f0;
+    --text: #1c273c;
+    --text-muted: #505d73;
+    --text-faint: #596882;
+    --accent: #5b47fb;
+    --accent-hover: #4632e0;
+    --accent-soft: #eeecfe;
+    --accent-text: #3e2adb;
+    --ok: #0a7b3e;
+    --ok-soft: #e3f7ec;
+    --warn: #8a5000;
+    --warn-soft: #fef3dc;
+    --danger: #b81d2c;
+    --danger-soft: #fde8ea;
+    --info: #0052cc;
+    --info-soft: #e6f0ff;
+    --teal: #00666e;
+    --teal-soft: #e0f7f9;
+    --radius: 4px;
+    --radius-sm: 2px;
+    --shadow: 0 1px 2px rgba(28, 39, 60, 0.04);
     color-scheme: light;
   }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --bg:#0e1015; --surface:#161922; --surface-2:#1d212c; --surface-3:#262b38;
-      --border:#2b3140; --text:#e7e9ee; --text-muted:#9aa1b2; --text-faint:#6b7183;
-      --accent:#7d80f0; --accent-soft:#252a4a; --accent-text:#a6a8f7;
-      --ok:#33c9ab; --ok-soft:#122a26;
-      --warn:#e0a83f; --warn-soft:#2e260f;
-      --danger:#ef5b66; --danger-soft:#331419;
-      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.45);
-      color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"]{
-    --bg:#0e1015; --surface:#161922; --surface-2:#1d212c; --surface-3:#262b38;
-    --border:#2b3140; --text:#e7e9ee; --text-muted:#9aa1b2; --text-faint:#6b7183;
-    --accent:#7d80f0; --accent-soft:#252a4a; --accent-text:#a6a8f7;
-    --ok:#33c9ab; --ok-soft:#122a26;
-    --warn:#e0a83f; --warn-soft:#2e260f;
-    --danger:#ef5b66; --danger-soft:#331419;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.45);
+
+  :root[data-theme="dark"] {
+    --bg: #0f141f;
+    --surface: #161d2b;
+    --surface-2: #1e2738;
+    --surface-3: #283347;
+    --border: #2d3a52;
+    --border-subtle: #222c3f;
+    --text: #f0f4f8;
+    --text-muted: #a8b6cc;
+    --text-faint: #8f9fb8;
+    --accent: #5b47fb;
+    --accent-hover: #6e5cff;
+    --accent-soft: #211d47;
+    --accent-text: #a89eff;
+    --ok: #42d992;
+    --ok-soft: #102e22;
+    --warn: #f7b749;
+    --warn-soft: #33240d;
+    --danger: #ff7a85;
+    --danger-soft: #38151b;
+    --info: #75adff;
+    --info-soft: #132747;
+    --teal: #3ce0eb;
+    --teal-soft: #0e2d33;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
 
-  *{box-sizing:border-box}
-  body{
-    margin:0; background:var(--bg); color:var(--text);
-    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-    font-size:14px; line-height:1.5;
-    -webkit-font-smoothing:antialiased;
-  }
-  code, .mono{ font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
-  ::selection{ background:var(--accent-soft); }
-  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
-
-  a{ color:inherit; }
-  h1,h2,h3,h4{ text-wrap:balance; margin:0; font-weight:600; }
-  button{ font-family:inherit; font-size:inherit; cursor:pointer; }
-
-  .app{ display:grid; grid-template-columns:236px 1fr; grid-template-rows:56px 1fr; min-height:640px; height:100%; }
-
-  /* Top bar (content column only) */
-  .topbar{
-    grid-column:2; grid-row:1;
-    display:flex; align-items:center; gap:14px;
-    padding:0 24px; border-bottom:1px solid var(--border); background:var(--surface);
-  }
-  .brand-mark{
-    width:22px; height:22px; border-radius:6px; background:var(--accent);
-    display:flex; align-items:center; justify-content:center; flex:none;
-  }
-  .brand-mark svg{ width:13px; height:13px; }
-  .env-dot{ width:6px; height:6px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
-  .topbar-spacer{ flex:1; }
-
-  /* Project dropdown */
-  .project-dropdown{ position:relative; }
-  .project-dropdown-trigger{
-    display:flex; align-items:center; gap:7px; padding:6px 10px; border-radius:8px; border:0;
-    background:transparent; color:var(--text); font-size:13px; font-weight:600; cursor:pointer;
-    transition:background-color .15s ease;
-  }
-  .project-dropdown-trigger:hover{ background:var(--surface-2); }
-  .project-dropdown.open .project-dropdown-trigger{ background:var(--surface-2); }
-  .project-dropdown-trigger .chevs{ width:13px; height:13px; color:var(--text-faint); flex:none; }
-  .project-dropdown-menu{
-    position:absolute; top:calc(100% + 8px); left:0; width:260px; z-index:40;
-    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-    box-shadow:var(--shadow); padding:6px; display:none;
-  }
-  .project-dropdown.open .project-dropdown-menu{ display:block; }
-  .project-dropdown-search{
-    display:flex; align-items:center; gap:8px; padding:8px 9px; margin-bottom:4px;
-    border-bottom:1px solid var(--border);
-  }
-  .project-dropdown-search input{
-    flex:1; min-width:0; border:0; background:transparent; outline:0; font-size:13px; color:var(--text); font-family:inherit;
-  }
-  .project-dropdown-search input::placeholder{ color:var(--text-faint); }
-  .project-dropdown-search .kbd{
-    font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:5px;
-    background:var(--surface-2); color:var(--text-faint); border:1px solid var(--border); flex:none;
-  }
-  .project-dropdown-list{ max-height:260px; overflow-y:auto; padding-top:2px; display:flex; flex-direction:column; gap:1px; }
-  .project-row{
-    display:flex; align-items:center; gap:10px; width:100%; padding:7px 8px; border:0; border-radius:8px;
-    background:transparent; color:var(--text); font-size:13px; text-align:left; cursor:pointer;
-    transition:background-color .1s ease;
-  }
-  .project-row:hover{ background:var(--surface-2); }
-  .project-icon{
-    width:20px; height:20px; border-radius:6px; flex:none; display:flex; align-items:center; justify-content:center;
-    color:#fff; font-size:10px; font-weight:700;
-  }
-  .project-empty{ padding:14px 8px; text-align:center; font-size:12px; color:var(--text-faint); }
-  .topbar-right{ display:flex; align-items:center; gap:10px; }
-  .theme-toggle{
-    display:flex; border-radius:8px; overflow:hidden; background:var(--surface-2);
-  }
-  .theme-toggle button{
-    border:0; background:transparent; color:var(--text-muted); padding:6px 10px; font-size:12px;
-    transition:background-color .15s ease, color .15s ease;
-  }
-  .theme-toggle button:hover{ color:var(--text); }
-  .theme-toggle button.active{ background:var(--surface); color:var(--text); }
-  .theme-toggle button.active:hover{ background:var(--surface); }
-  .user-chip{ display:flex; align-items:center; gap:8px; padding-left:10px; border-left:1px solid var(--border); }
-  .avatar{ width:26px; height:26px; border-radius:50%; background:var(--accent-soft); color:var(--accent-text); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; }
-  .user-chip .who{ font-size:12px; }
-  .user-chip .role{ display:block; color:var(--text-faint); font-size:11px; }
-
-  /* Sidebar (full height, own header) */
-  .sidebar{
-    grid-column:1; grid-row:1/3; border-right:1px solid var(--border); background:var(--surface);
-    padding:14px 12px 18px; display:flex; flex-direction:column; gap:2px; overflow-x:hidden; overflow-y:auto;
-  }
-  .project-switch{
-    display:flex; align-items:center; gap:9px; width:100%; padding:7px 8px; margin-bottom:10px;
-    border:0; border-radius:8px; background:transparent; color:var(--text); text-align:left; cursor:pointer;
-    transition:background-color .15s ease;
-  }
-  .project-switch:hover{ background:var(--surface-2); }
-  .project-switch-name{ font-size:13px; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:-.01em; }
-  .project-switch .chevron{ width:13px; height:13px; color:var(--text-faint); flex:none; }
-  .sidebar-search{
-    display:flex; align-items:center; gap:8px; width:100%; padding:7px 9px; margin-bottom:14px;
-    border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-faint);
-    font-size:12.5px; cursor:pointer; transition:border-color .15s ease;
-  }
-  .sidebar-search:hover{ border-color:var(--text-faint); }
-  .sidebar-search svg{ width:14px; height:14px; flex:none; }
-  .sidebar-search span.label{ flex:1; }
-  .sidebar-search .kbd{
-    font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:5px;
-    background:var(--surface-2); color:var(--text-faint); border:1px solid var(--border);
-  }
-  .nav-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); padding:14px 12px 6px; }
-  .nav-item{
-    display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; border:0;
-    background:transparent; color:var(--text-muted); text-align:left; width:100%; font-size:13px;
-    transition:background-color .15s ease, color .15s ease;
-  }
-  .nav-item:hover{ background:var(--surface-2); color:var(--text); }
-  .nav-item.active{ background:var(--surface-2); color:var(--text); font-weight:600; }
-  .nav-item.active:hover{ background:var(--surface-2); }
-  .nav-item svg{ width:15px; height:15px; flex:none; opacity:.75; }
-  .nav-item.active svg{ opacity:1; }
-
-  /* Main */
-  .main{ grid-column:2; grid-row:2; overflow-y:auto; padding:32px 40px 70px; }
-  .view{ display:none; max-width:1080px; }
-  .view.active{ display:block; }
-
-  .view-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:26px; }
-  .eyebrow{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); margin-bottom:6px; font-weight:600; }
-  .view-head h1{ font-size:27px; letter-spacing:-.01em; }
-  .view-head p{ color:var(--text-muted); margin:8px 0 0; max-width:56ch; }
-
-  .btn{
-    display:inline-flex; align-items:center; gap:7px; border-radius:8px; padding:9px 15px; font-size:13px; font-weight:600;
-    border:1px solid var(--border); background:var(--surface); color:var(--text); white-space:nowrap;
-    transition:background-color .12s ease, border-color .12s ease, color .12s ease, transform .08s ease;
-  }
-  .btn:hover{ background:var(--surface-2); border-color:var(--text-faint); }
-  .btn:active{ transform:scale(.97); }
-  .btn-primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
-  .btn-primary:hover{ background:var(--accent-text); border-color:var(--accent-text); }
-  .btn-primary:disabled{ opacity:.45; cursor:not-allowed; transform:none; }
-  .btn-ghost{ border-color:transparent; background:transparent; }
-  .btn-ghost:hover{ background:var(--surface-3); border-color:transparent; }
-  .btn-sm{ padding:6px 11px; font-size:12px; }
-
-  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
-  .card-pad{ padding:22px 24px; }
-  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .grid-3{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-  .stack{ display:flex; flex-direction:column; gap:16px; }
-  .row{ display:flex; align-items:center; gap:10px; }
-  .row-between{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-
-  .stat-card{ padding:18px 20px; }
-  .stat-label{ font-size:11.5px; color:var(--text-muted); }
-  .stat-value{ font-size:26px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums; }
-  .stat-sub{ font-size:11.5px; color:var(--text-faint); margin-top:4px; }
-
-  /* Trend chart card */
-  .chart-card{ padding:0; overflow:hidden; }
-  .chart-tabs{ display:flex; border-bottom:1px solid var(--border); }
-  .chart-tab{
-    flex:1; display:flex; flex-direction:column; gap:7px; align-items:flex-start; text-align:left;
-    padding:14px 18px; border:0; border-right:1px solid var(--border); border-bottom:2px solid transparent;
-    background:transparent; cursor:pointer; transition:background-color .12s ease, border-color .12s ease;
-  }
-  .chart-tab:last-child{ border-right:0; }
-  .chart-tab:hover{ background:var(--surface-2); }
-  .chart-tab.active{ border-bottom-color:var(--accent); background:var(--surface); }
-  .chart-tab-label{ font-size:11.5px; color:var(--text-muted); font-weight:600; }
-  .chart-tab-row{ display:flex; align-items:baseline; gap:8px; }
-  .chart-tab-value{ font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; }
-  .chart-tab-delta{ font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; white-space:nowrap; }
-  .chart-tab-delta.up{ background:var(--ok-soft); color:var(--ok); }
-  .chart-tab-delta.down{ background:var(--danger-soft); color:var(--danger); }
-  .chart-wrap{ padding:16px 20px 8px; }
-  .chart-wrap svg{ width:100%; height:auto; display:block; overflow:visible; }
-  .chart-grid{ stroke:var(--border); stroke-width:1; }
-  .chart-axis-y{ fill:var(--text-faint); font-size:10px; font-family:"IBM Plex Sans", sans-serif; }
-  .chart-axis-x{ fill:var(--text-faint); font-size:10px; font-family:"IBM Plex Sans", sans-serif; }
-  .chart-area{ fill:var(--accent); opacity:.12; }
-  .chart-line{ fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
-  .chart-line-dashed{ fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:4 4; stroke-linecap:round; }
-  .chart-dot{ fill:var(--surface); stroke:var(--accent); stroke-width:2; }
-
-  .pill{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
-  .pill-ok{ background:var(--ok-soft); color:var(--ok); }
-  .pill-warn{ background:var(--warn-soft); color:var(--warn); }
-  .pill-danger{ background:var(--danger-soft); color:var(--danger); }
-  .pill-neutral{ background:var(--surface-2); color:var(--text-muted); }
-  .pill-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
-
-  .status-dot{ display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text-muted); }
-  .status-dot.ok{ color:var(--ok); }
-  .status-dot.warn{ color:var(--warn); }
-  .status-dot.danger{ color:var(--danger); }
-
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint); font-weight:600; padding:0 12px 10px; }
-  td{ padding:13px 12px; border-top:1px solid var(--border); vertical-align:middle; transition:background-color .1s ease; }
-  tr:hover td{ background:var(--surface-2); }
-  .table-wrap{ overflow-x:auto; }
-  [data-view="audit"] thead tr{
-    height:35px;
-    background:#f8f8f8;
-  }
-  [data-view="audit"] thead th{
-    height:35px;
-    background:#f8f8f8;
-    padding:0 12px;
-    vertical-align:middle;
+  * {
+    box-sizing: border-box;
   }
 
-  .section-title{ font-size:13px; font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
-  .section-title .count{ color:var(--text-faint); font-weight:500; font-size:11.5px; }
-
-  /* Nuevo test / upload */
-  .dropzone{
-    border:1.5px dashed var(--border); border-radius:var(--radius); padding:34px 20px; text-align:center;
-    color:var(--text-muted); background:var(--surface-2);
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
-  .dropzone svg{ width:26px; height:26px; margin-bottom:10px; color:var(--text-faint); }
-  .dropzone .fname{ font-family:"IBM Plex Mono"; font-size:12.5px; color:var(--text); }
 
-  .repo-card{
-    padding:2px 0; display:flex; align-items:center; gap:12px;
+  code, pre, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
-  .repo-icon{
-    width:34px; height:34px; border-radius:8px; background:var(--surface-3); flex:none;
-    display:flex; align-items:center; justify-content:center;
+
+  :focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 2px;
   }
-  .repo-icon svg{ width:18px; height:18px; color:var(--text); }
-  .repo-name{ font-size:13px; font-weight:600; }
-  .repo-meta{ font-size:11.5px; color:var(--text-faint); margin-top:2px; }
-  .repo-meta .mono{ color:var(--text-muted); }
-  .sync-row{
-    display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted);
-    padding:10px 2px 2px;
+
+  h1, h2, h3, h4, p {
+    margin: 0;
   }
-  .sync-dot{ width:6px; height:6px; border-radius:50%; background:var(--ok); flex:none; }
 
-  .flow-step{ display:flex; gap:12px; padding:12px 0; border-top:1px solid var(--border); }
-  .flow-step:first-child{ border-top:0; }
-  .flow-num{
-    width:22px; height:22px; border-radius:6px; background:var(--surface-3); color:var(--text-muted);
-    display:flex; align-items:center; justify-content:center; font-size:11px; font-family:"IBM Plex Mono"; flex:none; margin-top:1px;
+  button {
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
   }
-  .flow-step.done .flow-num{ background:var(--ok-soft); color:var(--ok); }
-  .flow-title{ font-size:13px; font-weight:600; }
-  .flow-desc{ font-size:12.5px; color:var(--text-muted); margin-top:2px; }
-  .flow-meta{ font-family:"IBM Plex Mono"; font-size:11px; color:var(--text-faint); margin-top:4px; }
 
-  pre.code{
-    margin:0; padding:16px 18px; background:#12131a; color:#d3d7e6; border-radius:var(--radius);
-    font-family:"IBM Plex Mono"; font-size:12px; line-height:1.65; overflow-x:auto; border:1px solid var(--border);
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
-  :root[data-theme="light"] pre.code, :root:not([data-theme="dark"]):not([data-theme="light"]) pre.code { }
-  .code-kw{ color:#9d8cff; } .code-str{ color:#7fd0a5; } .code-fn{ color:#6bb8ff; } .code-com{ color:#6b7183; }
 
-  .attack-opt{
-    border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; cursor:pointer; background:var(--surface);
-    transition:border-color .12s ease, background-color .12s ease;
+  /* ==========================================================================
+     Azia Top Horizontal Navigation Header (ProtectedLayout)
+     ========================================================================== */
+  .az-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 30;
   }
-  .attack-opt:hover{ border-color:var(--text-faint); }
-  .attack-opt.selected{ border-color:var(--accent); background:var(--accent-soft); }
-  .attack-opt.selected:hover{ border-color:var(--accent); }
-  .attack-opt .row-between{ margin-bottom:4px; }
-  .attack-opt h4{ font-size:13px; }
-  .attack-opt p{ margin:0; font-size:12px; color:var(--text-muted); }
-  .radio{ width:15px; height:15px; border-radius:50%; border:1.5px solid var(--text-faint); flex:none; position:relative; }
-  .attack-opt.selected .radio{ border-color:var(--accent); }
-  .attack-opt.selected .radio::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--accent); }
 
-  /* Rehearsal / progress */
-  .progress-track{ height:6px; border-radius:999px; background:var(--surface-3); overflow:hidden; }
-  .progress-fill{ height:100%; background:var(--accent); border-radius:999px; transition:width .4s ease; }
-  .progress-fill.ok{ background:var(--ok); }
-
-  .log-line{ font-family:"IBM Plex Mono"; font-size:12px; padding:3px 0; color:var(--text-muted); display:flex; gap:10px; }
-  .log-line .t{ color:var(--text-faint); flex:none; }
-  .log-line.ok .msg{ color:var(--ok); }
-  .log-line.warn .msg{ color:var(--warn); }
-
-  /* Swarm pods */
-  .pod-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(74px,1fr)); gap:8px; }
-  .pod{
-    aspect-ratio:1; border-radius:8px; background:var(--ok-soft); border:1px solid var(--border);
-    display:flex; align-items:center; justify-content:center; font-family:"IBM Plex Mono"; font-size:10px; color:var(--ok);
-    position:relative;
+  .az-header-inner {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 0 24px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
   }
-  .pod.running{ background:var(--accent-soft); color:var(--accent-text); }
-  .pod.running::after{
-    content:""; position:absolute; inset:0; border-radius:8px; border:1.5px solid var(--accent); opacity:.5;
-    animation:pulse 1.6s ease-in-out infinite;
+
+  .az-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    text-decoration: none;
   }
-  @media (prefers-reduced-motion: reduce){ .pod.running::after{ animation:none; } }
-  @keyframes pulse{ 0%,100%{ transform:scale(1); opacity:.6; } 50%{ transform:scale(1.12); opacity:0; } }
 
-  .finding-card{ border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; }
-  .finding-card + .finding-card{ margin-top:12px; }
-  .sev-stripe{ width:3px; border-radius:3px; align-self:stretch; flex:none; }
-  .sev-high{ background:var(--danger); } .sev-med{ background:var(--warn); }
-
-  .divider{ height:1px; background:var(--border); margin:22px 0; }
-
-  .toggle{ width:36px; height:20px; border-radius:999px; background:var(--surface-3); border:1px solid var(--border); position:relative; flex:none; }
-  .toggle.on{ background:var(--ok); border-color:var(--ok); }
-  .toggle::after{ content:""; position:absolute; top:1px; left:1px; width:16px; height:16px; border-radius:50%; background:var(--surface); transition:left .15s ease; }
-  .toggle.on::after{ left:17px; background:#fff; }
-
-  .kv{ display:flex; justify-content:space-between; font-size:12.5px; padding:9px 0; border-top:1px solid var(--border); }
-  .kv:first-child{ border-top:0; }
-  .kv .k{ color:var(--text-muted); }
-  .kv .v{ font-weight:600; }
-
-  .empty-hint{ font-size:12px; color:var(--text-faint); text-align:center; padding:20px; }
-
-  /* Commit trigger */
-  .commit-card{ display:flex; align-items:center; gap:12px; padding:13px 16px; }
-  .commit-icon{ width:30px; height:30px; border-radius:7px; background:var(--surface-3); flex:none; display:flex; align-items:center; justify-content:center; }
-  .commit-icon svg{ width:15px; height:15px; }
-  .commit-title{ font-size:13px; font-weight:600; }
-  .commit-meta{ font-size:11.5px; color:var(--text-faint); margin-top:2px; }
-
-  /* Pipeline */
-  .pipeline{ display:flex; flex-direction:column; }
-  .pl-step{ position:relative; padding-left:38px; padding-bottom:26px; }
-  .pl-step::before{ content:""; position:absolute; left:13px; top:28px; bottom:0; width:1.5px; background:var(--border); }
-  .pl-step:last-child::before{ display:none; }
-  .pl-step:last-child{ padding-bottom:2px; }
-  .pl-icon{
-    position:absolute; left:0; top:0; width:27px; height:27px; border-radius:50%;
-    background:var(--surface-2); border:1.5px solid var(--border); color:var(--text-faint);
-    display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; font-family:"IBM Plex Mono";
-    transition:background .2s, border-color .2s, color .2s;
+  .az-logo {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--accent-text);
+    line-height: 1;
   }
-  .pl-step.active .pl-icon{ border-color:var(--accent); color:var(--accent-text); background:var(--accent-soft); }
-  .pl-step.done .pl-icon{ border-color:var(--ok); color:var(--ok); background:var(--ok-soft); }
-  .pl-spinner{ width:12px; height:12px; border-radius:50%; border:2px solid var(--accent-soft); border-top-color:var(--accent); animation:spin .7s linear infinite; }
-  @media (prefers-reduced-motion: reduce){ .pl-spinner{ animation:none; } }
-  @keyframes spin{ to{ transform:rotate(360deg); } }
-  .pl-head-text{ flex:1; }
-  .pl-title{ font-size:14px; font-weight:600; }
-  .pl-sub{ font-size:12px; color:var(--text-muted); margin-top:1px; }
-  .pl-head{ display:flex; align-items:center; gap:12px; min-height:27px; }
-  .pl-body{ margin-top:14px; opacity:0; max-height:0; overflow:hidden; transition:opacity .25s ease; }
-  .pl-step.active .pl-body, .pl-step.done .pl-body{ opacity:1; max-height:none; overflow:visible; }
-  .pl-step.locked .pl-title, .pl-step.locked .pl-sub{ color:var(--text-faint); }
-  .pl-step.done .pl-body{ display:none; }
-  .pl-step.done .pl-summary{ display:block; }
-  .pl-summary{ display:none; margin-top:6px; font-size:12px; color:var(--text-muted); }
 
-  .check-opt{
-    border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; cursor:pointer; background:var(--surface);
-    display:flex; gap:12px; align-items:flex-start;
-    transition:border-color .12s ease, background-color .12s ease;
+  .az-brand-sub {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-left: 1px solid var(--border);
+    padding-left: 10px;
   }
-  .check-opt:hover{ border-color:var(--text-faint); }
-  .check-opt.selected{ border-color:var(--accent); background:var(--accent-soft); }
-  .check-opt.selected:hover{ border-color:var(--accent); }
-  .checkbox{ width:16px; height:16px; border-radius:5px; border:1.5px solid var(--text-faint); flex:none; margin-top:1px; position:relative; }
-  .check-opt.selected .checkbox{ border-color:var(--accent); background:var(--accent); }
-  .check-opt.selected .checkbox::after{ content:""; position:absolute; left:4px; top:1px; width:4px; height:8px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(40deg); }
-  .check-opt h4{ font-size:13px; display:flex; align-items:center; gap:8px; }
-  .check-opt p{ margin:4px 0 0; font-size:12px; color:var(--text-muted); }
-  .rec-badge{ font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-text); background:var(--surface); border:1px solid var(--accent); padding:1px 7px; border-radius:999px; }
 
-  .skeleton{ background:linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 37%, var(--surface-3) 63%); background-size:400% 100%; animation:shimmer 1.4s ease infinite; border-radius:6px; }
-  @keyframes shimmer{ 0%{ background-position:100% 0; } 100%{ background-position:0 0; } }
-  @media (prefers-reduced-motion: reduce){ .skeleton{ animation:none; } }
+  .az-nav {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    min-height: 60px;
+  }
 
-  .pod-lbl{ font-size:11px; font-weight:600; color:var(--text-muted); margin:14px 0 8px; }
-  .pod-lbl:first-child{ margin-top:0; }
-  .pod.pending{ background:var(--surface-3); color:var(--text-faint); border-style:dashed; }
-  .pod.torn-down{ background:transparent; color:var(--text-faint); opacity:.4; }
-  .pod.torn-down::after{ display:none; }
+  .az-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+  }
+
+  .az-nav-link svg {
+    width: 15px;
+    height: 15px;
+    color: var(--text-faint);
+    flex: none;
+  }
+
+  .az-nav-link:hover {
+    color: var(--accent-text);
+    background: var(--surface-2);
+  }
+
+  .az-nav-link.active {
+    color: var(--accent-text);
+    border-bottom-color: var(--accent);
+  }
+
+  .az-nav-link.active svg {
+    color: var(--accent-text);
+  }
+
+  .az-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .az-session-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 12px;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .az-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .az-principal {
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .az-principal strong {
+    display: block;
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .az-principal span {
+    color: var(--text-faint);
+    font-size: 11px;
+  }
+
+  /* ==========================================================================
+     Main Container & Azia Page Header Strip
+     ========================================================================== */
+  .az-container {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+
+  .view {
+    display: none;
+  }
+
+  .view.active {
+    display: block;
+  }
+
+  .az-page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .az-page-title h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .az-page-title p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .az-header-meta {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+  }
+
+  .az-meta-item {
+    padding: 2px 18px;
+    border-left: 1px solid var(--border);
+  }
+
+  .az-meta-item:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .az-meta-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    display: block;
+  }
+
+  .az-meta-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 2px;
+    display: block;
+  }
+
+  /* ==========================================================================
+     Azia Sub-navigation / Action Bar (Tabs + Right Utility Links)
+     ========================================================================== */
+  .az-subbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .az-tablist {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .az-tab {
+    border: 0;
+    border-right: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text-muted);
+    padding: 4px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: color 0.12s ease;
+  }
+
+  .az-tab:first-child {
+    padding-left: 0;
+  }
+
+  .az-tab:last-child {
+    border-right: 0;
+  }
+
+  .az-tab:hover {
+    color: var(--text);
+  }
+
+  .az-tab[aria-selected="true"],
+  .az-tab.active {
+    color: var(--accent-text);
+    font-weight: 700;
+  }
+
+  .az-subbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .az-action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border: 0;
+    border-left: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .az-action-link:first-child {
+    border-left: 0;
+  }
+
+  .az-action-link:hover {
+    color: var(--accent-text);
+  }
+
+  .az-action-link svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* ==========================================================================
+     Buttons & Segmented Controls
+     ========================================================================== */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--surface-2);
+    border-color: var(--text-faint);
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+
+  .btn-sm {
+    padding: 5px 11px;
+    font-size: 12px;
+  }
+
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    border: none;
+    background: transparent;
+  }
+
+  .btn-icon:hover {
+    color: var(--text);
+    background: var(--surface-2);
+    border: none;
+  }
+
+  .btn-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  :root[data-theme="dark"] .theme-icon-sun {
+    display: none;
+  }
+
+  :root:not([data-theme="dark"]) .theme-icon-moon {
+    display: none;
+  }
+
+  .segmented {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .segmented button {
+    border: 0;
+    border-right: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    padding: 5px 11px;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .segmented button:last-child {
+    border-right: 0;
+  }
+
+  .segmented button:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .segmented button.active {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+
+  /* ==========================================================================
+     Cards, KPI Blocks & Grids (Azia 1px Flat Border Style)
+     ========================================================================== */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .card-pad {
+    padding: 20px 22px;
+  }
+
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .card-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .kpi-box {
+    padding: 16px 18px;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+  }
+
+  .kpi-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .kpi-val {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+
+  .kpi-bar {
+    height: 4px;
+    background: var(--surface-3);
+    margin-top: 12px;
+    overflow: hidden;
+  }
+
+  .kpi-bar-fill {
+    height: 100%;
+    background: var(--accent);
+  }
+
+  .grid-main-side {
+    display: grid;
+    grid-template-columns: 1.55fr 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* ==========================================================================
+     Badges / Pills (Semantic + Accessible Text, Never Color Alone)
+     ========================================================================== */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11.5px;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .badge-ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+
+  .badge-warn {
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+
+  .badge-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .badge-accent {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+
+  .badge-info {
+    background: var(--info-soft);
+    color: var(--info);
+  }
+
+  .badge-teal {
+    background: var(--teal-soft);
+    color: var(--teal);
+  }
+
+  .badge-neutral {
+    background: var(--surface-2);
+    color: var(--text-muted);
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* ==========================================================================
+     Tables & Definition Lists (<dl>)
+     ========================================================================== */
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    background: var(--surface-2);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  tbody tr:hover td {
+    background: var(--surface-2);
+  }
+
+  tbody tr.selected-row td {
+    background: var(--accent-soft);
+  }
+
+  dl.kv-list {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    row-gap: 10px;
+    column-gap: 12px;
+    font-size: 13px;
+  }
+
+  dl.kv-list dt {
+    color: var(--text-faint);
+    font-weight: 600;
+    padding-top: 2px;
+  }
+
+  dl.kv-list dd {
+    margin: 0;
+    color: var(--text);
+    font-weight: 600;
+    word-break: break-all;
+  }
+
+  /* ==========================================================================
+     9-Phase Run Timeline (RunPage <ol>)
+     ========================================================================== */
+  ol.phase-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  ol.phase-timeline li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  ol.phase-timeline li:last-child {
+    border-bottom: 0;
+  }
+
+  .phase-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .phase-idx {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-faint);
+    flex: none;
+  }
+
+  ol.phase-timeline li[data-fase-estado="hecha"] .phase-idx {
+    background: var(--ok-soft);
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+
+  ol.phase-timeline li[data-fase-estado="actual"] {
+    background: var(--accent-soft);
+  }
+
+  ol.phase-timeline li[data-fase-estado="actual"] .phase-idx {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+  }
+
+  .phase-name {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  ol.phase-timeline li[data-fase-estado="pendiente"] .phase-name {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  /* ==========================================================================
+     Post-Mortem Findings & Inspectable FlowPlan (<details>)
+     ========================================================================== */
+  .finding-item {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--danger);
+    border-radius: var(--radius-sm);
+    padding: 16px 18px;
+    background: var(--surface);
+  }
+
+  .finding-item + .finding-item {
+    margin-top: 12px;
+  }
+
+  .evidence-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .evidence-uri {
+    display: inline-block;
+    padding: 5px 9px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text);
+    user-select: all;
+  }
+
+  details.plan-details {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  details.plan-details summary {
+    padding: 15px 20px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+
+  details.plan-details[open] summary {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+
+  .plan-body {
+    padding: 18px 20px;
+  }
+
+  .flow-block {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .flow-block + .flow-block {
+    margin-top: 14px;
+  }
+
+  details.flow-details summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    background: var(--surface);
+    transition: background-color 0.12s ease;
+  }
+
+  details.flow-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  details.flow-details summary:hover {
+    background: var(--surface-2);
+  }
+
+  details.flow-details[open] summary {
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface-2);
+  }
+
+  details.flow-details summary .chevron-icon {
+    width: 15px;
+    height: 15px;
+    transition: transform 0.15s ease;
+    flex: none;
+    color: var(--text-faint);
+  }
+
+  details.flow-details[open] summary .chevron-icon {
+    transform: rotate(90deg);
+  }
+
+  .flow-content {
+    padding: 14px 16px;
+  }
+
+  pre.json-body {
+    margin: 6px 0 0;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-size: 11.5px;
+    color: var(--text);
+    overflow-x: auto;
+  }
+
+  /* ==========================================================================
+     Alerts, Dialog Modal & Login Form
+     ========================================================================== */
+  .alert-box {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+
+  .alert-danger {
+    background: var(--danger-soft);
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .alert-warn {
+    background: var(--warn-soft);
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 20, 31, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 50;
+  }
+
+  .modal-backdrop.open {
+    display: flex;
+  }
+
+  .modal-dialog {
+    width: 100%;
+    max-width: 480px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+  }
+
+  .fieldset-box {
+    margin: 16px 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .fieldset-box legend {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    padding: 0 6px;
+  }
+
+  .login-wrap {
+    max-width: 420px;
+    margin: 36px auto;
+  }
+
+  .form-field {
+    margin-bottom: 14px;
+  }
+
+  .form-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 5px;
+  }
+
+  .form-field input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+  }
+
+  /* ==========================================================================
+     Responsive (375px Mobile Requirement — U9-T04)
+     ========================================================================== */
+  @media (max-width: 860px) {
+    .kpi-strip {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .grid-main-side,
+    .grid-2 {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .az-header-inner {
+      padding: 10px 16px;
+    }
+    .az-container {
+      padding: 18px 16px 48px;
+    }
+    .kpi-strip {
+      grid-template-columns: 1fr;
+    }
+    .az-meta-item {
+      border-left: 0;
+      padding-left: 0;
+      padding-right: 16px;
+    }
+    dl.kv-list {
+      grid-template-columns: 1fr;
+      row-gap: 4px;
+    }
+  }
 </style>
+</head>
+<body>
 
-<div class="app" id="app">
-  <div class="topbar">
-    <div class="project-dropdown" id="projectDropdown">
-      <button type="button" class="project-dropdown-trigger" id="projectDropdownBtn">
-        <span id="projectDropdownLabel">payments-api</span>
-        <svg class="chevs" viewBox="0 0 24 24" fill="none">
-          <path d="M7 9l5-5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M7 15l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<!-- ==========================================================================
+     TOP HORIZONTAL HEADER (ProtectedLayout.tsx)
+     ========================================================================== -->
+<header class="az-header">
+  <div class="az-header-inner">
+    <div class="az-brand">
+      <span class="az-logo">aqs</span>
+      <span class="az-brand-sub">Agentic QA Swarm</span>
+    </div>
+
+    <nav class="az-nav" aria-label="Principal">
+      <button type="button" class="az-nav-link active" data-nav="inbox">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.8"/><path d="M4 13h5l2 3h2l2-3h5" stroke="currentColor" stroke-width="1.8"/></svg>
+        Inbox
+      </button>
+      <button type="button" class="az-nav-link" data-nav="runs">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Mis corridas
+      </button>
+      <button type="button" class="az-nav-link" data-nav="warm">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M5 8l14 8M19 8L5 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Entorno
+      </button>
+    </nav>
+
+    <div class="az-header-right">
+      <button type="button" class="btn btn-icon" id="btnThemeToggle" aria-label="Cambiar tema visual" title="Alternar tema Claro / Oscuro">
+        <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <div class="project-dropdown-menu" id="projectDropdownMenu">
-        <div class="project-dropdown-search">
-          <input type="text" placeholder="Buscar proyecto…" id="projectSearchInput" autocomplete="off">
-          <span class="kbd">Esc</span>
+      <div class="az-session-chip" id="headerSessionChip">
+        <span class="az-avatar" id="headerUserAvatar">OP</span>
+        <div class="az-principal">
+          <strong id="headerUserName">operador-demo</strong>
+          <span>Rol: user</span>
         </div>
-        <div class="project-dropdown-list" id="projectDropdownList">
-          <button type="button" class="project-row" data-project="payments-api"><span class="project-icon" style="background:#14171c">P</span>payments-api</button>
-          <button type="button" class="project-row" data-project="ledger-service"><span class="project-icon" style="background:#5457d6">L</span>ledger-service</button>
-          <button type="button" class="project-row" data-project="fraud-detection"><span class="project-icon" style="background:#d33d4a">F</span>fraud-detection</button>
-          <button type="button" class="project-row" data-project="notifications-api"><span class="project-icon" style="background:#0f9d84">N</span>notifications-api</button>
-          <button type="button" class="project-row" data-project="docs-site"><span class="project-icon" style="background:#b8790e">D</span>docs-site</button>
+      </div>
+      <button type="button" class="btn btn-sm" id="btnLogout" data-nav="login">Salir</button>
+    </div>
+  </div>
+</header>
+
+<main class="az-container">
+
+  <!-- ========================================================================
+       1. VISTA INBOX (/inbox — InboxPage.tsx)
+       ======================================================================== -->
+  <section class="view active" data-view="inbox" aria-label="Vista Inbox">
+    <div class="az-page-header">
+      <div class="az-page-title">
+        <h1>Inbox de notificaciones</h1>
+        <p>Eventos recibidos desde GitHub. Cero auto-run: ninguna corrida arranca sin confirmación explícita.</p>
+      </div>
+      <div class="az-header-meta">
+        <div class="az-meta-item">
+          <span class="az-meta-label">Entorno</span>
+          <span class="az-meta-value" style="color:var(--ok);">Listo (aqs-test)</span>
+        </div>
+        <div class="az-meta-item">
+          <span class="az-meta-label">Reset Verificado</span>
+          <span class="az-meta-value mono">sí (100%)</span>
+        </div>
+        <div class="az-meta-item">
+          <span class="az-meta-label">Familias Activas</span>
+          <span class="az-meta-value mono">happy-path</span>
         </div>
       </div>
     </div>
-    <div class="topbar-spacer"></div>
-    <div class="topbar-right">
-      <!-- <div class="theme-toggle" role="group" aria-label="Theme">
-        <button type="button" data-theme-btn="light">Light</button>
-        <button type="button" data-theme-btn="dark">Dark</button>
-        <button type="button" data-theme-btn="system" class="active">System</button>
-      </div> -->
-      <div class="user-chip">
-        <span class="avatar">MR</span>
-        <span class="who">Marta R.<span class="role">Backend Lead</span></span>
-      </div>
-    </div>
-  </div>
 
-  <div class="sidebar" id="sidebar">
-    <button type="button" class="project-switch">
-      <span class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12c2-4 5-6 8-6s6 2 8 6c-2 4-5 6-8 6s-6-2-8-6z" stroke="#fff" stroke-width="1.8"/><circle cx="12" cy="12" r="2.1" fill="#fff"/></svg>
-      </span>
-      <span class="project-switch-name">Agentic QA Swarm</span>
-      <svg class="chevron" viewBox="0 0 24 24" fill="none"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <div class="sidebar-search">
-      <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span class="label">Buscar</span>
-      <span class="kbd">/</span>
-    </div>
-    <div class="nav-label">Corridas</div>
-    <button class="nav-item active" data-view="dashboard">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M3 12h4v7H3zM10 5h4v14h-4zM17 9h4v10h-4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-      Panel
-    </button>
-    <button class="nav-item" data-view="new">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      Corrida
-    </button>
-    <button class="nav-item" data-view="report">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-      Reportes
-    </button>
-    <div class="nav-label">Administración</div>
-    <button class="nav-item" data-view="settings">
-      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.32 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-      Configuración
-    </button>
-    <button class="nav-item" data-view="audit">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M5 5h14v14H5z" stroke="currentColor" stroke-width="1.5"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-      Log de auditoría
-    </button>
-  </div>
-
-  <div class="main">
-
-    <!-- DASHBOARD -->
-    <section class="view active" data-view="dashboard">
-      <div class="view-head">
-        <div>
-          <div class="eyebrow">Panel</div>
-          <h1>payments-api</h1>
-          <p>Pendientes de confirmar y resultados de las últimas corridas.</p>
-        </div>
-        <button class="btn btn-primary" data-start-event="pr">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          Ejecutar nueva
+    <!-- Sub-navigation bar (Azia style) -->
+    <div class="az-subbar">
+      <div class="az-tablist" role="tablist" aria-label="Estado de las notificaciones">
+        <button type="button" role="tab" class="az-tab" id="tab-pending" aria-selected="true" data-inbox-tab="pending">
+          Pendientes (3)
+        </button>
+        <button type="button" role="tab" class="az-tab" id="tab-confirmed" aria-selected="false" data-inbox-tab="confirmed">
+          Confirmadas (2)
+        </button>
+        <button type="button" role="tab" class="az-tab" id="tab-rejected" aria-selected="false" data-inbox-tab="rejected">
+          Rechazadas (0)
         </button>
       </div>
-
-      <div class="section-title">Pendientes de confirmación <span class="count">3</span></div>
-      <div class="stack" style="gap:10px; margin-bottom:16px;">
-        <div class="card" style="border-color:var(--accent); background:var(--accent-soft);">
-          <div class="commit-card">
-            <div class="commit-icon" style="background:var(--surface);">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
-            </div>
-            <div style="flex:1;">
-              <div class="commit-title"><span class="pill pill-neutral">PR</span> #184 · feat: concurrent transfers</div>
-              <div class="commit-meta">acme-fintech/payments-api · <span class="mono">c4e21ab</span> · hace 4 min · espera tu confirmación</div>
-            </div>
-            <button class="btn btn-primary btn-sm" data-start-event="pr">Confirmar y ejecutar →</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="commit-card">
-            <div class="commit-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
-            </div>
-            <div style="flex:1;">
-              <div class="commit-title"><span class="pill pill-neutral">Commit</span> push a <span class="mono">main</span></div>
-              <div class="commit-meta">acme-fintech/payments-api · <span class="mono">a1c9e02</span> · hace 2 h · solo notificación</div>
-            </div>
-            <button class="btn btn-sm" data-start-event="commit">Confirmar y ejecutar →</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="commit-card">
-            <div class="commit-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
-            </div>
-            <div style="flex:1;">
-              <div class="commit-title"><span class="pill pill-neutral">Release</span> tag <span class="mono">v2.4.0</span></div>
-              <div class="commit-meta">acme-fintech/payments-api · imagen <span class="mono">ghcr.io/acme/payments-api:2.4.0</span> · hace 1 d</div>
-            </div>
-            <button class="btn btn-sm" data-start-event="tag">Confirmar y ejecutar →</button>
-          </div>
-        </div>
+      <div class="az-subbar-actions">
+        <a href="onboarding-mock.html" class="az-action-link" title="Conectar una nueva aplicación">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Nueva aplicación
+        </a>
+        <button type="button" class="az-action-link" id="btnInboxRefresh">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M20 11a8.1 8.1 0 00-15.5-2m-.5-4v4h4M4 13a8.1 8.1 0 0015.5 2m.5 4v-4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Actualizar
+        </button>
       </div>
+    </div>
 
-      <div class="card chart-card" style="margin-bottom:16px;">
-        <div class="chart-tabs" id="chartTabs">
-          <button type="button" class="chart-tab active" data-metric="ensayo">
-            <span class="chart-tab-label">Ensayos exitosos al primer intento</span>
-            <span class="chart-tab-row"><span class="chart-tab-value">74%</span><span class="chart-tab-delta up">+16pp</span></span>
-          </button>
-          <button type="button" class="chart-tab" data-metric="teardown">
-            <span class="chart-tab-label">Entornos de prueba limpiados</span>
-            <span class="chart-tab-row"><span class="chart-tab-value">100%</span><span class="chart-tab-delta up">+0pp</span></span>
-          </button>
-          <button type="button" class="chart-tab" data-metric="incidentes">
-            <span class="chart-tab-label">Incidentes de política</span>
-            <span class="chart-tab-row"><span class="chart-tab-value">0</span><span class="chart-tab-delta up">-1</span></span>
-          </button>
+    <!-- KPI summary strip (Azia analytics aesthetic) -->
+    <div class="kpi-strip">
+      <div class="card kpi-box">
+        <div class="kpi-label">Notificaciones pendientes</div>
+        <div class="kpi-row">
+          <span class="kpi-val" id="kpiPendingCount">3</span>
+          <span class="badge badge-accent">esperando confirm</span>
         </div>
-        <div class="chart-wrap">
-          <svg id="trendChart" viewBox="0 0 760 220" preserveAspectRatio="none"></svg>
-        </div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width: 60%; background: var(--accent);"></div></div>
       </div>
-
-      <div class="card">
-        <div class="card-pad" style="padding-bottom:0;">
-          <div class="section-title">Corridas recientes <span class="count">4</span></div>
+      <div class="card kpi-box">
+        <div class="kpi-label">Corridas confirmadas</div>
+        <div class="kpi-row">
+          <span class="kpi-val">2</span>
+          <span class="badge badge-info">auditable</span>
         </div>
-        <div class="table-wrap">
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width: 40%; background: var(--info);"></div></div>
+      </div>
+      <div class="card kpi-box">
+        <div class="kpi-label">Estado del entorno</div>
+        <div class="kpi-row">
+          <span class="kpi-val" style="font-size:20px;">Listo</span>
+          <span class="badge badge-ok"><span class="badge-dot"></span>ready</span>
+        </div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width: 100%; background: var(--ok);"></div></div>
+      </div>
+      <div class="card kpi-box">
+        <div class="kpi-label">Auto-ejecución sin humano</div>
+        <div class="kpi-row">
+          <span class="kpi-val">0</span>
+          <span class="badge badge-teal">bloqueado por gate</span>
+        </div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" style="width: 100%; background: var(--teal);"></div></div>
+      </div>
+    </div>
+
+    <!-- Listado de notificaciones (Ancho completo) -->
+    <div class="card">
+      <div class="card-pad" style="padding-bottom: 12px;">
+        <div class="card-title">Listado de notificaciones</div>
+        <div class="card-sub">Eventos recibidos listos para revisión y confirmación previa a la inferencia de flujos sobre el entorno.</div>
+      </div>
+      <div class="table-wrap" id="inbox-lista" role="region" aria-labelledby="tab-pending">
         <table>
-          <thead><tr><th>Evento</th><th>Flujos</th><th>Estado</th><th>Hallazgo</th><th>Duración</th><th></th></tr></thead>
-          <tbody>
+          <thead>
             <tr>
-              <td><span class="mono">PR #179</span></td><td>feliz camino + concurrencia</td>
-              <td><span class="status-dot warn"><span class="pill-dot"></span>Hallazgo confirmado</span></td>
-              <td>Doble débito bajo concurrencia</td><td>4m 12s</td>
-              <td><button class="btn btn-sm btn-ghost" data-goto="report">Ver →</button></td>
+              <th scope="col">Repositorio</th>
+              <th scope="col">Evento</th>
+              <th scope="col">SHA</th>
+              <th scope="col">Artefacto</th>
+              <th scope="col">Estado</th>
+              <th scope="col" style="text-align:right;"><span class="sr-only">Acciones</span></th>
             </tr>
-            <tr>
-              <td><span class="mono">tag v2.3.1</span></td><td>feliz camino + estado</td>
-              <td><span class="status-dot ok"><span class="pill-dot"></span>Sin hallazgos</span></td>
-              <td>Sin problemas detectados</td><td>3m 40s</td>
-              <td><button class="btn btn-sm btn-ghost">Ver →</button></td>
-            </tr>
-            <tr>
-              <td><span class="mono">commit 9f2aa1c</span></td><td>feliz camino</td>
-              <td><span class="pill pill-danger"><span class="pill-dot"></span>Requiere revisión</span></td>
-              <td>La aplicación no arrancó</td><td>0m 48s</td>
-              <td><button class="btn btn-sm btn-ghost">Ver →</button></td>
-            </tr>
-            <tr>
-              <td><span class="mono">PR #176</span></td><td>concurrencia</td>
-              <td><span class="status-dot ok"><span class="pill-dot"></span>Sin hallazgos</span></td>
-              <td>—</td><td>3m 58s</td>
-              <td><button class="btn btn-sm btn-ghost">Ver →</button></td>
-            </tr>
-          </tbody>
+          </thead>
+          <tbody id="inboxTableBody"></tbody>
         </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       2. VISTA DE CORRIDA (/runs/:id — RunPage.tsx + U9-T03)
+       ======================================================================== -->
+  <section class="view" data-view="run" aria-label="Vista de corrida">
+    <div class="az-page-header">
+      <div class="az-page-title">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <h1>Corrida <code style="font-size:19px;">run-84a1d9b4c02e11ef</code></h1>
+          <span id="runVerdictBadge" class="badge badge-accent"><span class="badge-dot"></span>Plan inferido · Esperando inicio</span>
+        </div>
+        <p>Trace: <code id="runTraceId">tr-99201a4f-8c1e-44d0-a712</code> · Sondeo automático cada 3 s hasta estado terminal (<span class="mono">done</span> / <span class="mono">failed</span>).</p>
+      </div>
+
+      <div class="az-header-meta">
+        <div class="az-meta-item">
+          <span class="az-meta-label">Estado de corrida</span>
+          <span class="az-meta-value mono" id="runHeaderState">inferred</span>
+        </div>
+        <div class="az-meta-item">
+          <span class="az-meta-label">Previsualizar estado (Demo)</span>
+          <div class="segmented" style="margin-top:3px;" id="runDemoSwitcher">
+            <button type="button" class="active" data-run-demo="inferred">Plan inferido</button>
+            <button type="button" data-run-demo="running">En curso</button>
+            <button type="button" data-run-demo="bug">Done (bug)</button>
+            <button type="button" data-run-demo="clean">Done (limpia)</button>
+            <button type="button" data-run-demo="failed">Fallida</button>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- NUEVA EJECUCIÓN (pipeline) -->
-    <section class="view" data-view="new">
-      <div class="view-head">
+    <!-- Banner interactivo para iniciar la corrida tras revisar el plan inferido -->
+    <div id="runInferredBanner" class="alert-box" style="display:block; background:var(--accent-soft); border-color:var(--accent); color:var(--text); margin-bottom:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
         <div>
-          <div class="eyebrow">Nueva corrida</div>
-          <h1>Corrida de pruebas</h1>
-          <p>Se va a preparar un entorno aislado, generar los flujos de prueba y ejecutarlos sin tocar staging.</p>
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:22px;">
-        <div class="commit-card">
-          <div class="commit-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="badge badge-accent">Superficie inferida</span>
+            <strong style="font-size:13.5px;">Plan de corrida listo para iniciar</strong>
           </div>
-          <div style="flex:1;">
-            <div class="repo-name" id="eventRepo">acme-fintech/payments-api</div>
-            <div class="repo-meta" id="eventMeta">PR #184 · <span class="mono">c4e21ab</span> · entorno de prueba</div>
-          </div>
-          <span class="pill pill-ok" id="eventPill"><span class="pill-dot"></span>confirmado</span>
-        </div>
-      </div>
-
-      <div class="pipeline" id="pipeline">
-
-        <!-- Step 1: boot artifact -->
-        <div class="pl-step active" data-step="boot">
-          <div class="pl-icon" id="iconBoot">1</div>
-          <div class="pl-head">
-            <div class="pl-head-text">
-              <div class="pl-title">Artefacto en Docker</div>
-              <div class="pl-sub">Se va a obtener la imagen de Docker de la aplicación y las necesarias para iniciar las pruebas.</div>
-            </div>
-          </div>
-          <div class="pl-body" id="bootBody">
-            <div class="stack" style="gap:8px;">
-              <div class="skeleton" style="height:14px; width:50%;"></div>
-              <div class="skeleton" style="height:72px; width:100%;"></div>
-            </div>
-          </div>
-          <div class="pl-summary" id="bootDone"></div>
-        </div>
-
-        <!-- Step 2: flow selection -->
-        <div class="pl-step locked" data-step="select">
-          <div class="pl-icon" id="iconSelect">2</div>
-          <div class="pl-head">
-            <div class="pl-head-text">
-              <div class="pl-title">Flujos de QA</div>
-              <div class="pl-sub">Se van a proponer los flujos de prueba a partir de lo que la aplicación expone. Tú eliges cuáles ejecutar.</div>
-            </div>
-          </div>
-          <div class="pl-body">
-            <div class="stack" style="gap:10px; margin-top:2px;">
-              <div class="check-opt selected" data-flow="happy">
-                <div class="checkbox"></div>
-                <div>
-                  <h4>Camino feliz · reservar, transferir y liberar <span class="rec-badge">recomendado</span></h4>
-                  <p>Recorre el flujo principal de la aplicación y comprueba que el saldo no queda negativo.</p>
-                </div>
-              </div>
-              <div class="check-opt selected" data-flow="race">
-                <div class="checkbox"></div>
-                <div>
-                  <h4>Concurrencia sobre la misma reserva <span class="rec-badge">recomendado</span></h4>
-                  <p>Lanza varias transferencias al mismo tiempo para detectar un doble débito o un saldo incorrecto.</p>
-                </div>
-              </div>
-              <div class="check-opt" data-flow="state">
-                <div class="checkbox"></div>
-                <div>
-                  <h4>Transiciones de estado inválidas</h4>
-                  <p>Prueba pasos fuera de orden para ver si la aplicación permite estados que no debería.</p>
-                </div>
-              </div>
-              <div class="check-opt" data-flow="mass">
-                <div class="checkbox"></div>
-                <div>
-                  <h4>Campos no documentados</h4>
-                  <p>Envía datos extra no previstos para detectar escrituras que no deberían estar permitidas.</p>
-                </div>
-              </div>
-            </div>
-            <div class="row-between" style="margin-top:16px;">
-              <span style="font-size:12px; color:var(--text-faint);" id="selectSummary">2 flujos seleccionados</span>
-              <button class="btn btn-primary" id="btnGenerate">Aceptar y continuar →</button>
-            </div>
-          </div>
-          <div class="pl-summary" id="selectDone"></div>
-        </div>
-
-        <!-- Step 3: script generation -->
-        <div class="pl-step locked" data-step="generate">
-          <div class="pl-icon" id="iconGenerate">3</div>
-          <div class="pl-head">
-            <div class="pl-head-text">
-              <div class="pl-title">Scripts de prueba</div>
-              <div class="pl-sub">Se van a escribir los scripts de cada flujo para que puedas revisarlos antes de ejecutarlos.</div>
-            </div>
-          </div>
-          <div class="pl-body" id="generateBody">
-            <div class="stack" style="gap:8px;">
-              <div class="skeleton" style="height:14px; width:60%;"></div>
-              <div class="skeleton" style="height:120px; width:100%;"></div>
-            </div>
-          </div>
-          <div class="pl-summary" id="generateDone"></div>
-        </div>
-
-        <!-- Step 4: rehearsal -->
-        <div class="pl-step locked" data-step="rehearsal">
-          <div class="pl-icon" id="iconRehearsal">4</div>
-          <div class="pl-head">
-            <div class="pl-head-text">
-              <div class="pl-title">Ensayo previo</div>
-              <div class="pl-sub">Se va a probar un recorrido simple para comprobar que el entorno responde antes de la corrida completa.</div>
-            </div>
-          </div>
-          <div class="pl-body" id="rehearsalBody"></div>
-          <div class="pl-summary" id="rehearsalDone"></div>
-        </div>
-
-        <!-- Step 5: run -->
-        <div class="pl-step locked" data-step="swarm">
-          <div class="pl-icon" id="iconSwarm">5</div>
-          <div class="pl-head">
-            <div class="pl-head-text">
-              <div class="pl-title">Corrida de pruebas</div>
-              <div class="pl-sub">Se van a ejecutar los flujos seleccionados contra una copia aislada de la aplicación.</div>
-            </div>
-          </div>
-          <div class="pl-body" id="swarmBody"></div>
-          <div class="pl-summary" id="swarmDone"></div>
-        </div>
-
-        <!-- Step 6: done -->
-        <div class="pl-step locked" data-step="finish">
-          <div class="pl-icon" id="iconFinish">6</div>
-          <div class="pl-head">
-            <div class="pl-head-text">
-              <div class="pl-title">Entorno limpiado</div>
-              <div class="pl-sub">Se va a apagar y eliminar el entorno de prueba. El reporte queda listo para revisar.</div>
-            </div>
-          </div>
-          <div class="pl-body" id="finishBody"></div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- REPORTE -->
-    <section class="view" data-view="report">
-      <div class="view-head">
-        <div>
-          <div class="eyebrow">Reporte</div>
-          <h1>PR #179 · concurrencia sobre una reserva</h1>
-          <p>Un hallazgo confirmado en esta corrida. El entorno de prueba ya se eliminó.</p>
-        </div>
-        <span class="pill pill-neutral">entorno eliminado</span>
-      </div>
-
-      <div class="grid-3" style="margin-bottom:16px;">
-        <div class="card stat-card"><div class="stat-label">Requests totales</div><div class="stat-value">4,000</div></div>
-        <div class="card stat-card"><div class="stat-label">Problemas detectados</div><div class="stat-value" style="color:var(--danger)">3</div></div>
-        <div class="card stat-card"><div class="stat-label">Duración total</div><div class="stat-value">1m 34s</div></div>
-      </div>
-
-      <div class="section-title">Hallazgos <span class="count">1 confirmado</span></div>
-      <div class="finding-card row" style="align-items:stretch; gap:14px;">
-        <div class="sev-stripe sev-high"></div>
-        <div style="flex:1;">
-          <div class="row-between">
-            <h4 style="font-size:14px; margin-bottom:4px;">Doble débito cuando hay varias transferencias a la vez</h4>
-            <span class="pill pill-danger">alta severidad</span>
-          </div>
-          <p style="margin:6px 0 10px; color:var(--text-muted); font-size:13px;">
-            Con 40 solicitudes al mismo tiempo sobre la misma reserva, 3 lograron debitar antes de que el saldo se actualizara, dejándolo en negativo. El problema se reprodujo de forma consistente.
+          <p style="font-size:12.5px; color:var(--text-muted); margin-top:4px;">
+            Se ha desplegado el artefacto en el entorno y se infirieron los flujos de prueba. Revisa el plan completo a continuación antes de autorizar la ejecución.
           </p>
-          <div class="row" style="gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-sm">Ver evidencia cruda</button>
-            <button class="btn btn-sm">Ver 3 requests que fallaron</button>
-            <button class="btn btn-sm btn-ghost">Marcar como ruido</button>
-          </div>
         </div>
+        <button type="button" class="btn btn-primary" id="btnStartRunExecution" style="padding:8px 18px; font-weight:700;">
+          Iniciar ejecución de flujos →
+        </button>
       </div>
+    </div>
 
-      <div class="divider"></div>
-      <div class="card card-pad">
-        <div class="section-title">Resumen enviado a Slack</div>
-        <div style="background:var(--surface-2); border-radius:var(--radius); padding:16px 18px; font-size:13px;">
-          <strong>#payments-eng</strong> · Agentic QA Swarm<br>
-          <span style="color:var(--text-muted)">
-            🔴 <strong>1 hallazgo confirmado</strong> en <span class="mono">PR #179</span> — bajo carga concurrente, una condición de carrera deja el saldo en negativo. El entorno de prueba ya se eliminó. <a href="#" style="color:var(--accent-text); text-decoration:underline;">Ver reporte completo →</a>
-          </span>
-        </div>
-      </div>
-    </section>
+    <div id="runFailedBanner" class="alert-box alert-danger" role="status" data-estado="failed" style="display:none;">
+      Fallida · última fase alcanzada: rehearsing (ensayo bloqueante devolvió 500 Internal Server Error tras 2 intentos)
+    </div>
 
-    <!-- SETTINGS -->
-    <section class="view" data-view="settings">
-      <div class="view-head">
-        <div>
-          <div class="eyebrow">Configuración</div>
-          <h1>Configuración del proyecto</h1>
-          <p>Conecta el repositorio, elige qué eventos notifican y define cómo se lanzan las corridas.</p>
-        </div>
-      </div>
-
-      <div class="card card-pad" style="margin-bottom:16px;">
-        <div class="section-title">Repositorio conectado</div>
-        <div class="repo-card">
-          <div class="repo-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.19c0 4.49 2.87 8.3 6.84 9.65.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.67.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05a9.3 9.3 0 015 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.43.2 2.48.1 2.74.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.02 10.02 0 0022 12.19C22 6.58 17.52 2 12 2z"/></svg>
-          </div>
-          <div style="flex:1;">
-            <div class="repo-name">acme-fintech/payments-api</div>
-            <div class="repo-meta">GitHub · entorno de prueba <span class="mono">qa-swarm-test</span></div>
-          </div>
-          <span class="pill pill-ok"><span class="pill-dot"></span>conectado</span>
-        </div>
-        <div class="sync-row">
-          <span class="sync-dot"></span>
-          Cada commit, PR y release genera una notificación. Nada se ejecuta hasta que alguien confirma.
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="stack">
-          <div class="card card-pad">
-            <div class="section-title">Eventos que notifican</div>
-            <div class="row-between" style="padding:8px 0;"><span>Commits</span><div class="toggle on"></div></div>
-            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Pull requests</span><div class="toggle on"></div></div>
-            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Tags / releases</span><div class="toggle on"></div></div>
-            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Ejecutar automáticamente al recibir el evento</span><div class="toggle"></div></div>
+    <div class="grid-main-side">
+      <!-- Columna izquierda: Post-mortem (U9-T03) + Plan de flujos plegable (U9-T03) -->
+      <div class="stack">
+        <!-- Post-mortem card -->
+        <section class="card card-pad" aria-label="Informe post-mortem" id="runReportCard">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Informe post-mortem (<code>GET /api/reports/run-84a1d9b4c02e11ef</code>)</h2>
+              <div class="card-sub">Generado por <span class="mono">agent-reporter</span> con redacción previa de secretos y evidencia en MinIO.</div>
+            </div>
+            <span id="reportVerdictPill" class="badge badge-danger"><span class="badge-dot"></span>bug (1 hallazgo)</span>
           </div>
 
-          <div class="card card-pad">
-            <div class="section-title">Tipos de prueba habilitados</div>
-            <div class="row-between" style="padding:8px 0;"><span>Camino feliz</span><div class="toggle on"></div></div>
-            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Concurrencia</span><div class="toggle on"></div></div>
-            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Estados inválidos</span><div class="toggle on"></div></div>
-            <div class="row-between" style="padding:8px 0; border-top:1px solid var(--border);"><span>Campos no documentados</span><div class="toggle"></div></div>
+          <div id="reportContent">
+            <p id="reportSummary" style="font-size:13.5px; color:var(--text); background:var(--surface-2); padding:12px 14px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); margin-bottom:16px;">
+              Se detectó una violación del invariante de inventario en el endpoint de creación de pedidos: al enviar una cantidad superior al stock disponible, el servicio descontó existencias dejando el saldo en negativo (-3 unidades) y respondió 201 Created en lugar de rechazar la operación.
+            </p>
+
+            <div id="reportFindingsList">
+              <div class="finding-item">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge badge-info mono">POST</span>
+                    <code style="font-size:13px; font-weight:700;">/orders</code>
+                  </div>
+                  <span class="mono" style="font-size:11.5px; color:var(--text-faint);">ID: finding-stock-negativo-01</span>
+                </div>
+                <dl class="kv-list" style="margin-top:8px;">
+                  <dt>Invariante violado</dt>
+                  <dd>El stock de un producto nunca puede quedar menor que 0 tras crear o confirmar un pedido (<code>stock &gt;= 0</code>).</dd>
+                  <dt>Causa raíz (negocio)</dt>
+                  <dd>El handler de <code>POST /orders</code> deduce la cantidad solicitada sin validar previamente la disponibilidad actual cuando el pedido incluye el flag promocional.</dd>
+                  <dt>Evidencia (copiable)</dt>
+                  <dd>
+                    <ul class="evidence-list">
+                      <li><code class="evidence-uri">s3://evidence/run-84a1d9b4c02e11ef/runner-flow-stock-probe.json</code></li>
+                      <li><code class="evidence-uri">s3://evidence/run-84a1d9b4c02e11ef/http-trace-orders-post.log</code></li>
+                    </ul>
+                  </dd>
+                </dl>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div class="stack">
-          <div class="card card-pad">
-            <div class="section-title">Entorno de prueba</div>
-            <div class="kv"><span class="k">Nombre</span><span class="v">qa-swarm-test</span></div>
-            <div class="kv"><span class="k">Tope de CPU / memoria</span><span class="v">4 CPU · 8 Gi</span></div>
-            <div class="kv"><span class="k">Ensayo previo</span><span class="v" style="color:var(--ok)">siempre activo</span></div>
-            <div class="kv"><span class="k">Limpieza al terminar</span><span class="v" style="color:var(--ok)">siempre activa</span></div>
+        <!-- Plan de flujos inspectable (No colapsable; cada flujo colapsado por defecto) -->
+        <section class="card" aria-label="Plan de flujos" id="runPlanDetails">
+          <div class="card-pad" style="border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <div>
+              <h2 class="card-title" id="runPlanSummaryTitle" style="font-size: 14px;">Flujos inferidos (<code>GET /api/runs/run-84a1d9b4c02e11ef/plan</code>)</h2>
+              <div class="card-sub">Plan de flujos de prueba y sondeo de invariantes de negocio</div>
+            </div>
+            <span class="badge badge-neutral mono">workflow: default · 2 flujos</span>
           </div>
+          <div class="card-pad" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Flujo 1 (colapsado por defecto) -->
+            <details class="flow-block flow-details">
+              <summary>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <svg class="chevron-icon" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <strong>1. Camino feliz de consulta y pedido válido</strong>
+                </div>
+                <span class="badge badge-ok">happy-path (`invariant_probe: false`)</span>
+              </summary>
+              <div class="flow-content">
+                <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+                  <strong>Invariante:</strong> Un pedido con unidades dentro del stock disponible devuelve <code>201</code> y reduce el inventario exactamente en la cantidad pedida.
+                </p>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">Paso</th>
+                        <th scope="col">Método</th>
+                        <th scope="col">Ruta</th>
+                        <th scope="col">Estado esperado</th>
+                        <th scope="col" style="text-align:right;">Solicitud</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td class="mono">1</td>
+                        <td><span class="badge badge-teal mono">GET</span></td>
+                        <td><code>/products</code></td>
+                        <td><code>200</code></td>
+                        <td style="text-align:right;">
+                          <button type="button" class="btn btn-sm" data-view-request="flow-1-step-1">Ver request</button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="mono">2</td>
+                        <td><span class="badge badge-info mono">POST</span></td>
+                        <td><code>/orders</code></td>
+                        <td><code>201</code></td>
+                        <td style="text-align:right;">
+                          <button type="button" class="btn btn-sm btn-primary" data-view-request="flow-1-step-2">Ver request</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
 
-        </div>
+            <!-- Flujo 2 (colapsado por defecto) -->
+            <details class="flow-block flow-details">
+              <summary>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <svg class="chevron-icon" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <strong>2. Sondeo de agotamiento de stock</strong>
+                </div>
+                <span class="badge badge-accent">sondeo de invariante (`invariant_probe: true`)</span>
+              </summary>
+              <div class="flow-content">
+                <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+                  <strong>Invariante:</strong> Solicitar una cantidad mayor al stock disponible debe ser rechazado con <code>409</code> o <code>422</code> sin alterar el saldo.
+                </p>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">Paso</th>
+                        <th scope="col">Método</th>
+                        <th scope="col">Ruta</th>
+                        <th scope="col">Estado esperado</th>
+                        <th scope="col" style="text-align:right;">Solicitud</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td class="mono">1</td>
+                        <td><span class="badge badge-info mono">POST</span></td>
+                        <td><code>/orders</code></td>
+                        <td><code>409</code></td>
+                        <td style="text-align:right;">
+                          <button type="button" class="btn btn-sm btn-primary" data-view-request="flow-2-step-1">Ver request</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
+          </div>
+        </section>
       </div>
-    </section>
 
-    <!-- AUDIT -->
-    <section class="view" data-view="audit">
-      <div class="view-head">
-        <div>
-          <div class="eyebrow">Administración</div>
-          <h1>Log de auditoría</h1>
-          <p>Historial de confirmaciones, ejecuciones y rechazos.</p>
+      <!-- Columna derecha: Línea de tiempo de 9 fases del contrato -->
+      <section class="card card-pad" aria-label="Línea de tiempo de fases">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">Línea de tiempo de la corrida</h2>
+            <div class="card-sub">9 fases del contrato (<span class="mono">go-run-controller</span>)</div>
+          </div>
+          <span class="badge badge-ok" id="timelineSummaryBadge">9/9 completadas</span>
         </div>
+        <ol class="phase-timeline" id="phaseList"></ol>
+      </section>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       3. VISTA MIS CORRIDAS (/runs — RunsPage.tsx)
+       ======================================================================== -->
+  <section class="view" data-view="runs" aria-label="Vista Mis corridas">
+    <div class="az-page-header">
+      <div class="az-page-title">
+        <h1>Mis corridas</h1>
+        <p>Recibos de confirmación auditables (<code>GET /api/confirmations?limit=20</code>), ordenados del más reciente al más antiguo.</p>
       </div>
-      <div class="card">
-        <div class="table-wrap">
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
         <table>
-          <thead><tr><th>Hora</th><th>Evento</th><th>Actor</th><th>Resultado</th></tr></thead>
+          <thead>
+            <tr>
+              <th scope="col">Corrida (<code>run_id</code>)</th>
+              <th scope="col">Notificación (<code>notification_id</code>)</th>
+              <th scope="col">Confirmada (hora local)</th>
+              <th scope="col">Confirmada por</th>
+              <th scope="col"><span class="sr-only">Acción</span></th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td class="mono">14:02:08</td><td>PR #184 recibida desde GitHub</td><td>sistema</td><td><span class="status-dot ok"><span class="pill-dot"></span>notificado</span></td></tr>
-            <tr><td class="mono">14:02:11</td><td>Confirmación de corrida</td><td>Marta R.</td><td><span class="status-dot ok"><span class="pill-dot"></span>aprobado</span></td></tr>
-            <tr><td class="mono">14:02:40</td><td>Arranque del entorno de prueba</td><td>sistema</td><td><span class="status-dot ok"><span class="pill-dot"></span>listo</span></td></tr>
-            <tr><td class="mono">14:02:41</td><td>Ensayo previo</td><td>sistema</td><td><span class="status-dot ok"><span class="pill-dot"></span>superado</span></td></tr>
-            <tr><td class="mono">14:03:47</td><td>Limpieza del entorno de prueba</td><td>sistema</td><td><span class="status-dot ok"><span class="pill-dot"></span>completo</span></td></tr>
-            <tr><td class="mono">11:18:02</td><td>Intento de usar un entorno fuera de prueba</td><td>CI pipeline</td><td><span class="pill pill-danger">rechazado</span></td></tr>
+            <tr>
+              <td><a href="#run" class="mono" style="color:var(--accent-text); font-weight:700;" data-goto-run="bug">run-84a1d9b4c02e11ef</a></td>
+              <td class="mono">notif-7f4790e-01</td>
+              <td>21/10/2026, 20:41:12</td>
+              <td><code>operador-demo</code></td>
+              <td><button type="button" class="btn btn-sm" data-goto-run="bug">Ver corrida →</button></td>
+            </tr>
+            <tr>
+              <td><a href="#run" class="mono" style="color:var(--accent-text); font-weight:700;" data-goto-run="clean">run-3c09e12a77b40019</a></td>
+              <td class="mono">notif-a1c9e02-02</td>
+              <td>21/10/2026, 18:15:04</td>
+              <td><code>operador-demo</code></td>
+              <td><button type="button" class="btn btn-sm" data-goto-run="clean">Ver corrida →</button></td>
+            </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       4. VISTA ENTORNO (/warm — WarmPage.tsx)
+       ======================================================================== -->
+  <section class="view" data-view="warm" aria-label="Vista Entorno">
+    <div class="az-page-header">
+      <div class="az-page-title">
+        <h1>Entorno</h1>
+        <p>Estado en vivo del namespace aislado <span class="mono">aqs-test</span> (<code>GET /api/warm</code>, sondeo cada 10 s en solo lectura).</p>
+      </div>
+      <div class="az-header-meta">
+        <div class="az-meta-item">
+          <span class="az-meta-label">Simular estado del entorno</span>
+          <div class="segmented" style="margin-top:3px;" id="warmDemoSwitcher">
+            <button type="button" class="active" data-warm-demo="ready">Listo</button>
+            <button type="button" data-warm-demo="unverified">Listo sin reset</button>
+            <button type="button" data-warm-demo="dirty">Sucio</button>
+            <button type="button" data-warm-demo="cuarentena">Cuarentena</button>
+            <button type="button" data-warm-demo="idle-escalado">Inactivo</button>
+          </div>
+        </div>
+        <div class="az-meta-item">
+          <button type="button" class="btn btn-primary" id="btnWarmRefresh">Actualizar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="warmUnverifiedAlert" class="alert-box alert-warn" role="alert" style="display:none;">
+      El entorno está listo, pero el reset no está verificado. No confíes en sus resultados hasta verificarlo.
+    </div>
+
+    <section class="card card-pad" aria-label="Tarjeta del entorno">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title">Estado operativo de <code>aqs-test</code></h2>
+          <div class="card-sub">Pre-desplegado (App + Postgres + Redis) y reutilizado entre corridas con gate obligatorio <code>reset_verified=true</code>.</div>
+        </div>
+        <span data-testid="warm-estado" data-state="ready" id="warmBadge" class="badge badge-ok">
+          <span class="badge-dot"></span>Listo
+        </span>
+      </div>
+
+      <div class="kpi-strip" style="margin-bottom:0;">
+        <div class="card kpi-box" style="background:var(--surface-2);">
+          <div class="kpi-label">Estado (<code>state</code>)</div>
+          <div class="kpi-row"><span class="kpi-val" style="font-size:20px;" id="warmStateLabel">Listo</span></div>
+        </div>
+        <div class="card kpi-box" style="background:var(--surface-2);">
+          <div class="kpi-label">Reset verificado (<code>reset_verified</code>)</div>
+          <div class="kpi-row"><span class="kpi-val mono" style="font-size:20px;" id="warmResetText">sí</span></div>
+        </div>
+        <div class="card kpi-box" style="background:var(--surface-2);">
+          <div class="kpi-label">Versión base (<code>baseline_version</code>)</div>
+          <div class="kpi-row"><span class="kpi-val mono" style="font-size:18px;">v1.4.2-baseline</span></div>
+        </div>
+        <div class="card kpi-box" style="background:var(--surface-2);">
+          <div class="kpi-label">Identificador del entorno</div>
+          <div class="kpi-row"><span class="kpi-val mono" style="font-size:18px;">env-aqs-test-01</span></div>
         </div>
       </div>
     </section>
+  </section>
 
+  <!-- ========================================================================
+       5. VISTA INICIAR SESIÓN (/login — LoginPage.tsx)
+       ======================================================================== -->
+  <section class="view" data-view="login" aria-label="Vista Iniciar sesión">
+    <div class="login-wrap">
+      <div class="card card-pad">
+        <div style="margin-bottom: 18px;">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:6px;">
+            <span class="az-logo">aqs</span>
+            <span style="font-size:12px; font-weight:600; color:var(--text-faint);">go-identity</span>
+          </div>
+          <h1 style="font-size:20px; font-weight:700;">Iniciar sesión</h1>
+          <p style="font-size:12.5px; color:var(--text-muted); margin-top:4px;">
+            Sesión mantenida únicamente en memoria (sin <code>localStorage</code> ni cookies).
+          </p>
+        </div>
+
+        <div id="loginAlertBox" class="alert-box alert-danger" role="alert" style="display:none;"></div>
+
+        <form id="loginForm" novalidate>
+          <div class="form-field">
+            <label htmlFor="login-usuario">Usuario</label>
+            <input id="login-usuario" name="usuario" autocomplete="username" value="operador-demo">
+          </div>
+          <div class="form-field">
+            <label htmlFor="login-clave">Contraseña</label>
+            <input id="login-clave" name="clave" type="password" autocomplete="current-password" value="••••••••••••">
+          </div>
+          <div class="form-field" id="otpFieldWrap" style="display:none;">
+            <label htmlFor="login-codigo">Código de verificación (OTP 6 dígitos)</label>
+            <input id="login-codigo" name="codigo" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="123456">
+          </div>
+          <div style="margin-bottom: 14px;" id="otpToggleWrap">
+            <button type="button" class="btn btn-sm" id="btnShowOtp" style="width:100%;">
+              Tengo un código de verificación
+            </button>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;">Entrar</button>
+        </form>
+
+        <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border-subtle);">
+          <span class="az-meta-label" style="margin-bottom:6px;">Previsualizar estados de error (U6-T03)</span>
+          <div class="segmented" style="width:100%;">
+            <button type="button" class="active" data-login-demo="ok" style="flex:1;">Normal</button>
+            <button type="button" data-login-demo="401" style="flex:1;">401 Credenciales</button>
+            <button type="button" data-login-demo="429" style="flex:1;">429 Lockout</button>
+            <button type="button" data-login-demo="503" style="flex:1;">503 Caído</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ==========================================================================
+     MODAL DE CONFIRMACIÓN EXPLÍCITA (InboxPage role="dialog")
+     ========================================================================== -->
+<div class="modal-backdrop" id="confirmModalBackdrop">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-titulo">
+    <h2 id="confirm-titulo" tabindex="-1" style="font-size:17px; font-weight:700; margin-bottom:6px;">
+      Revisar y confirmar corrida
+    </h2>
+    <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:14px;">
+      Esta acción desplegará el artefacto en <code>aqs-test</code> e <strong>inferirá la superficie de flujos</strong> para que puedas revisarla en la vista de corrida antes de autorizar el ensayo y ejecución.
+    </p>
+    <dl class="kv-list">
+      <dt>Repositorio</dt>
+      <dd id="modalRepo">omarjayg/target-orders-app</dd>
+      <dt>SHA</dt>
+      <dd><code id="modalSha">7f4790e8b21c4a901e330c84a1d9b4c02e11ef99</code></dd>
+      <dt>Artefacto</dt>
+      <dd><code id="modalArtifact">image · ghcr.io/omarjayg/target-orders:7f4790e</code></dd>
+    </dl>
+    <fieldset class="fieldset-box">
+      <legend>Familias de flujos</legend>
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer;">
+        <input type="checkbox" id="chkHappyPath" checked>
+        <code>happy-path</code> (Camino feliz transaccional + sondeo de invariantes)
+      </label>
+    </fieldset>
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+      <button type="button" class="btn" id="btnCancelModal">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="btnSubmitConfirm">Inferir flujos y revisar corrida →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     MODAL DE DETALLE DE LA SOLICITUD (Request Modal)
+     ========================================================================== -->
+<div class="modal-backdrop" id="requestModalBackdrop">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="requestModalTitle" style="max-width: 520px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;">
+      <h2 id="requestModalTitle" tabindex="-1" style="font-size:16px; font-weight:700;">
+        Detalle de la solicitud (Request)
+      </h2>
+      <button type="button" class="btn btn-icon" id="btnCloseRequestModal" aria-label="Cerrar modal" title="Cerrar">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+      <span class="badge badge-info mono" id="reqModalMethod">POST</span>
+      <code id="reqModalPath" style="font-size:14px; font-weight:700;">/orders</code>
+      <span class="badge badge-ok mono" id="reqModalStatus">Status esperado: 201</span>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <span class="az-meta-label" style="margin-bottom:5px;">Cabeceras (Headers)</span>
+      <pre class="json-body" id="reqModalHeaders" style="margin:0; font-size:11.5px;"></pre>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
+        <span class="az-meta-label">Cuerpo de la solicitud (JSON Body)</span>
+        <button type="button" class="btn btn-sm" id="btnCopyReqBody" style="padding:2px 8px; font-size:11px;">Copiar JSON</button>
+      </div>
+      <pre class="json-body" id="reqModalBody" style="max-height:220px; overflow-y:auto; margin:0;"></pre>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:18px;">
+      <button type="button" class="btn" id="btnOkRequestModal">Cerrar</button>
+    </div>
   </div>
 </div>
 
 <script>
+  // ---------- Navegación principal ----------
   const views = document.querySelectorAll('.view');
-  const navItems = document.querySelectorAll('.nav-item');
-  function showView(name){
+  const navLinks = document.querySelectorAll('[data-nav]');
+
+  function showView(name) {
     views.forEach(v => v.classList.toggle('active', v.dataset.view === name));
-    navItems.forEach(n => n.classList.toggle('active', n.dataset.view === name));
+    const activeNav = name === 'run' ? 'runs' : name;
+    navLinks.forEach(n => n.classList.toggle('active', n.dataset.nav === activeNav));
   }
-  navItems.forEach(n => n.addEventListener('click', () => {
-    showView(n.dataset.view);
-    if(n.dataset.view === 'new' && document.getElementById('iconBoot').textContent === '1'){
-      runBoot();
-    }
-  }));
-  document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => showView(b.dataset.goto)));
 
-  // ---------- Project dropdown ----------
-  const projectDropdown = document.getElementById('projectDropdown');
-  const projectDropdownBtn = document.getElementById('projectDropdownBtn');
-  const projectDropdownLabel = document.getElementById('projectDropdownLabel');
-  const projectSearchInput = document.getElementById('projectSearchInput');
-  const projectRows = document.querySelectorAll('.project-row');
-
-  function openProjectDropdown(){
-    projectDropdown.classList.add('open');
-    projectSearchInput.value = '';
-    projectRows.forEach(r => r.style.display = '');
-    setTimeout(() => projectSearchInput.focus(), 0);
-  }
-  function closeProjectDropdown(){
-    projectDropdown.classList.remove('open');
-  }
-  projectDropdownBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    projectDropdown.classList.contains('open') ? closeProjectDropdown() : openProjectDropdown();
+  navLinks.forEach(btn => {
+    btn.addEventListener('click', () => showView(btn.dataset.nav));
   });
-  document.addEventListener('click', (e) => {
-    if(!projectDropdown.contains(e.target)) closeProjectDropdown();
-  });
-  document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape') closeProjectDropdown();
-  });
-  projectSearchInput.addEventListener('input', () => {
-    const q = projectSearchInput.value.trim().toLowerCase();
-    projectRows.forEach(r => { r.style.display = r.dataset.project.toLowerCase().includes(q) ? '' : 'none'; });
-  });
-  projectRows.forEach(r => r.addEventListener('click', () => {
-    projectDropdownLabel.textContent = r.dataset.project;
-    closeProjectDropdown();
-  }));
 
-  // ---------- Trend chart ----------
-  const CHART_DATES = ['Aug 14','Aug 15','Aug 16','Aug 17','Aug 18','Aug 19','Aug 20','Aug 21'];
-  const CHART_METRICS = {
-    ensayo:     { values:[58,64,60,68,65,70,66,74], domainMin:50, domainMax:80, ticks:[50,60,70,80] },
-    teardown:   { values:[100,100,97,100,100,100,100,100], domainMin:90, domainMax:100, ticks:[90,95,100] },
-    incidentes: { values:[0,0,1,0,0,0,0,0], domainMin:0, domainMax:3, ticks:[0,1,2,3] }
-  };
-  const trendChart = document.getElementById('trendChart');
-
-  function renderChart(key){
-    const m = CHART_METRICS[key];
-    const W = 760, H = 220, padL = 30, padR = 8, padT = 10, padB = 24;
-    const plotW = W - padL - padR, plotH = H - padT - padB;
-    const n = m.values.length;
-    const xAt = i => padL + (i/(n-1))*plotW;
-    const yAt = v => padT + plotH - ((v - m.domainMin)/(m.domainMax - m.domainMin))*plotH;
-    const pts = m.values.map((v,i) => [xAt(i), yAt(v)]);
-    const baseY = (padT + plotH).toFixed(1);
-
-    const fullPath = pts.map((p,i) => (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
-    const areaPath = fullPath + ` L${pts[n-1][0].toFixed(1)},${baseY} L${pts[0][0].toFixed(1)},${baseY} Z`;
-    const solidPath = pts.slice(0, n-1).map((p,i) => (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
-    const dashedPath = `M${pts[n-2][0].toFixed(1)},${pts[n-2][1].toFixed(1)} L${pts[n-1][0].toFixed(1)},${pts[n-1][1].toFixed(1)}`;
-
-    const gridLines = m.ticks.map(t => {
-      const yy = yAt(t).toFixed(1);
-      return `<line class="chart-grid" x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}"/>
-              <text class="chart-axis-y" x="0" y="${(+yy+3).toFixed(1)}">${t}</text>`;
-    }).join('');
-
-    const xLabels = CHART_DATES.map((d,i) => {
-      const anchor = i===0 ? 'start' : (i===n-1 ? 'end' : 'middle');
-      return `<text class="chart-axis-x" x="${xAt(i).toFixed(1)}" y="${H-6}" text-anchor="${anchor}">${d}</text>`;
-    }).join('');
-
-    trendChart.innerHTML = `
-      ${gridLines}
-      <path class="chart-area" d="${areaPath}"></path>
-      <path class="chart-line" d="${solidPath}"></path>
-      <path class="chart-line-dashed" d="${dashedPath}"></path>
-      <circle class="chart-dot" cx="${pts[n-1][0].toFixed(1)}" cy="${pts[n-1][1].toFixed(1)}" r="3.5"></circle>
-      ${xLabels}
-    `;
-  }
-  document.querySelectorAll('.chart-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.chart-tab').forEach(t => t.classList.toggle('active', t === tab));
-      renderChart(tab.dataset.metric);
-    });
-  });
-  renderChart('ensayo');
-
+  // ---------- Tema Claro / Oscuro (Solo icono - Claro por defecto) ----------
   const root = document.documentElement;
-  document.querySelectorAll('[data-theme-btn]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const mode = btn.dataset.themeBtn;
-      if(mode === 'system'){ root.removeAttribute('data-theme'); }
-      else { root.setAttribute('data-theme', mode); }
-      document.querySelectorAll('[data-theme-btn]').forEach(b => b.classList.toggle('active', b === btn));
+  const btnTheme = document.getElementById('btnThemeToggle');
+  if (btnTheme) {
+    btnTheme.addEventListener('click', () => {
+      const isDark = root.getAttribute('data-theme') === 'dark';
+      const next = isDark ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      btnTheme.setAttribute('aria-label', next === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro');
+      btnTheme.setAttribute('title', next === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro');
     });
-  });
-
-  // ---------- Pipeline: corrida aislada ----------
-  const EVENTS = {
-    pr:     { title: 'PR #184 · feat: concurrent transfers', meta: 'PR #184 · <span class="mono">c4e21ab</span> · entorno de prueba' },
-    commit: { title: 'push a main', meta: 'commit <span class="mono">a1c9e02</span> · entorno de prueba' },
-    tag:    { title: 'tag v2.4.0', meta: 'tag <span class="mono">v2.4.0</span> · imagen <span class="mono">ghcr.io/acme/payments-api:2.4.0</span>' }
-  };
-
-  const FLOWS = {
-    happy: { label: 'Camino feliz', file: 'transfers_happy_path.js', vus: 1 },
-    race:  { label: 'Concurrencia sobre hold', file: 'transfers_concurrency.js', vus: 40 },
-    state: { label: 'Transiciones inválidas', file: 'transfers_invalid_state.js', vus: 8 },
-    mass:  { label: 'Campos no documentados', file: 'transfers_undeclared_fields.js', vus: 8 }
-  };
-
-  const stepEls = {
-    boot: document.querySelector('.pl-step[data-step="boot"]'),
-    select: document.querySelector('.pl-step[data-step="select"]'),
-    generate: document.querySelector('.pl-step[data-step="generate"]'),
-    rehearsal: document.querySelector('.pl-step[data-step="rehearsal"]'),
-    swarm: document.querySelector('.pl-step[data-step="swarm"]'),
-    finish: document.querySelector('.pl-step[data-step="finish"]')
-  };
-
-  let currentEvent = 'pr';
-
-  function setStep(el, state){ el.classList.remove('locked','active','done'); el.classList.add(state); }
-  function selectedFlows(){ return Array.from(document.querySelectorAll('.check-opt.selected')).map(o => o.dataset.flow); }
-
-  function applyEvent(key){
-    currentEvent = key;
-    const e = EVENTS[key];
-    document.getElementById('eventMeta').innerHTML = e.meta;
   }
 
-  function resetPipeline(){
-    Object.values(stepEls).forEach((el, i) => setStep(el, i === 0 ? 'active' : 'locked'));
-    document.querySelectorAll('.check-opt').forEach(o => o.classList.toggle('selected', o.dataset.flow === 'happy' || o.dataset.flow === 'race'));
-    document.getElementById('iconBoot').textContent = '1';
-    document.getElementById('iconSelect').textContent = '2';
-    document.getElementById('iconGenerate').textContent = '3';
-    document.getElementById('iconRehearsal').textContent = '4';
-    document.getElementById('iconSwarm').textContent = '5';
-    document.getElementById('iconFinish').textContent = '6';
-    document.getElementById('bootBody').innerHTML = `<div class="stack" style="gap:8px;"><div class="skeleton" style="height:14px; width:50%;"></div><div class="skeleton" style="height:72px; width:100%;"></div></div>`;
-    document.getElementById('generateBody').innerHTML = `<div class="stack" style="gap:8px;"><div class="skeleton" style="height:14px; width:60%;"></div><div class="skeleton" style="height:120px; width:100%;"></div></div>`;
-    document.getElementById('rehearsalBody').innerHTML = '';
-    document.getElementById('swarmBody').innerHTML = '';
-    document.getElementById('finishBody').innerHTML = '';
-    ['bootDone','selectDone','generateDone','rehearsalDone','swarmDone'].forEach(id => document.getElementById(id).textContent = '');
-    updateSelectSummary();
-    document.getElementById('btnGenerate').disabled = false;
-  }
+  // ---------- Datos y lógica de Inbox (/inbox) ----------
+  const NOTIFICATIONS = [
+    {
+      id: 'notif-7f4790e-01',
+      repo: 'omarjayg/target-orders-app',
+      github_event: 'commit',
+      sha: '7f4790e8b21c4a901e330c84a1d9b4c02e11ef99',
+      artifact: 'image · ghcr.io/omarjayg/target-orders:7f4790e',
+      state: 'pending'
+    },
+    {
+      id: 'notif-c4e21ab-02',
+      repo: 'omarjayg/target-orders-app',
+      github_event: 'pull_request',
+      sha: 'c4e21ab90d114f88a3201b77e51920a11099bc12',
+      artifact: 'build_from_repo · refs/pull/18/merge',
+      state: 'pending'
+    },
+    {
+      id: 'notif-v143-03',
+      repo: 'omarjayg/target-orders-app',
+      github_event: 'tag',
+      sha: '991a04bc72e189f0021a774c89012e33a81200f1',
+      artifact: 'image · ghcr.io/omarjayg/target-orders:v1.4.3',
+      state: 'pending'
+    },
+    {
+      id: 'notif-a1c9e02-04',
+      repo: 'omarjayg/target-orders-app',
+      github_event: 'commit',
+      sha: 'a1c9e0277b4001984a1d9b4c02e11ef881203944',
+      artifact: 'image · ghcr.io/omarjayg/target-orders:a1c9e02',
+      state: 'confirmed'
+    },
+    {
+      id: 'notif-55e019a-05',
+      repo: 'omarjayg/target-orders-app',
+      github_event: 'pull_request',
+      sha: '55e019a44c81920f11234a901e330c84a1d9b4c0',
+      artifact: 'build_from_repo · refs/pull/15/merge',
+      state: 'confirmed'
+    }
+  ];
 
-  function updateSelectSummary(){
-    const n = selectedFlows().length;
-    document.getElementById('selectSummary').textContent =
-      n === 0 ? 'Selecciona al menos un flujo' :
-      n === 1 ? '1 flujo seleccionado' :
-      n + ' flujos seleccionados';
-    document.getElementById('btnGenerate').disabled = n === 0;
-  }
+  let currentInboxTab = 'pending';
+  let selectedNotif = NOTIFICATIONS[0];
 
-  document.querySelectorAll('.check-opt').forEach(opt => {
-    opt.addEventListener('click', () => { opt.classList.toggle('selected'); updateSelectSummary(); });
-  });
+  function renderInbox() {
+    const filtered = NOTIFICATIONS.filter(n => n.state === currentInboxTab);
+    const tbody = document.getElementById('inboxTableBody');
 
-  function runBoot(){
-    document.getElementById('iconBoot').innerHTML = '<span class="pl-spinner"></span>';
-    document.getElementById('bootBody').innerHTML = `
-      <div class="card card-pad" style="margin-bottom:0;">
-        <div class="stack" style="gap:2px;" id="bootLog"></div>
-      </div>`;
-    const log = document.getElementById('bootLog');
-    const lines = [
-      ['00:00', 'Obteniendo la imagen de la aplicación', ''],
-      ['00:04', 'Arrancando la aplicación', ''],
-      ['00:09', 'Arrancando los servicios de prueba', 'ok'],
-      ['00:14', 'Aplicación lista para probar', 'ok'],
-    ];
-    lines.forEach((l, i) => {
-      setTimeout(() => {
-        const row = document.createElement('div');
-        row.className = 'log-line ' + l[2];
-        row.innerHTML = `<span class="t mono">${l[0]}</span><span class="msg">${l[1]}</span>`;
-        log.appendChild(row);
-      }, i * 450);
-    });
-    setTimeout(() => {
-      setStep(stepEls.boot, 'done');
-      document.getElementById('bootDone').textContent = 'Entorno de prueba listo';
-      document.getElementById('iconBoot').innerHTML = '✓';
-      setStep(stepEls.select, 'active');
-    }, lines.length * 450 + 300);
-  }
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-faint); padding:24px;">No hay notificaciones ${currentInboxTab === 'rejected' ? 'rechazadas' : 'en este estado'}</td></tr>`;
+      return;
+    }
 
-  document.getElementById('btnGenerate').addEventListener('click', () => {
-    const chosen = selectedFlows();
-    if(!chosen.length) return;
-    setStep(stepEls.select, 'done');
-    document.getElementById('selectDone').textContent =
-      chosen.length + ' flujo' + (chosen.length>1?'s':'') + ' seleccionado' + (chosen.length>1?'s':'');
-    document.getElementById('iconSelect').innerHTML = '✓';
-    setStep(stepEls.generate, 'active');
-    runGenerate(chosen);
-  });
+    tbody.innerHTML = filtered.map(n => {
+      const badgeClass = n.state === 'pending' ? 'badge-warn' : (n.state === 'confirmed' ? 'badge-ok' : 'badge-danger');
+      const actionButton = n.state === 'pending'
+        ? `<button type="button" class="btn btn-sm btn-primary" data-confirm-notif="${n.id}">Revisar y confirmar →</button>`
+        : (n.state === 'confirmed'
+          ? `<button type="button" class="btn btn-sm" data-goto-run="inferred">Ver corrida →</button>`
+          : `<span style="color:var(--text-faint); font-size:12px;">Rechazada</span>`);
+      return `
+        <tr>
+          <td><strong>${n.repo}</strong></td>
+          <td><span class="badge badge-neutral mono">${n.github_event}</span></td>
+          <td><code>${n.sha.slice(0, 7)}</code></td>
+          <td><code>${n.artifact}</code></td>
+          <td><span class="badge ${badgeClass}"><span class="badge-dot"></span>${n.state}</span></td>
+          <td style="text-align:right;">
+            ${actionButton}
+          </td>
+        </tr>`;
+    }).join('');
 
-  function runGenerate(chosen){
-    setTimeout(() => {
-      const scripts = chosen.map(k => {
-        const a = FLOWS[k];
-        return `<span class="code-com">// ${a.file} — generado para este flujo, editable</span>
-<span class="code-kw">import</span> http <span class="code-kw">from</span> <span class="code-str">'k6/http'</span>;
-<span class="code-kw">import</span> { check } <span class="code-kw">from</span> <span class="code-str">'k6'</span>;
-
-<span class="code-kw">export const</span> options = { vus: <span class="code-fn">${a.vus}</span>, iterations: <span class="code-fn">${a.vus}</span> };
-
-<span class="code-kw">export default function</span> () {
-  <span class="code-kw">const</span> hold = http.<span class="code-fn">post</span>(<span class="code-str">\`\${BASE}/accounts/\${ACC}/hold\`</span>);
-  <span class="code-kw">const</span> tx   = http.<span class="code-fn">post</span>(<span class="code-str">\`\${BASE}/transfers\`</span>, { hold_id: hold.json(<span class="code-str">'id'</span>) });
-  <span class="code-fn">check</span>(tx, { <span class="code-str">'saldo nunca negativo'</span>: (r) =&gt; r.json(<span class="code-str">'balance'</span>) &gt;= <span class="code-fn">0</span> });
-}`;
-      }).join('\n\n');
-      document.getElementById('generateBody').innerHTML =
-        `<pre class="code">${scripts}</pre>
-         <div style="font-size:12px; color:var(--text-faint); margin-top:10px;">${chosen.length} flujo${chosen.length>1?'s':''} listo${chosen.length>1?'s':''} para el ensayo</div>`;
-      setStep(stepEls.generate, 'done');
-      document.getElementById('generateDone').textContent = chosen.length + ' script' + (chosen.length>1?'s':'') + ' listos para revisar';
-      document.getElementById('iconGenerate').innerHTML = '✓';
-      setStep(stepEls.rehearsal, 'active');
-      runRehearsal(chosen);
-    }, 1500);
-  }
-
-  function runRehearsal(chosen){
-    document.getElementById('iconRehearsal').innerHTML = '<span class="pl-spinner"></span>';
-    const body = document.getElementById('rehearsalBody');
-    body.innerHTML = `
-      <div class="card card-pad" style="margin-bottom:0;">
-        <div class="row-between" style="margin-bottom:8px;">
-          <span style="font-size:12.5px; color:var(--text-muted);">Progreso del ensayo</span>
-          <span class="mono" id="rehearsalPct" style="font-size:12px;">0%</span>
-        </div>
-        <div class="progress-track"><div class="progress-fill" id="rehearsalBar" style="width:0%"></div></div>
-        <div class="stack" style="gap:2px; margin-top:14px;" id="rehearsalLog"></div>
-      </div>`;
-    const log = document.getElementById('rehearsalLog');
-    const bar = document.getElementById('rehearsalBar');
-    const pct = document.getElementById('rehearsalPct');
-    const lines = [
-      ['00:00.12', 'POST /accounts/42/hold → 201 Created', 'ok'],
-      ['00:00.61', 'POST /transfers → 200 OK', 'ok'],
-      ['00:01.30', 'assert saldo_disponible ≥ 0 → pass', 'ok'],
-    ];
-    lines.forEach((l, i) => {
-      setTimeout(() => {
-        const row = document.createElement('div');
-        row.className = 'log-line ' + l[2];
-        row.innerHTML = `<span class="t mono">${l[0]}</span><span class="msg">${l[1]}</span>`;
-        log.appendChild(row);
-        const p = Math.round(((i+1)/lines.length)*100);
-        bar.style.width = p + '%'; pct.textContent = p + '%';
-      }, i * 500);
-    });
-    setTimeout(() => {
-      bar.classList.add('ok');
-      const row = document.createElement('div');
-      row.className = 'log-line';
-      row.innerHTML = `<span class="t mono">00:01.80</span><span class="msg" style="color:var(--ok); font-weight:600;">Ensayo superado — se puede continuar con la corrida</span>`;
-      log.appendChild(row);
-
-      const gate = document.createElement('div');
-      gate.className = 'card card-pad';
-      gate.style.marginTop = '12px';
-      gate.innerHTML = `
-        <div class="section-title">Listo para la corrida completa</div>
-        <div class="kv"><span class="k">Entorno</span><span class="v" style="color:var(--ok)">copia aislada de la aplicación</span></div>
-        <div class="kv"><span class="k">Staging / producción</span><span class="v" style="color:var(--ok)">no se usa</span></div>
-        <div class="kv"><span class="k">Ensayo</span><span class="v" style="color:var(--ok)">superado</span></div>
-        <div class="kv"><span class="k">Flujos</span><span class="v">${chosen.length} seleccionado${chosen.length>1?'s':''}</span></div>
-        <div style="margin-top:16px;">
-          <button class="btn btn-primary" style="width:100%; justify-content:center;" id="btnConfirmSwarm">Confirmar corrida completa →</button>
-        </div>`;
-      body.appendChild(gate);
-      document.getElementById('btnConfirmSwarm').addEventListener('click', () => {
-        setStep(stepEls.rehearsal, 'done');
-        document.getElementById('rehearsalDone').textContent = 'Ensayo superado';
-        document.getElementById('iconRehearsal').innerHTML = '✓';
-        setStep(stepEls.swarm, 'active');
-        runSwarm(chosen);
-      });
-    }, lines.length * 500 + 200);
-  }
-
-  function runSwarm(chosen){
-    document.getElementById('iconSwarm').innerHTML = '<span class="pl-spinner"></span>';
-    const units = ['app', 'postgres', 'redis'].concat(chosen.map((_, i) => 'runner-' + (i+1)));
-    const body = document.getElementById('swarmBody');
-    body.innerHTML = `
-      <div class="grid-3" style="margin-bottom:14px;">
-        <div class="card stat-card"><div class="stat-label">Servicios</div><div class="stat-value">${units.length}</div><div class="stat-sub">entorno de prueba aislado</div></div>
-        <div class="card stat-card"><div class="stat-label">Estado</div><div class="stat-value" id="swarmState" style="font-size:16px; color:var(--warn)">ejecutando pruebas</div></div>
-        <div class="card stat-card"><div class="stat-label">Tiempo transcurrido</div><div class="stat-value mono" id="swarmClock">00:00</div></div>
-      </div>
-      <div class="card card-pad">
-        <div class="section-title">Entorno de prueba <span class="count" id="podSummary">0/${units.length} listos</span></div>
-        <div class="pod-lbl">Aplicación bajo prueba</div>
-        <div class="pod-grid" id="podGridApp"></div>
-        <div class="pod-lbl">Ejecutores de prueba</div>
-        <div class="pod-grid" id="podGridRun"></div>
-      </div>`;
-    const swarmState = document.getElementById('swarmState');
-    const podSummary = document.getElementById('podSummary');
-    const clockEl = document.getElementById('swarmClock');
-    const clockStart = Date.now();
-    const clockTimer = setInterval(() => {
-      const s = Math.floor((Date.now()-clockStart)/1000);
-      clockEl.textContent = String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
-    }, 250);
-
-    const pods = [];
-    units.forEach((name, i) => {
-      const pod = document.createElement('div');
-      pod.className = 'pod pending';
-      pod.textContent = name;
-      (i < 3 ? document.getElementById('podGridApp') : document.getElementById('podGridRun')).appendChild(pod);
-      pods.push(pod);
-    });
-
-    let doneCount = 0;
-    pods.forEach((pod, i) => {
-      const runAt = 200 + i * 80;
-      const doneAt = runAt + 700 + (i % 3) * 160;
-      setTimeout(() => { pod.classList.remove('pending'); pod.classList.add('running'); }, runAt);
-      setTimeout(() => {
-        pod.classList.remove('running'); pod.classList.add('done');
-        doneCount++;
-        podSummary.textContent = doneCount + '/' + units.length + ' listos';
-        if(doneCount === units.length){
-          swarmState.textContent = 'pruebas completadas';
-          swarmState.style.color = 'var(--accent-text)';
-          setTimeout(() => finishRun(pods, clockTimer, swarmState, podSummary, units.length), 700);
+    tbody.querySelectorAll('[data-confirm-notif]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const found = NOTIFICATIONS.find(x => x.id === btn.dataset.confirmNotif);
+        if (found) {
+          selectedNotif = found;
+          document.getElementById('modalRepo').textContent = selectedNotif.repo;
+          document.getElementById('modalSha').textContent = selectedNotif.sha;
+          document.getElementById('modalArtifact').textContent = selectedNotif.artifact;
+          chkHappyPath.checked = true;
+          btnSubmitConfirm.disabled = false;
+          modalBackdrop.classList.add('open');
+          document.getElementById('confirm-titulo').focus();
         }
-      }, doneAt);
+      });
+    });
+
+    tbody.querySelectorAll('[data-goto-run]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        applyRunDemo(btn.dataset.gotoRun);
+        showView('run');
+      });
     });
   }
 
-  function finishRun(pods, clockTimer, swarmState, podSummary, totalPods){
-    swarmState.textContent = 'eliminando entorno';
-    swarmState.style.color = 'var(--danger)';
-    pods.forEach((pod, i) => {
-      setTimeout(() => { pod.classList.remove('done'); pod.classList.add('torn-down'); }, i * 40);
+  document.querySelectorAll('[data-inbox-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentInboxTab = tab.dataset.inboxTab;
+      document.querySelectorAll('[data-inbox-tab]').forEach(t => {
+        t.setAttribute('aria-selected', String(t === tab));
+      });
+      renderInbox();
     });
-    setTimeout(() => {
-      clearInterval(clockTimer);
-      swarmState.textContent = 'completado';
-      swarmState.style.color = 'var(--ok)';
-      podSummary.textContent = totalPods + '/' + totalPods + ' terminados · entorno vacío';
-
-      setStep(stepEls.swarm, 'done');
-      document.getElementById('swarmDone').textContent = 'Entorno de prueba eliminado';
-      document.getElementById('iconSwarm').innerHTML = '✓';
-      setStep(stepEls.finish, 'active');
-      document.getElementById('finishBody').innerHTML = `
-        <div class="card card-pad">
-          <div class="row-between">
-            <div>
-              <div style="font-size:13px; font-weight:600;">El entorno de prueba se eliminó</div>
-              <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">1 hallazgo confirmado · resumen enviado a #payments-eng</div>
-            </div>
-            <button class="btn btn-primary" data-goto="report">Ver reporte →</button>
-          </div>
-        </div>`;
-      document.querySelectorAll('#finishBody [data-goto]').forEach(b => b.addEventListener('click', () => showView(b.dataset.goto)));
-    }, pods.length * 40 + 400);
-  }
-
-  function startFromEvent(key){
-    applyEvent(key);
-    resetPipeline();
-    showView('new');
-    document.querySelector('.main').scrollTo({ top: 0, behavior: 'smooth' });
-    runBoot();
-  }
-
-  document.querySelectorAll('[data-start-event]').forEach(btn => {
-    btn.addEventListener('click', () => startFromEvent(btn.dataset.startEvent));
   });
 
-  resetPipeline();
+  // Modal de confirmación
+  const modalBackdrop = document.getElementById('confirmModalBackdrop');
+  const chkHappyPath = document.getElementById('chkHappyPath');
+  const btnSubmitConfirm = document.getElementById('btnSubmitConfirm');
+
+  chkHappyPath.addEventListener('change', () => {
+    btnSubmitConfirm.disabled = !chkHappyPath.checked;
+  });
+
+  document.getElementById('btnCancelModal').addEventListener('click', () => {
+    modalBackdrop.classList.remove('open');
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      modalBackdrop.classList.remove('open');
+      if (reqModal) reqModal.classList.remove('open');
+    }
+  });
+
+  // ---------- Datos y modal de Request de cada paso ----------
+  const REQUEST_DETAILS = {
+    'flow-1-step-1': {
+      method: 'GET',
+      path: '/products',
+      status: 'Status esperado: 200',
+      badgeClass: 'badge-teal',
+      headers: 'Host: aqs-test.local\nAccept: application/json\nUser-Agent: aqs-runner/v1',
+      body: '{\n  // Solicitud GET: sin cuerpo JSON\n}'
+    },
+    'flow-1-step-2': {
+      method: 'POST',
+      path: '/orders',
+      status: 'Status esperado: 201',
+      badgeClass: 'badge-info',
+      headers: 'Host: aqs-test.local\nContent-Type: application/json\nAccept: application/json\nUser-Agent: aqs-runner/v1',
+      body: '{\n  "sku": "item-1",\n  "qty": 2\n}'
+    },
+    'flow-2-step-1': {
+      method: 'POST',
+      path: '/orders',
+      status: 'Status esperado: 409',
+      badgeClass: 'badge-info',
+      headers: 'Host: aqs-test.local\nContent-Type: application/json\nAccept: application/json\nUser-Agent: aqs-runner/v1',
+      body: '{\n  "sku": "item-1",\n  "qty": 999\n}'
+    }
+  };
+
+  const reqModal = document.getElementById('requestModalBackdrop');
+  const reqModalMethod = document.getElementById('reqModalMethod');
+  const reqModalPath = document.getElementById('reqModalPath');
+  const reqModalStatus = document.getElementById('reqModalStatus');
+  const reqModalHeaders = document.getElementById('reqModalHeaders');
+  const reqModalBody = document.getElementById('reqModalBody');
+
+  document.querySelectorAll('[data-view-request]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const reqId = btn.dataset.viewRequest;
+      const data = REQUEST_DETAILS[reqId];
+      if (data) {
+        reqModalMethod.textContent = data.method;
+        reqModalMethod.className = 'badge mono ' + (data.badgeClass || 'badge-info');
+        reqModalPath.textContent = data.path;
+        reqModalStatus.textContent = data.status;
+        reqModalHeaders.textContent = data.headers;
+        reqModalBody.textContent = data.body;
+        reqModal.classList.add('open');
+        document.getElementById('requestModalTitle').focus();
+      }
+    });
+  });
+
+  const closeReqModal = () => reqModal.classList.remove('open');
+  document.getElementById('btnCloseRequestModal')?.addEventListener('click', closeReqModal);
+  document.getElementById('btnOkRequestModal')?.addEventListener('click', closeReqModal);
+
+  document.getElementById('btnCopyReqBody')?.addEventListener('click', () => {
+    if (reqModalBody && reqModalBody.textContent) {
+      navigator.clipboard?.writeText(reqModalBody.textContent);
+      const copyBtn = document.getElementById('btnCopyReqBody');
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = '¡Copiado!';
+      setTimeout(() => { copyBtn.textContent = orig; }, 1400);
+    }
+  });
+
+  btnSubmitConfirm.addEventListener('click', () => {
+    modalBackdrop.classList.remove('open');
+    if (selectedNotif) {
+      selectedNotif.state = 'confirmed';
+      renderInbox();
+    }
+    applyRunDemo('inferred');
+    showView('run');
+  });
+
+  // Botón para iniciar ejecución desde la vista de corrida tras inspeccionar el plan
+  const btnStartRun = document.getElementById('btnStartRunExecution');
+  if (btnStartRun) {
+    btnStartRun.addEventListener('click', () => {
+      applyRunDemo('running');
+      setTimeout(() => {
+        applyRunDemo('bug');
+      }, 1400);
+    });
+  }
+
+  // ---------- Línea de tiempo y estados de Corrida (/runs/:id) ----------
+  const FASES = [
+    { estado: 'confirmed', etiqueta: 'Confirmada' },
+    { estado: 'warm_ready', etiqueta: 'Entorno listo' },
+    { estado: 'deploying', etiqueta: 'Desplegando' },
+    { estado: 'inferring', etiqueta: 'Infiriendo superficie' },
+    { estado: 'rehearsing', etiqueta: 'Ensayando' },
+    { estado: 'running', etiqueta: 'Ejecutando' },
+    { estado: 'resetting', etiqueta: 'Reseteando' },
+    { estado: 'reporting', etiqueta: 'Generando informe' },
+    { estado: 'done', etiqueta: 'Completada' }
+  ];
+
+  function renderTimeline(actualIdx, hechasHasta) {
+    const ol = document.getElementById('phaseList');
+    ol.innerHTML = FASES.map((f, i) => {
+      const esActual = i === actualIdx;
+      const estado = esActual ? 'actual' : (i < hechasHasta ? 'hecha' : 'pendiente');
+      const badgeCls = estado === 'hecha' ? 'badge-ok' : (estado === 'actual' ? 'badge-accent' : 'badge-neutral');
+      const symbol = estado === 'hecha' ? '✓' : (i + 1);
+      return `
+        <li data-fase-estado="${estado}" ${esActual ? 'aria-current="step"' : ''}>
+          <div class="phase-left">
+            <span class="phase-idx">${symbol}</span>
+            <div>
+              <div class="phase-name">${f.etiqueta}</div>
+              <code style="font-size:11px; color:var(--text-faint);">${f.estado}</code>
+            </div>
+          </div>
+          <span class="badge ${badgeCls}">${estado}</span>
+        </li>`;
+    }).join('');
+  }
+
+  function applyRunDemo(mode) {
+    document.querySelectorAll('#runDemoSwitcher button').forEach(b => {
+      b.classList.toggle('active', b.dataset.runDemo === mode);
+    });
+
+    const verdictBadge = document.getElementById('runVerdictBadge');
+    const headerState = document.getElementById('runHeaderState');
+    const failedBanner = document.getElementById('runFailedBanner');
+    const inferredBanner = document.getElementById('runInferredBanner');
+    const reportCard = document.getElementById('runReportCard');
+    const reportVerdictPill = document.getElementById('reportVerdictPill');
+    const reportSummary = document.getElementById('reportSummary');
+    const reportFindings = document.getElementById('reportFindingsList');
+    const timelineBadge = document.getElementById('timelineSummaryBadge');
+    const planTitle = document.getElementById('runPlanSummaryTitle');
+
+    if (mode === 'inferred') {
+      headerState.textContent = 'inferred';
+      verdictBadge.className = 'badge badge-accent';
+      verdictBadge.innerHTML = '<span class="badge-dot"></span>Plan inferido · Esperando inicio';
+      failedBanner.style.display = 'none';
+      if (inferredBanner) inferredBanner.style.display = 'block';
+      reportCard.style.display = 'none';
+      if (planTitle) planTitle.innerHTML = 'Flujos inferidos (<code>GET /api/runs/run-84a1d9b4c02e11ef/plan</code>)';
+      timelineBadge.className = 'badge badge-accent';
+      timelineBadge.textContent = 'Fase 4 de 9: inferring completada';
+      renderTimeline(3, 4);
+    } else if (mode === 'running') {
+      headerState.textContent = 'running';
+      verdictBadge.className = 'badge badge-warn';
+      verdictBadge.innerHTML = '<span class="badge-dot"></span>En ejecución (running)';
+      failedBanner.style.display = 'none';
+      if (inferredBanner) inferredBanner.style.display = 'none';
+      reportCard.style.display = 'none';
+      if (planTitle) planTitle.innerHTML = 'Flujos en ejecución (<code>GET /api/runs/run-84a1d9b4c02e11ef/plan</code>)';
+      timelineBadge.className = 'badge badge-accent';
+      timelineBadge.textContent = 'Fase 6 de 9 en curso';
+      renderTimeline(5, 5);
+    } else if (mode === 'bug') {
+      headerState.textContent = 'done';
+      verdictBadge.className = 'badge badge-danger';
+      verdictBadge.innerHTML = '<span class="badge-dot"></span>Veredicto: bug';
+      failedBanner.style.display = 'none';
+      if (inferredBanner) inferredBanner.style.display = 'none';
+      reportCard.style.display = 'block';
+      reportVerdictPill.className = 'badge badge-danger';
+      reportVerdictPill.innerHTML = '<span class="badge-dot"></span>bug (1 hallazgo)';
+      reportSummary.textContent = 'Se detectó una violación del invariante de inventario en el endpoint de creación de pedidos: al enviar una cantidad superior al stock disponible, el servicio descontó existencias dejando el saldo en negativo (-3 unidades) y respondió 201 Created en lugar de rechazar la operación.';
+      reportFindings.style.display = 'block';
+      if (planTitle) planTitle.innerHTML = 'Flujos ejecutados (<code>GET /api/runs/run-84a1d9b4c02e11ef/plan</code>)';
+      timelineBadge.className = 'badge badge-ok';
+      timelineBadge.textContent = '9/9 completadas';
+      renderTimeline(-1, 9);
+    } else if (mode === 'clean') {
+      headerState.textContent = 'done';
+      verdictBadge.className = 'badge badge-ok';
+      verdictBadge.innerHTML = '<span class="badge-dot"></span>Veredicto: sin-hallazgos';
+      failedBanner.style.display = 'none';
+      if (inferredBanner) inferredBanner.style.display = 'none';
+      reportCard.style.display = 'block';
+      reportVerdictPill.className = 'badge badge-ok';
+      reportVerdictPill.innerHTML = '<span class="badge-dot"></span>sin-hallazgos';
+      reportSummary.textContent = 'Todos los flujos ensayados y ejecutados respetaron los invariantes de negocio declarados. No se detectaron anomalías lógicas ni errores 5xx.';
+      reportFindings.style.display = 'none';
+      if (planTitle) planTitle.innerHTML = 'Flujos ejecutados (<code>GET /api/runs/run-84a1d9b4c02e11ef/plan</code>)';
+      timelineBadge.className = 'badge badge-ok';
+      timelineBadge.textContent = '9/9 completadas';
+      renderTimeline(-1, 9);
+    } else if (mode === 'failed') {
+      headerState.textContent = 'failed';
+      verdictBadge.className = 'badge badge-danger';
+      verdictBadge.innerHTML = '<span class="badge-dot"></span>Estado: failed';
+      failedBanner.style.display = 'block';
+      if (inferredBanner) inferredBanner.style.display = 'none';
+      reportCard.style.display = 'none';
+      timelineBadge.className = 'badge badge-danger';
+      timelineBadge.textContent = 'Detenida en rehearsing';
+      renderTimeline(-1, 5);
+    }
+  }
+
+  document.querySelectorAll('#runDemoSwitcher button').forEach(btn => {
+    btn.addEventListener('click', () => applyRunDemo(btn.dataset.runDemo));
+  });
+
+  document.querySelectorAll('[data-goto-run]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      applyRunDemo(el.dataset.gotoRun);
+      showView('run');
+    });
+  });
+
+  // ---------- Estados de Entorno Warm (/warm) ----------
+  const WARM_MODES = {
+    ready:          { state: 'ready', label: 'Listo', badge: 'badge-ok', reset: 'sí', alert: false },
+    unverified:     { state: 'ready', label: 'Listo', badge: 'badge-warn', reset: 'no', alert: true },
+    dirty:          { state: 'dirty', label: 'Sucio (requiere reset)', badge: 'badge-warn', reset: 'no', alert: false },
+    cuarentena:     { state: 'cuarentena', label: 'En cuarentena', badge: 'badge-danger', reset: 'no', alert: false },
+    'idle-escalado':{ state: 'idle-escalado', label: 'Inactivo (escalado)', badge: 'badge-neutral', reset: 'sí', alert: false }
+  };
+
+  document.querySelectorAll('#warmDemoSwitcher button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#warmDemoSwitcher button').forEach(b => b.classList.toggle('active', b === btn));
+      const m = WARM_MODES[btn.dataset.warmDemo];
+      const badge = document.getElementById('warmBadge');
+      badge.dataset.state = m.state;
+      badge.className = 'badge ' + m.badge;
+      badge.innerHTML = `<span class="badge-dot"></span>${m.label}`;
+      document.getElementById('warmStateLabel').textContent = m.label;
+      document.getElementById('warmResetText').textContent = m.reset;
+      document.getElementById('warmUnverifiedAlert').style.display = m.alert ? 'block' : 'none';
+    });
+  });
+
+  // ---------- Estados de Login (/login) ----------
+  document.getElementById('btnShowOtp').addEventListener('click', () => {
+    document.getElementById('otpFieldWrap').style.display = 'block';
+    document.getElementById('otpToggleWrap').style.display = 'none';
+  });
+
+  document.getElementById('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const userInput = document.getElementById('login-usuario').value.trim() || 'operador-demo';
+    const userNameEl = document.getElementById('headerUserName');
+    const userAvatarEl = document.getElementById('headerUserAvatar');
+    if (userNameEl) userNameEl.textContent = userInput;
+    if (userAvatarEl) userAvatarEl.textContent = userInput.slice(0, 2).toUpperCase();
+    showView('inbox');
+  });
+
+  document.querySelectorAll('[data-login-demo]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-login-demo]').forEach(b => b.classList.toggle('active', b === btn));
+      const alertBox = document.getElementById('loginAlertBox');
+      const mode = btn.dataset.loginDemo;
+      if (mode === 'ok') {
+        alertBox.style.display = 'none';
+      } else if (mode === '401') {
+        alertBox.style.display = 'block';
+        alertBox.className = 'alert-box alert-danger';
+        alertBox.textContent = 'Usuario, contraseña o código incorrectos';
+        document.getElementById('otpFieldWrap').style.display = 'block';
+        document.getElementById('otpToggleWrap').style.display = 'none';
+      } else if (mode === '429') {
+        alertBox.style.display = 'block';
+        alertBox.className = 'alert-box alert-warn';
+        alertBox.textContent = 'Demasiados intentos, espera 28 s';
+      } else if (mode === '503') {
+        alertBox.style.display = 'block';
+        alertBox.className = 'alert-box alert-danger';
+        alertBox.textContent = 'Servicio de identidad no disponible';
+      }
+    });
+  });
+
+  // Inicializar vistas
+  renderInbox();
+  applyRunDemo('inferred');
 </script>
+</body>
+</html>
