@@ -426,8 +426,10 @@ describe('Inbox estructura del mockup (U10-T02 CA-2)', () => {
     await screen.findByText('acme/rechazado');
     await user.click(screen.getByRole('tab', { name: /^Pendientes/ }));
     await screen.findByText('acme/api');
-    expect(screen.getByRole('tab', { name: 'Confirmadas (1)' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Rechazadas (1)' })).toBeTruthy();
+    // Solo el contador de la última carga: los de las pestañas no recargadas no se muestran.
+    expect(screen.getByRole('tab', { name: 'Pendientes (3)' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^Confirmadas$/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^Rechazadas$/ })).toBeTruthy();
 
     expect(document.querySelectorAll('.kpi-box')).toHaveLength(4);
     expect(screen.getByRole('table')).toBeTruthy();

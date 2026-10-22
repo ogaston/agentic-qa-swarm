@@ -5,7 +5,6 @@ import { ApiError, apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
 import { FLOW_FAMILIES, type FlowFamily } from '../../inbox/flows';
 import { Badge, type TonoBadge } from '../../components/Badge';
-import { Card } from '../../components/Card';
 import { Kpi } from '../../components/Kpi';
 import { PageHeader, type ElementoMeta } from '../../components/PageHeader';
 
@@ -72,9 +71,11 @@ export function InboxPage() {
       const datos = await apiFetch<Notification[]>(`/api/notifications?state=${porEstado}`);
       if (id !== peticion.current) return;
       setLista(datos);
-      setConteos((previos) => ({ ...previos, [porEstado]: datos.length }));
+      // Solo el contador de la carga vigente: los demás quedarían obsoletos sin refrescar su lista.
+      setConteos({ [porEstado]: datos.length });
     } catch (error) {
       if (id !== peticion.current) return;
+      setConteos({});
       setLista([]);
       setErrorLista(error);
     }
@@ -298,7 +299,7 @@ export function InboxPage() {
 
       <div className="kpi-strip">
         <Kpi etiqueta="Notificaciones pendientes" valor={textoContador('pending')} />
-        <Kpi etiqueta="Confirmadas" valor={textoContador('confirmed')} />
+        <Kpi etiqueta="Corridas confirmadas" valor={textoContador('confirmed')} />
         <Kpi etiqueta="Estado del entorno" valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'} />
         <Kpi etiqueta="Rechazadas" valor={textoContador('rejected')} />
       </div>
@@ -310,11 +311,13 @@ export function InboxPage() {
           <p className="empty">{textoVacio}</p>
         ) : null}
         {lista !== null && errorLista === null && lista.length > 0 ? (
-          <Card
-            titulo="Listado de notificaciones"
-            sub="Eventos recibidos listos para revisión y confirmación previa a la inferencia de flujos sobre el entorno."
-            pad={false}
-          >
+          <div className="card">
+            <div className="card-pad">
+              <div className="card-title">Listado de notificaciones</div>
+              <div className="card-sub">
+                Eventos recibidos listos para revisión y confirmación previa a la inferencia de flujos sobre el entorno.
+              </div>
+            </div>
             <div className="table-wrap">
               <table className="data-table">
                 <thead>
@@ -335,12 +338,16 @@ export function InboxPage() {
                       <td data-label="Repositorio">
                         <strong>{n.repo}</strong>
                       </td>
-                      <td data-label="Evento">{n.github_event}</td>
+                      <td data-label="Evento">
+                        <code>{n.github_event}</code>
+                      </td>
                       <td data-label="SHA">
                         <code>{n.sha.slice(0, 7)}</code>
                       </td>
                       <td data-label="Artefacto">
-                        {n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}
+                        <span className="mono">
+                          {n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}
+                        </span>
                       </td>
                       <td data-label="Estado">
                         <Badge tono={COLOR_ESTADO[n.state]} punto>
@@ -367,7 +374,7 @@ export function InboxPage() {
                 </tbody>
               </table>
             </div>
-          </Card>
+          </div>
         ) : null}
       </div>
 
@@ -395,9 +402,11 @@ export function InboxPage() {
             <dd>{seleccionada.state}</dd>
           </dl>
           {seleccionada.state === 'pending' ? (
-            <button ref={disparadorRef} type="button" className="btn btn-primary" onClick={abrirPanel}>
-              Revisar y confirmar
-            </button>
+            <p>
+              <button ref={disparadorRef} type="button" className="btn btn-primary" onClick={abrirPanel}>
+                Revisar y confirmar
+              </button>
+            </p>
           ) : null}
         </section>
       ) : null}
