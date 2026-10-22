@@ -15,6 +15,13 @@ const PESTANAS: { estado: Estado; etiqueta: string; vacio: string }[] = [
   { estado: 'rejected', etiqueta: 'Rechazadas', vacio: 'No hay notificaciones rechazadas' },
 ];
 
+/** Color de la insignia por estado de la notificación; la etiqueta de texto es la que informa. */
+const COLOR_ESTADO: Record<Estado, 'warn' | 'teal' | 'danger'> = {
+  pending: 'warn',
+  confirmed: 'teal',
+  rejected: 'danger',
+};
+
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';
 const MSG_NO_EXISTE = 'La notificación ya no existe';
 const RUN_ID = /^run-[0-9a-f]{16}$/;
@@ -143,10 +150,16 @@ export function InboxPage() {
   const textoVacio = PESTANAS.find((p) => p.estado === estado)?.vacio ?? '';
 
   return (
-    <main>
-      <h1>Inbox</h1>
+    <main className="page">
+      <div className="page-header">
+        <div className="page-title">
+          <h1>Inbox</h1>
+          <p className="page-desc">Notificaciones de despliegue. Ninguna corre sin tu confirmación.</p>
+        </div>
+      </div>
 
-      <div role="tablist" aria-label="Estado de las notificaciones">
+      <div className="toolbar">
+      <div role="tablist" aria-label="Estado de las notificaciones" className="tabs">
         {PESTANAS.map((p) => (
           <button
             key={p.estado}
@@ -156,6 +169,7 @@ export function InboxPage() {
             aria-selected={p.estado === estado}
             aria-controls="inbox-lista"
             disabled={enVuelo}
+            className="tab"
             onClick={() => elegirPestana(p.estado)}
           >
             {p.etiqueta}
@@ -163,25 +177,26 @@ export function InboxPage() {
         ))}
       </div>
 
-      <div>
-        <button
-          type="button"
-          onClick={() => {
-            void cargar(estado);
-          }}
-        >
-          Actualizar
-        </button>
+      <button
+        type="button"
+        className="btn btn-secondary"
+        onClick={() => {
+          void cargar(estado);
+        }}
+      >
+        Actualizar
+      </button>
       </div>
 
       <div id="inbox-lista" role="region" aria-labelledby={`tab-${estado}`}>
         {lista === null && errorLista === null ? <p>Cargando notificaciones…</p> : null}
         {errorLista !== null ? <ApiErrorNotice error={errorLista} /> : null}
         {lista !== null && errorLista === null && lista.length === 0 ? (
-          <p>{textoVacio}</p>
+          <p className="empty">{textoVacio}</p>
         ) : null}
         {lista !== null && errorLista === null && lista.length > 0 ? (
-          <table>
+          <div className="card table-wrap">
+          <table className="data-table">
             <thead>
               <tr>
                 <th scope="col">Repositorio</th>
@@ -203,10 +218,13 @@ export function InboxPage() {
                     <code>{n.sha.slice(0, 7)}</code>
                   </td>
                   <td>{n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}</td>
-                  <td>{n.state}</td>
+                  <td>
+                    <span className={`badge badge-${COLOR_ESTADO[n.state]}`}>{n.state}</span>
+                  </td>
                   <td>
                     <button
                       type="button"
+                      className="btn btn-secondary btn-sm"
                       disabled={enVuelo}
                       onClick={() => {
                         setSeleccionadaId(n.id);
@@ -222,13 +240,14 @@ export function InboxPage() {
               ))}
             </tbody>
           </table>
+          </div>
         ) : null}
       </div>
 
-      {mensajeAccion !== null ? <p role="alert">{mensajeAccion}</p> : null}
+      {mensajeAccion !== null ? <p role="alert" className="notice notice-danger">{mensajeAccion}</p> : null}
 
       {seleccionada !== null ? (
-        <section aria-label="Detalle de la notificación">
+        <section aria-label="Detalle de la notificación" className="card detail">
           <h2>Detalle</h2>
           <dl>
             <dt>Repositorio</dt>
@@ -249,7 +268,7 @@ export function InboxPage() {
             <dd>{seleccionada.state}</dd>
           </dl>
           {seleccionada.state === 'pending' && !panelAbierto ? (
-            <button type="button" onClick={abrirPanel}>
+            <button type="button" className="btn btn-primary" onClick={abrirPanel}>
               Revisar y confirmar
             </button>
           ) : null}
@@ -261,6 +280,7 @@ export function InboxPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-titulo"
+          className="modal card"
           onKeyDown={alPulsarTeclaPanel}
         >
           <h2 id="confirm-titulo" tabIndex={-1} ref={tituloPanel}>
@@ -280,10 +300,10 @@ export function InboxPage() {
                 : 'Sin artefacto'}
             </dd>
           </dl>
-          <fieldset>
+          <fieldset className="fieldset">
             <legend>Familias de flujos</legend>
             {FLOW_FAMILIES.map((f) => (
-              <label key={f}>
+              <label key={f} className="check">
                 <input
                   type="checkbox"
                   name="familias"
@@ -296,11 +316,12 @@ export function InboxPage() {
             ))}
           </fieldset>
           {errorAccion !== null ? <ApiErrorNotice error={errorAccion} /> : null}
-          <button type="button" onClick={cerrarPanel} disabled={enVuelo}>
+          <button type="button" className="btn btn-secondary" onClick={cerrarPanel} disabled={enVuelo}>
             Cancelar
           </button>{' '}
           <button
             type="button"
+            className="btn btn-primary"
             onClick={() => void confirmar()}
             disabled={familias.length === 0 || enVuelo}
           >

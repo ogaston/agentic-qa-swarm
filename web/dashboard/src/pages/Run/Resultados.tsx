@@ -14,15 +14,24 @@ const VEREDICTOS: Record<Verdict, { etiqueta: string; descripcion: string }> = {
   inconcluso: { etiqueta: 'Inconcluso', descripcion: 'La corrida no permite afirmar ni descartar fallos.' },
 };
 
+const COLOR_VEREDICTO: Record<Verdict, 'danger' | 'ok' | 'warn'> = {
+  bug: 'danger',
+  'sin-hallazgos': 'ok',
+  inconcluso: 'warn',
+};
+
 /** Veredicto con texto e insignia; el color no es lo único que lo distingue. */
 export function Veredicto({ verdict }: { verdict: Verdict }) {
   const v = VEREDICTOS[verdict];
   return (
-    <section aria-label="Veredicto">
+    <section aria-label="Veredicto" className="card verdict">
       <p>
-        Veredicto: <strong data-veredicto={verdict}>{v.etiqueta}</strong>
+        Veredicto:{' '}
+        <strong data-veredicto={verdict} className={`badge badge-${COLOR_VEREDICTO[verdict]}`}>
+          {v.etiqueta}
+        </strong>
       </p>
-      <p>{v.descripcion}</p>
+      <p className="text-muted">{v.descripcion}</p>
     </section>
   );
 }
@@ -31,8 +40,8 @@ export function Veredicto({ verdict }: { verdict: Verdict }) {
 function AvisoServicio({ onReintentar }: { onReintentar: () => void }) {
   return (
     <p>
-      <span role="alert">No se pudo cargar el informe. El servicio no está disponible.</span>{' '}
-      <button type="button" onClick={onReintentar}>
+      <span role="alert" className="notice notice-danger">No se pudo cargar el informe. El servicio no está disponible.</span>{' '}
+      <button type="button" className="btn btn-secondary" onClick={onReintentar}>
         Reintentar
       </button>
     </p>
@@ -54,14 +63,14 @@ export function PostMortem({ id, activo }: { id: string; activo: boolean }) {
       return (
         <p>
           El informe aún no está disponible.{' '}
-          <button type="button" onClick={reintentar}>
+          <button type="button" className="btn btn-secondary" onClick={reintentar}>
             Reintentar
           </button>
         </p>
       );
     }
     if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
-      return <p role="alert">Sin acceso al informe.</p>;
+      return <p role="alert" className="notice notice-danger">Sin acceso al informe.</p>;
     }
     if (error instanceof ApiError && (error.status >= 500 || error.status === 0)) {
       return <AvisoServicio onReintentar={reintentar} />;
@@ -72,17 +81,17 @@ export function PostMortem({ id, activo }: { id: string; activo: boolean }) {
   if (data === null) return null;
 
   return (
-    <section aria-label="Post-mortem">
+    <section aria-label="Post-mortem" className="card">
       <h2>Post-mortem</h2>
       <p>{data.summary}</p>
       {data.findings.length === 0 ? (
-        <p>No se encontraron hallazgos en esta corrida.</p>
+        <p className="empty">No se encontraron hallazgos en esta corrida.</p>
       ) : (
-        <ol>
+        <ol className="findings-list">
           {data.findings.map((f) => (
-            <li key={f.finding_id}>
+            <li key={f.finding_id} className="finding-card">
               <p>
-                <code>
+                <code className="mono">
                   {f.method} {f.path}
                 </code>
               </p>
@@ -92,7 +101,7 @@ export function PostMortem({ id, activo }: { id: string; activo: boolean }) {
               <ul>
                 {f.evidence_uris.map((uri, i) => (
                   <li key={`${i}-${uri}`}>
-                    <code>{uri}</code>
+                    <code className="mono">{uri}</code>
                   </li>
                 ))}
               </ul>
@@ -133,22 +142,22 @@ export function PlanFlujos({ id, activo }: { id: string; activo: boolean }) {
     }
   } else if (data !== null) {
     contenido = (
-      <ol>
+      <ol className="flow-list">
         {data.flows.map((flow) => (
           <li key={flow.flow_id}>
             <p>
-              <strong>{flow.name}</strong> <code>{flow.flow_id}</code>
+              <strong>{flow.name}</strong> <code className="mono">{flow.flow_id}</code>
               {flow.invariant_probe ? ' (sondeo)' : ''}
             </p>
             <p>Invariante: {flow.invariant}</p>
             <ol>
               {flow.steps.map((paso, i) => (
                 <li key={i}>
-                  <code>
+                  <code className="mono">
                     {paso.method} {paso.path}
                   </code>{' '}
                   (espera {paso.expect_status})
-                  {paso.body !== undefined && <pre>{JSON.stringify(paso.body, null, 2)}</pre>}
+                  {paso.body !== undefined && <pre className="mono code-block">{JSON.stringify(paso.body, null, 2)}</pre>}
                 </li>
               ))}
             </ol>
@@ -161,7 +170,7 @@ export function PlanFlujos({ id, activo }: { id: string; activo: boolean }) {
   }
 
   return (
-    <details>
+    <details className="card details">
       <summary>Flujos ejecutados</summary>
       {contenido}
     </details>

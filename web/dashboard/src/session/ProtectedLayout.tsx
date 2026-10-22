@@ -13,16 +13,25 @@ export function ProtectedLayout() {
 
   return (
     <>
-      <header>
-        <span>Agentic QA Swarm</span>{' '}
-        <span>{session.principal.principal_id}</span>{' '}
-        <span>{session.principal.role}</span>{' '}
-        <nav aria-label="Principal">
-          <Link to="/inbox">Inbox</Link> <Link to="/runs">Mis corridas</Link> <Link to="/warm">Warm</Link>
-        </nav>{' '}
-        <button type="button" onClick={() => void logout()}>
-          Salir
-        </button>
+      <header className="app-header">
+        <div className="app-header-inner">
+          <div className="app-brand">
+            <span className="app-wordmark">aqs</span>
+            <span className="app-brand-tag">Agentic QA Swarm</span>
+          </div>
+          <nav aria-label="Principal" className="app-nav">
+            <Link to="/inbox">Inbox</Link>
+            <Link to="/runs">Mis corridas</Link>
+            <Link to="/warm">Warm</Link>
+          </nav>
+          <div className="app-session">
+            <span className="app-principal">{session.principal.principal_id}</span>
+            <span className="app-role">{session.principal.role}</span>
+            <button type="button" className="btn btn-secondary" onClick={() => void logout()}>
+              Salir
+            </button>
+          </div>
+        </div>
       </header>
       <Outlet />
     </>

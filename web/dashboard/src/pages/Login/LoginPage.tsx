@@ -61,12 +61,13 @@ export function LoginPage() {
   }
 
   return (
-    <main>
+    <main className="page page-narrow">
       <h1>Iniciar sesión</h1>
-      <form onSubmit={(evento) => void enviar(evento)}>
-        <div>
+      <form className="card form" onSubmit={(evento) => void enviar(evento)}>
+        <div className="field">
           <label htmlFor="login-usuario">Usuario</label>
           <input
+            className="input"
             id="login-usuario"
             name="usuario"
             autoComplete="username"
@@ -74,9 +75,10 @@ export function LoginPage() {
             onChange={(e) => setUsuario(e.target.value)}
           />
         </div>
-        <div>
+        <div className="field">
           <label htmlFor="login-clave">Contraseña</label>
           <input
+            className="input"
             id="login-clave"
             name="clave"
             type="password"
@@ -86,9 +88,10 @@ export function LoginPage() {
           />
         </div>
         {mostrarCodigo ? (
-          <div>
+          <div className="field">
             <label htmlFor="login-codigo">Código de verificación</label>
             <input
+              className="input"
               id="login-codigo"
               name="codigo"
               inputMode="numeric"
@@ -100,19 +103,19 @@ export function LoginPage() {
             />
           </div>
         ) : (
-          <button type="button" onClick={() => setMostrarCodigo(true)}>
+          <button type="button" className="btn btn-link" onClick={() => setMostrarCodigo(true)}>
             Tengo un código de verificación
           </button>
         )}
-        <button type="submit" disabled={pendiente || bloqueado}>
+        <button type="submit" className="btn btn-primary" disabled={pendiente || bloqueado}>
           Entrar
         </button>
       </form>
 
       {bloqueado ? (
-        <p role="alert">{`Demasiados intentos, espera ${restante} s`}</p>
+        <p role="alert" className="notice notice-danger">{`Demasiados intentos, espera ${restante} s`}</p>
       ) : null}
-      {mensaje !== null && !bloqueado ? <p role="alert">{mensaje}</p> : null}
+      {mensaje !== null && !bloqueado ? <p role="alert" className="notice notice-danger">{mensaje}</p> : null}
       {errorApi !== null ? <ApiErrorNotice error={errorApi} /> : null}
     </main>
   );
