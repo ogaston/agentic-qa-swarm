@@ -19,7 +19,6 @@ NS_SYS=aqs-system
 NS_TEST=aqs-test
 PROBE=aqs-smoke-probe
 PROBE_IMAGE=busybox:1.37.0
-STATE_DIR="$AQS_KIND_STATE_DIR"  # insumos persistentes (U9-T05)
 P_IDENTITY=18600
 P_UI=18601
 P_INTAKE=18602

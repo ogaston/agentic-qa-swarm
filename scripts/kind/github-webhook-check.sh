@@ -23,7 +23,6 @@ cd "$root" || exit 1
 NS_SYS=aqs-system
 P_UI=18625
 P_IDENTITY=18626
-STATE_DIR="$AQS_KIND_STATE_DIR"  # insumos persistentes (U9-T05)
 TIMEOUT_S="${WEBHOOK_TIMEOUT_S:-600}"
 BRANCH="${WEBHOOK_BRANCH:-main}"
 

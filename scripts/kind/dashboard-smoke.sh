@@ -15,7 +15,6 @@ cd "$root" || exit 1
 require_kind_context # sale 3 si el contexto no es kind-aqs (antes de crear nada)
 
 ORIGIN=http://127.0.0.1:18610
-STATE_DIR="$AQS_KIND_STATE_DIR"  # insumos persistentes (U9-T05)
 work=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/aqs-dash-smoke.XXXXXX") || exit 1
 chmod 700 "$work"
 fail=0

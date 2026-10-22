@@ -25,7 +25,7 @@ si ninguna falla. Las comprobaciones son:
 
 - `healthz-<svc>` y `readyz-<svc>` (200) para los 7 servicios del control plane.
 - `login-demo`: `POST /auth/login` en go-identity con el usuario `demo` (contraseña en
-  `${XDG_RUNTIME_DIR:-/tmp}/aqs-kind/demo.txt`) y `GET /auth/session` con rol `user`.
+  `${AQS_KIND_STATE_DIR}/demo.txt`, por defecto `~/.local/state/aqs-kind/demo.txt`) y `GET /auth/session` con rol `user`.
 - `inbox-con-token` (200 y JSON) e `inbox-sin-token-401` en ui-api.
 - `warm-estado`: `GET /warm` en ui-api (200 con un `state` del enum de WarmState).
 - `rbac-test-ns-only`: `kubectl auth can-i` para go-warm-manager y go-reset frente a
@@ -145,8 +145,8 @@ Desde la ronda 3 no hay proxy en el clúster: el gateway del humano ya es un Lit
 compatible con OpenAI. Planner y reporter lo llaman directamente (`LLM_PROVIDER=http`). Ningún componente del
 clúster tiene egress al proveedor salvo los agentes, y solo hacia `IP/32:puerto` del gateway.
 
-Insumos del humano, fuera del repo (modo 600): `${XDG_RUNTIME_DIR}/aqs-kind/deepseek.key` (la clave) y
-`${XDG_RUNTIME_DIR}/aqs-kind/litellm.env` (variables `LITELLM_UPSTREAM_IP`, `LITELLM_UPSTREAM_PORT`,
+Insumos del humano, fuera del repo (modo 600): `${AQS_KIND_STATE_DIR}/deepseek.key` (`~/.local/state/aqs-kind`) (la clave) y
+`${AQS_KIND_STATE_DIR}/litellm.env` (variables `LITELLM_UPSTREAM_IP`, `LITELLM_UPSTREAM_PORT`,
 `LITELLM_UPSTREAM_MODEL`). `scripts/kind/secrets.sh` los valida antes de tocar el clúster y crea:
 
 - Secret `agents-llm-key` (`api-key`): la clave del gateway, copiada de `deepseek.key`. Planner y reporter la
