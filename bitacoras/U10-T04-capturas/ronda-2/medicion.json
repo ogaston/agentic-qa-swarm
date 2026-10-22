@@ -1,0 +1,30 @@
+{
+  "resultados": {
+    "375 login": {
+      "anchoVentana": 375,
+      "anchoDocumento": 375,
+      "scrollHorizontal": false
+    },
+    "375 runs": {
+      "anchoVentana": 375,
+      "anchoDocumento": 375,
+      "scrollHorizontal": false
+    },
+    "375 warm": {
+      "anchoVentana": 375,
+      "anchoDocumento": 375,
+      "scrollHorizontal": false
+    },
+    "1280 runs enlace run_id": {
+      "color": "rgb(62, 42, 219)",
+      "fontWeight": "700",
+      "textDecorationLine": "underline"
+    },
+    "mockup runs enlace run_id": {
+      "color": "rgb(62, 42, 219)",
+      "fontWeight": "700",
+      "textDecorationLine": "underline"
+    }
+  },
+  "errores": []
+}

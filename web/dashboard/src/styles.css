@@ -841,6 +841,55 @@ main.page-narrow {
   margin: 36px auto;
 }
 
+/* Tarjeta de «Iniciar sesión» (mockup): marca, título, texto y botones a todo el ancho. */
+.login-marca {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.login-marca-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.login-titulo {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.login-texto {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 4px 0 18px;
+}
+
+.login-otp {
+  margin-bottom: 14px;
+}
+
+.btn-bloque {
+  width: 100%;
+}
+
+/* Enlace de corrida (run_id) en «Mis corridas»: acento y negrita, como el mockup (.mono no lo fija). */
+.enlace-corrida {
+  color: var(--accent-text);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* Nombres de campo de la API (run_id, state…) marcados en las vistas de T04: conservan su grafía. */
+.campo-api,
+.login-texto code {
+  text-transform: none;
+  letter-spacing: 0;
+  word-break: normal;
+}
+
 .fieldset {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);

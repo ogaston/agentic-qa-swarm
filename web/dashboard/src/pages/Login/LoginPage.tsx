@@ -8,6 +8,7 @@ import { useSession } from '../../session/SessionContext';
 const MSG_CREDENCIALES = 'Usuario, contraseña o código incorrectos';
 const MSG_IDENTIDAD = 'Servicio de identidad no disponible';
 
+/** «Iniciar sesión» (`/login`), según el mockup: tarjeta centrada con marca, sin cabecera de sesión. */
 export function LoginPage() {
   const { login } = useSession();
   const navigate = useNavigate();
@@ -61,62 +62,79 @@ export function LoginPage() {
   }
 
   return (
-    <main className="page page-narrow">
-      <h1>Iniciar sesión</h1>
-      <form className="card card-vista form" onSubmit={(evento) => void enviar(evento)}>
-        <div className="field">
-          <label htmlFor="login-usuario">Usuario</label>
-          <input
-            className="input"
-            id="login-usuario"
-            name="usuario"
-            autoComplete="username"
-            value={usuario}
-            onChange={(e) => setUsuario(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="login-clave">Contraseña</label>
-          <input
-            className="input"
-            id="login-clave"
-            name="clave"
-            type="password"
-            autoComplete="current-password"
-            value={clave}
-            onChange={(e) => setClave(e.target.value)}
-          />
-        </div>
-        {mostrarCodigo ? (
-          <div className="field">
-            <label htmlFor="login-codigo">Código de verificación</label>
-            <input
-              className="input"
-              id="login-codigo"
-              name="codigo"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              pattern="[0-9]{6}"
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-            />
+    <main className="az-container">
+      <div className="login-wrap">
+        <div className="card card-pad">
+          <div className="login-marca">
+            <span className="az-logo">aqs</span>
+            <span className="login-marca-sub">go-identity</span>
           </div>
-        ) : (
-          <button type="button" className="btn btn-link" onClick={() => setMostrarCodigo(true)}>
-            Tengo un código de verificación
-          </button>
-        )}
-        <button type="submit" className="btn btn-primary" disabled={pendiente || bloqueado}>
-          Entrar
-        </button>
-      </form>
+          <h1 className="login-titulo">Iniciar sesión</h1>
+          <p className="login-texto">
+            Sesión mantenida únicamente en memoria (sin <code>localStorage</code> ni cookies).
+          </p>
 
-      {bloqueado ? (
-        <p role="alert" className="notice notice-danger">{`Demasiados intentos, espera ${restante} s`}</p>
-      ) : null}
-      {mensaje !== null && !bloqueado ? <p role="alert" className="notice notice-danger">{mensaje}</p> : null}
-      {errorApi !== null ? <ApiErrorNotice error={errorApi} /> : null}
+          {bloqueado ? (
+            <div role="alert" className="alert-box alert-warn">{`Demasiados intentos, espera ${restante} s`}</div>
+          ) : null}
+          {mensaje !== null && !bloqueado ? (
+            <div role="alert" className="alert-box alert-danger">
+              {mensaje}
+            </div>
+          ) : null}
+
+          <form onSubmit={(evento) => void enviar(evento)}>
+            <div className="form-field">
+              <label htmlFor="login-usuario">Usuario</label>
+              <input
+                id="login-usuario"
+                name="usuario"
+                autoComplete="username"
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="login-clave">Contraseña</label>
+              <input
+                id="login-clave"
+                name="clave"
+                type="password"
+                autoComplete="current-password"
+                value={clave}
+                onChange={(e) => setClave(e.target.value)}
+              />
+            </div>
+            {mostrarCodigo ? (
+              <div className="form-field">
+                <label htmlFor="login-codigo">Código de verificación</label>
+                <input
+                  id="login-codigo"
+                  name="codigo"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  pattern="[0-9]{6}"
+                  placeholder="123456"
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                />
+              </div>
+            ) : (
+              <div className="login-otp">
+                <button type="button" className="btn btn-sm btn-bloque" onClick={() => setMostrarCodigo(true)}>
+                  Tengo un código de verificación
+                </button>
+              </div>
+            )}
+            <button type="submit" className="btn btn-primary btn-bloque" disabled={pendiente || bloqueado}>
+              Entrar
+            </button>
+          </form>
+
+          {errorApi !== null ? <ApiErrorNotice error={errorApi} /> : null}
+        </div>
+      </div>
     </main>
   );
 }

@@ -139,3 +139,77 @@ describe('WarmPage', () => {
     expect(contador.peticiones).toBe(2);
   });
 });
+
+// U10-T04 CA-2: estructura de «Entorno» según el mockup (encabezado, tarjeta con kv-list, icono + texto).
+describe('WarmPage (estructura del mockup, U10-T04)', () => {
+  it('el título «Entorno» es el h1 y la tarjeta se titula con el warm_id', async () => {
+    contarPeticiones(() => HttpResponse.json(WARM));
+    renderWarm();
+    await vaciar();
+    expect(screen.getByRole('heading', { level: 1, name: 'Entorno' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Estado operativo de warm-1' })).toBeTruthy();
+  });
+
+  it('la tarjeta expone estado, reset_verified, baseline_version y warm_id en un dl.kv-list', async () => {
+    contarPeticiones(() => HttpResponse.json(WARM));
+    const { container } = renderWarm();
+    await vaciar();
+    const lista = container.querySelector('dl.kv-list');
+    expect(lista).not.toBeNull();
+    const etiquetas = Array.from(lista?.querySelectorAll('dt') ?? []).map((dt) => dt.textContent ?? '');
+    expect(etiquetas.some((t) => t.startsWith('Estado'))).toBe(true);
+    expect(etiquetas.some((t) => t.startsWith('Reset verificado'))).toBe(true);
+    expect(etiquetas.some((t) => t.startsWith('Versión base'))).toBe(true);
+    expect(etiquetas.some((t) => t.startsWith('Identificador del entorno'))).toBe(true);
+    expect(lista?.textContent).toContain('v1.2.0');
+    expect(lista?.textContent).toContain('warm-1');
+  });
+
+  it('los 4 estados se leen como texto y llevan un icono decorativo', async () => {
+    const esperado: Record<string, string> = {
+      ready: 'Listo',
+      dirty: 'Sucio (requiere reset)',
+      cuarentena: 'En cuarentena',
+      'idle-escalado': 'Inactivo (escalado)',
+    };
+    for (const state of Object.keys(esperado)) {
+      server.resetHandlers();
+      contarPeticiones(() => HttpResponse.json({ ...WARM, state }));
+      const { unmount } = renderWarm();
+      await vaciar();
+      const insignia = document.querySelector('[data-testid="warm-estado"]');
+      expect(insignia?.textContent?.trim()).toBe(esperado[state]);
+      const icono = insignia?.querySelector('svg');
+      expect(icono).not.toBeNull();
+      expect(icono?.getAttribute('aria-hidden')).toBe('true');
+      unmount();
+    }
+  });
+
+  it('ready sin reset verificado: el aviso es alert-box alert-warn con role=alert', async () => {
+    contarPeticiones(() => HttpResponse.json({ ...WARM, reset_verified: false }));
+    renderWarm();
+    await vaciar();
+    const aviso = screen.getByRole('alert');
+    expect(aviso.classList.contains('alert-box')).toBe(true);
+    expect(aviso.classList.contains('alert-warn')).toBe(true);
+  });
+
+  it('un fallo 503 se muestra como alert-box alert-danger', async () => {
+    contarPeticiones(() =>
+      HttpResponse.json({ code: 'warm_unavailable', message: 'x' }, { status: 503, headers: { 'Retry-After': '5' } }),
+    );
+    renderWarm();
+    await vaciar();
+    const aviso = screen.getByRole('alert');
+    expect(aviso.classList.contains('alert-box')).toBe(true);
+    expect(aviso.classList.contains('alert-danger')).toBe(true);
+  });
+
+  it('«Actualizar» es un único botón en la cabecera', async () => {
+    contarPeticiones(() => HttpResponse.json(WARM));
+    renderWarm();
+    await vaciar();
+    expect(screen.getAllByRole('button', { name: 'Actualizar' }).length).toBe(1);
+  });
+});
