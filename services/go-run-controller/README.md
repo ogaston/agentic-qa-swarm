@@ -4,6 +4,22 @@ Controlador de corridas (C9): máquina de estados persistida en un diario JSONL 
 con un gate de go-governance (U4) en cada transición, `GET /runs/{id}`, `/healthz`, `/readyz` y `/metrics`.
 `RUN_PHASES=real` usa los adaptadores reales (U2-T04); `fake` sigue exigiendo `RUN_ALLOW_FAKE_PHASES=true` y se rechaza con `RUN_ENV=prod`.
 
+## Formato de `Run.Plan` en el diario y regla de despliegue (U9-T02)
+
+- Desde U9-T02 cada línea del diario (`RUN_DATA_DIR/runs.jsonl`) puede llevar el campo `plan`
+  (`Run.Plan`, el FlowPlan validado de la corrida, con `omitempty`). Se escribe en el mismo almacén y con la misma
+  atomicidad que el resto de campos (como `HandedOff` y `Launched`), y se guarda la primera vez que el controlador
+  obtiene el plan.
+- El diario se abre con `DisallowUnknownFields`. Un binario anterior a U9-T02 (sin `Run.Plan`) **no puede abrir un
+  diario que ya contenga al menos una línea con `plan`**: falla al arrancar con
+  `diario: línea N ilegible: json: unknown field "plan"` y entra en CrashLoopBackOff.
+- **Regla de despliegue:** después del primer despliegue con `Run.Plan` no se hace rollback a un binario sin ese
+  campo. Las salidas son (1) ir hacia delante (corregir y desplegar otra versión posterior) o (2) vaciar el volumen
+  `go-run-controller-data`, lo que **pierde el estado de todas las corridas**. No se edita el diario a mano: rompe la
+  cadena de hash.
+- Candidata (no implementada): versionado y lectura tolerante del diario (campo de versión, o ignorar campos
+  desconocidos), que haría reversible el rollback.
+
 ## Origen de flujos (U3)
 
 `RUN_FLOW_SOURCE=u3` (solo con `RUN_PHASES=real`; `U3_URL` http(s) obligatoria) cablea `adapters.FlowSourceU3`:
