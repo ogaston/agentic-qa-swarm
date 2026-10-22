@@ -218,7 +218,7 @@
 | U9-T3 | [x] | Dashboard: veredicto, post-mortem y plan en `/runs/:id`; `/` → `/inbox`; `dashboard-smoke.sh` con `reporte-visible` | US-M9, US-M4, S5 | `tareas/U9-T03-vista-de-resultados.md` |
 | U9-T4 | [x] | Estilo del dashboard según `mockups/swarm-mock.html` (tokens, temas, AA, 375 px), sin cambiar comportamiento ni CSP | S5 | `tareas/U9-T04-estilo-del-dashboard.md` |
 | U9-T5 | [x] | Insumos y credenciales demo de kind en un directorio persistente (700/600) + `secrets.sh --rotate-demo` seguro (C-127) | US-M10 | `tareas/U9-T05-insumos-persistentes-kind.md` |
-| U9-T6 | [ ] | Limpieza de estilo: quitar el `style={{}}` de `RunPage` (C-131) y `check:dist-urls` sin falsos positivos (C-130) | S5 | `tareas/U9-T06-limpieza-estilo.md` |
+| U9-T6 | [x] | Limpieza de estilo: quitar el `style={{}}` de `RunPage` (C-131) y `check:dist-urls` sin falsos positivos (C-130) | S5 | `tareas/U9-T06-limpieza-estilo.md` |
 
 > **Tareas redactadas (2026-10-21)**, a pedido del humano («yes, write the U9 tasks») tras comprobar que el dashboard no muestra el post-mortem. Olas: **1** = T01 ∥ T02 ∥ T05; **2** = T03 (exige T01 y T02); **3** = T04 (exige T03: mismas vistas). Máximo 3 en paralelo. T01 y T02 tocan `contracts/openapi/control-plane.yaml`, `web/dashboard/src/api/schema.gen.ts` y `scripts/kind/kind-e2e.sh`: se fusionan en orden y la segunda rebasa y regenera los tipos. T05 toca `scripts/kind/lib.sh` y `secrets.sh`, que T01 puede tocar solo si cambia el despliegue: si chocan, rebasa la segunda. Toda secuencia que use el clúster va dentro de `flock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock`. Decisiones al redactar (el humano puede revertirlas): el reporte se lee **a través del reporter** (`GET /v1/reports?uri=`) y no con un cliente S3 en `ui-api`, para no dar credenciales de MinIO a otro servicio; el plan se **persiste en el controlador** en vez de volver a pedirlo al planner, para que lo mostrado sea lo ejecutado y no cueste otra llamada al LLM; la evidencia se muestra como URIs `s3://` copiables, sin URLs prefirmadas.
 
@@ -270,3 +270,22 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 | P4 | Medición de costo por corrida (inferencia + cómputo) | U3-T07 original | P2 |
 | P5 | Demos en dev con aprobación humana (`docs/demo-dev-u3.md`; CA-8 de U2-T08) | U2-T08, U3-T07 originales | P1, P2, P3 |
 | P6 | Umbrales del §10 medidos con modelo real | C-85 | P2 |
+
+## U10 — Fidelidad visual del dashboard al mockup
+
+- **Responsabilidad**: que el dashboard se vea y se estructure como `mockups/swarm-mock.html` (cabecera, encabezados de página con metadatos, pestañas, KPI, tarjetas, insignias, rejilla de la corrida, diálogos), y que una prueba lo exija.
+- **Bounded context**: U6 (dashboard). **Historias**: S5.
+- **Límites**: solo `web/dashboard/**` y `scripts/kind/dashboard-smoke.sh`; sin endpoints nuevos, sin CDN, sin relajar la CSP; no se portan el conmutador demo, «Nueva aplicación» ni «Iniciar ejecución» del mockup (`DESIGN.md §1.3`).
+- **Predecesoras**: U9 cerrada.
+- **Salida**: `npm run e2e:fidelidad` en verde y capturas lado a lado de las 5 vistas en claro/oscuro y a 375 px.
+
+| # | Hecho | Tarea | Historias | Comando de verificación |
+|---|---|---|---|---|
+| U10-T1 | [ ] | Cáscara y primitivas del mockup (cabecera, chip de sesión, tema, page-header, badge, card, kpi, modal) con prueba de paridad de reglas | S5 | `tareas/U10-T01-cascara-y-componentes-base.md` |
+| U10-T2 | [ ] | Inbox: pestañas, KPI, listado en tarjeta, diálogo de confirmación | S5, US-M1 | `tareas/U10-T02-inbox-fiel.md` |
+| U10-T3 | [ ] | Corrida: encabezado, post-mortem, plan plegable, línea de tiempo en rejilla | S5, US-M9, US-M4 | `tareas/U10-T03-corrida-fiel.md` |
+| U10-T4 | [ ] | Mis corridas, Entorno y Login | S5, US-M10 | `tareas/U10-T04-runs-warm-login-fieles.md` |
+| U10-T5 | [ ] | `e2e:fidelidad`: compara estilos calculados, estructura y píxeles contra el mockup; enganchado al smoke | S5 | `tareas/U10-T05-compuerta-de-fidelidad-visual.md` |
+
+> **Tareas redactadas (2026-10-22)**, a pedido del humano tras comparar el dashboard con el mockup («looks way different»). Causa: U9-T04 portó tokens pero no la estructura ni un criterio comparativo. Olas: **1** = T01; **2** = T02 ∥ T03 ∥ T04 ∥ T05 (máx. 3 en paralelo: T05 va tras la primera que cierre); todas exigen T01. Decisiones al redactar (el humano puede revertirlas): «Warm» → «Entorno» como en el mockup; KPI y metadatos solo con datos reales; el banner «Iniciar ejecución» y el conmutador demo no se portan.
+
