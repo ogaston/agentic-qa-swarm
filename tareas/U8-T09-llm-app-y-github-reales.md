@@ -47,25 +47,25 @@ Detalle:
 
 ## Criterios de aceptación
 
-- [ ] **CA-1** — Sin claves en git ni en logs, y planner y reporter disponibles con LLM real.
+- [x] **CA-1** — Sin claves en git ni en logs, y planner y reporter disponibles con LLM real.
   ```bash
   git grep -c -i -E 'sk-[a-z0-9]{20,}' | wc -l; bash scripts/kind/kind-smoke.sh 2>&1 | grep -E '^(OK|FALLA) (secrets-no-en-logs|llm-real-configurado)'
   ```
   Esperado: `0`, `OK secrets-no-en-logs` y `OK llm-real-configurado`.
 
-- [ ] **CA-2** — Ciclo completo con modelo real y app definitiva.
+- [x] **CA-2** — Ciclo completo con modelo real y app definitiva.
   ```bash
   bash scripts/kind/kind-e2e.sh --bug off 2>&1 | grep -c '^FALLA'; echo "rc=${PIPESTATUS[0]}"
   ```
   Esperado: `0` y `rc=0`.
 
-- [ ] **CA-3** — Evento real de GitHub llega al inbox.
+- [x] **CA-3** — Evento real de GitHub llega al inbox.
   ```bash
   bash scripts/kind/github-webhook-check.sh; echo "rc=$?"
   ```
   Esperado: `OK webhook-github-recibido` (la entrega aparece en el inbox con el SHA del commit empujado por el humano) y `rc=0`.
 
-- [ ] **CA-4** — Alcance.
+- [x] **CA-4** — Alcance.
   ```bash
   git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(deploy/flux/(base|kind)/|scripts/kind/|docs/operaciones/|demo/|agents/|tareas/U8-T09-llm-app-y-github-reales\.md|bitacoras/U8-T09\.md|revisiones/U8-T09/)' | wc -l
   ```
