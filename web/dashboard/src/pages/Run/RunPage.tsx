@@ -4,6 +4,7 @@ import { ApiError, apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
 import type { components } from '../../api/schema.gen';
 import { usePolling } from '../../hooks/usePolling';
+import { PlanFlujos, PostMortem, Veredicto } from './Resultados';
 
 type Run = components['schemas']['Run'];
 
@@ -26,6 +27,12 @@ const COLOR_FALLIDA = '#b00020';
 function esTerminal(run: Run): boolean {
   return run.state === 'done' || run.state === 'failed';
 }
+
+function indiceFase(estado: string | null): number {
+  return FASES.findIndex((f) => f.estado === estado);
+}
+
+const INDICE_ENSAYO = indiceFase('rehearsing');
 
 /** Ruta de la corrida (`/runs/:id`). Valida el id antes de pedir nada. */
 export function RunPage() {
@@ -57,6 +64,12 @@ function VistaCorrida({ id }: { id: string }) {
   if (data !== null && data.state !== 'failed') ultimaFase.current = data.state;
 
   const noEncontrada = error instanceof ApiError && error.status === 404;
+  // El plan existe desde que la corrida llega a «rehearsing». En `failed` se pide siempre: si no hay
+  // plan, la API responde plan_not_ready y la vista lo dice. No depende de la última fase vista.
+  const alcanzoEnsayo =
+    data !== null && (data.state === 'failed' || indiceFase(data.state) >= INDICE_ENSAYO);
+  // El informe existe al terminar («done») o, si falla, cuando el controlador ya guardó su report_uri.
+  const informeListo = data !== null && (data.state === 'done' || (data.state === 'failed' && data.report_uri !== undefined));
 
   return (
     <main>
@@ -83,6 +96,9 @@ function VistaCorrida({ id }: { id: string }) {
       )}
 
       {data !== null && <Linea run={data} ultimaFase={ultimaFase.current} />}
+      {data?.verdict !== undefined && <Veredicto verdict={data.verdict} />}
+      <PostMortem id={id} activo={informeListo} />
+      <PlanFlujos id={id} activo={alcanzoEnsayo} />
       {data === null && !noEncontrada && error === null && <p>Cargando corrida…</p>}
       {detenido && data !== null && !esTerminal(data) && <p>Sondeo detenido.</p>}
     </main>
