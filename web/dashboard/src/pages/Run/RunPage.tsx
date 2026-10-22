@@ -8,6 +8,9 @@ import { PlanFlujos, PostMortem, Veredicto } from './Resultados';
 
 type Run = components['schemas']['Run'];
 
+// Color fijado por RunPage.test («failed … en rojo»): el texto de la fase fallida sobre un fondo fijo claro (.status-failed).
+const COLOR_FALLIDA = '#b00020';
+
 const ID_RUN = /^run-[0-9a-f]{16}$/;
 const INTERVALO_MS = 3000;
 const FASES = [
@@ -21,8 +24,6 @@ const FASES = [
   { estado: 'reporting', etiqueta: 'Generando informe' },
   { estado: 'done', etiqueta: 'Completada' },
 ] as const;
-
-const COLOR_FALLIDA = '#b00020';
 
 function esTerminal(run: Run): boolean {
   return run.state === 'done' || run.state === 'failed';
@@ -72,24 +73,28 @@ function VistaCorrida({ id }: { id: string }) {
   const informeListo = data !== null && (data.state === 'done' || (data.state === 'failed' && data.report_uri !== undefined));
 
   return (
-    <main>
-      <h1>Corrida</h1>
-      <p>
-        <code>{id}</code>
-      </p>
-      {data?.trace_id !== undefined && (
-        <p>
-          Trace: <code>{data.trace_id}</code>
-        </p>
-      )}
+    <main className="page">
+      <div className="page-header">
+        <div className="page-title">
+          <h1>Corrida</h1>
+          <p className="page-desc">
+            <code className="mono">{id}</code>
+            {data?.trace_id !== undefined && (
+              <>
+                {' · '}Trace: <code className="mono">{data.trace_id}</code>
+              </>
+            )}
+          </p>
+        </div>
+      </div>
 
-      {noEncontrada && <p role="alert">Corrida no encontrada</p>}
+      {noEncontrada && <p role="alert" className="notice notice-danger">Corrida no encontrada</p>}
 
       {!noEncontrada && error !== null && <ApiErrorNotice error={error} />}
-      {!noEncontrada && error !== null && data !== null && <p>Mostrando la última lectura correcta.</p>}
+      {!noEncontrada && error !== null && data !== null && <p className="notice">Mostrando la última lectura correcta.</p>}
       {agotado && (
         <p>
-          <button type="button" onClick={refrescar}>
+          <button type="button" className="btn btn-secondary" onClick={refrescar}>
             Reintentar
           </button>
         </p>
@@ -112,7 +117,7 @@ function Linea({ run, ultimaFase }: { run: Run; ultimaFase: string | null }) {
     const texto = conocida ? `Fallida · última fase alcanzada: ${ultimaFase}` : 'Fallida';
     return (
       <>
-        <p role="status" data-estado="failed" style={{ color: COLOR_FALLIDA, fontWeight: 'bold' }}>
+        <p role="status" data-estado="failed" className="notice status-failed" style={{ color: COLOR_FALLIDA, fontWeight: 'bold' }}>
           {texto}
         </p>
         <Fases actual={-1} hechasHasta={conocida ? indiceUltima + 1 : 0} />
@@ -132,13 +137,21 @@ function Linea({ run, ultimaFase }: { run: Run; ultimaFase: string | null }) {
  */
 function Fases({ actual, hechasHasta }: { actual: number; hechasHasta: number }) {
   return (
-    <ol>
+    <ol aria-label="Fases de la corrida" className="phase-timeline">
       {FASES.map((fase, i) => {
         const esActual = i === actual;
         const estado = esActual ? 'actual' : i < hechasHasta ? 'hecha' : 'pendiente';
         return (
-          <li key={fase.estado} data-fase-estado={estado} aria-current={esActual ? 'step' : undefined}>
-            <span>{fase.etiqueta}</span> <code>{fase.estado}</code> <small>{estado}</small>
+          <li
+            key={fase.estado}
+            className={`phase phase-${estado}`}
+            data-fase={fase.estado}
+            data-fase-estado={estado}
+            aria-current={esActual ? 'step' : undefined}
+          >
+            <span className="phase-label">{fase.etiqueta}</span>{' '}
+            <code className="mono">{fase.estado}</code>{' '}
+            <small className="phase-tag">{estado}</small>
           </li>
         );
       })}

@@ -29,13 +29,19 @@ export function RunsPage() {
   }, []);
 
   return (
-    <main>
-      <h1>Mis corridas</h1>
+    <main className="page">
+      <div className="page-header">
+        <div className="page-title">
+          <h1>Mis corridas</h1>
+          <p className="page-desc">Corridas que confirmaste, más reciente primero.</p>
+        </div>
+      </div>
       {error !== null && <ApiErrorNotice error={error} />}
       {error === null && recibos === null && <p>Cargando…</p>}
-      {recibos !== null && recibos.length === 0 && <p>Aún no tienes corridas confirmadas.</p>}
+      {recibos !== null && recibos.length === 0 && <p className="empty">Aún no tienes corridas confirmadas.</p>}
       {recibos !== null && recibos.length > 0 && (
-        <table>
+        <div className="card table-wrap">
+        <table className="data-table">
           <thead>
             <tr>
               <th>Corrida</th>
@@ -47,16 +53,17 @@ export function RunsPage() {
           <tbody>
             {recibos.map((r) => (
               <tr key={`${r.run_id}-${r.notification_id}`}>
-                <td>
+                <td data-label="Corrida">
                   <Link to={`/runs/${r.run_id}`}>{r.run_id}</Link>
                 </td>
-                <td>{r.notification_id}</td>
-                <td>{new Date(r.confirmed_at).toLocaleString()}</td>
-                <td>{r.confirmed_by}</td>
+                <td data-label="Notificación">{r.notification_id}</td>
+                <td data-label="Confirmada">{new Date(r.confirmed_at).toLocaleString()}</td>
+                <td data-label="Por">{r.confirmed_by}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </main>
   );
