@@ -52,10 +52,10 @@ export function RunsPage() {
                 <thead>
                   <tr>
                     <th scope="col">
-                      Corrida (<code>run_id</code>)
+                      Corrida (<code className="campo-api">run_id</code>)
                     </th>
                     <th scope="col">
-                      Notificación (<code>notification_id</code>)
+                      Notificación (<code className="campo-api">notification_id</code>)
                     </th>
                     <th scope="col">Confirmada (hora local)</th>
                     <th scope="col">Confirmada por</th>
@@ -68,7 +68,7 @@ export function RunsPage() {
                   {recibos.map((r) => (
                     <tr key={`${r.run_id}-${r.notification_id}`}>
                       <td data-label="Corrida">
-                        <Link className="mono" to={`/runs/${r.run_id}`}>
+                        <Link className="mono enlace-corrida" to={`/runs/${r.run_id}`}>
                           {r.run_id}
                         </Link>
                       </td>

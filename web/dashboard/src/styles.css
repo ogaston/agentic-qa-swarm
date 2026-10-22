@@ -875,9 +875,15 @@ main.page-narrow {
   width: 100%;
 }
 
-/* Nombres de campo (run_id, state…) dentro de cabeceras, etiquetas y textos: conservan su grafía y no se parten. */
-th code,
-dl.kv-list dt code,
+/* Enlace de corrida (run_id) en «Mis corridas»: acento y negrita, como el mockup (.mono no lo fija). */
+.enlace-corrida {
+  color: var(--accent-text);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* Nombres de campo de la API (run_id, state…) marcados en las vistas de T04: conservan su grafía. */
+.campo-api,
 .login-texto code {
   text-transform: none;
   letter-spacing: 0;

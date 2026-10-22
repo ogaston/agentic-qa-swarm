@@ -114,7 +114,7 @@ export function WarmPage() {
           </div>
           <dl className="kv-list">
             <dt>
-              Estado (<code>state</code>)
+              Estado (<code className="campo-api">state</code>)
             </dt>
             <dd>
               <span className={`badge badge-${COLOR_ESTADO[data.state]}`} data-testid="warm-estado" data-state={data.state}>
@@ -123,7 +123,7 @@ export function WarmPage() {
               </span>
             </dd>
             <dt>
-              Reset verificado (<code>reset_verified</code>)
+              Reset verificado (<code className="campo-api">reset_verified</code>)
             </dt>
             <dd>
               <span className={`badge badge-${data.reset_verified ? 'ok' : 'warn'}`}>
@@ -131,13 +131,13 @@ export function WarmPage() {
               </span>
             </dd>
             <dt>
-              Versión base (<code>baseline_version</code>)
+              Versión base (<code className="campo-api">baseline_version</code>)
             </dt>
             <dd>
               <code>{data.baseline_version}</code>
             </dd>
             <dt>
-              Identificador del entorno (<code>warm_id</code>)
+              Identificador del entorno (<code className="campo-api">warm_id</code>)
             </dt>
             <dd>
               <code>{data.warm_id}</code>

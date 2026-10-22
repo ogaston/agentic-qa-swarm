@@ -51,6 +51,12 @@ async function contexto(ancho, alto) {
   return ctx;
 }
 
+/** Estilos computados del enlace run_id (mismo elemento en el dashboard y en el mockup). */
+function estiloEnlace(el) {
+  const s = getComputedStyle(el);
+  return { color: s.color, fontWeight: s.fontWeight, textDecorationLine: s.textDecorationLine };
+}
+
 async function medirScroll(page) {
   return page.evaluate(() => ({
     anchoVentana: window.innerWidth,
@@ -101,6 +107,7 @@ async function entrar(page) {
   await entrar(page);
   await page.click('a.az-nav-link[href="/runs"]');
   await page.waitForSelector('table');
+  resultados['1280 runs enlace run_id'] = await page.$eval('td[data-label="Corrida"] a', estiloEnlace);
   await page.screenshot({ path: `${SALIDA}/1280-runs.png`, fullPage: true });
   await page.click('a.az-nav-link[href="/warm"]');
   await page.waitForSelector('dl.kv-list');
@@ -119,6 +126,9 @@ async function entrar(page) {
         s.style.display = s.dataset.view === v ? 'block' : 'none';
       });
     }, vista);
+    if (vista === 'runs') {
+      resultados['mockup runs enlace run_id'] = await page.$eval('section.view[data-view="runs"] a[data-goto-run="bug"]', estiloEnlace);
+    }
     await page.locator(`section.view[data-view="${vista}"]`).screenshot({ path: `${SALIDA}/mockup-1280-${vista}.png` });
   }
   await ctx.close();

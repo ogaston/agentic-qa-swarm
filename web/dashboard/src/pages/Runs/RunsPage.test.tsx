@@ -5,6 +5,20 @@ import { describe, expect, it } from 'vitest';
 import { server } from '../../test/server';
 import { RunsPage } from './RunsPage';
 
+// Mismo patrón que Card.test.tsx: se lee la hoja desde el cwd, sin navegador.
+const fsModulo = 'node:fs';
+const { readFileSync } = (await import(/* @vite-ignore */ fsModulo)) as {
+  readFileSync: (ruta: string, codificacion: 'utf8') => string;
+};
+const proceso = (globalThis as unknown as { process: { cwd: () => string } }).process;
+const CSS = readFileSync(`${proceso.cwd()}/src/styles.css`, 'utf8');
+
+/** Bloque de declaraciones de la primera regla cuyo selector es exactamente `selector`. */
+function declaracionesDe(selector: string): string {
+  const re = new RegExp(`(^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`);
+  return re.exec(CSS)?.[2] ?? '';
+}
+
 const RECIBOS = [
   {
     run_id: 'run-' + 'a'.repeat(32),
@@ -96,5 +110,22 @@ describe('RunsPage (estructura del mockup, U10-T04)', () => {
     renderMisCorridas();
     const mensaje = await screen.findByText('Aún no tienes corridas confirmadas.');
     expect(mensaje.closest('.card')).not.toBeNull();
+  });
+
+  // U10-T04 F-01: el enlace run_id tiene que verse como enlace (acento y negrita, como el mockup).
+  it('el enlace run_id usa la clase de enlace de corrida, con acento y negrita del mockup', async () => {
+    server.use(http.get('/api/confirmations', () => HttpResponse.json(RECIBOS)));
+    renderMisCorridas();
+    const enlace = await screen.findByRole('link', { name: RECIBOS[0]?.run_id ?? '' });
+    expect(enlace.classList.contains('enlace-corrida')).toBe(true);
+    expect(declaracionesDe('.enlace-corrida')).toMatch(/color:\s*var\(--accent-text\)/);
+    expect(declaracionesDe('.enlace-corrida')).toMatch(/font-weight:\s*700/);
+    expect(declaracionesDe('.enlace-corrida')).toMatch(/text-decoration:\s*underline/);
+  });
+
+  // U10-T04 F-02 (AMARILLO): los nombres de campo se acotan a las vistas de T04, sin regla global sobre th/dt.
+  it('ninguna regla global de la hoja apunta a th code ni a dt code', () => {
+    expect(CSS).not.toMatch(/(^|[\s,])th code\s*[,{]/);
+    expect(CSS).not.toMatch(/(^|[\s,])dl\.kv-list dt code\s*[,{]/);
   });
 });
