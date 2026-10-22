@@ -251,3 +251,23 @@ el egreso es DNS, el gateway del humano (solo `IP/32:puerto` de `litellm.env`, p
 
 Los comandos que tocan `aqs` se ejecutan dentro de `flock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock`
 cuando hay más de un codificador usando el clúster.
+
+## Insumos y credenciales persistentes (U9-T05, C-127)
+
+Los insumos del humano (`litellm.env`, `deepseek.key`) y las credenciales demo (`demo.txt`, `admin.txt`,
+`admin-mfa-secret.txt`) viven en `AQS_KIND_STATE_DIR`, por defecto `${XDG_STATE_HOME:-$HOME/.local/state}/aqs-kind`,
+fuera del repo y **fuera de tmpfs**: sobreviven al reinicio de la máquina. El directorio es 700 y cada fichero 600;
+los scripts fallan si encuentran permisos más abiertos y nombran el archivo (no su contenido).
+Los locks (`aqs-kind.lock`) y los estados efímeros (pids, `aqs-dashboard`, trabajo temporal) siguen en `XDG_RUNTIME_DIR`.
+
+Si un insumo existe en la ruta antigua `${XDG_RUNTIME_DIR}/aqs-kind` y falta en la nueva, `secrets.sh` lo mueve una vez y avisa.
+
+## Tras reiniciar la máquina (U9-T05)
+
+1. Arranca el contenedor del clúster: `podman start aqs-control-plane`. Espera a que el API responda (`kubectl get nodes`).
+2. Comprueba los pods: `kubectl get pods -A` (todos `Running`/`Completed`). Si `go-identity` no está listo, revisa sus logs antes de seguir.
+3. Si falta `demo.txt` en `AQS_KIND_STATE_DIR` (o no coincide con el Secret), regenera solo las credenciales demo:
+   `flock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock bash scripts/kind/secrets.sh --rotate-demo`.
+   No necesita `litellm.env` ni `deepseek.key`, no toca otros Secrets y reinicia `go-identity` esperando el rollout.
+   Si la imagen `go-identity` no está en podman local, se exporta del nodo kind; si tampoco está allí, el script falla y dice qué ejecutar (`build-images.sh`, `load-images.sh`).
+4. Si falta `litellm.env` o `deepseek.key`, `secrets.sh` (sin `--rotate-demo`) para antes de tocar el clúster e indica la ruta donde ponerlos.

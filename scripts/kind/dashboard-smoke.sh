@@ -15,7 +15,7 @@ cd "$root" || exit 1
 require_kind_context # sale 3 si el contexto no es kind-aqs (antes de crear nada)
 
 ORIGIN=http://127.0.0.1:18610
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind"
+STATE_DIR="$AQS_KIND_STATE_DIR"  # insumos persistentes (U9-T05)
 work=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/aqs-dash-smoke.XXXXXX") || exit 1
 chmod 700 "$work"
 fail=0
@@ -87,11 +87,11 @@ if bad:
 PY
 }
 
-# Login del usuario demo (contraseña en $STATE_DIR/demo.txt, línea 2) a través del origen; token en $work/token.
+# Login del usuario demo (contraseña en $AQS_KIND_STATE_DIR/demo.txt, línea 2) a través del origen; token en $work/token.
 login() {
   local pw code role
-  pw=$(sed -n 2p "$STATE_DIR/demo.txt" 2>/dev/null) || pw=""
-  [ -n "$pw" ] || { echo "no hay contraseña demo en $STATE_DIR/demo.txt (ver scripts/kind/secrets.sh)"; return 1; }
+  pw=$(sed -n 2p "$AQS_KIND_STATE_DIR/demo.txt" 2>/dev/null) || pw=""
+  [ -n "$pw" ] || { echo "no hay contraseña demo en $AQS_KIND_STATE_DIR/demo.txt (ver scripts/kind/secrets.sh)"; return 1; }
   jq -n --arg u demo --arg p "$pw" '{username: $u, password: $p}' >"$work/login.json" || return 1
   http 200 "$ORIGIN/api/auth/login" -H 'Content-Type: application/json' --data @"$work/login.json" || return 1
   jq -j '.token // empty' "$work/body" >"$work/token" || return 1
