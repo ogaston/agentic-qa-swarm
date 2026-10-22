@@ -63,3 +63,38 @@ describe('RunsPage (Mis corridas)', () => {
     expect(await screen.findByText('Aún no tienes corridas confirmadas.')).toBeTruthy();
   });
 });
+
+// U10-T04 CA-2: estructura de «Mis corridas» según el mockup (encabezado, tarjeta con tabla).
+describe('RunsPage (estructura del mockup, U10-T04)', () => {
+  it('el título «Mis corridas» es el h1 de la página', () => {
+    server.use(http.get('/api/confirmations', () => HttpResponse.json([])));
+    renderMisCorridas();
+    expect(screen.getByRole('heading', { level: 1, name: 'Mis corridas' })).toBeTruthy();
+  });
+
+  it('la tabla vive en una tarjeta y tiene las columnas del mockup', async () => {
+    server.use(http.get('/api/confirmations', () => HttpResponse.json(RECIBOS)));
+    renderMisCorridas();
+    const tabla = await screen.findByRole('table');
+    expect(tabla.closest('.card')).not.toBeNull();
+    const cabeceras = screen.getAllByRole('columnheader').map((th) => th.textContent ?? '');
+    expect(cabeceras.some((t) => /^Corrida/.test(t))).toBe(true);
+    expect(cabeceras.some((t) => /^Notificación/.test(t))).toBe(true);
+    expect(cabeceras.some((t) => /^Confirmada \(hora local\)/.test(t))).toBe(true);
+    expect(cabeceras.some((t) => t === 'Confirmada por')).toBe(true);
+  });
+
+  it('cada corrida ofrece «Ver corrida →» hacia su vista', async () => {
+    server.use(http.get('/api/confirmations', () => HttpResponse.json(RECIBOS)));
+    renderMisCorridas();
+    const enlaces = await screen.findAllByRole('link', { name: 'Ver corrida →' });
+    expect(enlaces.map((e) => e.getAttribute('href'))).toEqual(RECIBOS.map((r) => `/runs/${r.run_id}`));
+  });
+
+  it('el vacío muestra el mensaje dentro de la tarjeta', async () => {
+    server.use(http.get('/api/confirmations', () => HttpResponse.json([])));
+    renderMisCorridas();
+    const mensaje = await screen.findByText('Aún no tienes corridas confirmadas.');
+    expect(mensaje.closest('.card')).not.toBeNull();
+  });
+});

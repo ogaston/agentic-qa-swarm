@@ -168,3 +168,68 @@ describe('LoginPage', () => {
     await waitFor(() => expect(currentLocation()).toBe('/warm'));
   });
 });
+
+// U10-T04 CA-2: estructura de «Iniciar sesión» según el mockup (login-wrap, tarjeta con marca, alert-box).
+describe('LoginPage (estructura del mockup, U10-T04)', () => {
+  it('h1 «Iniciar sesión» dentro de login-wrap y tarjeta con la marca aqs', () => {
+    renderApp('/login');
+    const titulo = screen.getByRole('heading', { level: 1, name: 'Iniciar sesión' });
+    const tarjeta = titulo.closest('.card');
+    expect(document.querySelector('.login-wrap')).not.toBeNull();
+    expect(tarjeta).not.toBeNull();
+    expect(tarjeta?.querySelector('.az-logo')?.textContent).toBe('aqs');
+  });
+
+  it('sin cabecera de sesión en /login', () => {
+    renderApp('/login');
+    expect(document.querySelector('.az-header')).toBeNull();
+  });
+
+  it('las etiquetas de usuario, contraseña y TOTP son <label> visibles', async () => {
+    const user = userEvent.setup();
+    renderApp('/login');
+    expect(screen.getByText('Usuario', { selector: 'label' })).toBeTruthy();
+    expect(screen.getByText('Contraseña', { selector: 'label' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Tengo un código de verificación' }));
+    expect(screen.getByText('Código de verificación', { selector: 'label' })).toBeTruthy();
+  });
+
+  it('401 es un alert-box alert-danger con role=alert', async () => {
+    server.use(http.post(LOGIN, () => HttpResponse.json({ code: 'unauthorized', message: 'x' }, { status: 401 })));
+    const user = userEvent.setup();
+    renderApp('/login');
+    await fillAndSubmit(user);
+    const aviso = await screen.findByRole('alert');
+    expect(aviso.classList.contains('alert-box')).toBe(true);
+    expect(aviso.classList.contains('alert-danger')).toBe(true);
+  });
+
+  it('503 es un alert-box con role=alert', async () => {
+    server.use(http.post(LOGIN, () => HttpResponse.json({ code: 'unavailable', message: 'x' }, { status: 503 })));
+    const user = userEvent.setup();
+    renderApp('/login');
+    await fillAndSubmit(user);
+    const aviso = await screen.findByRole('alert');
+    expect(aviso.classList.contains('alert-box')).toBe(true);
+  });
+
+  it('429 con cuenta atrás es un alert-box alert-warn con role=alert', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      server.use(
+        http.post(LOGIN, () =>
+          HttpResponse.json({ code: 'rate_limited', message: 'x' }, { status: 429, headers: { 'Retry-After': '30' } }),
+        ),
+      );
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderApp('/login');
+      await fillAndSubmit(user);
+      const aviso = await screen.findByRole('alert');
+      expect(aviso.classList.contains('alert-box')).toBe(true);
+      expect(aviso.classList.contains('alert-warn')).toBe(true);
+      expect(aviso.textContent).toMatch(/espera 30 s/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
