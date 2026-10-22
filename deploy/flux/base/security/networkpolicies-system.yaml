@@ -1,6 +1,7 @@
 # Aislamiento de aqs-system: solo INGRESS (U4-T05). Sin reglas de egress a proposito:
 # el control plane necesita la API de Kubernetes, MinIO, el LLM y GitHub, cuyas
 # direcciones dependen del cluster (candidata C-51; ver docs/seguridad/aislamiento.md).
+# Excepción (U9-T01): ui-api-egress acota el egreso de ui-api, que solo habla con servicios internos.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -63,5 +64,47 @@ spec:
         - namespaceSelector:
             matchLabels:
               aqs.io/ingress-controller: "true"
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+# U9-T01: ui-api solo habla con DNS, NATS, go-identity, go-warm-manager, go-run-controller y agent-reporter.
+# Al seleccionar el pod, cualquier otro egreso queda denegado: si ui-api necesita otro destino, añádelo aquí.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui-api-egress
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ui-api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nats
+      ports:
+        - {protocol: TCP, port: 4222}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: go-identity
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: go-warm-manager
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: go-run-controller
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-reporter
       ports:
         - {protocol: TCP, port: 8080}

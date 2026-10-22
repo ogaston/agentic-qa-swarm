@@ -45,6 +45,12 @@ spec:
             # Mismo token que acepta go-warm-manager (Secret go-warm-manager-service-token, clave token).
             - name: UIAPI_WARM_TOKEN_FILE
               value: /etc/aqs/warm/token
+            # U9-T01: GET /reports/{run}. Egreso permitido en networkpolicies-system.yaml (ui-api-egress) y
+            # ingreso del reporter desde ui-api en agents.yaml (agent-reporter-ingress-from-ui-api).
+            - name: RUN_CONTROLLER_URL
+              value: http://go-run-controller.aqs-system.svc:8080
+            - name: REPORTER_URL
+              value: http://agent-reporter.aqs-system.svc:8080
           image: ghcr.io/ogaston/agentic-qa-swarm/ui-api:0.0.0
           ports:
             - name: http

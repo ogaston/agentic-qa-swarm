@@ -1,4 +1,4 @@
-// Package httpapi expone GET /notifications, POST /notifications/{id}/confirm, GET /warm y GET /confirmations.
+// Package httpapi expone GET /notifications, POST /notifications/{id}/confirm, GET /warm, GET /confirmations y GET /reports/{run}.
 package httpapi
 
 import (
@@ -43,6 +43,12 @@ type Config struct {
 	WarmTokenFile string
 	// WarmTimeout es el plazo de la llamada al warm-manager; 0 = 2 s.
 	WarmTimeout time.Duration
+	// RunControllerURL es la base de go-run-controller (GET /runs/{id}); vacía = /reports responde 503.
+	RunControllerURL string
+	// ReporterURL es la base de agent-reporter (GET /v1/reports); vacía = /reports responde 503.
+	ReporterURL string
+	// UpstreamTimeout es el plazo de las llamadas de /reports; 0 = 2 s.
+	UpstreamTimeout time.Duration
 }
 
 // IdentityRetryAfter es el Retry-After (segundos) del 503 identity_unavailable.
@@ -54,7 +60,9 @@ type Handler struct {
 	lim     *limiter
 	origins map[string]struct{}
 	log     *log.Logger
-	warmc   *warmClient // nil = sin WARM_URL
+	warmc   *warmClient     // nil = sin WARM_URL
+	runc    *upstreamClient // nil = sin RUN_CONTROLLER_URL
+	repc    *upstreamClient // nil = sin REPORTER_URL
 }
 
 // New construye el handler con toda la cadena de middleware.
@@ -88,6 +96,20 @@ func New(cfg Config) (http.Handler, error) {
 		}
 		h.warmc = wc
 	}
+	if cfg.RunControllerURL != "" {
+		c, err := newUpstreamClient(cfg.RunControllerURL, cfg.UpstreamTimeout, cfg.Now, "RUN_CONTROLLER_URL")
+		if err != nil {
+			return nil, err
+		}
+		h.runc = c
+	}
+	if cfg.ReporterURL != "" {
+		c, err := newUpstreamClient(cfg.ReporterURL, cfg.UpstreamTimeout, cfg.Now, "REPORTER_URL")
+		if err != nil {
+			return nil, err
+		}
+		h.repc = c
+	}
 	return h, nil
 }
 
@@ -97,6 +119,7 @@ const (
 	RouteConfirm       = "/notifications/{id}/confirm"
 	RouteWarm          = "/warm"
 	RouteConfirmations = "/confirmations"
+	RouteReport        = "/reports/{run}"
 )
 
 // RoutePattern devuelve el PATRÓN de ruta de la petición ("unmatched" si no hay), nunca la ruta cruda.
@@ -114,6 +137,10 @@ func RoutePattern(r *http.Request) string {
 		id := strings.TrimSuffix(strings.TrimPrefix(p, "/notifications/"), "/confirm")
 		if id != "" && !strings.Contains(id, "/") {
 			return RouteConfirm
+		}
+	case strings.HasPrefix(p, "/reports/"):
+		if id := strings.TrimPrefix(p, "/reports/"); id != "" && !strings.Contains(id, "/") {
+			return RouteReport
 		}
 	}
 	return "unmatched"
@@ -220,6 +247,19 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request) {
 		}
 		if pr, ok := h.authenticate(w, r); ok {
 			h.confirm(w, r, pr, id)
+		}
+	case strings.HasPrefix(p, "/reports/"):
+		runID := strings.TrimPrefix(p, "/reports/")
+		if runID == "" || strings.Contains(runID, "/") {
+			writeError(w, http.StatusNotFound, "not_found", "ruta inexistente")
+			return
+		}
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w, "GET")
+			return
+		}
+		if pr, ok := h.authenticate(w, r); ok {
+			h.report(w, r, pr, runID)
 		}
 	default:
 		writeError(w, http.StatusNotFound, "not_found", "ruta inexistente")

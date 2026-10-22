@@ -249,6 +249,26 @@ spec:
       ports:
         - {protocol: TCP, port: 8080}
 ---
+---
+# U9-T01: ui-api lee el reporte por GET /v1/reports. Es el único cliente del reporter fuera de go-run-controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-reporter-ingress-from-ui-api
+  namespace: aqs-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent-reporter
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ui-api
+      ports:
+        - {protocol: TCP, port: 8080}
+---
 # Egreso del planner: DNS y LiteLLM.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

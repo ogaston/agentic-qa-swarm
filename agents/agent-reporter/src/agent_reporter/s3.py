@@ -10,10 +10,30 @@ import os
 import re
 from urllib.parse import urlsplit
 
-from agent_reporter.errors import EvidenceUnavailable, InvalidEvidenceUri, StoreUnavailable
+from agent_reporter.errors import EvidenceUnavailable, InvalidEvidenceUri, InvalidReportUri, StoreUnavailable
 
 _RUN_ID = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _SEG_BAD = ("", ".", "..")
+_REPORT_KEY = re.compile(r"^runs/([A-Za-z0-9._-]{1,128})/report-([0-9a-f]{64})\.json$")
+
+
+def report_key_of(uri: str, bucket: str) -> str:
+    """Clave runs/<run_id>/report-<sha256>.json de una URI de reporte de ESTE bucket.
+
+    Cualquier otra forma (otro bucket, otro esquema, query, clave fuera de la forma que escribe put) lanza
+    InvalidReportUri sin llamar a S3 (U9-T01).
+    """
+    try:
+        p = urlsplit(uri)
+    except ValueError as e:
+        raise InvalidReportUri("uri invalida") from e
+    m = _REPORT_KEY.fullmatch(p.path[1:]) if p.path.startswith("/") else None
+    if (
+        p.scheme != "s3" or p.netloc != bucket or p.query or p.fragment or m is None
+        or m.group(1) in (".", "..")
+    ):
+        raise InvalidReportUri("uri invalida")
+    return p.path[1:]
 
 
 def _key_of(uri: str, bucket: str, exc) -> str:
@@ -59,7 +79,7 @@ class S3ReportStore:
         return f"s3://{self.bucket}/{key}"
 
     def get(self, uri: str) -> bytes:
-        key = _key_of(uri, self.bucket, StoreUnavailable)
+        key = report_key_of(uri, self.bucket)
         try:
             return self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read()
         except Exception:  # noqa: BLE001

@@ -26,3 +26,7 @@ class ReportRejected(ReporterError):
 
 class StoreUnavailable(ReporterError):
     pass
+
+
+class InvalidReportUri(StoreUnavailable):
+    """La URI no tiene la forma s3://<bucket>/runs/<run_id>/report-<sha256>.json: no se toca el store (400)."""

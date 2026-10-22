@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,10 +26,11 @@ const (
 
 // warmFake es un warm-manager simulado: registra cada petición y responde con handler.
 type warmFake struct {
-	srv   *httptest.Server
-	mu    sync.Mutex
-	calls int
-	hdrs  []http.Header
+	srv     *httptest.Server
+	mu      sync.Mutex
+	calls   int
+	hdrs    []http.Header
+	queries []url.Values // query de cada petición (mismo orden que hdrs)
 }
 
 func newWarmFake(t *testing.T, handler http.HandlerFunc) *warmFake {
@@ -38,11 +40,18 @@ func newWarmFake(t *testing.T, handler http.HandlerFunc) *warmFake {
 		f.mu.Lock()
 		f.calls++
 		f.hdrs = append(f.hdrs, r.Header.Clone())
+		f.queries = append(f.queries, r.URL.Query())
 		f.mu.Unlock()
 		handler(w, r)
 	}))
 	t.Cleanup(f.srv.Close)
 	return f
+}
+
+func (f *warmFake) query(i int) url.Values {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.queries[i]
 }
 
 func (f *warmFake) count() int {
