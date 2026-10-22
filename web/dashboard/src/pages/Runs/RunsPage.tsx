@@ -53,12 +53,12 @@ export function RunsPage() {
           <tbody>
             {recibos.map((r) => (
               <tr key={`${r.run_id}-${r.notification_id}`}>
-                <td>
+                <td data-label="Corrida">
                   <Link to={`/runs/${r.run_id}`}>{r.run_id}</Link>
                 </td>
-                <td>{r.notification_id}</td>
-                <td>{new Date(r.confirmed_at).toLocaleString()}</td>
-                <td>{r.confirmed_by}</td>
+                <td data-label="Notificación">{r.notification_id}</td>
+                <td data-label="Confirmada">{new Date(r.confirmed_at).toLocaleString()}</td>
+                <td data-label="Por">{r.confirmed_by}</td>
               </tr>
             ))}
           </tbody>

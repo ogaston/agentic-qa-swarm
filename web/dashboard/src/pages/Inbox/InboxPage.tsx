@@ -212,16 +212,16 @@ export function InboxPage() {
             <tbody>
               {lista.map((n) => (
                 <tr key={n.id}>
-                  <td>{n.repo}</td>
-                  <td>{n.github_event}</td>
-                  <td>
+                  <td data-label="Repositorio">{n.repo}</td>
+                  <td data-label="Evento">{n.github_event}</td>
+                  <td data-label="SHA">
                     <code>{n.sha.slice(0, 7)}</code>
                   </td>
-                  <td>{n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}</td>
-                  <td>
+                  <td data-label="Artefacto">{n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}</td>
+                  <td data-label="Estado">
                     <span className={`badge badge-${COLOR_ESTADO[n.state]}`}>{n.state}</span>
                   </td>
-                  <td>
+                  <td data-label="Acciones">
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
