@@ -60,7 +60,7 @@ Desde `web/dashboard/`, con `npm ci` hecho.
 - [ ] **CA-4** — Comprobación de URLs, sin falsos positivos y con sensibilidad.
   ```bash
   npm run -s build >/dev/null && npm run -s check:dist-urls; echo "salida=$?"
-  mkdir -p /tmp/aqs-urls && printf '<link href="https://cdn.example.com/x.css">' > dist/_prueba.html && npm run -s check:dist-urls; echo "salida=$?"; rm -f dist/_prueba.html
+  printf '<link href="https://cdn.example.com/x.css">' > dist/_prueba.html && npm run -s check:dist-urls; echo "salida=$?"; rm -f dist/_prueba.html
   ```
   Esperado: primera ejecución imprime `0` y `salida=0`; la segunda imprime `1` y `salida=1` (la prueba de sensibilidad).
 
