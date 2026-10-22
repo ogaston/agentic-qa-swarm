@@ -338,7 +338,7 @@ main.page-narrow {
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -475,7 +475,7 @@ main.page-narrow {
 
 dl {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 4px 16px;
   margin: 0 0 12px;
 }
@@ -491,6 +491,8 @@ dl dt {
 
 dl dd {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .detail {
@@ -506,7 +508,9 @@ dl dd {
   width: min(480px, calc(100% - 32px));
   height: fit-content;
   z-index: 50;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--modal-shadow);
+  max-height: calc(100% - 32px);
+  overflow: auto;
 }
 
 /* ---------- Línea de tiempo de la corrida ---------- */
@@ -565,22 +569,15 @@ dl dd {
   height: 8px;
   border-radius: 50%;
   background: var(--info);
-  animation: pulso 1.6s ease-in-out infinite;
 }
 
-@keyframes pulso {
-  50% {
-    opacity: 0.35;
-  }
-}
-
-/* Fondo fijo claro (no es un token): el color de texto de la corrida fallida es #b00020 y solo
-   cumple AA sobre un fondo claro, también en el tema oscuro. */
+/* Corrida fallida: texto y fondo fijos (tokens --failed-*), también en el tema oscuro. */
 .status-failed {
   font-weight: 700;
-  background: #fde8ea;
-  border-color: #b00020;
-  border-left-color: #b00020;
+  background: var(--failed-bg);
+  border-color: var(--failed-fg);
+  border-left-color: var(--failed-fg);
+  color: var(--failed-fg);
 }
 
 /* ---------- Post-mortem y plan ---------- */

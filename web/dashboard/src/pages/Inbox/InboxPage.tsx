@@ -159,7 +159,7 @@ export function InboxPage() {
       </div>
 
       <div className="toolbar">
-      <div role="tablist" aria-label="Estado de las notificaciones" className="tabs">
+        <div role="tablist" aria-label="Estado de las notificaciones" className="tabs">
         {PESTANAS.map((p) => (
           <button
             key={p.estado}
@@ -196,7 +196,7 @@ export function InboxPage() {
         ) : null}
         {lista !== null && errorLista === null && lista.length > 0 ? (
           <div className="card table-wrap">
-          <table className="data-table">
+            <table className="data-table">
             <thead>
               <tr>
                 <th scope="col">Repositorio</th>

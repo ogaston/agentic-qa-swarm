@@ -53,7 +53,7 @@ export function WarmPage() {
       )}
 
       {data !== null && (
-        <section aria-label="Tarjeta del warm" className="card warm-card">
+        <section aria-label="Tarjeta del warm" className="card">
           <p>
             Estado:{' '}
             <span
@@ -75,7 +75,7 @@ export function WarmPage() {
               El warm está listo, pero el reset no está verificado. No confíes en sus resultados hasta verificarlo.
             </p>
           )}
-          <dl className="meta-list">
+          <dl>
             <dt>Versión base</dt>
             <dd>
               <code>{data.baseline_version}</code>

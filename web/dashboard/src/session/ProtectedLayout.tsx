@@ -1,4 +1,4 @@
-import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { loginPath } from './next';
 import { useSession } from './SessionContext';
 
@@ -20,9 +20,9 @@ export function ProtectedLayout() {
             <span className="app-brand-tag">Agentic QA Swarm</span>
           </div>
           <nav aria-label="Principal" className="app-nav">
-            <Link to="/inbox">Inbox</Link>
-            <Link to="/runs">Mis corridas</Link>
-            <Link to="/warm">Warm</Link>
+            <NavLink to="/inbox">Inbox</NavLink>
+            <NavLink to="/runs">Mis corridas</NavLink>
+            <NavLink to="/warm">Warm</NavLink>
           </nav>
           <div className="app-session">
             <span className="app-principal">{session.principal.principal_id}</span>
