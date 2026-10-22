@@ -8,9 +8,6 @@ import { PlanFlujos, PostMortem, Veredicto } from './Resultados';
 
 type Run = components['schemas']['Run'];
 
-// Color fijado por RunPage.test («failed … en rojo»): el texto de la fase fallida sobre un fondo fijo claro (.status-failed).
-const COLOR_FALLIDA = '#b00020';
-
 const ID_RUN = /^run-[0-9a-f]{16}$/;
 const INTERVALO_MS = 3000;
 const FASES = [
@@ -117,7 +114,7 @@ function Linea({ run, ultimaFase }: { run: Run; ultimaFase: string | null }) {
     const texto = conocida ? `Fallida · última fase alcanzada: ${ultimaFase}` : 'Fallida';
     return (
       <>
-        <p role="status" data-estado="failed" className="notice status-failed" style={{ color: COLOR_FALLIDA, fontWeight: 'bold' }}>
+        <p role="status" data-estado="failed" className="notice status-failed">
           {texto}
         </p>
         <Fases actual={-1} hechasHasta={conocida ? indiceUltima + 1 : 0} />
