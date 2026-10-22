@@ -736,3 +736,27 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **Context**: Construction — U8 olas 2-4.
 
 ---
+
+---
+
+## Construction — U8-T09: P4 aceptada, cierre pendiente de CA-3
+**Timestamp**: 2026-10-21T18:55:00-05:00
+**User Input**: "I accept P4, mark U8-T9 done after CA-3"
+**AI Response**: "Se registra la aceptación explícita del humano de F-02 (AMARILLO, ronda 5 de U8-T09): el costo en tokens por corrida no se mide y queda como candidata P4 (persistir `usage`), documentada en `docs/operaciones/kind-local.md`. U8-T9 sigue `[ ]` hasta que CA-3 pase. Intento de CA-3 (`github-webhook-check.sh`, SHA esperado e904fd9 de origin/main): FALLA, el clúster kind `aqs` no responde (API en 127.0.0.1:34451 rechaza conexiones) y el túnel cloudflared no está corriendo. Queda a cargo del humano levantar clúster y túnel y empujar un commit."
+**Context**: Construction — U8 ola 5.
+
+---
+
+## Construction — U8-T09 hecha y U8 cerrada (CA-3 verificado)
+**Timestamp**: 2026-10-21T19:25:00-05:00
+**User Input**: (salida pegada) "git push origin main ... e904fd9..7f4790e  main -> main ... bash scripts/kind/github-webhook-check.sh 7f4790eefea28744e28e5eaca7e46324634ae12e; echo \"rc=$?\" / sha esperado: 7f4790eefea28744e28e5eaca7e46324634ae12e (rama main) / OK webhook-github-recibido / notificación=n-1838266b-7f68-49c8-ad91-ea4b868a863f evento=commit repo=ogaston/agentic-qa-swarm estado=pending sha=7f4790eefea28744e28e5eaca7e46324634ae12e / rc=0"
+**AI Response**: "CA-3 pasa: la entrega real de GitHub del commit 7f4790e llegó por el túnel cloudflared a go-intake (HMAC válido) y aparece en el inbox. Se marcan [x] CA-1..CA-4 en la tarea y U8-T9 en `unidades-y-tareas.md`, conforme a la instrucción del humano «mark U8-T9 done after CA-3». U8 queda cerrada y con ella todas las unidades del plan. Incidencias del cierre: el clúster `aqs` estaba detenido (contenedor del nodo con exit 137) y se reinició con `podman start` conservando su estado; `${XDG_RUNTIME_DIR}/aqs-kind/` se había borrado al reiniciar la máquina; al intentar regenerar `demo.txt` el orquestador borró `go-identity-users` y dejó go-identity caído un rato (secrets.sh abortó por falta de `litellm.env` y un segundo intento creó el Secret con hashes vacíos); el humano lo recreó con hashes válidos y go-identity volvió a Running. El secreto del webhook no se tocó. Candidatas nuevas C-126 (responder `ping` con 200) y C-127 (insumos de aqs-kind en tmpfs)."
+**Context**: Construction — U8 cerrada; plan completo.
+
+---
+
+## Construction — U9 redactada (resultados visibles en el dashboard)
+**Timestamp**: 2026-10-21T19:50:00-05:00
+**User Input**: "is there any frontend where I can see this working?" / "try http://127.0.0.1:18610/ and see that there's nothing" / "okay what's missing then?" / "yes, write the U9 tasks"
+**AI Response**: "El dashboard (U6) funciona contra kind en http://127.0.0.1:18610/inbox, pero `/` no tiene ruta («No encontrado»), no tiene estilos y no muestra el post-mortem: `GET /reports/{run}` está en la OpenAPI sin implementar y `RunPage` termina en «Generando informe»; el plan de flujos no se guarda ni se expone. Se redacta U9 con 5 tareas: U9-T01 (`GET /reports/{run}` en ui-api vía `GET /v1/reports` del reporter, OpenAPI `Report` alineada), U9-T02 (plan persistido en el controlador y `GET /runs/{id}/plan`), U9-T03 (veredicto, post-mortem y plan en el dashboard; `/` → `/inbox`), U9-T04 (estilo según `mockups/swarm-mock.html`), U9-T05 (insumos de kind persistentes y `--rotate-demo` seguro; cierra C-127). Olas: 1 = T01 ∥ T02 ∥ T05; 2 = T03; 3 = T04. C-126 (ping de GitHub) queda en candidatas."
+**Context**: Construction — U9 redactada, sin despachar.
