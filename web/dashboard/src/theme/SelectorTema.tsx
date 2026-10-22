@@ -12,14 +12,11 @@ export function SelectorTema() {
     setTema(siguiente);
   }
 
+  // Etiqueta dinámica, como el mockup: describe la acción que hará el próximo clic.
+  const etiqueta = tema === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro';
+
   return (
-    <button
-      type="button"
-      className="btn btn-icon"
-      onClick={alternar}
-      aria-label="Cambiar tema visual"
-      title="Alternar tema Claro / Oscuro"
-    >
+    <button type="button" className="btn btn-icon" onClick={alternar} aria-label={etiqueta} title={etiqueta}>
       <svg className="theme-icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
         <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
         <path

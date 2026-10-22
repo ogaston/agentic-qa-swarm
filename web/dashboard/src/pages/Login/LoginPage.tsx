@@ -63,7 +63,7 @@ export function LoginPage() {
   return (
     <main className="page page-narrow">
       <h1>Iniciar sesión</h1>
-      <form className="card form" onSubmit={(evento) => void enviar(evento)}>
+      <form className="card card-vista form" onSubmit={(evento) => void enviar(evento)}>
         <div className="field">
           <label htmlFor="login-usuario">Usuario</label>
           <input

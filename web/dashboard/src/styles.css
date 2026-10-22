@@ -464,13 +464,17 @@ main.page-narrow {
 
 /* ---------- Tarjetas, KPI, rejillas y avisos ---------- */
 
-/* Relleno y margen heredados de las vistas actuales (U9-T04). El mockup no los declara en .card:
- * su relleno es .card-pad. Se retiran cuando T02–T04 migren las vistas. */
+/* .card es el del mockup: sin relleno ni margen propios (su relleno es .card-pad). */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+}
+
+/* Puente para las vistas actuales (U9-T04): conserva el relleno y margen que ya tienen.
+ * Se retira al migrar cada vista a .card-pad y .stack (T02–T04). */
+.card-vista {
   padding: 16px;
   margin-bottom: 16px;
 }
@@ -509,7 +513,6 @@ main.page-narrow {
 
 .kpi-box {
   padding: 16px 18px;
-  margin-bottom: 0;
 }
 
 .kpi-label {
@@ -560,12 +563,6 @@ main.page-narrow {
   display: flex;
   flex-direction: column;
   gap: 18px;
-}
-
-.stack > *,
-.grid-main-side > *,
-.kpi-strip > * {
-  margin-bottom: 0;
 }
 
 .table-wrap {
@@ -698,7 +695,7 @@ main.page-narrow {
 }
 
 .btn:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -1211,7 +1208,7 @@ dl.kv-list dd {
     row-gap: 4px;
   }
 
-  .card {
+  .card-vista {
     padding: 12px;
   }
 }

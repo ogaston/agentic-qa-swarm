@@ -53,7 +53,7 @@ export function WarmPage() {
       )}
 
       {data !== null && (
-        <section aria-label="Tarjeta del warm" className="card">
+        <section aria-label="Tarjeta del warm" className="card card-vista">
           <p>
             Estado:{' '}
             <span

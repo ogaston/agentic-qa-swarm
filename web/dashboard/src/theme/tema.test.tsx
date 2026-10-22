@@ -37,11 +37,13 @@ describe('selector de tema', () => {
     aplicarTema(temaInicial());
     render(<SelectorTema />);
     const user = userEvent.setup();
-    const boton = screen.getByRole('button', { name: 'Cambiar tema visual' });
+    const boton = screen.getByRole('button', { name: 'Cambiar a tema oscuro' });
 
     await user.click(boton);
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(window.localStorage.getItem(CLAVE_TEMA)).toBe('dark');
+    expect(boton.getAttribute('aria-label')).toBe('Cambiar a tema claro');
+    expect(boton.getAttribute('title')).toBe('Cambiar a tema claro');
 
     await user.click(boton);
     expect(document.documentElement.dataset.theme).toBe('light');
@@ -74,7 +76,7 @@ describe('selector de tema', () => {
 
     render(<SelectorTema />);
     const user = userEvent.setup();
-    await expect(user.click(screen.getByRole('button', { name: 'Cambiar tema visual' }))).resolves.not.toThrow();
+    await expect(user.click(screen.getByRole('button', { name: 'Cambiar a tema oscuro' }))).resolves.not.toThrow();
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 });

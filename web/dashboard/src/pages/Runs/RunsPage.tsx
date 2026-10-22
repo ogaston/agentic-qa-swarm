@@ -40,7 +40,7 @@ export function RunsPage() {
       {error === null && recibos === null && <p>Cargando…</p>}
       {recibos !== null && recibos.length === 0 && <p className="empty">Aún no tienes corridas confirmadas.</p>}
       {recibos !== null && recibos.length > 0 && (
-        <div className="card table-wrap">
+        <div className="card card-vista table-wrap">
         <table className="data-table">
           <thead>
             <tr>
