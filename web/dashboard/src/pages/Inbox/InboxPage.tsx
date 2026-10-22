@@ -4,9 +4,13 @@ import type { components } from '../../api/schema.gen';
 import { ApiError, apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
 import { FLOW_FAMILIES, type FlowFamily } from '../../inbox/flows';
+import { Badge, type TonoBadge } from '../../components/Badge';
+import { Kpi } from '../../components/Kpi';
+import { PageHeader, type ElementoMeta } from '../../components/PageHeader';
 
 type Notification = components['schemas']['Notification'];
 type ConfirmationReceipt = components['schemas']['ConfirmationReceipt'];
+type WarmState = components['schemas']['WarmState'];
 type Estado = Notification['state'];
 
 const PESTANAS: { estado: Estado; etiqueta: string; vacio: string }[] = [
@@ -16,22 +20,34 @@ const PESTANAS: { estado: Estado; etiqueta: string; vacio: string }[] = [
 ];
 
 /** Color de la insignia por estado de la notificación; la etiqueta de texto es la que informa. */
-const COLOR_ESTADO: Record<Estado, 'warn' | 'teal' | 'danger'> = {
+const COLOR_ESTADO: Record<Estado, TonoBadge> = {
   pending: 'warn',
   confirmed: 'teal',
   rejected: 'danger',
+};
+
+/** Etiquetas del estado del warm (mismas que la vista del entorno). */
+const ETIQUETA_ENTORNO: Record<WarmState['state'], string> = {
+  ready: 'Listo',
+  dirty: 'Sucio (requiere reset)',
+  cuarentena: 'En cuarentena',
+  'idle-escalado': 'Inactivo (escalado)',
 };
 
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';
 const MSG_NO_EXISTE = 'La notificación ya no existe';
 const RUN_ID = /^run-[0-9a-f]{16}$/;
 
-/** Inbox: lista filtrable, detalle y confirmación explícita. Sin polling ni confirmaciones automáticas. */
+/** Inbox: pestañas por estado, KPI, listado en tarjeta y confirmación explícita. Sin polling ni confirmaciones automáticas. */
 export function InboxPage() {
   const navigate = useNavigate();
   const [estado, setEstado] = useState<Estado>('pending');
   const [lista, setLista] = useState<Notification[] | null>(null);
   const [errorLista, setErrorLista] = useState<unknown>(null);
+  // Contadores de las pestañas: solo de las pestañas ya cargadas (no se piden listas extra).
+  const [conteos, setConteos] = useState<Partial<Record<Estado, number>>>({});
+  // Estado del warm para la cabecera y el KPI. null = no disponible o aún no leído.
+  const [warm, setWarm] = useState<WarmState | null>(null);
   const [seleccionadaId, setSeleccionadaId] = useState<string | null>(null);
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [familias, setFamilias] = useState<FlowFamily[]>([...FLOW_FAMILIES]);
@@ -43,21 +59,41 @@ export function InboxPage() {
   // Pestaña vigente, para que una recarga tras una acción use siempre la pestaña actual.
   const estadoRef = useRef<Estado>('pending');
   const tituloPanel = useRef<HTMLHeadingElement | null>(null);
+  const dialogoRef = useRef<HTMLDivElement | null>(null);
+  const disparadorRef = useRef<HTMLButtonElement | null>(null);
+  const panelAntes = useRef(false);
 
   // Carga la pestaña indicada. Una respuesta vieja (otra pestaña o recarga posterior) se descarta.
   const cargar = useCallback(async (porEstado: Estado) => {
     const id = ++peticion.current;
     setErrorLista(null);
+    // Sin contadores de la carga anterior mientras esta llega.
+    setConteos({});
     try {
       const datos = await apiFetch<Notification[]>(`/api/notifications?state=${porEstado}`);
       if (id !== peticion.current) return;
       setLista(datos);
+      // Solo el contador de la carga vigente: los demás quedarían obsoletos sin refrescar su lista.
+      setConteos({ [porEstado]: datos.length });
     } catch (error) {
       if (id !== peticion.current) return;
+      setConteos({});
       setLista([]);
       setErrorLista(error);
     }
   }, []);
+
+  const cargarWarm = useCallback(async () => {
+    try {
+      setWarm(await apiFetch<WarmState>('/api/warm'));
+    } catch {
+      setWarm(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarWarm();
+  }, [cargarWarm]);
 
   useEffect(() => {
     setLista(null);
@@ -76,6 +112,22 @@ export function InboxPage() {
     setEstado(nueva);
   }
 
+  /** Flechas, Inicio y Fin mueven la selección y el foco entre pestañas. */
+  function alPulsarTeclaPestana(evento: KeyboardEvent<HTMLDivElement>) {
+    const orden = PESTANAS.map((p) => p.estado);
+    const i = orden.indexOf(estado);
+    let j: number | null = null;
+    if (evento.key === 'ArrowRight') j = (i + 1) % orden.length;
+    else if (evento.key === 'ArrowLeft') j = (i - 1 + orden.length) % orden.length;
+    else if (evento.key === 'Home') j = 0;
+    else if (evento.key === 'End') j = orden.length - 1;
+    if (j === null) return;
+    evento.preventDefault();
+    const nueva = orden[j] as Estado;
+    if (nueva !== estado) elegirPestana(nueva);
+    document.getElementById(`tab-${nueva}`)?.focus();
+  }
+
   function abrirPanel() {
     setFamilias([...FLOW_FAMILIES]);
     setErrorAccion(null);
@@ -83,9 +135,11 @@ export function InboxPage() {
     setPanelAbierto(true);
   }
 
-  // Foco inicial en el título del panel.
+  // Foco inicial en el título del panel; al cerrarlo, el foco vuelve al disparador.
   useEffect(() => {
     if (panelAbierto) tituloPanel.current?.focus();
+    else if (panelAntes.current) disparadorRef.current?.focus();
+    panelAntes.current = panelAbierto;
   }, [panelAbierto]);
 
   function cerrarPanel() {
@@ -93,8 +147,32 @@ export function InboxPage() {
     setPanelAbierto(false);
   }
 
+  /** Esc cierra; Tab y Mayús+Tab cicla el foco dentro del diálogo (foco atrapado). */
   function alPulsarTeclaPanel(evento: KeyboardEvent<HTMLDivElement>) {
-    if (evento.key === 'Escape') cerrarPanel();
+    if (evento.key === 'Escape') {
+      cerrarPanel();
+      return;
+    }
+    if (evento.key !== 'Tab') return;
+    const dialogo = dialogoRef.current;
+    if (dialogo === null) return;
+    const enfocables = Array.from(
+      dialogo.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'),
+    );
+    const primero = enfocables[0];
+    const ultimo = enfocables[enfocables.length - 1];
+    if (primero === undefined || ultimo === undefined) {
+      evento.preventDefault();
+      return;
+    }
+    const activo = document.activeElement;
+    if (evento.shiftKey && (activo === primero || activo === tituloPanel.current)) {
+      evento.preventDefault();
+      ultimo.focus();
+    } else if (!evento.shiftKey && activo === ultimo) {
+      evento.preventDefault();
+      primero.focus();
+    }
   }
 
   function alternarFamilia(familia: FlowFamily) {
@@ -147,99 +225,157 @@ export function InboxPage() {
     }
   }
 
+  function actualizar() {
+    void cargar(estado);
+    void cargarWarm();
+  }
+
   const textoVacio = PESTANAS.find((p) => p.estado === estado)?.vacio ?? '';
+
+  // Cabecera: solo celdas con dato real de la API. «Familias activas» no existe en la API: se omite.
+  const meta: ElementoMeta[] = [];
+  if (warm !== null) {
+    meta.push({ etiqueta: 'Entorno', valor: ETIQUETA_ENTORNO[warm.state] });
+    meta.push({
+      etiqueta: 'Reset verificado',
+      valor: <span className="mono">{warm.reset_verified ? 'sí' : 'no'}</span>,
+    });
+  }
+
+  const textoContador = (estadoPestana: Estado) => {
+    const n = conteos[estadoPestana];
+    return n === undefined ? '—' : String(n);
+  };
 
   return (
     <main className="page">
-      <div className="page-header">
-        <div className="page-title">
-          <h1>Inbox</h1>
-          <p className="page-desc">Notificaciones de despliegue. Ninguna corre sin tu confirmación.</p>
+      <PageHeader
+        titulo="Inbox de notificaciones"
+        descripcion="Eventos recibidos desde GitHub. Cero auto-run: ninguna corrida arranca sin confirmación explícita."
+        meta={meta}
+      />
+
+      <div className="az-subbar">
+        <div
+          role="tablist"
+          aria-label="Estado de las notificaciones"
+          className="az-tablist"
+          onKeyDown={alPulsarTeclaPestana}
+        >
+          {PESTANAS.map((p) => {
+            const seleccionadaPestana = p.estado === estado;
+            const contador = conteos[p.estado];
+            return (
+              <button
+                key={p.estado}
+                type="button"
+                role="tab"
+                id={`tab-${p.estado}`}
+                aria-selected={seleccionadaPestana}
+                aria-controls="inbox-lista"
+                tabIndex={seleccionadaPestana ? 0 : -1}
+                disabled={enVuelo}
+                className="az-tab"
+                onClick={() => elegirPestana(p.estado)}
+              >
+                {contador === undefined ? p.etiqueta : `${p.etiqueta} (${contador})`}
+              </button>
+            );
+          })}
+        </div>
+        <div className="az-subbar-actions">
+          <button type="button" className="az-action-link" onClick={actualizar}>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M20 11a8.1 8.1 0 00-15.5-2m-.5-4v4h4M4 13a8.1 8.1 0 0015.5 2m.5 4v-4h-4"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Actualizar
+          </button>
         </div>
       </div>
 
-      <div className="toolbar">
-        <div role="tablist" aria-label="Estado de las notificaciones" className="tabs">
-        {PESTANAS.map((p) => (
-          <button
-            key={p.estado}
-            type="button"
-            role="tab"
-            id={`tab-${p.estado}`}
-            aria-selected={p.estado === estado}
-            aria-controls="inbox-lista"
-            disabled={enVuelo}
-            className="tab"
-            onClick={() => elegirPestana(p.estado)}
-          >
-            {p.etiqueta}
-          </button>
-        ))}
+      <div className="kpi-strip">
+        <Kpi etiqueta="Notificaciones pendientes" valor={textoContador('pending')} />
+        <Kpi etiqueta="Corridas confirmadas" valor={textoContador('confirmed')} />
+        <Kpi etiqueta="Estado del entorno" valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'} />
+        <Kpi etiqueta="Rechazadas" valor={textoContador('rejected')} />
       </div>
 
-      <button
-        type="button"
-        className="btn btn-secondary"
-        onClick={() => {
-          void cargar(estado);
-        }}
-      >
-        Actualizar
-      </button>
-      </div>
-
-      <div id="inbox-lista" role="region" aria-labelledby={`tab-${estado}`}>
+      <div id="inbox-lista" role="tabpanel" aria-labelledby={`tab-${estado}`}>
         {lista === null && errorLista === null ? <p>Cargando notificaciones…</p> : null}
         {errorLista !== null ? <ApiErrorNotice error={errorLista} /> : null}
         {lista !== null && errorLista === null && lista.length === 0 ? (
           <p className="empty">{textoVacio}</p>
         ) : null}
         {lista !== null && errorLista === null && lista.length > 0 ? (
-          <div className="card card-vista table-wrap">
-            <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Repositorio</th>
-                <th scope="col">Evento</th>
-                <th scope="col">SHA</th>
-                <th scope="col">Artefacto</th>
-                <th scope="col">Estado</th>
-                <th scope="col">
-                  <span className="sr-only">Acciones</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {lista.map((n) => (
-                <tr key={n.id}>
-                  <td data-label="Repositorio">{n.repo}</td>
-                  <td data-label="Evento">{n.github_event}</td>
-                  <td data-label="SHA">
-                    <code>{n.sha.slice(0, 7)}</code>
-                  </td>
-                  <td data-label="Artefacto">{n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}</td>
-                  <td data-label="Estado">
-                    <span className={`badge badge-${COLOR_ESTADO[n.state]}`}>{n.state}</span>
-                  </td>
-                  <td data-label="Acciones">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      disabled={enVuelo}
-                      onClick={() => {
-                        setSeleccionadaId(n.id);
-                        setPanelAbierto(false);
-                        setErrorAccion(null);
-                        setMensajeAccion(null);
-                      }}
-                    >
-                      Ver detalle
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="card">
+            <div className="card-pad">
+              <div className="card-title">Listado de notificaciones</div>
+              <div className="card-sub">
+                Eventos recibidos listos para revisión y confirmación previa a la inferencia de flujos sobre el entorno.
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Repositorio</th>
+                    <th scope="col">Evento</th>
+                    <th scope="col">SHA</th>
+                    <th scope="col">Artefacto</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">
+                      <span className="sr-only">Acciones</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lista.map((n) => (
+                    <tr key={n.id}>
+                      <td data-label="Repositorio">
+                        <strong>{n.repo}</strong>
+                      </td>
+                      <td data-label="Evento">
+                        <code>{n.github_event}</code>
+                      </td>
+                      <td data-label="SHA">
+                        <code>{n.sha.slice(0, 7)}</code>
+                      </td>
+                      <td data-label="Artefacto">
+                        <span className="mono">
+                          {n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}
+                        </span>
+                      </td>
+                      <td data-label="Estado">
+                        <Badge tono={COLOR_ESTADO[n.state]} punto>
+                          {n.state}
+                        </Badge>
+                      </td>
+                      <td data-label="Acciones">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={enVuelo}
+                          onClick={() => {
+                            setSeleccionadaId(n.id);
+                            setPanelAbierto(false);
+                            setErrorAccion(null);
+                            setMensajeAccion(null);
+                          }}
+                        >
+                          Ver detalle
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : null}
       </div>
@@ -247,9 +383,10 @@ export function InboxPage() {
       {mensajeAccion !== null ? <p role="alert" className="notice notice-danger">{mensajeAccion}</p> : null}
 
       {seleccionada !== null ? (
-        <section aria-label="Detalle de la notificación" className="card card-vista detail">
+        <section aria-label="Detalle de la notificación" className="card card-pad detail">
           <h2>Detalle</h2>
-          <dl>
+          <div className="stack">
+          <dl className="kv-list">
             <dt>Repositorio</dt>
             <dd>{seleccionada.repo}</dd>
             <dt>Evento</dt>
@@ -267,66 +404,72 @@ export function InboxPage() {
             <dt>Estado</dt>
             <dd>{seleccionada.state}</dd>
           </dl>
-          {seleccionada.state === 'pending' && !panelAbierto ? (
-            <button type="button" className="btn btn-primary" onClick={abrirPanel}>
-              Revisar y confirmar
-            </button>
+          {seleccionada.state === 'pending' ? (
+            <div>
+              <button ref={disparadorRef} type="button" className="btn btn-primary" onClick={abrirPanel}>
+                Revisar y confirmar
+              </button>
+            </div>
           ) : null}
+          </div>
         </section>
       ) : null}
 
       {panelAbierto && seleccionada !== null ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-titulo"
-          className="modal card card-vista"
-          onKeyDown={alPulsarTeclaPanel}
-        >
-          <h2 id="confirm-titulo" tabIndex={-1} ref={tituloPanel}>
-            Confirmar corrida
-          </h2>
-          <dl>
-            <dt>Repositorio</dt>
-            <dd>{seleccionada.repo}</dd>
-            <dt>SHA</dt>
-            <dd>
-              <code>{seleccionada.sha}</code>
-            </dd>
-            <dt>Artefacto</dt>
-            <dd>
-              {seleccionada.artifact
-                ? `${seleccionada.artifact.kind} · ${seleccionada.artifact.ref}`
-                : 'Sin artefacto'}
-            </dd>
-          </dl>
-          <fieldset className="fieldset">
-            <legend>Familias de flujos</legend>
-            {FLOW_FAMILIES.map((f) => (
-              <label key={f} className="check">
-                <input
-                  type="checkbox"
-                  name="familias"
-                  value={f}
-                  checked={familias.includes(f)}
-                  onChange={() => alternarFamilia(f)}
-                />{' '}
-                {f}
-              </label>
-            ))}
-          </fieldset>
-          {errorAccion !== null ? <ApiErrorNotice error={errorAccion} /> : null}
-          <button type="button" className="btn btn-secondary" onClick={cerrarPanel} disabled={enVuelo}>
-            Cancelar
-          </button>{' '}
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void confirmar()}
-            disabled={familias.length === 0 || enVuelo}
+        <div className="modal-backdrop open">
+          <div
+            ref={dialogoRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-titulo"
+            className="modal-dialog"
+            onKeyDown={alPulsarTeclaPanel}
           >
-            Confirmar corrida
-          </button>
+            <h2 id="confirm-titulo" tabIndex={-1} ref={tituloPanel}>
+              Confirmar corrida
+            </h2>
+            <dl className="kv-list">
+              <dt>Repositorio</dt>
+              <dd>{seleccionada.repo}</dd>
+              <dt>SHA</dt>
+              <dd>
+                <code>{seleccionada.sha}</code>
+              </dd>
+              <dt>Artefacto</dt>
+              <dd>
+                {seleccionada.artifact
+                  ? `${seleccionada.artifact.kind} · ${seleccionada.artifact.ref}`
+                  : 'Sin artefacto'}
+              </dd>
+            </dl>
+            <fieldset className="fieldset">
+              <legend>Familias de flujos</legend>
+              {FLOW_FAMILIES.map((f) => (
+                <label key={f} className="check">
+                  <input
+                    type="checkbox"
+                    name="familias"
+                    value={f}
+                    checked={familias.includes(f)}
+                    onChange={() => alternarFamilia(f)}
+                  />{' '}
+                  {f}
+                </label>
+              ))}
+            </fieldset>
+            {errorAccion !== null ? <ApiErrorNotice error={errorAccion} /> : null}
+            <button type="button" className="btn btn-secondary" onClick={cerrarPanel} disabled={enVuelo}>
+              Cancelar
+            </button>{' '}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void confirmar()}
+              disabled={familias.length === 0 || enVuelo}
+            >
+              Confirmar corrida
+            </button>
+          </div>
         </div>
       ) : null}
     </main>
