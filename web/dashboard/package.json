@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "gen:api": "openapi-typescript ../../contracts/openapi/control-plane.yaml -o src/api/schema.gen.ts",
+    "check:dist-urls": "bash scripts/check-dist-urls.sh",
     "check:api": "openapi-typescript ../../contracts/openapi/control-plane.yaml -o .schema.check.ts && (diff -q .schema.check.ts src/api/schema.gen.ts >/dev/null || (echo 'schema.gen.ts desactualizado: ejecuta npm run gen:api' >&2; rm -f .schema.check.ts; exit 1)) && rm -f .schema.check.ts"
   },
   "dependencies": {

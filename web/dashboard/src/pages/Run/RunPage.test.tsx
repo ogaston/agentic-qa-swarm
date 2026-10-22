@@ -115,14 +115,15 @@ describe('RunPage', () => {
     expect(screen.getByText('Completada')).toBeTruthy();
   });
 
-  it('failed es terminal y se muestra en rojo', async () => {
+  it('failed es terminal y se distingue sin depender del color', async () => {
     const contador = respuestas('inferring', 'failed');
     renderRun();
     await vaciar();
     await avanzar(3000);
     const aviso = screen.getByText(/Fallida/);
     expect(aviso.getAttribute('data-estado')).toBe('failed');
-    expect(getComputedStyle(aviso).color).toBe('rgb(176, 0, 32)');
+    expect(aviso.classList.contains('status-failed')).toBe(true);
+    expect(aviso.textContent).toContain('Fallida');
     expect(screen.getByText(/última fase alcanzada: inferring/)).toBeTruthy();
     await avanzar(10_000);
     expect(contador.peticiones).toBe(2);
