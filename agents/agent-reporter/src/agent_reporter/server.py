@@ -7,10 +7,12 @@ import os
 import sys
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 from agent_reporter.errors import (
     BudgetExceeded,
     EvidenceUnavailable,
+    InvalidReportUri,
     NoEvidence,
     ReportRejected,
     StoreUnavailable,
@@ -18,6 +20,7 @@ from agent_reporter.errors import (
 from agent_reporter.llm import LLMClient, LLMError
 from agent_reporter.metrics import METRICS
 from agent_reporter.reporter import Limits, correlate_postmortem, correlate_postmortem_uri, prepare
+from agent_reporter.s3 import report_key_of
 
 MAX_BODY = 64 * 1024
 log = logging.getLogger("agent_reporter")
@@ -30,6 +33,22 @@ class Service:
     store: object
     publisher: object
     limits: Limits
+    # Bucket de los reportes guardados (GET /v1/reports). Vacío = el GET responde invalid_uri a todo.
+    report_bucket: str = ""
+
+
+def handle_get_report(svc: Service, uri: str) -> tuple[int, bytes | dict]:
+    """GET /v1/reports: valida la URI contra el bucket del servicio ANTES de tocar el store (U9-T01)."""
+    try:
+        report_key_of(uri, svc.report_bucket)
+    except InvalidReportUri:
+        return 400, {"error": "invalid_uri"}
+    try:
+        return 200, svc.store.get(uri)
+    except InvalidReportUri:
+        return 400, {"error": "invalid_uri"}
+    except Exception:  # noqa: BLE001 - el mensaje del proveedor no sale
+        return 502, {"error": "store_unavailable"}
 
 
 def handle_report(svc: Service, body: bytes) -> tuple[int, dict]:
@@ -82,10 +101,19 @@ def make_handler(svc: Service):
             self.wfile.write(data)
 
         def do_GET(self):
-            if self.path in ("/healthz", "/readyz"):
+            url = urlsplit(self.path)
+            if url.path in ("/healthz", "/readyz") and not url.query:
                 self._send(200, {"status": "ok"})
-            elif self.path == "/metrics":
+            elif url.path == "/metrics":
                 self._send(200, METRICS.render().encode(), "text/plain; version=0.0.4")
+            elif url.path == "/v1/reports":
+                uris = parse_qs(url.query, keep_blank_values=True).get("uri", [])
+                if len(uris) != 1:
+                    return self._send(400, {"error": "invalid_uri"})
+                code, payload = handle_get_report(svc, uris[0])
+                if code != 200:
+                    return self._send(code, payload)
+                return self._send(200, payload, "application/json")
             else:
                 self._send(404, {"error": "not_found"})
 
@@ -183,7 +211,8 @@ def build_service(env=None) -> Service:
             _register_fixtures(llm, reader, e["REPORTER_FAKE_FIXTURES"], limits)
     else:
         raise SystemExit("LLM_PROVIDER no soportado")
-    return Service(reader, llm, store, RecordingPublisher(), limits)
+    report_bucket = e.get("EVIDENCE_BUCKET", "") if e.get("REPORTER_EVIDENCE", "dir") == "s3" else ""
+    return Service(reader, llm, store, RecordingPublisher(), limits, report_bucket=report_bucket)
 
 
 def main() -> None:

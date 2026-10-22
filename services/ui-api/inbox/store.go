@@ -186,6 +186,18 @@ func (s *Store) Receipts(limit int, visible func(Receipt) bool) []Receipt {
 	return out
 }
 
+// ReceiptByRun devuelve el recibo de la corrida runID, si existe (cualquier principal).
+func (s *Store) ReceiptByRun(runID string) (Receipt, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, rc := range s.receipt {
+		if rc.RunID == runID {
+			return rc, true
+		}
+	}
+	return Receipt{}, false
+}
+
 // Confirm registra la confirmacion de id por principalID: persiste (fsync) y
 // solo despues cambia el estado. La segunda confirmacion devuelve
 // ErrAlreadyConfirmed sin crear otro recibo.

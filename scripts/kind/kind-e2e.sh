@@ -893,6 +893,22 @@ report_present() {
   [ -s "$work/report.json" ] || { echo "no hay reporte bajado de MinIO (reporte-en-minio fallo antes)"; return 1; }
 }
 
+# U9-T01: GET /reports/{run} en ui-api con el token del demo (dueño de la corrida) devuelve lo mismo que el
+# reporte bajado de MinIO. La propiedad cruzada (403) NO se prueba aquí: el entorno solo tiene demo y admin,
+# y el admin ve todo por diseño. Esa parte va en services/ui-api (pruebas Report*).
+reporte_en_ui_api() {
+  report_present || return 1
+  expect_http 200 "http://127.0.0.1:$P_UI/reports/$RUN_ID" -H "Authorization: Bearer $TOKEN" || return 1
+  jq -e --slurpfile m "$work/report.json" \
+    '.verdict == $m[0].verdict and (.findings | length) == ($m[0].findings | length)' "$work/body" >/dev/null || {
+    echo "ui-api no devuelve el mismo verdict/hallazgos que MinIO: $(head -c 200 "$work/body")"; return 1
+  }
+}
+
+reporte_inexistente_404() { # una corrida sin recibo no tiene reporte: 404 sin llegar a los upstreams
+  expect_http 404 "http://127.0.0.1:$P_UI/reports/run-0000000000000000" -H "Authorization: Bearer $TOKEN"
+}
+
 verdict_sin_hallazgos() {
   run_verdict_nonempty || return 1
   report_present || return 1
@@ -1011,6 +1027,8 @@ check reset-verificado reset_verified
 # LLM real el reporte tarda mas que con el falso; sin esta espera report_uri aun no existe).
 check run-terminado wait_state 300 done
 check reporte-en-minio report_uri_ok
+check reporte-en-ui-api reporte_en_ui_api
+check reporte-inexistente-404 reporte_inexistente_404
 
 if [ "$BUG" = oversell ]; then
   check veredicto-bug verdict_bug

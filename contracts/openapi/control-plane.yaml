@@ -137,17 +137,40 @@ paths:
   /reports/{run}:
     get:
       operationId: getReport
-      summary: Reporte post-mortem de una corrida.
+      summary: Reporte post-mortem de una corrida que confirmo la persona (propiedad por recibo; admin ve todas). Lee el report_uri del controlador y el reporte a traves de agent-reporter.
       parameters:
-        - {name: run, in: path, required: true, schema: {type: string}}
+        - {name: run, in: path, required: true, schema: {type: string, pattern: '^[A-Za-z0-9._-]{1,128}$'}}
       responses:
         '200':
-          description: Reporte.
+          description: Reporte validado (contracts/plans/report.schema.json). Su run_id es el de la ruta.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Report'}
+        '400': {$ref: '#/components/responses/Error'}
         '401': {$ref: '#/components/responses/Error'}
-        '404': {$ref: '#/components/responses/Error'}
+        '403':
+          description: La corrida existe y pertenece a otro usuario (no aplica a admin). Sin peticiones salientes.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '404':
+          description: Corrida sin recibo de confirmacion (not_found), o sin report_uri todavia (report_not_ready).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '502':
+          description: Respuesta invalida o inconsistente de un upstream (run_controller_invalid, reporter_unavailable o report_mismatch).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '503':
+          description: Reportes no configurados (reports_unavailable) o go-run-controller caido (run_controller_unavailable). Incluye Retry-After.
+          headers:
+            Retry-After:
+              schema: {type: integer}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
   /policies/{name}:
     get:
       operationId: getPolicy
@@ -392,19 +415,35 @@ components:
           type: string
           description: URI con el que el reporter guardó el reporte validado (E-1); ausente hasta entonces.
     Report:
+      description: Copia fiel de contracts/plans/report.schema.json (v1). Si cambia uno, cambia el otro.
       type: object
-      required: [run_id, findings]
+      required: [run_id, verdict, summary, findings]
+      additionalProperties: false
       properties:
-        run_id: {type: string}
+        run_id: {type: string, minLength: 1}
+        verdict: {enum: [bug, sin-hallazgos, inconcluso]}
+        summary: {type: string}
+        report_uri: {type: string, minLength: 1}
         findings:
           type: array
           items:
             type: object
-            required: [id, severity, summary]
+            required: [finding_id, root_cause, invariant, method, path, evidence_uris]
+            additionalProperties: false
             properties:
-              id: {type: string}
-              severity: {type: string, enum: [low, medium, high, critical]}
-              summary: {type: string}
+              finding_id: {type: string, minLength: 1}
+              root_cause: {type: string, minLength: 1}
+              invariant: {type: string, minLength: 1}
+              method: {enum: [GET, POST, PUT, PATCH, DELETE]}
+              path: {type: string, pattern: '^/'}
+              evidence_uris:
+                type: array
+                minItems: 1
+                items: {type: string, format: uri, pattern: '^(s3|https)://'}
+      allOf:
+        - if: {properties: {verdict: {const: bug}}, required: [verdict]}
+          then: {properties: {findings: {type: array, minItems: 1}}}
+          else: {properties: {findings: {type: array, maxItems: 0}}}
     Policy:
       type: object
       required: [value]

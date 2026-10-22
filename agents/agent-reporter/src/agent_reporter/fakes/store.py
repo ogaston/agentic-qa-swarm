@@ -17,5 +17,7 @@ class MemoryReportStore:
         return uri
 
     def get(self, uri: str) -> bytes:
+        if uri not in self.objects:
+            raise StoreUnavailable("get fallido: objeto inexistente")
         data = self.objects[uri]
         return data + b" " if self.corrupt_readback else data

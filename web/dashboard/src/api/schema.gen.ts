@@ -113,7 +113,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Reporte post-mortem de una corrida. */
+        /** Reporte post-mortem de una corrida que confirmo la persona (propiedad por recibo; admin ve todas). Lee el report_uri del controlador y el reporte a traves de agent-reporter. */
         get: operations["getReport"];
         put?: never;
         post?: never;
@@ -317,15 +317,23 @@ export interface components {
             /** @description URI con el que el reporter guardó el reporte validado (E-1); ausente hasta entonces. */
             report_uri?: string;
         };
+        /** @description Copia fiel de contracts/plans/report.schema.json (v1). Si cambia uno, cambia el otro. */
         Report: {
             run_id: string;
+            /** @enum {unknown} */
+            verdict: "bug" | "sin-hallazgos" | "inconcluso";
+            summary: string;
+            report_uri?: string;
             findings: {
-                id: string;
-                /** @enum {string} */
-                severity: "low" | "medium" | "high" | "critical";
-                summary: string;
+                finding_id: string;
+                root_cause: string;
+                invariant: string;
+                /** @enum {unknown} */
+                method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+                path: string;
+                evidence_uris: string[];
             }[];
-        };
+        } & unknown;
         Policy: {
             value: {
                 [key: string]: unknown;
@@ -558,7 +566,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Reporte. */
+            /** @description Reporte validado (contracts/plans/report.schema.json). Su run_id es el de la ruta. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -567,8 +575,45 @@ export interface operations {
                     "application/json": components["schemas"]["Report"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
+            /** @description La corrida existe y pertenece a otro usuario (no aplica a admin). Sin peticiones salientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Corrida sin recibo de confirmacion (not_found), o sin report_uri todavia (report_not_ready). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Respuesta invalida o inconsistente de un upstream (run_controller_invalid, reporter_unavailable o report_mismatch). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Reportes no configurados (reports_unavailable) o go-run-controller caido (run_controller_unavailable). Incluye Retry-After. */
+            503: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getPolicy: {
