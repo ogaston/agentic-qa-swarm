@@ -31,6 +31,7 @@ Detalle:
 ## Archivos de contexto
 
 - `mockups/swarm-mock.html` (referencia visual; no se copia su JS)
+- `DESIGN.md` (sistema de diseño derivado del mockup: tokens, pares de contraste, componentes por vista; si choca con el alcance o los criterios de esta tarea, manda la tarea)
 - `web/dashboard/src/styles.css`, `src/pages/**`, `src/session/ProtectedLayout.tsx`
 - `tareas/U6-T06-recorrido-local-csp.md` (CSP del build)
 
