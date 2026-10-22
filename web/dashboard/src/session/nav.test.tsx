@@ -6,7 +6,7 @@ import { server } from '../test/server';
 import { currentLocation, renderApp } from '../test/renderApp';
 
 describe('cabecera de navegación protegida', () => {
-  it('enlaza a Inbox, Mis corridas y Warm con sus href', async () => {
+  it('enlaza a Inbox, Mis corridas y Entorno (/warm) con sus href', async () => {
     server.use(
       http.post('/api/auth/login', () =>
         HttpResponse.json({ token: 'tok', expires_at: '2099-01-01T00:00:00Z', session_id: 's1' }),
@@ -25,6 +25,6 @@ describe('cabecera de navegación protegida', () => {
     expect(nav.querySelectorAll('a').length).toBe(3);
     expect(screen.getByRole('link', { name: 'Inbox' }).getAttribute('href')).toBe('/inbox');
     expect(screen.getByRole('link', { name: 'Mis corridas' }).getAttribute('href')).toBe('/runs');
-    expect(screen.getByRole('link', { name: 'Warm' }).getAttribute('href')).toBe('/warm');
+    expect(screen.getByRole('link', { name: 'Entorno' }).getAttribute('href')).toBe('/warm');
   });
 });

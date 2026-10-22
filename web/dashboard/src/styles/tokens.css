@@ -1,12 +1,17 @@
 /*
  * Tokens de diseño del dashboard (U9-T04), derivados de mockups/swarm-mock.html y DESIGN.md §2.1.
  * Único origen de colores, superficies, bordes, radios, sombras y tipografía. El tema oscuro
- * sigue la preferencia del sistema (prefers-color-scheme). Sin recursos externos: la CSP es
- * default-src 'self' (U6-T06). Las fuentes son la pila del sistema: vendorizar IBM Plex sería una
- * dependencia más con peso, y el mockup solo la nombra como preferencia.
+ * sigue la preferencia del sistema (prefers-color-scheme) mientras no haya data-theme; con
+ * data-theme="light" o "dark" (selector de tema, U10-T01) manda el usuario. Sin recursos externos:
+ * la CSP es default-src 'self' (U6-T06). Las fuentes son la pila del sistema: vendorizar IBM Plex
+ * sería una dependencia más con peso, y el mockup solo la nombra como preferencia.
+ *
+ * El bloque oscuro va dos veces a propósito (DESIGN.md §2.1): bajo la preferencia del sistema y con
+ * data-theme="dark" explícito. Mantener ambos iguales.
  */
 
-:root {
+:root,
+:root[data-theme="light"] {
   --bg: #f8f9fa;
   --surface: #ffffff;
   --surface-2: #f1f4f8;
@@ -43,7 +48,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f141f;
     --surface: #161d2b;
     --surface-2: #1e2738;
@@ -74,4 +79,36 @@
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f141f;
+  --surface: #161d2b;
+  --surface-2: #1e2738;
+  --surface-3: #283347;
+  --border: #2d3a52;
+  --border-subtle: #222c3f;
+  --text: #f0f4f8;
+  --text-muted: #a8b6cc;
+  --text-faint: #8f9fb8;
+  --accent: #5b47fb;
+  --accent-hover: #6e5cff;
+  --accent-soft: #211d47;
+  --accent-text: #a89eff;
+  --ok: #42d992;
+  --ok-soft: #102e22;
+  --warn: #f7b749;
+  --warn-soft: #33240d;
+  --danger: #ff7a85;
+  --danger-soft: #38151b;
+  --info: #75adff;
+  --info-soft: #132747;
+  --teal: #3ce0eb;
+  --teal-soft: #0e2d33;
+  --on-accent: #ffffff;
+  --failed-fg: #b00020;
+  --failed-bg: #fde8ea;
+  --modal-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }

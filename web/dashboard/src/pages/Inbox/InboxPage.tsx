@@ -195,7 +195,7 @@ export function InboxPage() {
           <p className="empty">{textoVacio}</p>
         ) : null}
         {lista !== null && errorLista === null && lista.length > 0 ? (
-          <div className="card table-wrap">
+          <div className="card card-vista table-wrap">
             <table className="data-table">
             <thead>
               <tr>
@@ -247,7 +247,7 @@ export function InboxPage() {
       {mensajeAccion !== null ? <p role="alert" className="notice notice-danger">{mensajeAccion}</p> : null}
 
       {seleccionada !== null ? (
-        <section aria-label="Detalle de la notificación" className="card detail">
+        <section aria-label="Detalle de la notificación" className="card card-vista detail">
           <h2>Detalle</h2>
           <dl>
             <dt>Repositorio</dt>
@@ -280,7 +280,7 @@ export function InboxPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-titulo"
-          className="modal card"
+          className="modal card card-vista"
           onKeyDown={alPulsarTeclaPanel}
         >
           <h2 id="confirm-titulo" tabIndex={-1} ref={tituloPanel}>

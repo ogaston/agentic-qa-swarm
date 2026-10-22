@@ -24,7 +24,7 @@ const COLOR_VEREDICTO: Record<Verdict, 'danger' | 'ok' | 'warn'> = {
 export function Veredicto({ verdict }: { verdict: Verdict }) {
   const v = VEREDICTOS[verdict];
   return (
-    <section aria-label="Veredicto" className="card verdict">
+    <section aria-label="Veredicto" className="card card-vista verdict">
       <p>
         Veredicto:{' '}
         <strong data-veredicto={verdict} className={`badge badge-${COLOR_VEREDICTO[verdict]}`}>
@@ -81,7 +81,7 @@ export function PostMortem({ id, activo }: { id: string; activo: boolean }) {
   if (data === null) return null;
 
   return (
-    <section aria-label="Post-mortem" className="card">
+    <section aria-label="Post-mortem" className="card card-vista">
       <h2>Post-mortem</h2>
       <p>{data.summary}</p>
       {data.findings.length === 0 ? (
@@ -170,7 +170,7 @@ export function PlanFlujos({ id, activo }: { id: string; activo: boolean }) {
   }
 
   return (
-    <details className="card details">
+    <details className="card card-vista details">
       <summary>Flujos ejecutados</summary>
       {contenido}
     </details>
