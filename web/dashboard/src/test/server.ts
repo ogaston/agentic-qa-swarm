@@ -8,6 +8,10 @@ import { setupServer } from 'msw/node';
 // La vista de corrida pide el informe y el plan al llegar a sus estados: por defecto, «aún no».
 export const server = setupServer(
   http.get('/api/notifications', () => HttpResponse.json([])),
+  // La cabecera del inbox lee el estado del warm (U10-T02): por defecto, «no disponible».
+  http.get('/api/warm', () =>
+    HttpResponse.json({ code: 'warm_unavailable', message: 'warm no disponible' }, { status: 503 }),
+  ),
   http.get('/api/reports/:run', () =>
     HttpResponse.json({ code: 'report_not_ready', message: 'el informe aún no está disponible' }, { status: 404 }),
   ),
