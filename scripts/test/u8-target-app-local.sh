@@ -82,7 +82,7 @@ bl() { # <metodo> <ruta> [token]
 }
 
 # --- preparacion comun -----------------------------------------------------------------
-# GOTOOLCHAIN=auto: go.mod fija la version del toolchain (1.26.9); un Go local mas viejo la descarga.
+# GOTOOLCHAIN=auto: go.mod fija la version del toolchain (1.26.10); un Go local mas viejo la descarga.
 if ! (cd "$root/demo/target-app" 2>/dev/null && GOTOOLCHAIN=auto go build -o "$work/target-app" .); then
   echo "FALLA build-target-app (demo/target-app no compila o no existe)"
   exit 1

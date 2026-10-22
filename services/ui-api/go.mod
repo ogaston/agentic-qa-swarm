@@ -1,6 +1,6 @@
 module github.com/ogaston/agentic-qa-swarm/services/ui-api
 
-go 1.26.9
+go 1.26.10
 
 require (
 	github.com/nats-io/nats-server/v2 v2.15.1
