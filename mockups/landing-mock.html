@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agentic QA Swarm — Autonomous Black-Box QA for Transactional APIs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    :root {
+      --bg: #090b10;
+      --bg-radial: radial-gradient(circle at 50% 0%, #151b2e 0%, #090b10 70%);
+      --surface: #11141f;
+      --surface-2: #161b2a;
+      --surface-3: #1f2538;
+      --border: #232a3d;
+      --border-focus: #3b4563;
+      --border-accent: rgba(125, 128, 240, 0.4);
+      --text: #f0f3fa;
+      --text-muted: #8b95a8;
+      --text-faint: #596377;
+      --accent: #7d80f0;
+      --accent-soft: rgba(125, 128, 240, 0.12);
+      --accent-glow: rgba(125, 128, 240, 0.25);
+      --cyan: #38bdf8;
+      --cyan-soft: rgba(56, 189, 248, 0.12);
+      --ok: #34d399;
+      --ok-soft: rgba(52, 211, 153, 0.12);
+      --warn: #fbbf24;
+      --warn-soft: rgba(251, 191, 36, 0.12);
+      --danger: #f87171;
+      --danger-soft: rgba(248, 113, 113, 0.12);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --mono: "IBM Plex Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      background-image: var(--bg-radial);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    code, .mono { font-family: var(--mono); }
+    a { color: inherit; text-decoration: none; }
+    ::selection { background: var(--accent-soft); color: var(--text); }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* GRID BACKGROUND OVERLAY */
+    .grid-pattern {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 720px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      mask-image: radial-gradient(ellipse 60% 50% at 50% 0%, #000 70%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* NAVBAR */
+    header.nav-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(12px);
+      background: rgba(9, 11, 16, 0.82);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+    .brand-name {
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+      color: #fff;
+    }
+    .brand-badge {
+      font-size: 11px;
+      font-family: var(--mono);
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--surface-3);
+      color: var(--cyan);
+      border: 1px solid var(--border);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      transition: color .15s ease;
+    }
+    .nav-links a:hover {
+      color: #fff;
+    }
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 9px 16px;
+      font-size: 13.5px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all .15s ease;
+      font-family: var(--font);
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 0 18px var(--accent-glow);
+    }
+    .btn-primary:hover {
+      background: #8e91ff;
+      box-shadow: 0 0 24px rgba(125, 128, 240, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-secondary:hover {
+      background: var(--surface-3);
+      border-color: var(--border-focus);
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12.5px;
+    }
+
+    /* HERO */
+    section.hero {
+      position: relative;
+      padding: 84px 0 64px;
+      text-align: center;
+      z-index: 1;
+    }
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--cyan);
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .hero-pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+    }
+    .hero h1 {
+      font-size: 46px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      color: #fff;
+      max-width: 890px;
+      margin: 0 auto 20px;
+    }
+    .hero h1 span.gradient {
+      background: linear-gradient(135deg, #a5b4fc 0%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p.lead {
+      font-size: 17px;
+      color: var(--text-muted);
+      max-width: 720px;
+      margin: 0 auto 34px;
+      line-height: 1.6;
+    }
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 38px;
+    }
+    .cli-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+    .cli-bar .copy-btn {
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+    .cli-bar .copy-btn:hover { color: var(--text); }
+
+    /* STATS STRIP */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 50px;
+      padding-top: 40px;
+      border-top: 1px solid var(--border);
+    }
+    .stat-box {
+      text-align: left;
+      background: rgba(17, 20, 31, 0.6);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px 20px;
+    }
+    .stat-box .val {
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+      font-family: var(--mono);
+    }
+    .stat-box .lbl {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* SECTION HEADERS */
+    .section-head {
+      text-align: center;
+      max-width: 680px;
+      margin: 0 auto 48px;
+    }
+    .section-tag {
+      font-size: 11.5px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .section-head h2 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    .section-head p {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    /* CODE PREVIEW WINDOW */
+    .code-window {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+      margin: 40px 0;
+    }
+    .window-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+    }
+    .window-dots {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .window-dots span {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #333a4f;
+    }
+    .window-dots span.dot-red { background: #ef4444; }
+    .window-dots span.dot-yellow { background: #f59e0b; }
+    .window-dots span.dot-green { background: #10b981; }
+
+    .code-tabs {
+      display: flex;
+      gap: 4px;
+    }
+    .code-tab {
+      background: transparent;
+      border: 0;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .code-tab.active {
+      background: var(--surface-3);
+      color: #fff;
+    }
+    .code-tab:hover:not(.active) {
+      color: var(--text);
+    }
+    .code-meta {
+      font-size: 11.5px;
+      font-family: var(--mono);
+      color: var(--text-faint);
+    }
+
+    pre.code-body {
+      padding: 22px 24px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+      color: #d1d5db;
+    }
+    .kw { color: #c084fc; font-weight: 600; }
+    .fn { color: #60a5fa; }
+    .str { color: #34d399; }
+    .num { color: #fbbf24; }
+    .com { color: #64748b; font-style: italic; }
+    .key { color: #93c5fd; }
+    .tag { color: #f472b6; }
+    .pass { color: #34d399; font-weight: 600; }
+    .warn-txt { color: #f59e0b; }
+
+    /* 4 PILLARS GRID */
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      margin-bottom: 70px;
+    }
+    .pillar-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      position: relative;
+      transition: border-color .15s ease, transform .15s ease;
+    }
+    .pillar-card:hover {
+      border-color: var(--border-focus);
+      transform: translateY(-2px);
+    }
+    .pillar-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      font-size: 18px;
+    }
+    .pi-purple { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--border-accent); }
+    .pi-cyan { background: var(--cyan-soft); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .pi-green { background: var(--ok-soft); color: var(--ok); border: 1px solid rgba(52, 211, 153, 0.3); }
+    .pi-amber { background: var(--warn-soft); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.3); }
+
+    .pillar-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .pillar-card p {
+      color: var(--text-muted);
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+    .pillar-tag {
+      display: inline-block;
+      margin-top: 14px;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--surface-2);
+      color: var(--text-faint);
+    }
+
+    /* COMPARISON TABLE */
+    .table-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow-x: auto;
+      margin-bottom: 70px;
+    }
+    table.comp-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13.5px;
+    }
+    table.comp-table th, table.comp-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    table.comp-table th {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    table.comp-table th.col-highlight {
+      background: rgba(125, 128, 240, 0.08);
+      color: var(--accent);
+      border-left: 1px solid var(--border-accent);
+      border-right: 1px solid var(--border-accent);
+    }
+    table.comp-table td.col-highlight {
+      background: rgba(125, 128, 240, 0.04);
+      border-left: 1px solid var(--border-accent);
+      border-right: 1px solid var(--border-accent);
+      font-weight: 600;
+      color: #fff;
+    }
+    table.comp-table tr:last-child td {
+      border-bottom: 0;
+    }
+    .badge-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ok);
+      font-weight: 600;
+    }
+    .badge-cross {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--danger);
+    }
+    .badge-dim {
+      color: var(--text-faint);
+    }
+
+    /* INTEGRATIONS STRIP */
+    .integrations-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      flex-wrap: wrap;
+      margin: 30px 0 60px;
+      padding: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .integ-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: color .15s ease;
+    }
+    .integ-chip:hover { color: #fff; }
+    .integ-chip svg { width: 18px; height: 18px; fill: currentColor; }
+
+    /* WARM SANDBOX SIMULATOR */
+    .sim-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin: 30px 0 70px;
+    }
+    .sim-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .sim-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .sim-btn {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: var(--mono);
+      cursor: pointer;
+    }
+    .sim-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .sim-display {
+      background: #090b10;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .sim-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sim-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 12px var(--ok);
+    }
+    .sim-text h4 { font-size: 15px; font-weight: 700; color: #fff; }
+    .sim-text p { font-size: 12.5px; color: var(--text-muted); }
+    .sim-metrics {
+      display: flex;
+      gap: 24px;
+    }
+    .sim-metric {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .sim-metric strong {
+      display: block;
+      font-size: 14px;
+      color: #fff;
+      font-family: var(--mono);
+    }
+
+    /* FOOTER */
+    footer.landing-footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 0 32px;
+      background: var(--surface);
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 40px;
+    }
+    .footer-col h4 {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .footer-col a { font-size: 13px; color: var(--text-muted); transition: color .15s; }
+    .footer-col a:hover { color: #fff; }
+    .footer-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-faint);
+    }
+
+    @media (max-width: 860px) {
+      .stats-grid, .pillars-grid, .footer-grid { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 34px; }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="grid-pattern"></div>
+
+  <!-- NAVBAR -->
+  <header class="nav-header">
+    <div class="container nav-inner">
+      <div class="brand-wrap">
+        <div class="brand-icon">🐝</div>
+        <a href="landing-mock.html" class="brand-name">Agentic QA Swarm</a>
+        <span class="brand-badge">Warm Sandbox QA</span>
+      </div>
+
+      <ul class="nav-links">
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#code-previews">Code Previews</a></li>
+        <li><a href="#comparison">Comparison</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="../contracts/openapi/control-plane.yaml" target="_blank">OpenAPI 3.1</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="../contracts/openapi/control-plane.yaml" class="btn btn-secondary btn-sm" target="_blank">
+          API Specs
+        </a>
+        <a href="swarm-mock.html" class="btn btn-primary btn-sm">
+          Launch App Mock →
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO SECTION -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-pill">
+          <span class="dot"></span>
+          Platform Warm Sandbox · 100% Verified Reset · Zero Staging Access
+        </div>
+
+        <h1>
+          Autonomous Black-Box QA for Transactional APIs.<br>
+          <span class="gradient">Deterministic Swarms. Zero Auto-Run.</span>
+        </h1>
+
+        <p class="lead">
+          Intercepts GitHub commits and PRs, waits for human confirmation, deploys your service onto an isolated 
+          platform warm sandbox, generates deterministic k6 load tests, and guarantees a 100% verified reset before merge.
+        </p>
+
+        <div class="hero-ctas">
+          <a href="swarm-mock.html" class="btn btn-primary">
+            Launch Interactive App Mock →
+          </a>
+          <a href="../specs/prd.md" class="btn btn-secondary" target="_blank">
+            Read PRD Specification
+          </a>
+        </div>
+
+        <div class="cli-bar">
+          <span>$ curl -H "Authorization: Bearer $TOKEN" https://control-plane.local/notifications</span>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText('curl -H &quot;Authorization: Bearer $TOKEN&quot; https://control-plane.local/notifications'); alert('Copied to clipboard!');" title="Copy command">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+        </div>
+
+        <!-- STATS STRIP -->
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="val" style="color:var(--ok);">100%</div>
+            <div class="lbl">Verified Reset Completeness (DB & Cache wipe)</div>
+          </div>
+          <div class="stat-box">
+            <div class="val" style="color:var(--cyan);">0</div>
+            <div class="lbl">Customer Staging/Prod Incidents (Never touched)</div>
+          </div>
+          <div class="stat-box">
+            <div class="val" style="color:var(--accent);">74%</div>
+            <div class="lbl">First-Time Rehearsal Pass Rate before Full Run</div>
+          </div>
+          <div class="stat-box">
+            <div class="val" style="color:var(--warn);">&gt;30%</div>
+            <div class="lbl">Target Confirmed Business Logic Finding Rate</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTEGRATIONS STRIP -->
+    <div class="container">
+      <div class="integrations-bar">
+        <div class="integ-chip" title="GitHub Webhooks and App">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          GitHub App
+        </div>
+        <div class="integ-chip" title="Kubernetes Namespace aqs-test">
+          <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.2l6.8 3.8v7.6L12 19.4 5.2 15.6V8L12 4.2z"/></svg>
+          Kubernetes
+        </div>
+        <div class="integ-chip" title="GitOps Continuous Delivery">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v10M7 12h10" stroke="currentColor" stroke-width="2"/></svg>
+          Flux GitOps
+        </div>
+        <div class="integ-chip" title="Grafana k6 Load Runner">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 8v8M15 8v8M9 12h6" stroke="currentColor" stroke-width="2"/></svg>
+          Grafana k6
+        </div>
+        <div class="integ-chip" title="MinIO S3 Evidence Store">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          MinIO Evidence
+        </div>
+        <div class="integ-chip" title="PostgreSQL Database">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          PostgreSQL & Redis
+        </div>
+        <div class="integ-chip" title="Prometheus Metrics">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z" fill="currentColor"/></svg>
+          Prometheus
+        </div>
+      </div>
+    </div>
+
+    <!-- CODE PREVIEWS SECTION -->
+    <section id="code-previews" class="container">
+      <div class="section-head">
+        <div class="section-tag">Code & Contracts</div>
+        <h2>Inspectable Artifacts. No Black Boxes.</h2>
+        <p>Every test is standard code, every gate is a schema-validated event, and every finding links to raw logs.</p>
+      </div>
+
+      <div class="code-window">
+        <div class="window-topbar">
+          <div class="window-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+
+          <div class="code-tabs">
+            <button class="code-tab active" data-tab="k6">transfers_concurrency.js (k6)</button>
+            <button class="code-tab" data-tab="openapi">control-plane.yaml</button>
+            <button class="code-tab" data-tab="reset">reset-verified.log</button>
+            <button class="code-tab" data-tab="report">finding_double_debit.json</button>
+          </div>
+
+          <div class="code-meta" id="codeMeta">k6 / javascript · 40 VUs</div>
+        </div>
+
+        <pre class="code-body" id="codeDisplay"></pre>
+      </div>
+    </section>
+
+    <!-- 4 CORE PILLARS SECTION -->
+    <section id="how-it-works" class="container">
+      <div class="section-head">
+        <div class="section-tag">Safety Invariants</div>
+        <h2>Architected for Trust and Zero Pollution</h2>
+        <p>How Agentic QA Swarm eliminates manual black-box QA while safeguarding your environments.</p>
+      </div>
+
+      <div class="pillars-grid">
+        <div class="pillar-card">
+          <div class="pillar-icon pi-purple">🛡️</div>
+          <h3>Platform Warm Sandbox</h3>
+          <p>
+            Your application runs in an isolated, reusable namespace (<code class="mono">aqs-test</code>) with pre-deployed 
+            PostgreSQL and Redis dependencies. Your staging and production environments are never accessed or targeted.
+          </p>
+          <span class="pillar-tag">Isolated Namespace · No Client Staging Target</span>
+        </div>
+
+        <div class="pillar-card">
+          <div class="pillar-icon pi-cyan">👤</div>
+          <h3>Human Confirmation Gate</h3>
+          <p>
+            Zero auto-run. GitHub events only produce notifications in your inbox. No Kubernetes Jobs or pods are ever 
+            created until an engineer explicitly approves the run with a verifiable identity token.
+          </p>
+          <span class="pillar-tag">POST /notifications/{id}/confirm · Fail-Closed</span>
+        </div>
+
+        <div class="pillar-card">
+          <div class="pillar-icon pi-amber">⚡</div>
+          <h3>Inspectable k6 & Blocking Rehearsal</h3>
+          <p>
+            The LLM agent generates standard, versionable <code class="mono">k6</code> test scripts. A lightweight unit rehearsal 
+            must return 2xx before authorizing a full concurrency swarm, preventing compute waste on broken builds.
+          </p>
+          <span class="pillar-tag">rehearsal.passed=true · Non-Proprietary Code</span>
+        </div>
+
+        <div class="pillar-card">
+          <div class="pillar-icon pi-green">🔄</div>
+          <h3>100% Verified Reset</h3>
+          <p>
+            Between every run, the platform restarts services, wipes PostgreSQL tables, flushes Redis cache, and verifies 
+            state via health probes (<code class="mono">reset_verified=true</code>). If verification fails, the warm sandbox enters quarantine.
+          </p>
+          <span class="pillar-tag">Zero Cross-Run Contamination · Rebuild Hygiene</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURE COMPARISON TABLE -->
+    <section id="comparison" class="container">
+      <div class="section-head">
+        <div class="section-tag">Comparison</div>
+        <h2>Why Agentic QA Swarm is Built Differently</h2>
+        <p>A breakdown of our design invariants compared to brittle manual E2E setups and uncontrolled autonomous agents.</p>
+      </div>
+
+      <div class="table-container">
+        <table class="comp-table">
+          <thead>
+            <tr>
+              <th>Feature / Invariant</th>
+              <th class="col-highlight">Agentic QA Swarm</th>
+              <th>Autonomous LLM Testers</th>
+              <th>Traditional Staging E2E</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Execution Target</strong></td>
+              <td class="col-highlight"><span class="badge-check">✓</span> Platform Warm Sandbox (<code class="mono">aqs-test</code>)</td>
+              <td><span class="badge-cross">✗</span> Customer Staging / Prod (High Risk)</td>
+              <td><span class="badge-dim">—</span> Fragile Shared Staging</td>
+            </tr>
+            <tr>
+              <td><strong>Autonomy & Triggers</strong></td>
+              <td class="col-highlight"><span class="badge-check">✓</span> Human Confirmation Gate (Zero Auto-Run)</td>
+              <td><span class="badge-cross">✗</span> Runaway Autonomous Loop</td>
+              <td><span class="badge-dim">—</span> Scheduled or CI trigger</td>
+            </tr>
+            <tr>
+              <td><strong>Test Script Artifact</strong></td>
+              <td class="col-highlight"><span class="badge-check">✓</span> Standard, inspectable <code class="mono">k6</code> scripts</td>
+              <td><span class="badge-cross">✗</span> Proprietary prompt logs / black box</td>
+              <td><span class="badge-cross">✗</span> Handcrafted brittle scripts</td>
+            </tr>
+            <tr>
+              <td><strong>State Hygiene</strong></td>
+              <td class="col-highlight"><span class="badge-check">✓</span> 100% Verified Reset (<code class="mono">reset_verified=true</code>)</td>
+              <td><span class="badge-cross">✗</span> Database pollution & orphaned rows</td>
+              <td><span class="badge-dim">—</span> Manual seed scripts / dirty state</td>
+            </tr>
+            <tr>
+              <td><strong>Pre-Flight Safety Gate</strong></td>
+              <td class="col-highlight"><span class="badge-check">✓</span> Blocking Unit Rehearsal (<code class="mono">rehearsal.passed</code>)</td>
+              <td><span class="badge-cross">✗</span> Blind full execution</td>
+              <td><span class="badge-cross">✗</span> Immediate run (fails late)</td>
+            </tr>
+            <tr>
+              <td><strong>Bug Finding Capability</strong></td>
+              <td class="col-highlight"><span class="badge-check">✓</span> Race conditions & business logic flaws</td>
+              <td><span class="badge-dim">—</span> Superficial UI & text scraping</td>
+              <td><span class="badge-dim">—</span> Only checks hardcoded assertions</td>
+            </tr>
+            <tr>
+              <td><strong>Runner Network Security</strong></td>
+              <td class="col-highlight"><span class="badge-check">✓</span> Deny-by-default (Zero LLM egress in pods)</td>
+              <td><span class="badge-cross">✗</span> Open internet egress for models</td>
+              <td><span class="badge-dim">—</span> Full CI host privileges</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- LIVE SANDBOX STATE SIMULATOR -->
+    <section id="architecture" class="container">
+      <div class="sim-card">
+        <div class="sim-header">
+          <div>
+            <div class="section-tag">Interactive Simulator</div>
+            <h3 style="font-size:20px; font-weight:700; color:#fff;">Warm Sandbox Lifecycle States</h3>
+            <p style="color:var(--text-muted); font-size:13px; margin-top:2px;">
+              Inspect how the platform manages the reusable warm sandbox across lifecycle events.
+            </p>
+          </div>
+          <div class="sim-controls">
+            <button class="sim-btn active" data-state="ready">1. ready</button>
+            <button class="sim-btn" data-state="deploying">2. deploying</button>
+            <button class="sim-btn" data-state="rehearsal">3. rehearsal</button>
+            <button class="sim-btn" data-state="running">4. running</button>
+            <button class="sim-btn" data-state="resetting">5. resetting</button>
+            <button class="sim-btn" data-state="cuarentena">6. cuarentena (fail)</button>
+          </div>
+        </div>
+
+        <div class="sim-display">
+          <div class="sim-status">
+            <span class="sim-dot" id="simDot"></span>
+            <div class="sim-text">
+              <h4 id="simStateTitle">State: ready</h4>
+              <p id="simStateDesc">Warm Sandbox is clean, probes 200 OK, reset_verified=true. Ready for incoming confirmed run.</p>
+            </div>
+          </div>
+
+          <div class="sim-metrics">
+            <div class="sim-metric">
+              <span>Namespace</span>
+              <strong class="mono">aqs-test</strong>
+            </div>
+            <div class="sim-metric">
+              <span>Gate Status</span>
+              <strong class="mono" id="simGateText" style="color:var(--ok);">gate: open</strong>
+            </div>
+            <div class="sim-metric">
+              <span>Active Pods</span>
+              <strong class="mono" id="simPodsText">3 (App + DB + Cache)</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="landing-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <div class="brand-wrap" style="margin-bottom:12px;">
+            <div class="brand-icon">🐝</div>
+            <span class="brand-name">Agentic QA Swarm</span>
+          </div>
+          <p style="font-size:13px; color:var(--text-muted); max-width:320px; line-height:1.6;">
+            Autonomous black-box QA on platform warm sandboxes with 100% verified reset and human confirmation gates.
+          </p>
+        </div>
+
+        <div class="footer-col">
+          <h4>Exploration</h4>
+          <ul>
+            <li><a href="swarm-mock.html">Interactive App Mock</a></li>
+            <li><a href="../project-overview.html">Project Blueprint (HTML)</a></li>
+            <li><a href="../DECISIONES.md">Architecture Decisions</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Contracts & Specs</h4>
+          <ul>
+            <li><a href="../contracts/openapi/control-plane.yaml" target="_blank">OpenAPI 3.1 Spec</a></li>
+            <li><a href="../specs/prd.md" target="_blank">Authoritative PRD</a></li>
+            <li><a href="../unidades-y-tareas.md">Construction Units</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Platform</h4>
+          <ul>
+            <li><a href="#how-it-works">Warm Sandbox Invariant</a></li>
+            <li><a href="#code-previews">k6 Test Generation</a></li>
+            <li><a href="#comparison">Feature Comparison</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>Agentic QA Swarm · Built with Go, Kubernetes, Flux &amp; LLM Agents</div>
+        <div>Inception Complete · Construction Active</div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // CODE SNIPPET PREVIEW DATA
+    const CODE_SNIPPETS = {
+      k6: {
+        meta: 'k6 / javascript · 40 VUs concurrency stress',
+        code: `<span class="com">// transfers_concurrency.js — Generated by Agentic QA Swarm</span>
+<span class="kw">import</span> http <span class="kw">from</span> <span class="str">'k6/http'</span>;
+<span class="kw">import</span> { check, sleep } <span class="kw">from</span> <span class="str">'k6'</span>;
+
+<span class="kw">export const</span> options = {
+  vus: <span class="num">40</span>,
+  iterations: <span class="num">40</span>,
+  thresholds: {
+    <span class="str">'checks'</span>: [<span class="str">'rate==1.0'</span>], <span class="com">// Strict business logic invariant</span>
+  },
+};
+
+<span class="kw">export default function</span> () {
+  <span class="kw">const</span> BASE = __ENV.TARGET_URL || <span class="str">'http://sut.aqs-test.svc:8080'</span>;
+  
+  <span class="com">// Step 1: Create a temporary funds hold</span>
+  <span class="kw">const</span> holdRes = http.<span class="fn">post</span>(\`\${BASE}/accounts/42/hold\`, JSON.<span class="fn">stringify</span>({ amount: <span class="num">100.00</span> }), {
+    headers: { <span class="str">'Content-Type'</span>: <span class="str">'application/json'</span> },
+  });
+  
+  <span class="com">// Step 2: Concurrently debit against the same hold</span>
+  <span class="kw">const</span> txRes = http.<span class="fn">post</span>(\`\${BASE}/transfers\`, JSON.<span class="fn">stringify</span>({
+    hold_id: holdRes.<span class="fn">json</span>(<span class="str">'id'</span>),
+    amount: <span class="num">100.00</span>
+  }), { headers: { <span class="str">'Content-Type'</span>: <span class="str">'application/json'</span> } });
+  
+  <span class="com">// Invariant: Account balance must NEVER become negative</span>
+  <span class="fn">check</span>(txRes, {
+    <span class="str">'balance is never negative'</span>: (r) =&gt; r.<span class="fn">json</span>(<span class="str">'balance'</span>) &gt;= <span class="num">0</span>,
+    <span class="str">'status code is valid (200 or 409)'</span>: (r) =&gt; [200, 409].<span class="fn">includes</span>(r.status),
+  });
+}`
+      },
+      openapi: {
+        meta: 'contracts/openapi/control-plane.yaml · OpenAPI 3.1.0',
+        code: `<span class="key">openapi</span>: <span class="str">'3.1.0'</span>
+<span class="key">info</span>:
+  <span class="key">title</span>: <span class="str">Agentic QA Swarm - Control Plane API</span>
+  <span class="key">version</span>: <span class="str">1.0.0</span>
+<span class="key">paths</span>:
+  <span class="key">/webhooks/github</span>:
+    <span class="key">post</span>:
+      <span class="key">summary</span>: <span class="str">Receive GitHub event (creates notification, zero auto-run)</span>
+      <span class="key">parameters</span>:
+        - <span class="key">name</span>: <span class="str">X-Hub-Signature-256</span>
+          <span class="key">in</span>: <span class="str">header</span>
+          <span class="key">required</span>: <span class="kw">true</span>
+  <span class="key">/notifications/{id}/confirm</span>:
+    <span class="key">post</span>:
+      <span class="key">summary</span>: <span class="str">Human confirmation gate (triggers deploy-{run} on warm)</span>
+      <span class="key">requestBody</span>:
+        <span class="key">content</span>:
+          <span class="key">application/json</span>:
+            <span class="key">schema</span>:
+              <span class="key">properties</span>:
+                <span class="key">flows</span>: { <span class="key">type</span>: <span class="str">array</span>, <span class="key">items</span>: { <span class="key">type</span>: <span class="str">string</span> } }
+      <span class="key">responses</span>:
+        <span class="key">'201'</span>:
+          <span class="key">description</span>: <span class="str">Confirmation persisted; publishes run.confirmed</span>`
+      },
+      reset: {
+        meta: 'job/reset-run-84a1d · verified reset probe logs',
+        code: `<span class="com">[00:00.00] INFO  Starting verified reset sequence for namespace: aqs-test</span>
+<span class="com">[00:00.15] INFO  Identified warm dependencies: postgresql-0, redis-0, sut-deployment</span>
+<span class="com">[00:00.32] INFO  Terminating runner jobs: runner-84a1d-happy, runner-84a1d-race ... [OK]</span>
+<span class="com">[00:00.75] INFO  Executing PostgreSQL database sanitization...</span>
+<span class="com">[00:01.10] DB    TRUNCATE TABLE accounts, holds, ledger_entries CASCADE;</span>
+<span class="com">[00:01.35] DB    Restoring baseline synthetic seed fixture v1 ... <span class="pass">[DONE: 12ms]</span></span>
+<span class="com">[00:01.45] CACHE FLUSHDB async on redis.aqs-test.svc.cluster.local ... <span class="pass">[DONE]</span></span>
+<span class="com">[00:01.80] K8S   Rolling restart SUT deployment pod ... <span class="pass">[Running]</span></span>
+<span class="com">[00:02.40] PROBE GET http://sut.aqs-test:8080/healthz ... <span class="pass">200 OK</span></span>
+<span class="com">[00:02.50] PROBE DB connection check & clean row count verify ... <span class="pass">MATCH (0 orphaned)</span></span>
+<span class="com">[00:02.60] AUDIT Emitting event: reset.verified (reset_verified=true)</span>
+<span class="com">[00:02.65] SUCCESS Warm Sandbox restored to state: ready (0 cross-run pollution)</span>`
+      },
+      report: {
+        meta: 'findings/run-84a1d.json · business logic finding',
+        code: `{
+  <span class="key">"run_id"</span>: <span class="str">"run-84a1d9b4c02e11ef80010242ac120002"</span>,
+  <span class="key">"commit_sha"</span>: <span class="str">"c4e21ab39f"</span>,
+  <span class="key">"verdict"</span>: <span class="str">"BUSINESS_LOGIC_DEFECT_DETECTED"</span>,
+  <span class="key">"finding"</span>: {
+    <span class="key">"title"</span>: <span class="str">"Double debit under concurrent transfer hold fulfillment"</span>,
+    <span class="key">"severity"</span>: <span class="str">"HIGH"</span>,
+    <span class="key">"broken_invariant"</span>: <span class="str">"Account balance must never be negative ($balance &gt;= 0)"</span>,
+    <span class="key">"reproducibility"</span>: <span class="str">"100% under 40 simultaneous requests"</span>,
+    <span class="key">"observed_state"</span>: <span class="str">"Account #42 reached -$100.00 balance due to non-atomic lock"</span>
+  },
+  <span class="key">"evidence"</span>: {
+    <span class="key">"minio_uri"</span>: <span class="str">"s3://evidence/runs/run-84a1d/raw_logs.ndjson.zst"</span>,
+    <span class="key">"k6_metrics_uri"</span>: <span class="str">"s3://evidence/runs/run-84a1d/k6_metrics.json"</span>
+  },
+  <span class="key">"warm_state_after"</span>: {
+    <span class="key">"reset_verified"</span>: <span class="kw">true</span>,
+    <span class="key">"quarantined"</span>: <span class="kw">false</span>
+  }
+}`
+      }
+    };
+
+    // TAB SWITCHING
+    const codeDisplay = document.getElementById('codeDisplay');
+    const codeMeta = document.getElementById('codeMeta');
+    const tabs = document.querySelectorAll('.code-tab');
+
+    function renderTab(key) {
+      const data = CODE_SNIPPETS[key];
+      if (!data) return;
+      codeDisplay.innerHTML = data.code;
+      codeMeta.textContent = data.meta;
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === key));
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => renderTab(tab.dataset.tab));
+    });
+    renderTab('k6');
+
+    // WARM SANDBOX SIMULATOR
+    const simStates = {
+      ready: {
+        title: 'State: ready',
+        desc: 'Warm Sandbox is clean, probes 200 OK, reset_verified=true. Ready for next confirmed run.',
+        dot: 'var(--ok)',
+        gate: 'gate: open',
+        gateColor: 'var(--ok)',
+        pods: '3 (App + DB + Cache)'
+      },
+      deploying: {
+        title: 'State: deploying version',
+        desc: 'Rolling out incoming commit/tag on app pod. Postgres and Redis kept warm and reused.',
+        dot: 'var(--cyan)',
+        gate: 'gate: deploying',
+        gateColor: 'var(--cyan)',
+        pods: '3 (Rollout in progress)'
+      },
+      rehearsal: {
+        title: 'State: rehearsal (gate)',
+        desc: 'Executing single unit probe before authorizing full swarm. Must return 2xx.',
+        dot: 'var(--accent)',
+        gate: 'gate: verifying 2xx',
+        gateColor: 'var(--accent)',
+        pods: '4 (3 warm + 1 rehearsal job)'
+      },
+      running: {
+        title: 'State: running k6 swarm',
+        desc: 'Concurrency stress testing against SUT service. Zero LLM egress or internet access.',
+        dot: 'var(--warn)',
+        gate: 'gate: locked',
+        gateColor: 'var(--warn)',
+        pods: '5 (3 warm + 2 runner jobs)'
+      },
+      resetting: {
+        title: 'State: verified reset',
+        desc: 'TRUNCATE DB tables, FLUSHDB cache, restart SUT pod, verify probes. Zero contamination.',
+        dot: 'var(--warn)',
+        gate: 'gate: resetting',
+        gateColor: 'var(--warn)',
+        pods: '3 (Running reset probe)'
+      },
+      cuarentena: {
+        title: 'State: cuarentena (fail-closed)',
+        desc: 'Reset probe or deploy failed after 2 retries. Environment quarantined; escalated to human.',
+        dot: 'var(--danger)',
+        gate: 'gate: blocked',
+        gateColor: 'var(--danger)',
+        pods: '3 (Quarantine / Handoff)'
+      }
+    };
+
+    const simButtons = document.querySelectorAll('.sim-btn');
+    const simDot = document.getElementById('simDot');
+    const simStateTitle = document.getElementById('simStateTitle');
+    const simStateDesc = document.getElementById('simStateDesc');
+    const simGateText = document.getElementById('simGateText');
+    const simPodsText = document.getElementById('simPodsText');
+
+    simButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const s = btn.dataset.state;
+        const config = simStates[s];
+        if (!config) return;
+
+        simButtons.forEach(b => b.classList.toggle('active', b === btn));
+        simDot.style.background = config.dot;
+        simDot.style.boxShadow = `0 0 12px ${config.dot}`;
+        simStateTitle.textContent = config.title;
+        simStateDesc.textContent = config.desc;
+        simGateText.textContent = config.gate;
+        simGateText.style.color = config.gateColor;
+        simPodsText.textContent = config.pods;
+      });
+    });
+  </script>
+</body>
+</html>
