@@ -21,12 +21,16 @@ import re
 import sys
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = "127.0.0.1"
-RUN_PATH = re.compile(r"^/runs/(run-[0-9a-f]{32})$")
-SEQUENCE = ["deploying", "running", "done"]
+RUN_PATH = re.compile(r"^/runs/(run-[0-9a-f]{16})(?:/plan)?$")
+SEQUENCE = ["confirmed", "warm_ready", "deploying", "inferring", "rehearsing", "running",
+            "resetting", "reporting", "done"]
+TRACE_ID = "0af7651916cd43dd8448eb211c80319c"
+REPORT_URI = "s3://aqs-reports/{run}/report.json"
 
 
 def bearer(handler):
@@ -83,6 +87,26 @@ def make_warm_handler(token):
     return Warm
 
 
+def plan_for(run_id):
+    return {"run_id": run_id, "workflow": "checkout", "flows": [
+        {"flow_id": "f-happy", "name": "Compra feliz", "invariant": "el total coincide con la suma de ítems",
+         "invariant_probe": False, "steps": [
+             {"method": "POST", "path": "/cart/items", "expect_status": 201},
+             {"method": "POST", "path": "/checkout", "expect_status": 200}]},
+        {"flow_id": "f-double", "name": "Doble cobro", "invariant": "un pedido no se cobra dos veces",
+         "invariant_probe": True, "steps": [
+             {"method": "POST", "path": "/checkout", "expect_status": 200},
+             {"method": "POST", "path": "/checkout", "expect_status": 409}]}]}
+
+
+def report_for(run_id):
+    return {"run_id": run_id, "verdict": "bug", "summary": "Se cobró dos veces un pedido idéntico.",
+            "report_uri": REPORT_URI.format(run=run_id), "findings": [
+                {"finding_id": "F-1", "root_cause": "POST /checkout no es idempotente",
+                 "invariant": "un pedido no se cobra dos veces", "method": "POST", "path": "/checkout",
+                 "evidence_uris": ["s3://aqs-evidence/%s/req-2.har" % run_id]}]}
+
+
 def make_run_handler(identity_url):
     counts = {}
     lock = threading.Lock()
@@ -91,7 +115,13 @@ def make_run_handler(identity_url):
         def do_GET(self):
             if self.path == "/healthz":
                 return self.send_json(200, {"status": "ok"})
-            m = RUN_PATH.match(self.path)
+            path, _, query = self.path.partition("?")
+            if path == "/v1/reports":  # simula agent-reporter: el reporte validado de la corrida
+                m = re.search(r"run-[0-9a-f]{16}", urllib.parse.unquote(query))
+                if not m:
+                    return self.send_json(404, {"code": "not_found", "message": "no existe"})
+                return self.send_json(200, report_for(m.group(0)))
+            m = RUN_PATH.match(path)
             if not m:
                 return self.send_json(404, {"code": "not_found", "message": "no existe"})
             token = bearer(self)
@@ -114,11 +144,16 @@ def make_run_handler(identity_url):
                     {"Retry-After": "1"},
                 )
             run_id = m.group(1)
+            if path.endswith("/plan"):
+                return self.send_json(200, plan_for(run_id))
             with lock:
                 n = counts.get(run_id, 0)
                 counts[run_id] = n + 1
             state = SEQUENCE[min(n, len(SEQUENCE) - 1)]
-            return self.send_json(200, {"id": run_id, "state": state})
+            body = {"id": run_id, "state": state, "trace_id": TRACE_ID}
+            if state == "done":
+                body.update(verdict="bug", report_uri=REPORT_URI.format(run=run_id))
+            return self.send_json(200, body)
 
     return Run
 

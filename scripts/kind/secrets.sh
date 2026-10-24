@@ -59,11 +59,11 @@ declare -A SECRET_NS=(
 # nunca se imprimen: los errores nombran la variable, no su contenido.
 litellm_env="$AQS_KIND_STATE_DIR/litellm.env"
 deepseek_key="$AQS_KIND_STATE_DIR/deepseek.key"
-LITELLM_UPSTREAM_IP="" LITELLM_UPSTREAM_PORT="" LITELLM_UPSTREAM_MODEL=""
+LITELLM_UPSTREAM_IP="" LITELLM_UPSTREAM_PORT="" LITELLM_UPSTREAM_MODEL="" LITELLM_UPSTREAM_URL="" LITELLM_UPSTREAM_IPS=""
 
 # Lee una variable de litellm.env sin evaluar el archivo (no se ejecuta como shell).
 litellm_var() {
-  grep -E "^$1=" "$litellm_env" | tail -n1 | cut -d= -f2- | tr -d '\r'
+  { grep -E "^$1=" "$litellm_env" || true; } | tail -n1 | cut -d= -f2- | tr -d '\r'
 }
 
 check_litellm_inputs() {
@@ -73,7 +73,20 @@ check_litellm_inputs() {
   LITELLM_UPSTREAM_IP=$(litellm_var LITELLM_UPSTREAM_IP)
   LITELLM_UPSTREAM_PORT=$(litellm_var LITELLM_UPSTREAM_PORT)
   LITELLM_UPSTREAM_MODEL=$(litellm_var LITELLM_UPSTREAM_MODEL)
-  [[ "$LITELLM_UPSTREAM_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail "LITELLM_UPSTREAM_IP ausente o no es IPv4 literal en litellm.env"
+  # Proveedor directo (p. ej. DeepSeek): LITELLM_UPSTREAM_URL=https://host[/v1]. El egreso se abre a las IPv4 que
+  # resuelve el host en este momento (IP/32 cada una); LITELLM_UPSTREAM_IP es opcional y se suma si existe.
+  LITELLM_UPSTREAM_URL=$(litellm_var LITELLM_UPSTREAM_URL)
+  if [ -n "$LITELLM_UPSTREAM_URL" ]; then
+    [[ "$LITELLM_UPSTREAM_URL" =~ ^https://([A-Za-z0-9.-]+)(:[0-9]{1,5})?(/[A-Za-z0-9._/-]*)?$ ]] || fail "LITELLM_UPSTREAM_URL debe ser https://host[:puerto][/ruta] en litellm.env"
+    local host=${BASH_REMATCH[1]}
+    [ -n "$LITELLM_UPSTREAM_PORT" ] || LITELLM_UPSTREAM_PORT=443
+    LITELLM_UPSTREAM_IPS=$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u | tr '\n' ' ')
+    if [ -n "$LITELLM_UPSTREAM_IP" ]; then LITELLM_UPSTREAM_IPS="$LITELLM_UPSTREAM_IPS$LITELLM_UPSTREAM_IP"; fi
+    [ -n "${LITELLM_UPSTREAM_IPS// /}" ] || fail "no se pudo resolver $host (¿sin red?)"
+  else
+    [[ "$LITELLM_UPSTREAM_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail "LITELLM_UPSTREAM_IP ausente o no es IPv4 literal en litellm.env"
+    LITELLM_UPSTREAM_IPS=$LITELLM_UPSTREAM_IP
+  fi
   [[ "$LITELLM_UPSTREAM_PORT" =~ ^[0-9]{1,5}$ ]] || fail "LITELLM_UPSTREAM_PORT ausente o no numérico en litellm.env"
   [[ "$LITELLM_UPSTREAM_MODEL" =~ ^[A-Za-z0-9._/-]+$ ]] || fail "LITELLM_UPSTREAM_MODEL ausente o con caracteres no válidos en litellm.env"
 }
@@ -249,14 +262,23 @@ gen_agents_llm_key() { # key: api-key
 }
 # Endpoint y modelo del gateway (U8-T09, ronda 3): salen de litellm.env. Se reaplican en cada ejecución.
 gen_llm_upstream() { # keys: base-url (http://IP:PUERTO/v1), host (IP literal del gateway), model (modelo del gateway)
-  printf 'http://%s:%s/v1' "$LITELLM_UPSTREAM_IP" "$LITELLM_UPSTREAM_PORT" > "$1/base-url"
-  printf '%s' "$LITELLM_UPSTREAM_IP" > "$1/host"
+  if [ -n "$LITELLM_UPSTREAM_URL" ]; then
+    printf '%s' "${LITELLM_UPSTREAM_URL%/}" > "$1/base-url"
+    printf '%s' "$(sed -E 's#^https://([^:/]+).*#\1#' <<<"$LITELLM_UPSTREAM_URL")" > "$1/host"
+  else
+    printf 'http://%s:%s/v1' "$LITELLM_UPSTREAM_IP" "$LITELLM_UPSTREAM_PORT" > "$1/base-url"
+    printf '%s' "$LITELLM_UPSTREAM_IP" > "$1/host"
+  fi
   printf '%s' "$LITELLM_UPSTREAM_MODEL" > "$1/model"
 }
 
 # NetworkPolicy de egreso de planner y reporter al gateway: IP/32 y puerto de litellm.env. Se aplica al clúster
 # y NO se escribe en el repo (kubectl apply -k no la poda). Es aditiva a las de base/ (DNS, MinIO del reporter).
 render_agents_egress() {
+  local blocks="" ip
+  for ip in $LITELLM_UPSTREAM_IPS; do blocks+="        - ipBlock:
+            cidr: ${ip}/32
+"; done
   kubectl apply -f - >/dev/null <<EOF || fail "no se pudo aplicar la NetworkPolicy agents-egress-upstream"
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -272,8 +294,7 @@ spec:
   policyTypes: [Egress]
   egress:
     - to:
-        - ipBlock:
-            cidr: ${LITELLM_UPSTREAM_IP}/32
+${blocks%$'\n'}
       ports:
         - {protocol: TCP, port: ${LITELLM_UPSTREAM_PORT}}
 EOF
