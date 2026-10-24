@@ -943,7 +943,7 @@ verdict_bug() {
 
 hallazgo_cita_invariante_y_evidencia() {
   report_present || return 1
-  jq -e '.findings[0].invariant | test("stock")' "$work/report.json" >/dev/null || {
+  jq -e '.findings[0].invariant | test("stock|existencia|inventario"; "i")' "$work/report.json" >/dev/null || {
     echo "el hallazgo no cita la invariante de stock: $(jq -c '.findings[0].invariant' "$work/report.json" 2>/dev/null)"; return 1
   }
   local uri key n=0

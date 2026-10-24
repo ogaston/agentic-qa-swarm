@@ -94,7 +94,7 @@ start go-identity env IDENTITY_USERS_FILE="$state/users.json" LISTEN_ADDR="127.0
   "$state/go-identity"
 # ui-api: con UIAPI_AUTH=identity valida cada petición contra go-identity real.
 start ui-api env UIAPI_AUTH=identity IDENTITY_URL="http://127.0.0.1:$p_identity" \
-  WARM_URL="http://127.0.0.1:$p_warm" UIAPI_WARM_TOKEN_FILE="$state/warm-token" \
+  WARM_URL="http://127.0.0.1:$p_warm" RUN_CONTROLLER_URL="http://127.0.0.1:$p_run" REPORTER_URL="http://127.0.0.1:$p_run" UIAPI_WARM_TOKEN_FILE="$state/warm-token" \
   UIAPI_EVENTS_FILE="$state/events.jsonl" UIAPI_OUTBOX_FILE="$state/outbox.jsonl" \
   UIAPI_DATA_DIR="$state/data" LISTEN_ADDR="127.0.0.1:$p_uiapi" LOG_LEVEL=warn \
   "$state/ui-api"

@@ -9,3 +9,13 @@
 - `deploy/flux/prod/` — overlay del entorno prod (U5-T04).
 - `.github/workflows/` — workflows de GitHub Actions (U5-T03).
 - `web/` — frontend (U6). `web/dashboard/` es la SPA Vite + React + TypeScript.
+
+## Entorno local rápido (sin clúster)
+
+```bash
+scripts/dev/dev-up.sh     # compila y levanta identity, ui-api, stubs y el dashboard en 127.0.0.1
+scripts/dev/dev-down.sh   # lo para y borra su estado
+```
+
+Requiere `go`, `npm`, `python3` y `curl`. Imprime la URL del dashboard y el usuario `demo`.
+Para el clúster kind completo (podman), ver `docs/operaciones/kind-local.md`.

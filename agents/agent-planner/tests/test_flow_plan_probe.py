@@ -89,3 +89,10 @@ def test_render_k6_falla_cerrado_con_body_o_sondeo():
     q["flows"][0]["invariant_probe"] = True
     with pytest.raises(FlowValidationError, match="invariant_probe"):
         rf(q, q["flows"][0])
+
+
+def test_prompt_pide_sondeos_de_invariantes_con_cuerpos_validos():
+    # El LLM real solo planeaba caminos felices: el prompt debe exigir sondeos y mantener cuerpos conformes.
+    assert "DEBES incluir al menos un flujo con invariant_probe true" in INSTRUCTIONS
+    assert "stock" in INSTRUCTIONS and "rechazo" in INSTRUCTIONS
+    assert "nunca el formato" in INSTRUCTIONS
