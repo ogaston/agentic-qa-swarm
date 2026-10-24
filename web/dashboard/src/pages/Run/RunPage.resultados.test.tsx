@@ -118,12 +118,12 @@ describe('RunPage: post-mortem', () => {
     ruta(`/api/reports/${ID}`, [{ json: { ...informeDosHallazgos, run_id: ID } }]);
     renderRun();
     await vaciar();
-    const pm = within(screen.getByRole('region', { name: 'Post-mortem' }));
+    const pm = within(screen.getByRole('region', { name: 'Informe post-mortem' }));
     expect(pm.getByText('Dos flujos fallidos')).toBeTruthy();
-    expect(pm.getByText('POST /orders')).toBeTruthy();
-    expect(pm.getByText('PATCH /orders/{id}')).toBeTruthy();
-    expect(pm.getByText('Invariante: inv a')).toBeTruthy();
-    expect(pm.getByText('Causa raíz: causa a')).toBeTruthy();
+    expect(pm.getByText('/orders')).toBeTruthy();
+    expect(pm.getByText('/orders/{id}')).toBeTruthy();
+    expect(pm.getByText('inv a')).toBeTruthy();
+    expect(pm.getByText('causa a')).toBeTruthy();
     expect(pm.getByText('s3://aqs-evidence/runs/run-1/flow-1/result.json')).toBeTruthy();
     expect(pm.getByText('s3://aqs-evidence/runs/run-1/flow-1/logs.txt')).toBeTruthy();
     expect(pm.getByText('https://evidence.example/run-1/flow-2/result.json')).toBeTruthy();
@@ -226,7 +226,7 @@ describe('RunPage: plan de flujos', () => {
     await vaciar();
     await avanzar(10_000);
     expect(plan.n).toBe(1);
-    expect(screen.getByText('Flujos ejecutados')).toBeTruthy();
+    expect(screen.getByText('Plan de flujos')).toBeTruthy();
     expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
     const pre = document.querySelector('pre');
     expect(pre?.textContent).toBe(JSON.stringify({ product_id: 1, qty: 11 }, null, 2));
@@ -247,7 +247,7 @@ describe('RunPage: plan de flujos', () => {
     await vaciar();
     await avanzar(10_000);
     expect(plan.n).toBe(1);
-    expect(screen.getByText('Flujos ejecutados')).toBeTruthy();
+    expect(screen.getByText('Plan de flujos')).toBeTruthy();
     expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
   });
 
@@ -258,7 +258,7 @@ describe('RunPage: plan de flujos', () => {
     await vaciar();
     await avanzar(3000);
     expect(plan.n).toBe(1);
-    expect(screen.getByText('Flujos ejecutados')).toBeTruthy();
+    expect(screen.getByText('Plan de flujos')).toBeTruthy();
     expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
   });
 
@@ -306,6 +306,6 @@ describe('RunPage: plan de flujos', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeTruthy();
     await pulsar('Reintentar');
     expect(plan.n).toBe(2);
-    expect(screen.getByText('Flujos ejecutados')).toBeTruthy();
+    expect(screen.getByText('Plan de flujos')).toBeTruthy();
   });
 });

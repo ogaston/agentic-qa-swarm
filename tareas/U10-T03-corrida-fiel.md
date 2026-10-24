@@ -9,7 +9,7 @@
 > Rehacer `RunPage`/`Resultados` con la «Vista de corrida» del mockup (líneas ~1232-1445).
 
 - `PageHeader` con `Corrida <code>run-id</code>`, insignia de veredicto/estado, trace id y franja de metadatos (Estado de corrida, sondeo cada 3 s).
-- Banner de fallida (`alert-box alert-danger`, `data-estado="failed"`) como en el mockup; el color pasa de estilo en línea a clase (cierra C-131; se adapta la aserción de `RunPage.test.tsx` a la clase/rol, no a `rgb(...)`).
+- Banner de fallida (`alert-box alert-danger`, `data-estado="failed"`) como en el mockup; el color sigue en clase, sin estilo en línea (C-131 ya la cerró U9-T06).
 - Rejilla `grid-main-side`: columna principal con tarjeta «Informe post-mortem» (resumen, `finding-item` con severidad/invariante/causa, `evidence-list` con URIs `s3://` copiables) y tarjeta plegable «Plan de flujos» (`flow-block`, método con insignia por verbo, esperado con insignia por familia de estado, `json-body`); columna lateral con la línea de tiempo de 9 fases (`phase-*`, hecha/actual/pendiente con icono + texto, no solo color).
 - Estados: sin reporte aún, reporte con bug, sin hallazgos, inconcluso, fallida, plan no disponible.
 **Fuera:** el conmutador «Previsualizar estado (Demo)» y el banner «Iniciar ejecución de flujos» (la ejecución no se inicia desde la UI: invariante de confirmación única); URLs prefirmadas; endpoints nuevos.

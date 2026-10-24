@@ -1,0 +1,114 @@
+[
+  {
+    "nombre": "bug",
+    "tema": "light",
+    "ancho": 1280,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 0
+  },
+  {
+    "nombre": "bug",
+    "tema": "light",
+    "ancho": 375,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 94
+  },
+  {
+    "nombre": "bug",
+    "tema": "dark",
+    "ancho": 1280,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 0
+  },
+  {
+    "nombre": "bug",
+    "tema": "dark",
+    "ancho": 375,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 94
+  },
+  {
+    "nombre": "sin-hallazgos",
+    "tema": "light",
+    "ancho": 1280,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 0
+  },
+  {
+    "nombre": "sin-hallazgos",
+    "tema": "light",
+    "ancho": 375,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 94
+  },
+  {
+    "nombre": "sin-hallazgos",
+    "tema": "dark",
+    "ancho": 1280,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 0
+  },
+  {
+    "nombre": "sin-hallazgos",
+    "tema": "dark",
+    "ancho": 375,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 94
+  },
+  {
+    "nombre": "en-curso",
+    "tema": "light",
+    "ancho": 1280,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 0
+  },
+  {
+    "nombre": "en-curso",
+    "tema": "light",
+    "ancho": 375,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 94
+  },
+  {
+    "nombre": "en-curso",
+    "tema": "dark",
+    "ancho": 1280,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 0
+  },
+  {
+    "nombre": "en-curso",
+    "tema": "dark",
+    "ancho": 375,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 94
+  },
+  {
+    "nombre": "fallida",
+    "tema": "light",
+    "ancho": 1280,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 0
+  },
+  {
+    "nombre": "fallida",
+    "tema": "light",
+    "ancho": 375,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 94
+  },
+  {
+    "nombre": "fallida",
+    "tema": "dark",
+    "ancho": 1280,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 0
+  },
+  {
+    "nombre": "fallida",
+    "tema": "dark",
+    "ancho": 375,
+    "desbordamientoApp": 0,
+    "desbordamientoMock": 94
+  }
+]

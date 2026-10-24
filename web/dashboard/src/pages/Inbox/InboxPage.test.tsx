@@ -128,11 +128,11 @@ describe('Inbox lista', () => {
     await screen.findByText('acme/api');
     expect(screen.queryByText('acme/confirmado')).toBeNull();
 
-    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
+    await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
     await screen.findByText('acme/confirmado');
     expect(screen.queryByText('acme/api')).toBeNull();
 
-    await user.click(screen.getByRole('tab', { name: 'Rechazadas' }));
+    await user.click(screen.getByRole('tab', { name: /^Rechazadas/ }));
     await screen.findByText('acme/rechazado');
     expect(screen.queryByText('acme/confirmado')).toBeNull();
 
@@ -197,12 +197,12 @@ describe('Inbox lista', () => {
         return HttpResponse.json(estado === 'confirmed' ? [confirmada] : [pendienteA]);
       }),
     ]);
-    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
+    await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
     await screen.findByText('acme/confirmado');
     await new Promise((r) => setTimeout(r, 600));
     expect(screen.queryByText('acme/api')).toBeNull();
     expect(screen.queryByText('acme/confirmado')).not.toBeNull();
-    expect(screen.getByRole('tab', { name: 'Confirmadas' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /^Confirmadas/ }).getAttribute('aria-selected')).toBe('true');
   });
 });
 
@@ -323,8 +323,8 @@ describe('Inbox confirma', () => {
     ]);
     const dialogo = await abrirPanel(user, 'acme/api');
     await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));
-    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
-    expect(screen.getByRole('tab', { name: 'Pendientes' }).getAttribute('aria-selected')).toBe('true');
+    await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
+    expect(screen.getByRole('tab', { name: /^Pendientes/ }).getAttribute('aria-selected')).toBe('true');
 
     expect(await screen.findByText('Esta notificación ya no está pendiente')).toBeTruthy();
     await waitFor(() => expect(reg.listas).toEqual(['pending', 'pending']));
@@ -342,8 +342,8 @@ describe('Inbox confirma', () => {
     ]);
     const dialogo = await abrirPanel(user, 'acme/api');
     await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));
-    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
-    expect(screen.getByRole('tab', { name: 'Pendientes' }).getAttribute('aria-selected')).toBe('true');
+    await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
+    expect(screen.getByRole('tab', { name: /^Pendientes/ }).getAttribute('aria-selected')).toBe('true');
     expect(await screen.findByText(/cuerpo inválido/)).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
@@ -375,12 +375,12 @@ describe('Inbox confirma', () => {
     const user = await abrirInbox([
       listaPorEstado({ pending: [pendienteA], confirmed: [confirmada], rejected: [rechazada] }, nuevoRegistro()),
     ]);
-    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
+    await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
     await screen.findByText('acme/confirmado');
     await user.click(within(filaDe('acme/confirmado')).getByRole('button', { name: 'Ver detalle' }));
     expect(screen.queryByRole('button', { name: 'Revisar y confirmar' })).toBeNull();
 
-    await user.click(screen.getByRole('tab', { name: 'Rechazadas' }));
+    await user.click(screen.getByRole('tab', { name: /^Rechazadas/ }));
     await screen.findByText('acme/rechazado');
     await user.click(within(filaDe('acme/rechazado')).getByRole('button', { name: 'Ver detalle' }));
     expect(screen.queryByRole('button', { name: 'Revisar y confirmar' })).toBeNull();
@@ -396,6 +396,129 @@ describe('Inbox confirma', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(reg.posts).toHaveLength(0);
+  });
+});
+
+const WARM_OK = { warm_id: 'warm-1', state: 'ready', reset_verified: true, baseline_version: 'v1.2.0' };
+
+function warmOk() {
+  return http.get('/api/warm', () => HttpResponse.json(WARM_OK));
+}
+
+describe('Inbox estructura del mockup (U10-T02 CA-2)', () => {
+  it('encabezado, tablist de 3 pestañas con contadores, 4 KPI, tabla y Actualizar; sin «Nueva aplicación»', async () => {
+    const reg = nuevoRegistro();
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA, pendienteB, pendienteC], confirmed: [confirmada], rejected: [rechazada] }, reg),
+      warmOk(),
+    ]);
+    await screen.findByText('acme/api');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Inbox de notificaciones' })).toBeTruthy();
+
+    const tablist = screen.getByRole('tablist');
+    expect(within(tablist).getAllByRole('tab')).toHaveLength(3);
+    expect(screen.getByRole('tab', { name: 'Pendientes (3)' })).toBeTruthy();
+
+    await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
+    await screen.findByText('acme/confirmado');
+    await user.click(screen.getByRole('tab', { name: /^Rechazadas/ }));
+    await screen.findByText('acme/rechazado');
+    await user.click(screen.getByRole('tab', { name: /^Pendientes/ }));
+    await screen.findByText('acme/api');
+    // Solo el contador de la última carga: los de las pestañas no recargadas no se muestran.
+    expect(screen.getByRole('tab', { name: 'Pendientes (3)' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^Confirmadas$/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^Rechazadas$/ })).toBeTruthy();
+
+    expect(document.querySelectorAll('.kpi-box')).toHaveLength(4);
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Actualizar' })).toBeTruthy();
+    expect(screen.queryByText(/Nueva aplicación/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /Nueva aplicación/ })).toBeNull();
+  });
+
+  it('la cabecera muestra solo datos reales: Entorno y Reset verificado desde /api/warm; sin «Familias activas»', async () => {
+    await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmOk()]);
+    await screen.findByText('acme/api');
+    const meta = document.querySelector('.az-header-meta') as HTMLElement;
+    expect(within(meta).getByText('Entorno')).toBeTruthy();
+    expect(within(meta).getByText('Reset verificado')).toBeTruthy();
+    expect(screen.queryByText('Familias activas')).toBeNull();
+  });
+
+  it('con el warm no disponible se omiten las celdas de la cabecera y el KPI de entorno no inventa valor', async () => {
+    await abrirInbox([
+      listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
+      http.get('/api/warm', () =>
+        HttpResponse.json({ code: 'warm_unavailable', message: 'x' }, { status: 503 }),
+      ),
+    ]);
+    await screen.findByText('acme/api');
+    expect(document.querySelector('.az-header-meta')).toBeNull();
+    expect(screen.queryByText('Reset verificado')).toBeNull();
+    expect(await screen.findByText('Sin dato')).toBeTruthy();
+  });
+
+  it('las flechas mueven la selección y el foco entre pestañas; tabindex roving', async () => {
+    const reg = nuevoRegistro();
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA], confirmed: [confirmada], rejected: [rechazada] }, reg),
+      warmOk(),
+    ]);
+    await screen.findByText('acme/api');
+    const pendientes = screen.getByRole('tab', { name: /^Pendientes/ });
+    pendientes.focus();
+    await user.keyboard('{ArrowRight}');
+    const confirmadas = screen.getByRole('tab', { name: /^Confirmadas/ });
+    expect(confirmadas.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(confirmadas);
+    expect(confirmadas.getAttribute('tabindex')).toBe('0');
+    expect(pendientes.getAttribute('tabindex')).toBe('-1');
+    await screen.findByText('acme/confirmado');
+
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: /^Rechazadas/ }));
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(pendientes);
+    expect(pendientes.getAttribute('aria-selected')).toBe('true');
+    await user.keyboard('{ArrowLeft}');
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: /^Rechazadas/ }));
+    await screen.findByText('acme/rechazado');
+    // Pendientes → Confirmadas (→) → Rechazadas (Fin) → Pendientes (→, envuelve) → Rechazadas (←)
+    expect(reg.listas).toEqual(['pending', 'confirmed', 'rejected', 'pending', 'rejected']);
+  });
+
+  it('la lista es un tabpanel etiquetado por la pestaña activa', async () => {
+    await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmOk()]);
+    await screen.findByText('acme/api');
+    const panel = screen.getByRole('tabpanel');
+    expect(panel.getAttribute('aria-labelledby')).toBe('tab-pending');
+  });
+});
+
+describe('Inbox diálogo modal (U10-T02 CA-2)', () => {
+  it('modal-backdrop/modal-dialog, foco dentro, Tab cicla, Esc cierra y el foco vuelve al disparador', async () => {
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
+      warmOk(),
+    ]);
+    const dialogo = await abrirPanel(user, 'acme/api');
+    expect(dialogo.className).toContain('modal-dialog');
+    expect(dialogo.parentElement?.className).toContain('modal-backdrop');
+    expect(dialogo.parentElement?.className).toContain('open');
+
+    const casilla = within(dialogo).getByRole('checkbox', { name: 'happy-path' });
+    const confirmar = within(dialogo).getByRole('button', { name: 'Confirmar corrida' });
+    confirmar.focus();
+    await user.keyboard('{Tab}');
+    expect(document.activeElement).toBe(casilla);
+    await user.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(document.activeElement).toBe(confirmar);
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Revisar y confirmar' }));
   });
 });
 
@@ -415,11 +538,11 @@ describe('Inbox sin auto', () => {
     await screen.findByText('acme/api');
     expect(screen.getAllByRole('row').length).toBeGreaterThanOrEqual(4);
 
-    await user.click(screen.getByRole('tab', { name: 'Confirmadas' }));
+    await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
     await screen.findByText('acme/confirmado');
-    await user.click(screen.getByRole('tab', { name: 'Rechazadas' }));
+    await user.click(screen.getByRole('tab', { name: /^Rechazadas/ }));
     await screen.findByText('acme/rechazado');
-    await user.click(screen.getByRole('tab', { name: 'Pendientes' }));
+    await user.click(screen.getByRole('tab', { name: /^Pendientes/ }));
     await screen.findByText('acme/api');
 
     const dialogo = await abrirPanel(user, 'acme/api');
