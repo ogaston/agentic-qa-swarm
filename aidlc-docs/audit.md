@@ -760,3 +760,272 @@ Keep working autonomously until the task is truly finished, then call task_compl
 **User Input**: "is there any frontend where I can see this working?" / "try http://127.0.0.1:18610/ and see that there's nothing" / "okay what's missing then?" / "yes, write the U9 tasks"
 **AI Response**: "El dashboard (U6) funciona contra kind en http://127.0.0.1:18610/inbox, pero `/` no tiene ruta («No encontrado»), no tiene estilos y no muestra el post-mortem: `GET /reports/{run}` está en la OpenAPI sin implementar y `RunPage` termina en «Generando informe»; el plan de flujos no se guarda ni se expone. Se redacta U9 con 5 tareas: U9-T01 (`GET /reports/{run}` en ui-api vía `GET /v1/reports` del reporter, OpenAPI `Report` alineada), U9-T02 (plan persistido en el controlador y `GET /runs/{id}/plan`), U9-T03 (veredicto, post-mortem y plan en el dashboard; `/` → `/inbox`), U9-T04 (estilo según `mockups/swarm-mock.html`), U9-T05 (insumos de kind persistentes y `--rotate-demo` seguro; cierra C-127). Olas: 1 = T01 ∥ T02 ∥ T05; 2 = T03; 3 = T04. C-126 (ping de GitHub) queda en candidatas."
 **Context**: Construction — U9 redactada, sin despachar.
+
+## Construction — U9 ola 1 despachada (T01 ∥ T02 ∥ T05)
+**Timestamp**: 2026-10-21T20:05:00-05:00
+**User Input**: "continue"
+**AI Response**: "U9 redactada y fusionada (PR #116, origin/main 4776614). Se crean los worktrees `agentic-qa-swarm-wt-U9-T01`, `-U9-T02` y `-U9-T05` (ramas `tarea/U9-T0N`, base 4776614) y se despachan en paralelo tres codificadores, ronda 1, con los hashes de tarea 2c4c978 (T01), e951fd4 (T02) y c04872c (T05). A T05 se le advierte no borrar Secrets vivos del clúster `aqs` (go-identity-users, webhook). Tope de 3 rondas por tarea."
+**Context**: Construction — U9 ola 1.
+
+---
+
+## Construction — U9-T05 CA-3 corrido por el humano; U9-T02 en espera de T05
+**Timestamp**: 2026-10-21T20:40:00-05:00
+**User Input**: (salida pegada) "lock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock bash -c 'bash scripts/kind/secrets.sh --rotate-demo; echo \"rc=$?\"; bash scripts/kind/kind-smoke.sh 2>&1 | grep -c \"^FALLA\"' / aqs-kind: demo.txt migrado de /run/user/1000/aqs-kind a /home/omarjayg/.local/state/aqs-kind (una sola vez) / aqs-kind: admin.txt migrado [...] / aqs-kind: admin-mfa-secret.txt migrado [...] / Warning: resource secrets/go-identity-users is missing the kubectl.kubernetes.io/last-applied-configuration annotation [...] / secrets: credenciales demo y admin escritas en /home/omarjayg/.local/state/aqs-kind (600) / secrets: OK (--rotate-demo: go-identity-users rotado y go-identity reiniciado; ningún otro Secret tocado) / rc=0"
+**AI Response**: "U9-T05 ronda 1 (af398dd): el codificador no corrió CA-3 porque el clasificador de permisos le denegó respaldar credenciales; el orquestador no lo sorteó y se lo llevó al humano, que corrió la rotación. La línea del conteo de FALLA no apareció en lo pegado; el orquestador volvió a correr kind-smoke bajo flock: rc=0, 0 FALLA, 25 OK; directorio 700 y ficheros 600; go-identity Running. Evidencia en `revisiones/U9-T05/ca3-evidencia.md`; revisor despachado. U9-T02 ronda 1 (94b0ad9): CA-1, CA-2 y CA-4 verificados; CA-3 falló en login-demo porque la migración de T05 ya movió demo.txt fuera de `${XDG_RUNTIME_DIR}/aqs-kind`, de donde siguen leyendo los scripts de origin/main. Arbitraje: el CA-3 de T02 (y de T01) se corre después de fusionar T05 y rebasar sobre ella; no se restauran credenciales en la ruta vieja. Arbitraje: `--bug on` en el CA-3 de T01 y T02 es una errata; vale `--bug oversell`. Candidatas nuevas: unificar `not_found`/`run_not_found` en GET /runs/{id}; `invariant_probe` requerido en schema.gen.ts por el `default: false`; que kind-up.sh arranque el contenedor parado; cifrado de insumos con sops/age."
+**Context**: Construction — U9 ola 1.
+
+---
+
+## Construction — U9-T05 VERDE en la ronda 2, PR #117
+**Timestamp**: 2026-10-21T21:30:00-05:00
+**User Input**: (sin entrada nueva del humano; eventos del loop)
+**AI Response**: "Ronda 1 de U9-T05 NO-VERDE (F-01 docs con ruta tmpfs, F-02 SC2034 nuevos y shellcheck sin correr, F-03 sin prueba del camino de la imagen). Arbitraje: CA-1 se mide como cero warnings nuevos de shellcheck respecto de origin/main (la base ya da rc≠0). Ronda 2 (1b21564) responde F-01..F-03; secrets.sh y lib.sh no cambian, así que la evidencia de CA-3 corrida por el humano sigue vigente. Revisor: VERDE (informe en `revisiones/U9-T05/ronda-2.md`, commit 28ccd4e). Se abre el PR #117 para revisión humana. U9-T01 (a79d58c) y U9-T02 (94b0ad9) esperan la fusión de T05 para rebasar y correr sus e2e en kind. Candidatas nuevas: limpiar /tmp/go-identity.tar en el nodo kind; STATE_DIR duplicado y SC1010 en kind-e2e.sh; `.shellcheckrc` para poder usar rc=0."
+**Context**: Construction — U9 ola 1.
+
+---
+
+## Documentation — Kubernetes Guide (`guide.md`)
+**Timestamp**: 2026-10-21T21:01:25-05:00
+**User Input**: "create a guide.md to explain how we're using kubernetes, and give me some useful command to explore the whole architecture"
+**AI Response**: "Created `guide.md` documenting the two-plane Kubernetes architecture (`aqs-system` and `aqs-test`), in-cluster `client-go` operations (`go-warm-manager`, `go-run-controller`, `go-reset`), defense-in-depth RBAC/NetworkPolicy/Rego isolation, GitOps overlays (`base`, `dev`, `prod`, `kind`), and a categorized command reference for exploring the live cluster and manifests."
+**Context**: Documentation — `guide.md` created at workspace root.
+
+---
+
+## Construction — U9-T01 y U9-T02: rebase sobre T05 y e2e en kind
+**Timestamp**: 2026-10-21T21:45:00-05:00
+**User Input**: "continue"
+**AI Response**: "PR #117 (U9-T05) fusionado por el humano (origin/main baca6ec). Se despachan en paralelo dos codificadores frescos que continúan la ronda 1 de U9-T01 (a79d58c) y U9-T02 (94b0ad9): rebase sobre baca6ec, repetir la verificación local y correr el e2e de kind (`--bug oversell`) con todo lo que toca el clúster dentro de un solo flock. No pueden rotar credenciales ni tocar Secrets. Después va el revisor de cada tarea."
+**Context**: Construction — U9 ola 1.
+
+---
+
+## Construction — Ajustes de UI Mockup (`mockups/swarm-mock.html`)
+**Timestamp**: 2026-10-21T21:17:38-05:00
+**User Input**: "@[mockups/swarm-mock.html] 
+
+I need you to fix the menu.
+
+- remove corrida from the menu
+- Instead of warn, put \"Entorno\"
+- Claro/Oscuro must be just an icon. Claro by default
+- Make sure that the logged user appear instead of login
+- Remove warn from entorno. (for the user is transparent if its warn or not.
+- Remove also this \"(go-intake)\""
+**AI Response**: "Ajustado el mockup de referencia `mockups/swarm-mock.html`: 1) Se retiró 'Corrida' del menú horizontal; 2) Se renombró la pestaña 'Warm' por 'Entorno'; 3) El selector de tema Claro/Oscuro se transformó en un botón exclusivo de icono (sol/luna), activo en modo Claro por defecto; 4) Se eliminó el enlace 'Login' del menú y se posicionó el chip del usuario autenticado (`operador-demo`, Rol: `user`) en la barra superior; 5) Se eliminó la palabra 'warm' de todas las etiquetas visibles de usuario referidas a Entorno ('Entorno Warm' → 'Entorno', 'Warm Sandbox' → 'Entorno', 'warm listo' → 'entorno listo', etc.); 6) Se retiró el indicador técnico '(go-intake)' del encabezado de la bandeja de entrada."
+**Context**: UI/UX Mockup — refinamiento del menú principal y reducción de exposición de detalles internos en la interfaz.
+
+---
+
+## Construction — Ajustes de UI Mockup: Botón de tema, tabla completa y flujo de corrida (`mockups/swarm-mock.html`)
+**Timestamp**: 2026-10-21T21:33:31-05:00
+**User Input**: "- remove the border of the night/day mode button.
+- Remove this from the table (?state=...)
+- Remove the component \"Detalle de la notificación\" the table already have all this data
+- There should be a button to see the the full run before it start, so I think that \"Revisar y Confirmar\" will send the notification to \"infer\" the tests and then the user, in the run view, will be able to start it"
+**AI Response**: "Ajustado `mockups/swarm-mock.html`: 1) Se eliminó el borde del botón de modo día/noche (`.btn-icon { border: none; background: transparent; }`); 2) Se eliminó el parámetro de depuración `(?state=...)` del encabezado de la tabla de notificaciones; 3) Se removió el panel lateral redundante 'Detalle de la notificación', permitiendo que la tabla ocupe el ancho completo de la tarjeta con acciones directas en cada fila; 4) Se implementó el flujo en dos pasos: al presionar 'Revisar y confirmar' en la tabla/modal, el sistema despliega el artefacto e infiere la superficie de pruebas en la vista de corrida (`inferred`), donde el usuario puede examinar la totalidad de los flujos antes de iniciar la ejecución mediante el botón 'Iniciar ejecución de flujos →'."
+**Context**: UI/UX Mockup — flujo interactivo de confirmación previa e inspección de plan antes de ejecutar flujos.
+
+## Construction — U9: cuota de Jobs liberada; crash de go-run-controller por imágenes cruzadas
+**Timestamp**: 2026-10-21T22:40:00-05:00
+**User Input**: (respuesta a pregunta) "Delete finished Jobs (Recommended)"
+**AI Response**: "U9-T02 (b7db499): CA-1, CA-2 y CA-4 verdes; CA-3 bloqueado porque aqs-test-quota estaba en 100/100 Jobs, todos terminados. Con autorización del humano, el orquestador borró, dentro del flock, los 100 Jobs terminados de aqs-test (la cuota quedó en 0/100) y reanudó al codificador de T02 para correr CA-3 de nuevo. U9-T01 (d20fc97): CA-1 a CA-4 verdes; CA-5 bloqueado porque go-run-controller está en CrashLoopBackOff (`diario: línea 917 ilegible: json: unknown field \"plan\"`). Diagnóstico del orquestador: T01 corrió build-images.sh y load-images.sh para TODAS las imágenes (mismo tag 0.0.0), así que reemplazó el controlador de T02, que escribe `plan` en el diario, por el de main, que no lo conoce. Es un fallo del despacho, que no restringió las imágenes por tarea. Arbitraje: T02 recarga su controlador; después T01 vuelve a correr CA-5 con `AQS_IMAGES` limitado a ui-api y agent-reporter. Nota para el revisor de T02: un binario anterior no puede leer el diario nuevo, así que el rollback por versión fijada (AR4) queda roto. Candidatas nuevas: ttlSecondsAfterFinished o un limpiador de Jobs en aqs-test; tags por tarea en las imágenes de kind en vez de 0.0.0 compartido."
+**Context**: Construction — U9 ola 1.
+
+---
+
+## Construction — Ajustes de UI Mockup: Flujos colapsados y Modal de Request (`mockups/swarm-mock.html`)
+**Timestamp**: 2026-10-21T21:42:19-05:00
+**User Input**: "good, now each flow in \"Flujos inferidos\" must be collapsed by default. and \"Flujos inferidos\" should not be collapsible. 
+
+and also, instead of \"Cuerpo JSON\" we should have a view request button and opens a modal showing the rquest"
+**AI Response**: "Ajustado el componente de plan de flujos en `mockups/swarm-mock.html`: 1) La sección contenedora 'Flujos inferidos' se transformó en una tarjeta fija (`<section class=\"card\">`), eliminando el comportamiento colapsable general; 2) Cada flujo individual dentro del plan se implementó como un acordeón (`<details class=\"flow-block flow-details\">`) cerrado por defecto con indicador chevron animado; 3) Se reemplazó la columna 'Cuerpo JSON' de la tabla por 'Solicitud' con un botón 'Ver request', el cual abre un modal dedicado (`#requestModalBackdrop`) con método, ruta, código esperado, cabeceras HTTP y cuerpo JSON formateado con opción de copiado."
+**Context**: UI/UX Mockup — refinamiento del plan de flujos y visualizador modal de solicitudes HTTP.
+
+## Construction — U9-T01/T02: veredicto-bug fuera del conteo; revisores despachados
+**Timestamp**: 2026-10-21T23:30:00-05:00
+**User Input**: (respuesta a pregunta) "Accept, open a task"
+**AI Response**: "Investigación de T02 (f2f909e, código b225e00 sin cambios): en 3 corridas el planner con LLM real generó 1, 3 y 5 flujos, ninguno el probe de stock (qty 11 sobre stock 10). Los flujos del plan guardado son los que se ejecutaron y no se pierde ninguno. El reporter respondió 200 con sin-hallazgos. T01 (8cd6dab): OK reporte-en-ui-api y OK reporte-inexistente-404, con las mismas 2 FALLA. Decisión del humano: `veredicto-bug` y `hallazgo-cita-invariante-y-evidencia` quedan fuera del conteo de CA-5 (T01) y CA-3 (T02); se abre una candidata para que la detección de oversell sea determinista con LLM real. Se despachan en paralelo los revisores de la ronda 1 de T01 y T02; al de T02 se le pide juzgar la compatibilidad hacia atrás del diario (rollback AR4). Candidata nueva: log del plan producido por el planner."
+**Context**: Construction — U9 ola 1.
+
+## Construction — U9-T01 VERDE (PR #118); U9-T02 ronda 2 en revisión
+**Timestamp**: 2026-10-22T00:30:00-05:00
+**User Input**: (sin entrada nueva del humano; eventos del loop)
+**AI Response**: "U9-T01 ronda 1 VERDE (informe en `revisiones/U9-T01/ronda-1.md`, commit 3df4a09): OK reporte-en-ui-api y reporte-inexistente-404 en kind; 4 amarillos van a candidatas. Se abre el PR #118; se fusiona antes que T02. U9-T02 ronda 1 NO-VERDE (3742719): F-01 NARANJA, el diario con `plan` rompe el rollback AR4. Arbitraje: se mantiene «mismo store» (precedente HandedOff/Launched) y se cierra con documentación; F-02 y F-03 van a candidatas. Ronda 2 (96e6692): README del controlador y `docs/operaciones/gestion-de-cambios.md`. Arbitraje: ese doc entra en el alcance de CA-4 porque lo pidió el orquestador. Revisor de la ronda 2 despachado. Candidatas acumuladas: detección de oversell determinista con LLM real; log del plan del planner; TTL o limpieza de Jobs en aqs-test; tags de imagen por tarea en kind; diario versionado y tolerante; plan repetido en cada línea del diario; plan_inspectable compara flow_id; token de servicio en GET /v1/reports; `---` duplicado en agents.yaml; índice de ReceiptByRun; prueba de paridad OpenAPI↔report.schema; `docs/seguridad/aislamiento.md` con la excepción ui-api-egress."
+**Context**: Construction — U9 ola 1.
+
+---
+
+## Construction — Creación de Mockup de Onboarding (`mockups/onboarding-mock.html`)
+**Timestamp**: 2026-10-21T21:54:08-05:00
+**User Input**: "Now copy this file and create a new one with the onboarding flow for a new app"
+**AI Response**: "Creado el prototipo interactivo `mockups/onboarding-mock.html` para el flujo de alta y conexión de una nueva aplicación objetivo (Target App) en 5 pasos (Wizard Azia): 1) Repositorio GitHub, webhook y secreto HMAC; 2) Especificación del contenedor del artefacto, puerto y probe de salud `/healthz`; 3) Dependencias del entorno aislado (`aqs-test`), base de datos Postgres/Redis y protocolo de reset verificado; 4) Políticas de gobernanza y límite de autonomía ('Agent, no Autonomous' con confirmación humana obligatoria y bloqueo estricto de staging/prod); 5) Verificación en vivo (smoke test simulado con consola de eventos en tiempo real, descubrimiento inicial de endpoints y visualizador del manifiesto GitOps en YAML). Enlazado bidireccionalmente con `mockups/swarm-mock.html`."
+**Context**: UI/UX Mockup — flujo de onboarding de aplicaciones objetivo para la plataforma.
+
+## Construction — U9-T02 VERDE en la ronda 2, PR #119
+**Timestamp**: 2026-10-22T00:50:00-05:00
+**User Input**: (sin entrada nueva del humano; eventos del loop)
+**AI Response**: "Revisor de la ronda 2 de U9-T02: VERDE (informe en `revisiones/U9-T02/ronda-2.md`, commit f1ab314). F-01 cerrado: la documentación coincide con el código (campo, volumen, texto del error). Amarillo nuevo F-04 (el aviso de gestion-de-cambios.md es más amplio que la condición real) va a candidata. Se abre el PR #119; se fusiona después de #118 y necesita rebase y regenerar schema.gen.ts. Ola 1 de U9 entregada en revisión humana; ola 2 (U9-T03) espera la fusión de T01 y T02."
+**Context**: Construction — U9 ola 1.
+
+---
+
+## Construction — Ajuste de Mockup Onboarding: Inicio en Dashboard con Empty State (`mockups/onboarding-mock.html`)
+**Timestamp**: 2026-10-21T22:08:52-05:00
+**User Input**: "the @[mockups/onboarding-mock.html] must start showing the dashboard with an empty state and a button for connect an app"
+**AI Response**: "Ajustado `mockups/onboarding-mock.html` para iniciar mostrando la vista principal del dashboard en estado vacío (Empty State con 0 aplicaciones conectadas y 0 notificaciones pendientes), manteniendo la coherencia estética con Azia Analytics y presentando un llamado a la acción primario ('+ Conectar una aplicación') que inicia la transición fluida hacia el wizard de onboarding de 5 pasos con opción de retorno al dashboard."
+**Context**: UI/UX Mockup — experiencia de primer uso (First-Run Experience) y estado vacío para onboarding de nuevas aplicaciones.
+
+---
+
+## Construction — Simplificación de Empty State en Onboarding (`mockups/onboarding-mock.html`)
+**Timestamp**: 2026-10-21T22:23:49-05:00
+**User Input**: "remove: Inbox de notificaciones
+Eventos recibidos desde GitHub. Cero auto-run: ninguna corrida arranca sin confirmación explícita.
+
+Aplicaciones
+0 conectadas
+Entorno
+Listo (aqs-test)
+Reset Verificado
+sí (100%)
+Pendientes (0)
+Confirmadas (0)
+Rechazadas (0)
++ Conectar aplicación
+Actualizar
+Aplicaciones conectadas
+0
+sin registrar
+Notificaciones pendientes
+0
+esperando webhooks
+Estado del entorno
+Listo
+ready (aqs-test)
+Auto-ejecución sin humano
+0
+bloqueado por gate
+
+only keep the empty state and the button"
+**AI Response**: "Removidos los componentes densos de tabla, subbar y KPI strip del dashboard inicial en `mockups/onboarding-mock.html`: se eliminaron el encabezado con metadatos ('Inbox de notificaciones', '0 aplicaciones', etc.), el subbar con pestañas ('Pendientes (0)', etc.) y la tira de tarjetas KPI. Se conservó exclusivamente la tarjeta central de Empty State con su descripción de valor, los pilares de la plataforma y el botón de acción principal '+ Conectar una aplicación'."
+**Context**: UI/UX Mockup — simplificación radical del estado inicial para centrar la atención del usuario en la conexión de la primera aplicación.
+
+## Construction — CI roja en #118 y #119: Go 1.26.10 y npm audit
+**Timestamp**: 2026-10-22T09:00:00-05:00
+**User Input**: "the two open PRs are failing"
+**AI Response**: "Ninguno de los dos fallos viene del código de los PR. (1) `vuln` falla en los 8 módulos Go, incluidos los que los PR no tocan: GO-2026-6809 en crypto/x509@go1.26.9, corregida en go1.26.10. Main corrió por última vez el 2026-10-20, antes del aviso, así que también fallará. Se crea el worktree `agentic-qa-swarm-wt-go-1.26.10` (rama chore/go-1.26.10) y se despacha un codificador para subir go.mod y Dockerfiles a 1.26.10, con govulncheck como verificación (precedente: chore/go-security-patch-1.26.9). (2) `dashboard` falla en la auditoría de npm porque el endpoint respondió `Service Unavailable` (externo, transitorio); se relanzan los jobs fallidos de ambos PR."
+**Context**: Construction — U9 ola 1 en revisión humana.
+
+## Construction — PR #121 (Go 1.26.10); dashboard verde tras relanzar
+**Timestamp**: 2026-10-22T09:40:00-05:00
+**User Input**: "go ahead with the force-push"
+**AI Response**: "Se sacaron los dos binarios del commit (demo/target-app/target-app y services/aqs-runner/aqs-runner) con amend. El force-push no hizo falta: la rama nunca llegó a GitHub (el push del codificador no se completó y la referencia de seguimiento estaba vieja), así que los binarios nunca se publicaron. Push normal de 26e682b (21 archivos, sin binarios) y PR #121. El job dashboard de #118 y #119 pasó al relanzarlo (el 503 de npm audit era transitorio). Orden de fusión: #121, después #118 y luego #119 (cada uno rebasado). Candidatas: binarios de go build en .gitignore; x/text en demo/target-app (GO-2026-6629, GO-2026-5970)."
+**Context**: Construction — U9 ola 1 en revisión humana.
+
+## Construction — #118 y #119 rebasados sobre Go 1.26.10; CI verde
+**Timestamp**: 2026-10-22T10:30:00-05:00
+**User Input**: "done, now rebase"
+**AI Response**: "#121 fusionado (origin/main 840f277). tarea/U9-T01 rebasada sin conflictos (5cadd68) y tarea/U9-T02 rebasada sobre main sin conflictos (e0934a6), las dos con push --force-with-lease. CI: #118 49 pass y 1 skipping; #119 47 pass y 1 skipping, sin fallos. Pendiente: cuando se fusione #118, rebasar #119 sobre ella y regenerar schema.gen.ts."
+**Context**: Construction — U9 ola 1 en revisión humana.
+
+## Construction — U9 ola 2: despacho de U9-T03
+**Timestamp**: 2026-10-22T11:00:00-05:00
+**User Input**: "continue"
+**AI Response**: "Ola 1 de U9 cerrada: #117 (T05), #118 (T01) y #119 (T02) fusionados; CI de main verde en 54d7cc7 (schema.gen.ts consistente tras fusionar #119). Se crea el worktree `agentic-qa-swarm-wt-U9-T03` (rama tarea/U9-T03 desde 54d7cc7) y se despacha el codificador de U9-T03 (blob c0e0bcf). Pendiente: marcar T1, T2 y T5 como hechas en `unidades-y-tareas.md`."
+**Context**: Construction — U9 ola 2.
+
+---
+
+## Construction — Simplificación de Empty State en Onboarding (`mockups/onboarding-mock.html`)
+**Timestamp**: 2026-10-22T08:33:52-05:00
+**User Input**: "make the empty state more simple, not too much text"
+**AI Response**: "Se simplificó drásticamente el componente de Empty State en `mockups/onboarding-mock.html`: se removieron la cuadrícula de 3 pilares extensos y textos secundarios innecesarios, dejando una tarjeta minimalista, limpia y enfocada con icono, título claro ('No hay aplicaciones conectadas'), subtítulo conciso y el botón primario '+ Conectar una aplicación'."
+**Context**: UI/UX Mockup — refinamiento hacia un diseño más simple y directo sin sobrecarga de texto.
+
+## Construction — U9-T03 VERDE en ronda 2; PR #122
+**Timestamp**: 2026-10-22T12:00:00-05:00
+**User Input**: "(sin entrada del humano; loop de agentes)"
+**AI Response**: "Ronda 1 NO-VERDE (F-01 NARANJA: corrida failed abierta directamente no pedía el plan; F-02 AMARILLO: ramas de error sin prueba). Candidatas arbitradas fuera de alcance: 404 transitorio de GET /runs/{id} tras confirmar; notificación pending que deja el smoke; «familia» = name/flow_id. Ronda 2 VERDE (6/6 CA, mutación de F-01 detectada). Rama tarea/U9-T03 (9377c72) publicada y PR #122 abierto en revisión humana. Siguiente: U9-T04 (ola 3) tras fusionar #122."
+**Context**: Construction — U9 ola 2.
+
+## U9-T04 — despacho (orquestador)
+**Timestamp**: 2026-10-22T08:52:27-05:00
+**User Input**: "ya fusioné el 122, despacha U9-T04"
+**AI Response**: Antes de despachar se detectó que `mockups/swarm-mock.html` (reescrito) y `DESIGN.md` solo existían en la copia local. Se preguntó al humano y eligió «PR de docs primero». Se abrió el PR #123 (docs/u9-diseno): referencia visual versionada, DESIGN.md en el contexto de U9-T04, U9-T1/T2/T3/T5 en [x] y candidatas C-128/C-129. U9-T04 se despacha cuando se fusione el #123.
+**Context**: CONSTRUCTION, U9 ola 3
+
+---
+
+## U9-T04 — despacho y rondas (orquestador)
+**Timestamp**: 2026-10-22T09:47:02-05:00
+**User Input**: "ya fusioné el 123, despacha U9-T04"
+**AI Response**: Se despachó U9-T04 (blob 157fedc) en agentic-qa-swarm-wt-U9-T04. La ronda 1 salió NO-VERDE (F-01 ROJO, desbordamiento a 375 px; F-02 y F-03 NARANJA). La ronda 2 salió VERDE. Se abrió el PR #124. CA-2 no cumple el literal (3 URLs preexistentes) y se aceptó por arbitraje del orquestador. Candidatas C-130..C-132 pendientes de registro.
+**Context**: CONSTRUCTION, U9 ola 3
+
+---
+
+## Cierre de U9 (orquestador)
+**Timestamp**: 2026-10-22T10:16:59-05:00
+**User Input**: "ya fusioné el 124"
+**AI Response**: Se abrió el PR #125 (docs/cierre-u9): U9-T4 en [x], nota de cierre de U9 y candidatas C-130 (filtro de CA-2), C-131 (DESIGN.md §6.2 frente a RunPage.test) y C-132 (fuentes). CA-2 se dejó como candidata porque el humano no eligió entre corregir la tarea y registrarlo.
+**Context**: CONSTRUCTION, U9 cerrada
+
+---
+
+## U10 — PR de tareas antes del despacho (orquestador)
+**Timestamp**: 2026-10-22T11:19:09-05:00
+**User Input**: "continue with the task for making the frontend to look exactly like @mockups/swarm-mock.html (T-01 i think)"
+**AI Response**: Las tareas de U10 solo existían en la copia local, así que no se podía despachar sobre un blob fusionado. Se abrió el PR #127 (docs/u10-tareas) con U10-T01..T05, la sección U10 de unidades-y-tareas.md, U9-T6 en [x] (#126 ya fusionado) y U10-T03 sin la mención de «cierra C-131», que ya cerró U9-T06. U10-T01 (ola 1) se despacha cuando se fusione el #127.
+**Context**: CONSTRUCTION, U10 ola 1
+
+---
+
+## U10-T01 — despacho (orquestador)
+**Timestamp**: 2026-10-22T11:25:39-05:00
+**User Input**: "ya fusioné el 127, despacha U10-T01" / (el #127 seguía abierto) / "you merge it"
+**AI Response**: El #127 seguía OPEN; por instrucción explícita del humano el orquestador lo fusionó (excepción puntual a «nunca fusiones», solo para ese PR de docs). Se creó el worktree agentic-qa-swarm-wt-U10-T01 (rama tarea/U10-T01 desde 526eafe) y se despachó el codificador de U10-T01 (blob 98dfa02), ronda 1.
+**Context**: CONSTRUCTION, U10 ola 1
+
+---
+
+## U10-T01 — rondas y PR (orquestador)
+**Timestamp**: 2026-10-22T11:48:26-05:00
+**User Input**: "(sin entrada del humano; loop de agentes)"
+**AI Response**: Ronda 1 NO-VERDE (F-01 NARANJA: .card con padding/margin heredados; F-02/F-03 AMARILLO corregidos; F-04 tipografía y F-05 tema en caliente arbitrados fuera de alcance como candidatas). Ronda 2 VERDE (5/5 CA, mutaciones detectadas, capturas de vistas idénticas; F-06 AMARILLO a la paridad bidireccional de T05). Rama tarea/U10-T01 (7c9c5c9) publicada y PR abierto en revisión humana. Siguiente: ola 2 (T02 ∥ T03 ∥ T04) tras fusionar.
+**Context**: CONSTRUCTION, U10 ola 1
+
+---
+
+## U10 ola 2 — despacho (orquestador)
+**Timestamp**: 2026-10-22T12:05:00-05:00
+**User Input**: "continue"
+**AI Response**: El #128 (U10-T01) ya estaba fusionado en origin/main (cbf8a6b). Se crearon los worktrees agentic-qa-swarm-wt-U10-T02/T03/T04 (ramas tarea/U10-T0N desde cbf8a6b) y se despacharon tres codificadores en paralelo, ronda 1: T02 (blob c37a4cb), T03 (blob 5c1acbc), T04 (blob 4692caf). T05 se despacha tras la primera que cierre.
+**Context**: CONSTRUCTION, U10 ola 2
+
+---
+
+## U10 ola 2 — rondas (orquestador)
+**Timestamp**: 2026-10-22T13:10:00-05:00
+**User Input**: "(sin entrada del humano; loop de agentes)"
+**AI Response**: Ronda 1 NO-VERDE en T02, T03 y T04. Arbitrajes: C-133 (conteo por estado en la API) y C-134 (insignia en Kpi) fuera de alcance; cambio de sonda en session.test.tsx aceptado. T04 VERDE en ronda 2 → PR #129. T02 NO-VERDE en ronda 2 (botón de «Detalle» a 0 px) → ronda 3 (última). T03 en revisión de ronda 2. Se libera un hueco y se despacha U10-T05 en agentic-qa-swarm-wt-U10-T05 (rama tarea/U10-T05 desde cbf8a6b).
+**Context**: CONSTRUCTION, U10 ola 2
+
+---
+
+## U10 ola 2 — PRs (orquestador)
+**Timestamp**: 2026-10-22T13:40:00-05:00
+**User Input**: "(sin entrada del humano; loop de agentes)"
+**AI Response**: T03 VERDE en ronda 2 → PR #130. T02 VERDE en ronda 3 → PR #131. Con #129 (T04), la ola 2 de T02-T04 queda en revisión humana; merge-tree entre las tres ramas sin conflictos. U10-T05 en curso (ronda 1).
+**Context**: CONSTRUCTION, U10 ola 2
+
+---
+
+## U10-T05 — codificador cancelado (orquestador)
+**Timestamp**: 2026-10-22T14:20:00-05:00
+**User Input**: "cancel the codificador"
+**AI Response**: Se detuvo el codificador de U10-T05 al inicio de la ronda 2 (ronda 1 NO-VERDE; informe y arbitraje en revisiones/U10-T05/ronda-1.md, con C-135 y C-136). La rama tarea/U10-T05 queda en el último commit; el worktree se conserva para retomar.
+**Context**: CONSTRUCTION, U10 ola 2
+
+---

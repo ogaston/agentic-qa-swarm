@@ -12,7 +12,7 @@
 | Perfil de cliente ideal (ICP) | `docs/icp.md` |
 | Investigación de crítica adversarial | `docs/critica.md` |
 | Investigación de validación | `docs/validacion.md` |
-| Mockup de UI | `docs/mockups/swarm-mock.html` |
+| Mockup de UI (prototipo exploratorio, no UI final) | `mockups/swarm-mock.html` |
 
 ---
 
@@ -406,7 +406,7 @@ M9. Post-mortem de lógica de negocio entregado al usuario.
 M10. Despliegue GitOps del **producto** (entorno estable para operadores) para el módulo 8, **incluido el entorno warm como workload gestionado por GitOps**.
 
 ### Should Have
-S1. Entrega por Slack. S2. Segunda familia de flujos (p. ej. concurrencia además del feliz camino). S3. Traspaso a humano con contexto estructurado (boot fallido, reset fallido o ensayo fallido). S4. Panel de políticas (eventos GitHub, cuotas del entorno warm, workflows con timeouts y aprobaciones, confirm-required). S5. Dashboard inbox de notificaciones pendientes + estado del warm (`ready`/`dirty`/`cuarentena`/`idle-escalado).
+S1. Entrega por Slack. S2. Segunda familia de flujos (p. ej. concurrencia además del feliz camino). S3. Traspaso a humano con contexto estructurado (boot fallido, reset fallido o ensayo fallido). S4. Panel de políticas (eventos GitHub, cuotas del entorno warm, workflows con timeouts y aprobaciones, confirm-required). S5. Dashboard inbox de notificaciones pendientes + estado del warm (`ready`/`dirty`/`cuarentena`/`idle-escalado`) implementado como aplicación web frontend real (consumiendo `ui-api` y OpenAPI; el archivo `mockups/swarm-mock.html` es únicamente un mockup exploratorio previo, no la UI final de producción).
 
 ### Could Have
 C1. Soporte para ambos motores de DB. C2. Persistencia de sesiones interrumpidas. C3. Biblioteca histórica de flujos. C4. Interfaz de auditoría completa. C5. Pull de imagen de registry además de build desde repo.

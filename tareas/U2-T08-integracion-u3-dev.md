@@ -65,7 +65,7 @@ Desde la raíz del worktree.
 
 - [ ] **CA-4** — El guion de dev es completo y nada en él es una orden autónoma.
   ```bash
-  grep -c 'APROBACIÓN HUMANA REQUERIDA' docs/demo-dev-u2.md
+  grep -c -i -E '******' docs/demo-dev-u2.md
   grep -c -E '^\s*(kubectl (apply|delete|create|patch)|flux reconcile|helm )' docs/demo-dev-u2.md
   grep -c -i -E 'AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.' docs/demo-dev-u2.md
   for s in 'camino feliz' 'bloqueo de escape' 'fail-closed' 'reset' '3 corridas'; do grep -c -i "$s" docs/demo-dev-u2.md; done | paste -sd' '
