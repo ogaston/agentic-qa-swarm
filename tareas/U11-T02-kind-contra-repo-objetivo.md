@@ -109,7 +109,7 @@ Detalle:
 
 - [ ] **CA-8** — Alcance.
   ```bash
-  git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(demo/target-app/|scripts/(kind|test)/|deploy/(kind|flux/kind)/|services/go-warm-manager/(testdata/|openapi_body_test\.go)|services/aqs-runner/cmd/aqs-runner/main_test\.go|docs/|tareas/U11-T0[23]-|unidades-y-tareas\.md|bitacoras/U11-T02\.md|revisiones/U11-T02/)' | wc -l; git diff --name-only $b -- services/go-intake services/ui-api services/go-run-controller deploy/flux/base contracts | grep -v '^deploy/flux/base/warm.yaml$' | wc -l; git diff $b -- deploy/flux/base/warm.yaml | grep -E '^[+-][^+-]' | grep -v -E '^[+-]\s*#' | wc -l
+  git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(demo/target-app/|scripts/(kind|test)/|deploy/(kind|flux/kind)/|services/go-warm-manager/(testdata/|openapi_body_test\.go)|services/aqs-runner/cmd/aqs-runner/main_test\.go|docs/|tareas/U11-T0[2-5]-|unidades-y-tareas\.md|deploy/flux/base/warm\.yaml|bitacoras/U11-T02\.md|revisiones/U11-T02/)' | wc -l; git diff --name-only $b -- services/go-intake services/ui-api services/go-run-controller deploy/flux/base contracts | grep -v '^deploy/flux/base/warm.yaml$' | wc -l; git diff $b -- deploy/flux/base/warm.yaml | grep -E '^[+-][^+-]' | grep -v -E '^[+-]\s*#' | wc -l
   ```
   Esperado: `0`, `0`, `0` y `0` (la única excepción en `deploy/flux/base` es `warm.yaml` y solo en líneas de comentario: el comentario que nombra `demo/target-app` se actualiza para cumplir CA-1).
 
