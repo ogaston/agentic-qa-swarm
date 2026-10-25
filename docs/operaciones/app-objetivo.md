@@ -32,6 +32,10 @@ con el listener `:9090` de la app.
 - En la demo la imagen **viene del evento**: el push a `main` del repo objetivo produce la notificación, y
   la imagen de ese commit (`ghcr.io/ogaston/demo-target-app-qa-swarm:<sha>`) es la que se despliega. Ya no se
   edita `RUN_ARTIFACT_REF` para cambiar de app ni de commit en la demo.
+- **Al añadir un repositorio objetivo hay que tocar dos listas, no una:** `INTAKE_ALLOWED_REPOS` (go-intake, qué
+  repositorios aceptan webhooks) **y también** `WARM_ALLOWED_IMAGE_PREFIXES` (go-warm-manager, qué prefijos de imagen
+  puede desplegar el warm; cada elemento es un prefijo `registro/owner/repo`, p. ej. `ghcr.io/ogaston/demo-target-app-qa-swarm`). Esta última variable es de U11-T03: cuando U11-T03 se fusione, sin el prefijo del nuevo
+  repositorio en ella el warm rechaza la imagen. Hasta entonces solo está activa la lista de `ghcr.io` por defecto.
 - Para una app del cliente, la imagen debe ser pública o accesible con pull anónimo, con tag fijado (ver §3).
   El valor `RUN_ARTIFACT_REF` de `deploy/flux/base/control-plane.yaml` (hoy `…/agentic-qa-swarm/target-app:0.0.0`) es
   un resto de U8 y se trata en la tarea candidata correspondiente; no se cambia en U11-T02.

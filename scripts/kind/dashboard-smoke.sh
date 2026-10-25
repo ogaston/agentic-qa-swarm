@@ -163,7 +163,7 @@ webhook_de_prueba() {
   [ -n "$secret" ] || { echo "secret go-intake-webhook vacio"; return 1; }
   sha=$(printf '%s' "smoke-$(date +%s%N)-$$-$RANDOM" | sha1sum | cut -c1-40)
   delivery=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'd-%s-%s' "$$" "$(date +%s%N)")
-  jq -n --arg a "$sha" '{ref:"refs/heads/main", after:$a, repository:{full_name:"ogaston/demo-target-app-qa-swarm"}}' >"$work/hook.json" || return 1
+  jq -n --arg a "$sha" --arg r "$(target_branch_ref)" --arg repo "$TARGET_REPO_FULL" '{ref:$r, after:$a, repository:{full_name:$repo}}' >"$work/hook.json" || return 1
   body=$(cat "$work/hook.json")
   sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" -hex | awk '{print $2}')"
   code=$(curl -sS -o "$work/hook.out" -w '%{http_code}' --max-time 15 \

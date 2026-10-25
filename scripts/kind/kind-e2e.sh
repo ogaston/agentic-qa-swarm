@@ -125,10 +125,7 @@ fi
 # U11-T02: el commit del repo objetivo que se despliega (TARGET_SHA o HEAD remoto) debe tener imagen
 # en GHCR. Se comprueba ANTES de tocar el clúster y ANTES de confirmar nada.
 E2E_SHA=$(resolve_target_sha) || exit 2
-target_image_exists "$E2E_SHA" || {
-  echo "kind-e2e: no hay imagen $TARGET_IMAGE_REPO:$E2E_SHA (o no hay red a GHCR). Espera a la CI del repo objetivo (solo push a main publica imagen) o define TARGET_SHA con un commit que la tenga." >&2
-  exit 2
-}
+require_target_image "$E2E_SHA" || exit 2
 echo "kind-e2e: repo objetivo $TARGET_REPO_FULL @ $E2E_SHA (imagen verificada)"
 
 STATE_DIR="$AQS_KIND_RUNTIME_DIR"  # efímeros (trabajo, venvs); insumos en AQS_KIND_STATE_DIR (U9-T05)
@@ -336,7 +333,7 @@ post_webhook() {
   secret=$(kcx -n "$NS_SYS" get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d)
   [ -n "$secret" ] || { echo "secret go-intake-webhook vacio"; return 1; }
   delivery=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'd-%s-%s' "$$" "$(date +%s%N)")
-  jq -n --arg a "$AFTER" '{ref:"refs/heads/main", after:$a, repository:{full_name:"ogaston/demo-target-app-qa-swarm"}}' >"$work/hook.json" || return 1
+  jq -n --arg a "$AFTER" --arg r "$(target_branch_ref)" --arg repo "$TARGET_REPO_FULL" '{ref:$r, after:$a, repository:{full_name:$repo}}' >"$work/hook.json" || return 1
   body=$(cat "$work/hook.json")
   sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" -hex | awk '{print $2}')"
   code=$(curl -sS -o "$work/hook.out" -w '%{http_code}' --max-time 15 \

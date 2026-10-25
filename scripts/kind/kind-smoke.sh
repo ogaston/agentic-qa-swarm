@@ -287,7 +287,8 @@ ciclo_webhook_confirm_corrida() {
   # `after` debe ser un SHA (40 hex): el intake valida el payload del push (invalid_payload si no).
   after=$(printf '%s' "smoke-$(date +%s%N)-$$-$RANDOM" | sha1sum | cut -c1-40)
   jq -n --arg a "$after" \
-    '{ref:"refs/heads/main", after:$a, repository:{full_name:"ogaston/demo-target-app-qa-swarm"}}' >"$work/hook.json" || return 1
+    --arg r "$(target_branch_ref)" --arg repo "$TARGET_REPO_FULL" \
+    '{ref:$r, after:$a, repository:{full_name:$repo}}' >"$work/hook.json" || return 1
   body=$(cat "$work/hook.json")
   sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" -hex | awk '{print $2}')"
   code=$(curl -s -o "$work/hook.out" -w '%{http_code}' --max-time 15 \

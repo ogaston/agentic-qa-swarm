@@ -22,7 +22,10 @@ NS_SYS=aqs-system
 NS_TEST=aqs-test
 # U11-T02: la app objetivo es el repo externo ogaston/demo-target-app-qa-swarm; su imagen se fija por SHA
 # (nunca :latest). Sobreescribible con TARGET_IMAGE=ghcr.io/...:<sha40>.
-TARGET_IMAGE=${TARGET_IMAGE:-ghcr.io/ogaston/demo-target-app-qa-swarm:b97a719199d5ccbc2ff24f9cfc408ec7ee31114d}
+# El SHA fijado vive solo en deploy/flux/kind/kustomization.yaml (una única fuente): se lee de allí.
+TARGET_APP_SHA=$(grep -A1 "newName: ghcr.io/$TARGET_REPO_FULL" "$root/deploy/flux/kind/kustomization.yaml" | sed -n 's/.*newTag: "\([0-9a-f]\{40\}\)".*/\1/p')
+[ -n "$TARGET_APP_SHA" ] || { echo "FALLA: no leo el SHA fijado de deploy/flux/kind/kustomization.yaml"; exit 2; }
+TARGET_IMAGE=${TARGET_IMAGE:-$TARGET_IMAGE_REPO:$TARGET_APP_SHA}
 IMAGE_REF="$TARGET_IMAGE"
 RUN_ID="u8t04-$(date +%s)"
 P_WM=18610
