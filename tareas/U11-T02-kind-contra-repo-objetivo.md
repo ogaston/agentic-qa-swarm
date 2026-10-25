@@ -75,13 +75,13 @@ Detalle:
 - [ ] **CA-3** — Las pruebas de Go no dependen del código de la app: pasan con el fixture y el runner se salta (o pasa con `TARGET_APP_DIR`).
   ```bash
   (cd services/go-warm-manager && GOTOOLCHAIN=auto go test ./... -count=1 2>&1 | tail -3); cmp <(curl -fsS https://raw.githubusercontent.com/ogaston/demo-target-app-qa-swarm/b97a719199d5ccbc2ff24f9cfc408ec7ee31114d/openapi.json) services/go-warm-manager/testdata/target-app-openapi.json && echo OPENAPI_IGUAL
-  (cd services/aqs-runner && GOTOOLCHAIN=auto go test ./... -count=1 -v -run 'Orders' 2>&1 | grep -E '^(--- |ok|FAIL)'); (cd services/aqs-runner && TARGET_APP_DIR=$(cd ../../../demo/target-app && pwd) GOTOOLCHAIN=auto go test ./... -count=1 -v -run 'Orders.*(Cuerpo|Body)' 2>&1 | grep -E '^(--- |ok|FAIL)')
+  (cd services/aqs-runner && GOTOOLCHAIN=auto go test ./... -count=1 -v -run 'Orders' 2>&1 | grep -E '^(--- |ok|FAIL)'); (cd services/aqs-runner && AQS_PLANNER_PYTHON=${AQS_PLANNER_PYTHON:?un python con jsonschema (deps del planner)} TARGET_APP_DIR=$(cd ../../../demo/target-app && pwd) GOTOOLCHAIN=auto go test ./... -count=1 -v -run 'Orders.*(Cuerpo|Body)' 2>&1 | grep -E '^(--- |ok|FAIL)')
   ```
-  Esperado: `ok` en `go-warm-manager` y `OPENAPI_IGUAL`; en `aqs-runner` sin la variable, la prueba del binario real sale `--- SKIP` y el resto `PASS`; con `TARGET_APP_DIR` apuntando al clon del repo externo, `--- PASS` (par falla-pasa: con la variable apuntando a un directorio vacío falla con el mensaje de compilación, no se salta en silencio).
+  Esperado: `ok` en `go-warm-manager` y `OPENAPI_IGUAL`; en `aqs-runner` sin la variable, la prueba del binario real sale `--- SKIP` y el resto `PASS`; con `TARGET_APP_DIR` apuntando al clon del repo externo **y `AQS_PLANNER_PYTHON` con un Python que tenga `jsonschema`** (deps del planner; sin él la prueba sigue saltándose por el planner), `--- PASS` (par falla-pasa: con la variable apuntando a un directorio vacío falla con el mensaje de compilación, no se salta en silencio).
 
 - [ ] **CA-4** — El overlay de kind arranca el warm con la imagen del repo externo fijada por SHA y sigue válido.
   ```bash
-  kubectl kustomize deploy/flux/kind | grep -n 'demo-target-app-qa-swarm'; bash scripts/ci/check-no-latest.sh; echo "no-latest rc=$?"; bash scripts/ci/policies.sh 2>&1 | tail -3; echo "policies rc=${PIPESTATUS[0]}"
+  kubectl kustomize deploy/flux/kind | grep -n 'demo-target-app-qa-swarm'; bash scripts/ci/check-no-latest.sh deploy/flux/kind; echo "no-latest rc=$?"; bash scripts/ci/policies.sh 2>&1 | tail -3; echo "policies rc=${PIPESTATUS[0]}"
   ```
   Esperado: una línea `image: ghcr.io/ogaston/demo-target-app-qa-swarm:b97a719199d5ccbc2ff24f9cfc408ec7ee31114d` en el `warm-app`, `no-latest rc=0` y `policies rc=0` (si `conftest`/`kubeconform` no están en el host, `policies.sh` corre en docker; el codificador lo anota).
 
@@ -91,15 +91,15 @@ Detalle:
   ```
   Esperado: seis `SINTAXIS_OK`, `0` y `4`. Más una prueba **sin clúster** (la escribe el codificador, p. ej. `scripts/test/u11-scripts-test.sh`, con `kubectl`/`curl` simulados en un directorio del `PATH`) que demuestre: (a) `kind-e2e.sh` con `TARGET_SHA` mal formado sale distinto de 0 antes de tocar el clúster; (b) sin red (`git ls-remote` falla) sale distinto de 0 con mensaje claro; (c) el cuerpo del webhook que firma lleva `ogaston/demo-target-app-qa-swarm` y el SHA elegido. Se ejecuta con `bash scripts/test/u11-scripts-test.sh` y termina con `OK`.
 
-- [ ] **CA-6** — Lectura de vuelta en un clúster real (`kind-aqs`): humo y ciclo completo con el repositorio real. Requiere red a GHCR y al gateway LLM del humano (igual que U8-T09).
+- [ ] **CA-6** — Lectura de vuelta en un clúster real (`kind-aqs`): humo y ciclo completo con el repositorio real. Requiere red a GHCR y al proveedor LLM del humano. **Estado tras la ronda 1:** el codificador lo corrió de verdad y encontró dos defectos que no son de esta tarea: el control positivo `llm-egress-acotado` falla (U11-T05) y el runner rechaza el nombre del Job por un `flow_id` inventado por el modelo (U11-T04). La parte propia de esta tarea ya quedó demostrada en esa corrida: `deploy: OK`, el `warm-app` arranca con `ghcr.io/ogaston/demo-target-app-qa-swarm:b97a719…`, y el e2e llega con el webhook del repo permitido hasta la fase `runners` (login, webhook 202, inbox, confirm, deploy, superficie, ensayo). **Por decisión del orquestador, el revisor de esta tarea evalúa CA-1..CA-5, CA-7 y CA-8 y comprueba que la evidencia de CA-6 de la bitácora es real y que los dos defectos están diagnosticados; la verificación completa de CA-6 (humo y e2e en verde, y la segunda lectura con un SHA distinto del fijado) se hace al cerrar U11-T04 y U11-T05, con el comando de abajo.**
   ```bash
   bash scripts/kind/kind-up.sh && bash scripts/kind/build-images.sh && bash scripts/kind/load-images.sh && bash scripts/kind/secrets.sh && bash scripts/kind/deploy.sh
   bash scripts/kind/kind-smoke.sh 2>&1 | grep -c '^FALLA'
   kubectl --context kind-aqs -n aqs-test get deploy warm-app -o jsonpath='{..image}'; echo
-  bash scripts/kind/kind-e2e.sh --bug off 2>&1 | grep -c '^FALLA'; echo "rc=${PIPESTATUS[0]}"
+  TARGET_SHA=<sha de un commit del repo objetivo distinto de b97a719, con imagen publicada> bash scripts/kind/kind-e2e.sh --bug off 2>&1 | grep -c '^FALLA'; echo "rc=${PIPESTATUS[0]}"
   kubectl --context kind-aqs -n aqs-test get deploy warm-app -o jsonpath='{..image}'; echo
   ```
-  Esperado: `0`; la primera lectura del `warm-app` muestra `ghcr.io/ogaston/demo-target-app-qa-swarm:b97a719…`; el e2e da `0` y `rc=0`; la segunda lectura muestra la imagen del **SHA que usó el e2e** (`TARGET_SHA` o el HEAD remoto), no la estática. Un `0` sin la segunda lectura no vale: la lectura de vuelta es la prueba de que se desplegó el commit.
+  Esperado: `0`; la primera lectura muestra `…:b97a719…`; el e2e da `0` y `rc=0`; la segunda lectura muestra la imagen del **`TARGET_SHA` usado**, distinta de la fijada (esa lectura discrimina; con el mismo SHA no prueba nada). Necesita un segundo commit con imagen en el repo objetivo: ver `docs/demo-real.md`.
 
 - [ ] **CA-7** — Documentación presente y consistente.
   ```bash
@@ -109,9 +109,9 @@ Detalle:
 
 - [ ] **CA-8** — Alcance.
   ```bash
-  git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(demo/target-app/|scripts/(kind|test)/|deploy/(kind|flux/kind)/|services/go-warm-manager/(testdata/|openapi_body_test\.go)|services/aqs-runner/cmd/aqs-runner/main_test\.go|docs/|tareas/U11-T0[23]-|unidades-y-tareas\.md|bitacoras/U11-T02\.md|revisiones/U11-T02/)' | wc -l; git diff --name-only $b -- services/go-intake services/ui-api services/go-run-controller deploy/flux/base contracts | wc -l
+  git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(demo/target-app/|scripts/(kind|test)/|deploy/(kind|flux/kind)/|services/go-warm-manager/(testdata/|openapi_body_test\.go)|services/aqs-runner/cmd/aqs-runner/main_test\.go|docs/|tareas/U11-T0[23]-|unidades-y-tareas\.md|bitacoras/U11-T02\.md|revisiones/U11-T02/)' | wc -l; git diff --name-only $b -- services/go-intake services/ui-api services/go-run-controller deploy/flux/base contracts | grep -v '^deploy/flux/base/warm.yaml$' | wc -l; git diff $b -- deploy/flux/base/warm.yaml | grep -E '^[+-][^+-]' | grep -v -E '^[+-]\s*#' | wc -l
   ```
-  Esperado: `0`, `0` y `0`.
+  Esperado: `0`, `0`, `0` y `0` (la única excepción en `deploy/flux/base` es `warm.yaml` y solo en líneas de comentario: el comentario que nombra `demo/target-app` se actualiza para cumplir CA-1).
 
 ---
 
