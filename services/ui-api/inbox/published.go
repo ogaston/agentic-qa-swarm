@@ -20,8 +20,14 @@ type Confirmed struct {
 	Artifact *Artifact // artefacto de la notificación confirmada (nil si no lo tiene)
 }
 
-// artifactOf devuelve una copia del artefacto de la notificación id. Debe llamarse con s.mu tomado.
+// artifactOf devuelve una copia del artefacto de la confirmación id: el persistido en el registro
+// o, si no lo hay (registro anterior), el de la notificación ya proyectada. nil si no hay ninguno.
+// Debe llamarse con s.mu tomado.
 func (s *Store) artifactOf(id string) *Artifact {
+	if a, ok := s.artifacts[id]; ok && a != nil {
+		c := *a
+		return &c
+	}
 	e, ok := s.items[id]
 	if !ok || e.n.Artifact == nil {
 		return nil

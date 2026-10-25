@@ -35,6 +35,10 @@ type RunConfirmedData struct {
 }
 
 // eventNamespace es el espacio de nombres UUIDv5 de los event_id de run.confirmed.
+// ErrArtifactUnavailable indica que la confirmación no tiene artefacto disponible (registro anterior
+// y notificación aún sin re-proyectar). run.confirmed no se publica: el reintento lo cubre (fail-closed).
+var ErrArtifactUnavailable = errors.New("run.confirmed sin artefacto disponible")
+
 var eventNamespace = [16]byte{0x7a, 0x1c, 0x52, 0x0e, 0x9b, 0x3d, 0x4f, 0x6a, 0x8e, 0x21, 0xc4, 0x5d, 0x90, 0x0b, 0x6e, 0x17}
 
 // EventID es el UUIDv5 determinista de run.confirmed para runID (misma entrada, mismo UUID).
@@ -128,6 +132,9 @@ func (p *Publisher) Publish(ctx context.Context, id string) error {
 	c, ok := p.store.Confirmation(id)
 	if !ok {
 		return ErrNotFound
+	}
+	if c.Artifact == nil { // F-01 (b): nunca publicar sin artefacto; no se marca publicado
+		return ErrArtifactUnavailable
 	}
 	if err := p.pub.Publish(ctx, NewRunConfirmed(c)); err != nil {
 		return fmt.Errorf("publicando run.confirmed: %w", err)

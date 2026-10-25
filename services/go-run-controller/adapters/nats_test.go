@@ -345,3 +345,27 @@ func TestPBT_RunConfirmedArtifactRoundTrip(t *testing.T) {
 		}
 	})
 }
+
+// Variante Fixed_ de PBT-02 (como TestPBT_Fixed_ArtifactRef de go-intake): ejemplos fijos que el
+// round-trip debe cubrir siempre, con y sin artefacto, ambos kinds y refs con puerto y ruta.
+func TestPBT_Fixed_RunConfirmedArtifactRoundTrip(t *testing.T) {
+	cases := []*runctl.Artifact{
+		nil,
+		{Kind: "published-image", Ref: "ghcr.io/ogaston/demo-target-app-qa-swarm:" + strings.Repeat("a", 40)},
+		{Kind: "build-from-repo", Ref: "acme/shop@" + strings.Repeat("b", 40)},
+		{Kind: "published-image", Ref: "registro.local:5000/equipo/app:v1.2.3"},
+	}
+	for _, want := range cases {
+		line := string(runConfirmedLine("55555555-5555-4555-8555-555555555555", "r-fixed"))
+		if want != nil {
+			line = strings.Replace(line, `"flows":["login"]}`, `"flows":["login"],"artifact":{"kind":"`+want.Kind+`","ref":"`+want.Ref+`"}}`, 1)
+		}
+		ev, err := ParseRunConfirmed([]byte(line))
+		if err != nil {
+			t.Fatalf("no parsea: %v\n%s", err, line)
+		}
+		if (ev.Artifact == nil) != (want == nil) || (want != nil && *ev.Artifact != *want) {
+			t.Fatalf("artefacto=%+v, quiero %+v", ev.Artifact, want)
+		}
+	}
+}

@@ -213,3 +213,69 @@ func TestRunConfirmedWithoutArtifactOmitsField(t *testing.T) {
 	}
 	validateRunConfirmed(t, raw)
 }
+
+// F-01 (a): el artefacto persiste en el registro de confirmaciones. Tras reiniciar, sin que
+// la notificación se haya re-proyectado (items vacío), run.confirmed sale con el artefacto.
+func TestRunConfirmedArtifactSobreviveReinicio(t *testing.T) {
+	dir := t.TempDir()
+	sha := strings.Repeat("a", 40)
+	want := Artifact{Kind: "published-image", Ref: "ghcr.io/ogaston/demo-target-app-qa-swarm:" + sha}
+	st, err := OpenStore(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var e NotifyCreated
+	e.EventID, e.Type, e.Version, e.OccurredAt, e.TraceID = "e1", "notify.created", 1, time.Now(), "t"
+	e.Data.NotificationID, e.Data.GithubEvent, e.Data.Repo, e.Data.SHA = "n-1", "commit", "ogaston/demo-target-app-qa-swarm", sha
+	e.Data.Artifact = &want
+	st.Apply(e)
+	if _, err := st.ConfirmTraced("n-1", "marta", []string{"checkout"}, "4bf92f3577b34da6a3ce929d0e0e4736"); err != nil {
+		t.Fatal(err)
+	}
+	// Reinicio antes de publicar: el recibo se relee, las notificaciones aún no (replay asíncrono).
+	st2, err := OpenStore(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rp := &recPub{}
+	if n := NewPublisher(st2, rp, nil).RepublishPending(context.Background()); n != 1 {
+		t.Fatalf("republicados=%d, quiero 1", n)
+	}
+	if got := rp.got[0].Data.Artifact; got == nil || *got != want {
+		t.Fatalf("run.confirmed republicado con artefacto=%+v, quiero %+v", got, want)
+	}
+}
+
+// F-01 (b), fail-closed: un recibo sin artefacto disponible (registro anterior, sin campo artifact,
+// y notificación aún sin re-proyectar) NO se publica ni se marca publicado; queda pendiente.
+func TestPublishSinArtefactoDisponibleNoMarcaPublicado(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"run_id":"run-1","notification_id":"n-1","confirmed_by":"marta","confirmed_at":"2026-01-02T03:04:05Z","flows":["checkout"],"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, ConfirmationsFile), []byte(legacy), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	st, err := OpenStore(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rp := &recPub{}
+	p := NewPublisher(st, rp, nil)
+	if err := p.Publish(context.Background(), "n-1"); err == nil {
+		t.Fatal("sin artefacto disponible, Publish debe fallar")
+	}
+	if len(rp.got) != 0 || st.IsPublished("n-1") || st.PublishPendingCount() != 1 {
+		t.Fatalf("publicado=%v eventos=%d pendientes=%d", st.IsPublished("n-1"), len(rp.got), st.PublishPendingCount())
+	}
+	// Cuando la notificación llega (replay), el reintento sí publica con artefacto.
+	var e NotifyCreated
+	e.EventID, e.Type, e.Version, e.OccurredAt, e.TraceID = "e1", "notify.created", 1, time.Now(), "t"
+	e.Data.NotificationID, e.Data.GithubEvent, e.Data.Repo, e.Data.SHA = "n-1", "commit", "a/b", strings.Repeat("a", 40)
+	e.Data.Artifact = &Artifact{Kind: "published-image", Ref: "ghcr.io/a/b:" + strings.Repeat("a", 40)}
+	st.Apply(e)
+	if err := p.Publish(context.Background(), "n-1"); err != nil {
+		t.Fatalf("tras el replay debe publicar: %v", err)
+	}
+	if len(rp.got) != 1 || rp.got[0].Data.Artifact == nil || !st.IsPublished("n-1") {
+		t.Fatalf("eventos=%d publicado=%v", len(rp.got), st.IsPublished("n-1"))
+	}
+}

@@ -27,8 +27,9 @@ const ConfirmationsFile = "confirmations.jsonl"
 // record es la linea persistida de una confirmacion.
 type record struct {
 	Receipt
-	Flows   []string `json:"flows"`
-	TraceID string   `json:"trace_id,omitempty"`
+	Flows    []string  `json:"flows"`
+	TraceID  string    `json:"trace_id,omitempty"`
+	Artifact *Artifact `json:"artifact,omitempty"` // artefacto de la notificación al confirmar (U11-T01); ausente en registros anteriores
 }
 
 type entry struct {
@@ -40,18 +41,19 @@ type entry struct {
 // Store es la proyeccion del inbox. El estado confirmed sale del registro
 // de confirmaciones, no de memoria volatil.
 type Store struct {
-	mu      sync.Mutex
-	now     func() time.Time
-	path    string
-	items   map[string]*entry
-	events  map[string]struct{}
-	receipt map[string]Receipt
-	flows   map[string][]string // flujos confirmados por notification_id
-	traces  map[string]string   // trace_id de la peticion que confirmo
-	pubDone map[string]struct{} // notification_id con run.confirmed ya publicado
-	pubPath string
-	seq     int
-	rorder  []string // notification_id de cada recibo, en orden de llegada (el último es el más reciente)
+	mu        sync.Mutex
+	now       func() time.Time
+	path      string
+	items     map[string]*entry
+	events    map[string]struct{}
+	receipt   map[string]Receipt
+	flows     map[string][]string  // flujos confirmados por notification_id
+	traces    map[string]string    // trace_id de la peticion que confirmo
+	artifacts map[string]*Artifact // artefacto de la notificación al confirmar (persistido en el registro)
+	pubDone   map[string]struct{}  // notification_id con run.confirmed ya publicado
+	pubPath   string
+	seq       int
+	rorder    []string // notification_id de cada recibo, en orden de llegada (el último es el más reciente)
 	// Skipped cuenta lineas de recibos ilegibles ignoradas al abrir.
 	Skipped int
 }
@@ -69,7 +71,7 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 	s := &Store{
 		now: now, path: filepath.Join(dir, ConfirmationsFile),
 		items: map[string]*entry{}, events: map[string]struct{}{}, receipt: map[string]Receipt{},
-		flows: map[string][]string{}, traces: map[string]string{}, pubDone: map[string]struct{}{},
+		flows: map[string][]string{}, traces: map[string]string{}, artifacts: map[string]*Artifact{}, pubDone: map[string]struct{}{},
 		pubPath: filepath.Join(dir, PublishedFile),
 	}
 	b, err := os.ReadFile(s.path)
@@ -91,6 +93,9 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 			s.rorder = append(s.rorder, r.NotificationID)
 			s.receipt[r.NotificationID] = r.Receipt
 			s.flows[r.NotificationID], s.traces[r.NotificationID] = r.Flows, r.TraceID
+			if r.Artifact != nil {
+				s.artifacts[r.NotificationID] = r.Artifact
+			}
 		}
 	}
 	if len(b) > 0 && b[len(b)-1] != '\n' {
@@ -110,6 +115,9 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 func (s *Store) Apply(ev NotifyCreated) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if ev.Data.Artifact == nil { // notify.created exige artefacto (contrato): sin él no se crea la entrada
+		return false
+	}
 	if _, seen := s.events[ev.EventID]; seen {
 		return false
 	}
@@ -221,7 +229,10 @@ func (s *Store) ConfirmTraced(id, principalID string, flows []string, traceID st
 		return Receipt{}, err
 	}
 	r := Receipt{RunID: runID, NotificationID: id, ConfirmedBy: principalID, ConfirmedAt: s.now().UTC().Truncate(time.Second)}
-	line, err := json.Marshal(record{Receipt: r, Flows: flows, TraceID: traceID})
+	// El artefacto se toma de la notificación ahora y se persiste: tras un reinicio no depende de
+	// que el replay de notify.created haya re-proyectado la notificación (F-01).
+	art := s.artifactOf(id)
+	line, err := json.Marshal(record{Receipt: r, Flows: flows, TraceID: traceID, Artifact: art})
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -231,6 +242,9 @@ func (s *Store) ConfirmTraced(id, principalID string, flows []string, traceID st
 	s.receipt[id] = r
 	s.rorder = append(s.rorder, id)
 	s.flows[id], s.traces[id] = append([]string(nil), flows...), traceID
+	if art != nil {
+		s.artifacts[id] = art
+	}
 	return r, nil
 }
 

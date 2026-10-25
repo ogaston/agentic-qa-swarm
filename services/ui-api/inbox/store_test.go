@@ -148,3 +148,16 @@ func TestConcurrentConfirmExactlyOne(t *testing.T) {
 		t.Fatalf("ok=%d conflict=%d", ok, conflict)
 	}
 }
+
+// F-03: Apply con un notify.created sin artefacto no hace panic y no crea entrada.
+func TestApplySinArtefactoNoPanica(t *testing.T) {
+	st := open(t, t.TempDir())
+	e := ev("e-nil", time.Now())
+	e.Data.Artifact = nil
+	if created := st.Apply(e); created {
+		t.Fatal("sin artefacto no debe crear la notificación")
+	}
+	if n := st.List(StatePending); len(n) != 0 {
+		t.Fatalf("no debe quedar entrada: %+v", n)
+	}
+}

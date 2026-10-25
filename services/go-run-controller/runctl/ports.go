@@ -51,13 +51,13 @@ type GateClient interface {
 	Authorize(ctx context.Context, req GateRequest) (GateDecision, error)
 }
 
-// Run es la corrida persistida.
 // Artifact es el artefacto a desplegar de una corrida ({kind, ref} del contrato de run.confirmed).
 type Artifact struct {
 	Kind string `json:"kind"`
 	Ref  string `json:"ref"`
 }
 
+// Run es la corrida persistida.
 type Run struct {
 	ID           string          `json:"id"`
 	State        State           `json:"state"`
