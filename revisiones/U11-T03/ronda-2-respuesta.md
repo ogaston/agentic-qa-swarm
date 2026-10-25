@@ -1,0 +1,11 @@
+# Respuesta a la ronda 2 — U11-T03 (codificador, ronda 3)
+
+F-05: Corregido en b175c51. Rojo primero: con las dos mutaciones del revisor aplicadas al parser del controlador y SIN pruebas nuevas, la suite seguía en verde (0 líneas FAIL). Luego se añadieron los casos explícitos (`TestParseImagePrefixesElementoVacioYSegmentosPunto` en adapters/imagen_test.go: `a,,b`, coma final, `,a`, `a, ,b`, `ghcr.io/o/../x`, `…/a/..`, `…/a/./b`) y la tabla de paridad del PARSER en `testdata/imagen_parse_casos.json` (20 casos: valor crudo → error o lista), copiada byte a byte en ambos módulos, con SHA-256 fijado en código (`dbaaad966c0e814071c5f1ae79a8c20e085acf30064132298445c680bbd7236a`) y prueba `TestParidadParserCasosIdenticos` en cada módulo. Par falla-pasa, cada mutación aplicada por separado y restaurada con `cmp` idéntico:
+- Mutación 1 (elemento vacío → `continue`): FAIL en `TestParseImagePrefixesElementoVacioYSegmentosPunto` (`"ghcr.io/o/a," debía ser error de configuración`, `",ghcr.io/o/a"`, `"ghcr.io/o/a, ,ghcr.io/o/b"`) y en `TestParidadParserCasosIdenticos` (`elemento vacio en medio … error=<nil>, esperado error=true`, `coma final`, `coma inicial`, `elemento solo espacios`). Suite: 3 líneas FAIL.
+- Mutación 2 (sin `hasDotSegment`): FAIL en `TestParseImagePrefixesElementoVacioYSegmentosPunto` (`"ghcr.io/o/../x"`, `"ghcr.io/o/a/.."`, `"ghcr.io/o/a/./b"` debían ser error) y en `TestParidadParserCasosIdenticos` (`dot-dot en medio`, `dot-dot al final`, `punto en medio`). Suite: 3 líneas FAIL.
+
+F-06: Corregido en b175c51: el comentario de `maxFallbackSeen` declara que, tras 10000 corridas posteriores avisadas o tras un reinicio, una corrida activa puede volver a emitir el WARN y subir `aqs_run_artifact_fallback_total`.
+
+F-07: Corregido en b175c51: `adapters.WarmAllowedRegistry` (exportado, antes `warmAllowedRegistry`) con comentario que dice que debe coincidir con `WARM_ALLOWED_REGISTRIES` de go-warm-manager. El INFO de arranque del controlador ahora incluye `registry=ghcr.io` (y el WARN de lista vacía también). Prueba: `TestLogImagePrefixesVacioWarnYConteo` comprueba `registry=ghcr.io` y que no aparezcan valores de prefijo. Sin lógica nueva.
+
+F-08: Sin cambio de código. Anotado en la bitácora (sección «Ronda 3», candidatas): coherencia fail-closed de la regla y documentación al escribir los README (candidata, U11-T02).
