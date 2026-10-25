@@ -47,3 +47,52 @@ func TestParidadImagenCasosIdenticos(t *testing.T) {
 		}
 	}
 }
+
+// U11-T03 F-05: el PARSER decide igual que el controlador sobre el valor crudo de WARM_ALLOWED_IMAGE_PREFIXES.
+// testdata/imagen_parse_casos.json es copia byte a byte de la del controlador; el SHA-256 fijado obliga a que
+// ambas sean iguales.
+const parseCasosSHA256 = "dbaaad966c0e814071c5f1ae79a8c20e085acf30064132298445c680bbd7236a"
+
+type casoParse struct {
+	Nombre string   `json:"nombre"`
+	Crudo  string   `json:"crudo"`
+	Error  bool     `json:"error"`
+	Lista  []string `json:"lista"`
+}
+
+func TestParidadParserCasosIdenticos(t *testing.T) {
+	raw, err := os.ReadFile("testdata/imagen_parse_casos.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(raw)
+	if got := hex.EncodeToString(sum[:]); got != parseCasosSHA256 {
+		t.Fatalf("testdata/imagen_parse_casos.json cambió (sha256 %s, fijado %s): actualiza AMBAS copias y la constante", got, parseCasosSHA256)
+	}
+	var casos []casoParse
+	if err := json.Unmarshal(raw, &casos); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range casos {
+		lista, err := wm.ParseImagePrefixes(c.Crudo)
+		if (err != nil) != c.Error {
+			t.Errorf("%s (crudo=%q): error=%v, esperado error=%v", c.Nombre, c.Crudo, err, c.Error)
+			continue
+		}
+		if err == nil && !equalStrings(lista, c.Lista) {
+			t.Errorf("%s (crudo=%q): lista=%v, esperada %v", c.Nombre, c.Crudo, lista, c.Lista)
+		}
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

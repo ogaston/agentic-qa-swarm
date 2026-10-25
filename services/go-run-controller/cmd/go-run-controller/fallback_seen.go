@@ -3,7 +3,8 @@ package main
 import "sync"
 
 // maxFallbackSeen acota las corridas ya avisadas por el respaldo RUN_ARTIFACT_REF (U11-T03 F-04): el mapa no
-// crece sin límite en un controlador de vida larga.
+// crece sin límite en un controlador de vida larga. Efecto: una corrida activa, tras 10000 corridas posteriores
+// avisadas, o tras un reinicio, puede volver a emitir el WARN y subir aqs_run_artifact_fallback_total.
 const maxFallbackSeen = 10000
 
 // seenBounded recuerda IDs ya vistos con un tope: al llenarse descarta el más antiguo (FIFO).

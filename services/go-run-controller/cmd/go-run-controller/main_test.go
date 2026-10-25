@@ -47,13 +47,13 @@ func nopLog() *slog.Logger { return slog.New(slog.DiscardHandler) }
 func TestLogImagePrefixesVacioWarnYConteo(t *testing.T) {
 	var b strings.Builder
 	lg := slog.New(slog.NewTextHandler(&b, nil))
-	logImagePrefixes(lg, 0)
+	logImagePrefixes(lg, 0, "ghcr.io")
 	if !strings.Contains(b.String(), "level=WARN") || !strings.Contains(b.String(), "vacía") {
 		t.Fatalf("lista vacía sin WARN: %s", b.String())
 	}
 	b.Reset()
-	logImagePrefixes(lg, 2)
-	if !strings.Contains(b.String(), "level=INFO") || !strings.Contains(b.String(), "count=2") || strings.Contains(b.String(), "ghcr.io") {
+	logImagePrefixes(lg, 2, "ghcr.io")
+	if !strings.Contains(b.String(), "level=INFO") || !strings.Contains(b.String(), "count=2") || !strings.Contains(b.String(), "registry=ghcr.io") || strings.Contains(b.String(), "ghcr.io/") {
 		t.Fatalf("INFO con conteo esperado y sin valores: %s", b.String())
 	}
 }

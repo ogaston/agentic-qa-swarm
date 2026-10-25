@@ -24,3 +24,16 @@ func TestValidateImageSoloPublishedImage(t *testing.T) {
 		t.Fatal("build-from-repo debe rechazarse")
 	}
 }
+
+// U11-T03 F-05: elemento vacío y segmentos "." / ".." son error de configuración (no se omiten ni se aceptan).
+func TestParseImagePrefixesElementoVacioYSegmentosPunto(t *testing.T) {
+	for _, bad := range []string{"a,,b", "ghcr.io/o/a,", ",ghcr.io/o/a", "ghcr.io/o/a, ,ghcr.io/o/b", "ghcr.io/o/../x", "ghcr.io/o/a/..", "ghcr.io/o/a/./b"} {
+		if _, err := ParseImagePrefixes(bad); err == nil {
+			t.Errorf("%q debía ser error de configuración", bad)
+		}
+	}
+	ok, err := ParseImagePrefixes("ghcr.io/o/a,ghcr.io/o/b/c")
+	if err != nil || len(ok) != 2 {
+		t.Fatalf("lista válida: %v %v", ok, err)
+	}
+}

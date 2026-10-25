@@ -11,8 +11,9 @@ import (
 // (ValidateArtifact y ParseImagePrefixes): los módulos no se importan entre sí. La paridad se prueba con
 // paridad_imagen_test.go, que comparte el mismo conjunto de casos en ambos módulos.
 
-// warmAllowedRegistry es el registro permitido por defecto de go-warm-manager (WARM_ALLOWED_REGISTRIES).
-const warmAllowedRegistry = "ghcr.io"
+// WarmAllowedRegistry es el registro fijo que acepta el controlador. Debe coincidir con WARM_ALLOWED_REGISTRIES
+// de go-warm-manager (su valor por defecto); si se cambia allí, la paridad deja de cubrirlo.
+const WarmAllowedRegistry = "ghcr.io"
 
 // ErrImageNotAllowed: la imagen publicada no está en WARM_ALLOWED_IMAGE_PREFIXES.
 var ErrImageNotAllowed = errors.New("imagen no permitida por WARM_ALLOWED_IMAGE_PREFIXES")
@@ -69,7 +70,7 @@ func ValidateImage(kind, ref string, prefixes []string) error {
 	if slash <= 0 || strings.ContainsAny(ref, " \t\r\n\"'\\") {
 		return fmt.Errorf("%w: la imagen debe llevar registro explicito", ErrInvalidImage)
 	}
-	if host := ref[:slash]; host != warmAllowedRegistry {
+	if host := ref[:slash]; host != WarmAllowedRegistry {
 		return fmt.Errorf("%w: registro no permitido %q", ErrInvalidImage, host)
 	}
 	rest := ref[slash+1:]

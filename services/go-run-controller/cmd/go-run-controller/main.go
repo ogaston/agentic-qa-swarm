@@ -236,7 +236,7 @@ func run(log *slog.Logger, env func(string) string) error {
 		return err
 	}
 	if c.real {
-		logImagePrefixes(log, len(c.imagePrefixes))
+		logImagePrefixes(log, len(c.imagePrefixes), adapters.WarmAllowedRegistry)
 	}
 	gate, err := adapters.NewHTTPGate(c.govURL, c.govToken)
 	if err != nil {
@@ -384,13 +384,13 @@ func tick(ctx context.Context, log *slog.Logger, ctl *runctl.Controller, src run
 
 // logImagePrefixes registra cuántos prefijos de imagen quedaron cargados (nunca sus valores). Lista vacía = WARN:
 // todo published-image se rechaza antes de pedir el deploy (fail-closed).
-func logImagePrefixes(log *slog.Logger, n int) {
+func logImagePrefixes(log *slog.Logger, n int, registry string) {
 	if log == nil {
 		return
 	}
 	if n == 0 {
-		log.Warn("WARM_ALLOWED_IMAGE_PREFIXES vacía: ningún published-image se desplegará (fail-closed)")
+		log.Warn("WARM_ALLOWED_IMAGE_PREFIXES vacía: ningún published-image se desplegará (fail-closed)", "registry", registry)
 		return
 	}
-	log.Info("prefijos de imagen permitidos cargados", "count", n)
+	log.Info("prefijos de imagen permitidos cargados", "count", n, "registry", registry)
 }
