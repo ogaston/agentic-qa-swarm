@@ -21,15 +21,16 @@ func TestArtifactResolve(t *testing.T) {
 		kind     string
 		ref      string
 	}{
-		{"commit", "", Event{GithubEvent: EventCommit, Repo: "acme/shop", SHA: sha40}, KindBuildFromRepo, "acme/shop@" + sha40},
-		{"PR opened", "", Event{GithubEvent: EventPullRequest, Repo: "acme/shop", SHA: sha40, HeadRepo: "acme/shop"}, KindBuildFromRepo, "acme/shop@" + sha40},
-		{"PR synchronize", "", Event{GithubEvent: EventPullRequest, Repo: "acme/shop", SHA: strings.Repeat("c", 40), HeadRepo: "acme/shop"}, KindBuildFromRepo, "acme/shop@" + strings.Repeat("c", 40)},
-		{"PR reopened", "", Event{GithubEvent: EventPullRequest, Repo: "acme/shop", SHA: sha40, HeadRepo: "ACME/Shop"}, KindBuildFromRepo, "acme/shop@" + sha40},
+		{"commit", "", Event{GithubEvent: EventCommit, Repo: "acme/shop", SHA: sha40}, KindPublishedImage, "ghcr.io/acme/shop:" + sha40},
+		{"PR opened", "", Event{GithubEvent: EventPullRequest, Repo: "acme/shop", SHA: sha40, HeadRepo: "acme/shop"}, KindPublishedImage, "ghcr.io/acme/shop:" + sha40},
+		{"PR synchronize", "", Event{GithubEvent: EventPullRequest, Repo: "acme/shop", SHA: strings.Repeat("c", 40), HeadRepo: "acme/shop"}, KindPublishedImage, "ghcr.io/acme/shop:" + strings.Repeat("c", 40)},
+		{"PR reopened", "", Event{GithubEvent: EventPullRequest, Repo: "acme/shop", SHA: sha40, HeadRepo: "ACME/Shop"}, KindPublishedImage, "ghcr.io/acme/shop:" + sha40},
 		{"push tag", "", Event{GithubEvent: EventTag, Repo: "acme/shop", SHA: sha40, Tag: "v1.2.0"}, KindPublishedImage, "ghcr.io/acme/shop:v1.2.0"},
 		{"release published", "", Event{GithubEvent: EventTag, Repo: "acme/shop", SHA: sha40, Tag: "v1.2.0"}, KindPublishedImage, "ghcr.io/acme/shop:v1.2.0"},
 		{"registro personalizado", "Registry.Example.com:5000", Event{GithubEvent: EventTag, Repo: "acme/shop", SHA: sha40, Tag: "v2"}, KindPublishedImage, "registry.example.com:5000/acme/shop:v2"},
 		{"repo con mayusculas a imagen en minusculas", "", Event{GithubEvent: EventTag, Repo: "Acme/Shop", SHA: sha40, Tag: "V1.0"}, KindPublishedImage, "ghcr.io/acme/shop:V1.0"},
-		{"commit conserva mayusculas del repo", "", Event{GithubEvent: EventCommit, Repo: "Acme/Shop", SHA: sha40}, KindBuildFromRepo, "Acme/Shop@" + sha40},
+		{"commit con mayusculas en el repo a imagen en minusculas", "", Event{GithubEvent: EventCommit, Repo: "Acme/Shop", SHA: sha40}, KindPublishedImage, "ghcr.io/acme/shop:" + sha40},
+		{"commit a registro personalizado", "Registry.Example.com:5000", Event{GithubEvent: EventCommit, Repo: "acme/shop", SHA: sha40}, KindPublishedImage, "registry.example.com:5000/acme/shop:" + sha40},
 	}
 	schema := compileSchema(t)
 	for _, c := range cases {
@@ -40,6 +41,9 @@ func TestArtifactResolve(t *testing.T) {
 			}
 			if got.Kind != c.kind || got.Ref != c.ref {
 				t.Fatalf("got %+v, quiero %s %s", got, c.kind, c.ref)
+			}
+			if got.Kind == KindBuildFromRepo {
+				t.Fatalf("un evento de commit/PR no debe resolver a build-from-repo: %+v", got)
 			}
 			// El ref sale valido contra el esquema de notify.created.
 			ev := map[string]any{

@@ -52,6 +52,12 @@ type GateClient interface {
 }
 
 // Run es la corrida persistida.
+// Artifact es el artefacto a desplegar de una corrida ({kind, ref} del contrato de run.confirmed).
+type Artifact struct {
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
+}
+
 type Run struct {
 	ID           string          `json:"id"`
 	State        State           `json:"state"`
@@ -72,6 +78,7 @@ type Run struct {
 	HandedOff    map[string]bool `json:"handed_off,omitempty"`  // fases cuyo handoff ya se emitió (a lo sumo uno)
 	Launched     map[string]bool `json:"launched,omitempty"`    // fase ya lanzada con éxito en el estado actual
 	Plan         json.RawMessage `json:"plan,omitempty"`        // FlowPlan validado de la corrida (ver StoredPlans)
+	Artifact     *Artifact       `json:"artifact,omitempty"`    // artefacto del evento run.confirmed (U11-T01); nil = respaldo RUN_ARTIFACT_REF
 }
 
 func (r Run) clone() Run {
@@ -84,6 +91,7 @@ func (r Run) clone() Run {
 	c.Started = copyMap(r.Started)
 	c.HandedOff = copyMap(r.HandedOff)
 	c.Plan = append(json.RawMessage(nil), r.Plan...)
+	c.Artifact = copyArtifact(r.Artifact)
 	return c
 }
 
@@ -113,7 +121,8 @@ type Event struct {
 	RunID       string
 	ConfirmedBy string
 	Flows       []string
-	Pos         int64 // posición opaca en la fuente (fin de la línea); la usa EventSource.Ack
+	Artifact    *Artifact // run.confirmed: artefacto de la notificación (opcional)
+	Pos         int64     // posición opaca en la fuente (fin de la línea); la usa EventSource.Ack
 }
 
 // Tipos de evento que consume el controlador.

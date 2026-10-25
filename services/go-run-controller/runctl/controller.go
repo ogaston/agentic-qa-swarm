@@ -87,7 +87,7 @@ func (k *Controller) Apply(ctx context.Context, ev Event) error {
 			return nil
 		}
 		return k.save(Run{ID: ev.RunID, State: Confirmed, TraceID: ev.TraceID,
-			ConfirmedBy: ev.ConfirmedBy, Flows: ev.Flows, Seen: []string{ev.EventID}})
+			ConfirmedBy: ev.ConfirmedBy, Flows: ev.Flows, Seen: []string{ev.EventID}, Artifact: copyArtifact(ev.Artifact)})
 	case EvRehearsalPassed, EvRehearsalFailed:
 		r, ok := k.c.Store.Get(ev.RunID)
 		if !ok {
@@ -110,6 +110,15 @@ func (k *Controller) Apply(ctx context.Context, ev Event) error {
 		return k.save(r)
 	}
 	return fmt.Errorf("tipo de evento no soportado %q", ev.Type)
+}
+
+// copyArtifact devuelve una copia del artefacto del evento (nil si no lo trae).
+func copyArtifact(a *Artifact) *Artifact {
+	if a == nil {
+		return nil
+	}
+	c := *a
+	return &c
 }
 
 func markSeen(r Run, eventID string) Run {

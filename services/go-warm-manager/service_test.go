@@ -201,6 +201,8 @@ func TestDeployRolloutTimeoutNeverSucceeds(t *testing.T) {
 	}
 	if d, _, _ := r.svc.DeployState(context.Background(), "r-1"); d.State != "failed" || d.Attempts != 3 || !strings.Contains(d.Reason, "timeout") {
 		t.Fatalf("%+v", d)
+	} else if !strings.Contains(d.Reason, okArt.Ref) { // U11-T01: el fallo por rollout incompleto nombra la imagen
+		t.Fatalf("el motivo debe nombrar la imagen %q: %q", okArt.Ref, d.Reason)
 	}
 }
 
@@ -407,8 +409,8 @@ func TestDeployRolloutReadErrorPersistentFailsClosed(t *testing.T) {
 	if err == nil || r.dep.Patches() != 3 || last.Type != "deploy.failed" || len(r.al.Calls) != 1 {
 		t.Fatalf("err=%v parches=%d ev=%s handoffs=%d", err, r.dep.Patches(), last.Type, len(r.al.Calls))
 	}
-	if !strings.Contains(last.Data["reason"].(string), "no se pudo leer el rollout") {
-		t.Fatalf("reason=%v", last.Data["reason"])
+	if !strings.Contains(last.Data["reason"].(string), "no se pudo leer el rollout") || !strings.Contains(last.Data["reason"].(string), okArt.Ref) {
+		t.Fatalf("reason=%v (debe nombrar la imagen %q)", last.Data["reason"], okArt.Ref)
 	}
 	if err := validate(t, "events/deploy.schema.json", last); err != nil {
 		t.Fatal(err)

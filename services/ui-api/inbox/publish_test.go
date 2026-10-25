@@ -140,3 +140,76 @@ func TestPublishPendingCountIgnoresOrphanPublishedIDs(t *testing.T) {
 		t.Fatalf("err=%v pendientes=%d", err, st.PublishPendingCount())
 	}
 }
+
+// validateRunConfirmed valida el JSON de un run.confirmed contra el esquema real del repositorio.
+func validateRunConfirmed(t *testing.T, raw []byte) {
+	t.Helper()
+	sch, err := os.ReadFile("../../../contracts/events/run.confirmed.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc any
+	_ = json.Unmarshal(sch, &doc)
+	cc := jsonschema.NewCompiler()
+	cc.DefaultDraft(jsonschema.Draft2020)
+	cc.AssertFormat()
+	if err := cc.AddResource("mem:///rc.json", doc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := cc.Compile("mem:///rc.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inst any
+	if err := json.Unmarshal(raw, &inst); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Validate(inst); err != nil {
+		t.Fatalf("run.confirmed invalido: %v\n%s", err, raw)
+	}
+}
+
+// El run.confirmed publicado lleva el artefacto de la notificación confirmada (CA-4a):
+// el controlador despliega ese artefacto y no el estático de RUN_ARTIFACT_REF.
+func TestRunConfirmedCarriesNotificationArtifact(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	want := Artifact{Kind: "published-image", Ref: "ghcr.io/ogaston/demo-target-app-qa-swarm:" + sha}
+	st, err := OpenStore(t.TempDir(), func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var e NotifyCreated
+	e.EventID, e.Type, e.Version, e.OccurredAt, e.TraceID = "e1", "notify.created", 1, time.Now(), "t"
+	e.Data.NotificationID, e.Data.GithubEvent, e.Data.Repo, e.Data.SHA = "n-1", "commit", "ogaston/demo-target-app-qa-swarm", sha
+	e.Data.Artifact = &want
+	st.Apply(e)
+	if _, err := st.ConfirmTraced("n-1", "marta", []string{"checkout"}, "4bf92f3577b34da6a3ce929d0e0e4736"); err != nil {
+		t.Fatal(err)
+	}
+	rp := &recPub{}
+	if err := NewPublisher(st, rp, nil).Publish(context.Background(), "n-1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(rp.got) != 1 {
+		t.Fatalf("eventos=%d", len(rp.got))
+	}
+	got := rp.got[0].Data.Artifact
+	if got == nil || *got != want {
+		t.Fatalf("artefacto=%+v, quiero %+v", got, want)
+	}
+	raw, _ := json.Marshal(rp.got[0])
+	validateRunConfirmed(t, raw)
+}
+
+// Sin artefacto en la Confirmed (recibo antiguo), run.confirmed no lleva el campo: es opcional en el contrato.
+func TestRunConfirmedWithoutArtifactOmitsField(t *testing.T) {
+	c := Confirmed{
+		Receipt: Receipt{RunID: "run-1", NotificationID: "n-1", ConfirmedBy: "marta", ConfirmedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)},
+		Flows:   []string{"checkout"}, TraceID: "4bf92f3577b34da6a3ce929d0e0e4736",
+	}
+	raw, _ := json.Marshal(NewRunConfirmed(c))
+	if strings.Contains(string(raw), `"artifact"`) {
+		t.Fatalf("sin artefacto no debe salir el campo: %s", raw)
+	}
+	validateRunConfirmed(t, raw)
+}

@@ -27,10 +27,11 @@ type RunConfirmed struct {
 
 // RunConfirmedData es el cuerpo de run.confirmed.
 type RunConfirmedData struct {
-	RunID          string   `json:"run_id"`
-	NotificationID string   `json:"notification_id"`
-	ConfirmedBy    string   `json:"confirmed_by"`
-	Flows          []string `json:"flows"`
+	RunID          string    `json:"run_id"`
+	NotificationID string    `json:"notification_id"`
+	ConfirmedBy    string    `json:"confirmed_by"`
+	Flows          []string  `json:"flows"`
+	Artifact       *Artifact `json:"artifact,omitempty"`
 }
 
 // eventNamespace es el espacio de nombres UUIDv5 de los event_id de run.confirmed.
@@ -59,7 +60,7 @@ func NewRunConfirmed(c Confirmed) RunConfirmed {
 	return RunConfirmed{
 		EventID: EventID(c.RunID), Type: "run.confirmed", Version: 1,
 		OccurredAt: c.ConfirmedAt.UTC(), TraceID: trace,
-		Data: RunConfirmedData{RunID: c.RunID, NotificationID: c.NotificationID, ConfirmedBy: c.ConfirmedBy, Flows: c.Flows},
+		Data: RunConfirmedData{RunID: c.RunID, NotificationID: c.NotificationID, ConfirmedBy: c.ConfirmedBy, Flows: c.Flows, Artifact: c.Artifact},
 	}
 }
 

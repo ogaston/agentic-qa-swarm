@@ -13,7 +13,6 @@ import (
 )
 
 var (
-	buildRefRE = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}$`)
 	imageRefRE = regexp.MustCompile(`^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)*/[a-z0-9_.-]+/[a-z0-9_.-]+:[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)
 )
 
@@ -25,30 +24,35 @@ func checkResolvable(t interface{ Fatalf(string, ...any) }, rc gen.ResolveCase) 
 	if strings.HasSuffix(strings.ToLower(ref.Ref), ":latest") {
 		t.Fatalf("ref móvil: %q", ref.Ref)
 	}
+	// PBT-03: commit y PR nunca resuelven a build-from-repo; van a imagen publicada por SHA.
+	reg := strings.ToLower(rc.Registry)
+	if reg == "" {
+		reg = artifact.DefaultRegistry
+	}
+	var tag string
 	switch rc.Event.GithubEvent {
 	case artifact.EventTag:
-		if ref.Kind != artifact.KindPublishedImage || !imageRefRE.MatchString(ref.Ref) || !strings.HasSuffix(ref.Ref, ":"+rc.Event.Tag) {
-			t.Fatalf("ref de imagen inválido: %+v (%+v)", ref, rc)
-		}
-		if want := strings.ToLower(rc.Event.Repo); !strings.Contains(ref.Ref, "/"+want+":") {
-			t.Fatalf("el repo debe ir en minúsculas: %q", ref.Ref)
-		}
-		reg := strings.ToLower(rc.Registry)
-		if reg == "" {
-			reg = artifact.DefaultRegistry
-		}
-		if !strings.HasPrefix(ref.Ref, reg+"/") {
-			t.Fatalf("el registro debe ir en minúsculas y al inicio: %q (registro %q)", ref.Ref, rc.Registry)
-		}
+		tag = rc.Event.Tag
 	default:
-		if ref.Kind != artifact.KindBuildFromRepo || !buildRefRE.MatchString(ref.Ref) || ref.Ref != rc.Event.Repo+"@"+rc.Event.SHA {
-			t.Fatalf("ref de build inválido: %+v", ref)
-		}
+		tag = rc.Event.SHA
+	}
+	if ref.Kind != artifact.KindPublishedImage || ref.Kind == artifact.KindBuildFromRepo {
+		t.Fatalf("kind inesperado: %+v (%+v)", ref, rc)
+	}
+	if !imageRefRE.MatchString(ref.Ref) || !strings.HasSuffix(ref.Ref, ":"+tag) {
+		t.Fatalf("ref de imagen inválido: %+v (%+v)", ref, rc)
+	}
+	if want := strings.ToLower(rc.Event.Repo); !strings.Contains(ref.Ref, "/"+want+":") {
+		t.Fatalf("el repo debe ir en minúsculas: %q", ref.Ref)
+	}
+	if want := reg + "/" + strings.ToLower(rc.Event.Repo) + ":" + tag; ref.Ref != want {
+		t.Fatalf("ref=%q, quiero %q", ref.Ref, want)
 	}
 }
 
-// Para todo evento válido, Resolve produce un ref que cumple el patrón de
-// U1-T03 (repo@sha de 40 hex, o registro/repo-en-minúsculas:tag) y nunca termina
+// Para todo evento válido, Resolve produce un ref de imagen publicada
+// (registro/repo-en-minúsculas:tag, donde el tag es el tag del evento o el SHA de
+// 40 hex en commit y PR) y nunca build-from-repo, y nunca termina
 // en :latest (sin importar mayúsculas). Antes del muestreo se recorren, siempre,
 // todos los casos de frontera de gen.FixedResolvable (repos con . _ -, tags con
 // latest como prefijo o sufijo, 1 y 128 caracteres, registros con puerto y ruta).
@@ -87,6 +91,11 @@ func TestPBT_Fixed_ArtifactRef(t *testing.T) {
 	}
 	ref, err := artifact.Resolver{}.Resolve(artifact.Event{GithubEvent: artifact.EventTag, Repo: "Acme/Shop", SHA: sha, Tag: "v1.0.0"})
 	if err != nil || ref.Ref != "ghcr.io/acme/shop:v1.0.0" {
+		t.Fatalf("%+v %v", ref, err)
+	}
+	// Commit: el tag de la imagen es el SHA completo y el repo va en minúsculas.
+	ref, err = artifact.Resolver{}.Resolve(artifact.Event{GithubEvent: artifact.EventCommit, Repo: "Ogaston/Demo-Target-App-QA-Swarm", SHA: sha})
+	if err != nil || ref.Kind != artifact.KindPublishedImage || ref.Ref != "ghcr.io/ogaston/demo-target-app-qa-swarm:"+sha {
 		t.Fatalf("%+v %v", ref, err)
 	}
 }

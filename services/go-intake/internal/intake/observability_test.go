@@ -42,7 +42,7 @@ func newObsEnvWith(t *testing.T, st NotificationStore, pub EventPublisher, res A
 	buf := &bytes.Buffer{}
 	reg := obs.NewRegistry()
 	app, err := NewHandler(Deps{
-		Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: st, Publisher: pub, Resolver: res,
+		Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: st, Publisher: pub, Resolver: res, AllowedRepos: testAllowed,
 		Now: func() time.Time { return time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC) },
 		Log: obs.NewLogger(buf, "go-intake", slog.LevelDebug), Metrics: obs.NewIntake(reg),
 	})
@@ -83,7 +83,7 @@ func TestObsRejectionReasons(t *testing.T) {
 	}{
 		{"firma inválida", badSig, "invalid_signature"},
 		{"firma ausente", noSig, "invalid_signature"},
-		{"evento no soportado", signed("ping", "d1", fixture(t, "ping.json")), "unsupported_event"},
+		{"evento no soportado", signed("issues", "d1", fixture(t, "ping.json")), "unsupported_event"},
 		{"artefacto irresoluble", signed("pull_request", "d1", fixture(t, "pull-request-fork.json")), "unresolvable_artifact"},
 		{"JSON roto", signed("pull_request", "d1", []byte(`{"action":`)), "bad_request"},
 		{"sin delivery", signed("pull_request", "", pr), "bad_request"},

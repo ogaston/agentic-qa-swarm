@@ -18,7 +18,7 @@ func newTestHandler(t *testing.T, secret string) (h http.Handler, dataDir, event
 	t.Helper()
 	root := t.TempDir()
 	dataDir, events, logs = filepath.Join(root, "d"), filepath.Join(root, "e.jsonl"), &bytes.Buffer{}
-	h, err := newHandler(obs.NewLogger(logs, serviceName, slog.LevelDebug), []byte(secret), dataDir, events, "")
+	h, err := newHandler(obs.NewLogger(logs, serviceName, slog.LevelDebug), []byte(secret), dataDir, events, "", []string{"acme/shop"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestOpsEndpointsRealChain(t *testing.T) {
 // webhook_secret de /readyz es defensa en profundidad, probado en internal/obs).
 func TestEmptySecretNeverServes(t *testing.T) {
 	root := t.TempDir()
-	if _, err := newHandler(slog.New(slog.DiscardHandler), nil, filepath.Join(root, "d"), filepath.Join(root, "e"), ""); err == nil {
+	if _, err := newHandler(slog.New(slog.DiscardHandler), nil, filepath.Join(root, "d"), filepath.Join(root, "e"), "", nil); err == nil {
 		t.Fatal("sin secreto no debe haber handler")
 	}
 }

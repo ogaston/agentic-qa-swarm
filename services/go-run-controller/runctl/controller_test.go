@@ -3,6 +3,7 @@ package runctl
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -274,5 +275,31 @@ func TestResumeFromPersistedState(t *testing.T) {
 	_ = k2.Drive(t.Context(), "r-1")
 	if r.state("r-1") != Rehearsing {
 		t.Fatal(r.state("r-1"))
+	}
+}
+
+// El artefacto del run.confirmed queda en la corrida (y por tanto persiste) para que el deploy
+// despliegue el del evento y no el estático (U11-T01, CA-4 b/d).
+func TestRunConfirmedArtifactQuedaEnLaCorrida(t *testing.T) {
+	r := newRig(t, AllowAll())
+	ev := confirmedEv()
+	ev.Artifact = &Artifact{Kind: "published-image", Ref: "ghcr.io/ogaston/demo-target-app-qa-swarm:" + strings.Repeat("a", 40)}
+	if err := r.k.Apply(t.Context(), ev); err != nil {
+		t.Fatal(err)
+	}
+	run, ok := r.store.Get("r-1")
+	if !ok || run.Artifact == nil || *run.Artifact != *ev.Artifact {
+		t.Fatalf("la corrida debe guardar el artefacto del evento: %+v", run.Artifact)
+	}
+}
+
+// Sin artefacto en el evento la corrida queda sin artefacto (el controlador usará su respaldo).
+func TestRunConfirmedSinArtifactDejaNil(t *testing.T) {
+	r := newRig(t, AllowAll())
+	if err := r.k.Apply(t.Context(), confirmedEv()); err != nil {
+		t.Fatal(err)
+	}
+	if run, _ := r.store.Get("r-1"); run.Artifact != nil {
+		t.Fatalf("sin artefacto en el evento, la corrida no debe tenerlo: %+v", run.Artifact)
 	}
 }

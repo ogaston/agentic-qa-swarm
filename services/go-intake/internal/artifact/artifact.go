@@ -71,6 +71,11 @@ func unresolvable(format string, a ...any) error {
 
 // Resolve devuelve el ArtifactRef del evento o un error que cumple
 // errors.Is(err, ErrUnresolvableArtifact). Fail-closed.
+//
+// commit y pull_request (mismo repositorio, sin forks) se resuelven a la imagen
+// publicada por CI con el SHA como tag (ghcr.io/<owner/repo>:<sha>): la CI del
+// repositorio publica esa imagen en cada push a main. tag resuelve a la imagen
+// del tag. Ninguno produce build-from-repo (ese kind sigue en el contrato).
 func (r Resolver) Resolve(ev Event) (Ref, error) {
 	if !repoRE.MatchString(ev.Repo) {
 		return Ref{}, unresolvable("repositorio invalido")
@@ -84,20 +89,25 @@ func (r Resolver) Resolve(ev Event) (Ref, error) {
 			(ev.HeadRepo == "" || !strings.EqualFold(ev.HeadRepo, ev.Repo)) {
 			return Ref{}, unresolvable("PR desde un fork o sin repositorio de origen")
 		}
-		return Ref{Kind: KindBuildFromRepo, Ref: ev.Repo + "@" + ev.SHA}, nil
+		return r.image(ev.Repo, ev.SHA)
 	case EventTag:
 		if strings.EqualFold(ev.Tag, "latest") || !tagRE.MatchString(ev.Tag) {
 			return Ref{}, unresolvable("tag vacio, latest o invalido")
 		}
-		reg := strings.ToLower(r.Registry)
-		if reg == "" {
-			reg = DefaultRegistry
-		}
-		if !regRE.MatchString(reg) {
-			return Ref{}, unresolvable("registro invalido")
-		}
-		return Ref{Kind: KindPublishedImage, Ref: reg + "/" + strings.ToLower(ev.Repo) + ":" + ev.Tag}, nil
+		return r.image(ev.Repo, ev.Tag)
 	default:
 		return Ref{}, unresolvable("evento %q no soportado", ev.GithubEvent)
 	}
+}
+
+// image arma la referencia published-image registro/repo-en-minusculas:tag.
+func (r Resolver) image(repo, tag string) (Ref, error) {
+	reg := strings.ToLower(r.Registry)
+	if reg == "" {
+		reg = DefaultRegistry
+	}
+	if !regRE.MatchString(reg) {
+		return Ref{}, unresolvable("registro invalido")
+	}
+	return Ref{Kind: KindPublishedImage, Ref: reg + "/" + strings.ToLower(repo) + ":" + tag}, nil
 }
