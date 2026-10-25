@@ -107,7 +107,7 @@ Detalle:
 
 - [ ] **CA-6** — Pruebas de todos los módulos tocados y alcance.
   ```bash
-  for d in services/go-intake services/ui-api services/go-run-controller services/go-warm-manager; do (cd $d && go vet ./... && go test ./... -count=1 2>&1 | tail -1); done; git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(services/(go-intake|ui-api|go-run-controller|go-warm-manager)/|contracts/(events|openapi)/|deploy/flux/base/control-plane\.yaml|tareas/U11-T01-|bitacoras/U11-T01\.md|revisiones/U11-T01/)' | wc -l
+  for d in services/go-intake services/ui-api services/go-run-controller services/go-warm-manager; do (cd $d && go vet ./... && go test ./... -count=1 2>&1 | tail -1); done; git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(services/(go-intake|ui-api|go-run-controller|go-warm-manager)/|contracts/(events|openapi)/|deploy/flux/base/control-plane\.yaml|tareas/U11-T01-|unidades-y-tareas\.md|bitacoras/U11-T01\.md|revisiones/U11-T01/)' | wc -l
   ```
   Esperado: cuatro `ok`, `0` y `0`.
 
