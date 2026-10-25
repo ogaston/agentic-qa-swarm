@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	"sigs.k8s.io/yaml"
@@ -107,12 +106,12 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 	// U11-T01: el deploy despliega el artefacto del evento (guardado en la corrida); RUN_ARTIFACT_REF
 	// es solo el respaldo para corridas cuyo run.confirmed no lo trajo (p. ej. kind-e2e.sh).
 	// U11-T03: el respaldo queda registrado: un WARN y un contador, una vez por corrida.
-	var fallbackSeen sync.Map
+	fallbackSeen := newSeenBounded(maxFallbackSeen)
 	artifact := func(runID string) (string, string, error) {
 		if r, ok := store.Get(runID); ok && r.Artifact != nil {
 			return r.Artifact.Kind, r.Artifact.Ref, nil
 		}
-		if _, dup := fallbackSeen.LoadOrStore(runID, true); !dup {
+		if fallbackSeen.addIfNew(runID) {
 			if log != nil {
 				log.Warn("deploy con el artefacto de respaldo RUN_ARTIFACT_REF: el evento no trajo artifact",
 					"run_id", runID, "artifact_source", "fallback")

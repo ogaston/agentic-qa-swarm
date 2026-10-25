@@ -20,28 +20,44 @@ var ErrImageNotAllowed = errors.New("imagen no permitida por WARM_ALLOWED_IMAGE_
 // ErrInvalidImage: el artefacto del deploy no cumple el formato (kind, registro, tag fijado).
 var ErrInvalidImage = errors.New("artefacto invalido")
 
-var (
-	imagePrefixRe = regexp.MustCompile(`^[a-z0-9.-]+/[a-z0-9._-]+/[a-z0-9._-]+$`)
-	imageTagRe    = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)
-	imageDigestRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
-)
+// Mismo criterio que go-warm-manager (types.go): al menos tres segmentos, sin vacíos ni . / ..
+var imagePrefixRe = regexp.MustCompile(`^[a-z0-9.-]+(/[a-z0-9._-]+){2,}$`)
 
-// ParseImagePrefixes lee WARM_ALLOWED_IMAGE_PREFIXES (lista separada por comas). Vacía = ninguna imagen
-// permitida (fail-closed). Un prefijo mal formado es error: el controlador no arranca.
+// hasDotSegment: un prefijo con un segmento "." o ".." no es un repositorio real.
+func hasDotSegment(p string) bool {
+	for _, s := range strings.Split(p, "/") {
+		if s == "." || s == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseImagePrefixes lee WARM_ALLOWED_IMAGE_PREFIXES (lista separada por comas). Vacía (o solo espacios) =
+// ninguna imagen permitida (fail-closed). Un elemento vacío (`a,,b`, coma final) o un prefijo mal formado es
+// error de configuración: el servicio no arranca (nunca se omite en silencio).
 func ParseImagePrefixes(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
 	var out []string
 	for _, p := range strings.Split(raw, ",") {
 		p = strings.TrimSpace(p)
 		if p == "" {
-			continue
+			return nil, errors.New("WARM_ALLOWED_IMAGE_PREFIXES: elemento vacío (sobra una coma)")
 		}
-		if !imagePrefixRe.MatchString(p) {
-			return nil, fmt.Errorf("WARM_ALLOWED_IMAGE_PREFIXES: prefijo %q mal formado (exige registro/owner/repo en minúsculas)", p)
+		if !imagePrefixRe.MatchString(p) || hasDotSegment(p) {
+			return nil, fmt.Errorf("WARM_ALLOWED_IMAGE_PREFIXES: prefijo %q mal formado (exige registro/owner/repo[/sub] en minúsculas)", p)
 		}
 		out = append(out, p)
 	}
 	return out, nil
 }
+
+var (
+	imageTagRe    = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)
+	imageDigestRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+)
 
 // ValidateImage decide si el artefacto puede pedirse a go-warm-manager. Solo published-image es
 // desplegable desde el controlador; build-from-repo se rechaza aquí (go-warm-manager tampoco lo despliega).

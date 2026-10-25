@@ -148,9 +148,21 @@ func TestParseImagePrefixesVacioEsFailClosed(t *testing.T) {
 	if err != nil || len(got) != 0 {
 		t.Fatalf("vacío debe ser lista vacía sin error: %v %v", got, err)
 	}
-	got, err = wm.ParseImagePrefixes(" ghcr.io/ogaston/a , ghcr.io/x/y ,")
+	got, err = wm.ParseImagePrefixes(" ghcr.io/ogaston/a , ghcr.io/x/y/z ")
 	if err != nil || len(got) != 2 {
-		t.Fatalf("lista válida: %v %v", got, err)
+		t.Fatalf("lista válida (3 y 4 segmentos): %v %v", got, err)
+	}
+	// U11-T03 F-04: un elemento vacío es error de configuración, nunca se omite en silencio.
+	for _, bad := range []string{"ghcr.io/ogaston/a,,ghcr.io/x/y", "ghcr.io/ogaston/a,", ",ghcr.io/x/y", "ghcr.io/ogaston/a, ,ghcr.io/x/y"} {
+		if _, err := wm.ParseImagePrefixes(bad); err == nil {
+			t.Errorf("%q debía ser error por elemento vacío", bad)
+		}
+	}
+	// Prefijos con ".." o sin límite de segmentos no son permisos.
+	for _, bad := range []string{"ghcr.io/ogaston/../x", "ghcr.io/ogaston/a/..", "ghcr.io/ogaston/a/./b"} {
+		if _, err := wm.ParseImagePrefixes(bad); err == nil {
+			t.Errorf("%q debía ser mal formado", bad)
+		}
 	}
 }
 

@@ -1,42 +1,49 @@
 package warmmanager_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
 	"testing"
 
 	wm "github.com/ogaston/agentic-qa-swarm/services/go-warm-manager"
 )
 
-// Paridad (U11-T03): este conjunto de casos es IDÉNTICO en
-// services/go-warm-manager/paridad_imagen_test.go y services/go-run-controller/adapters/paridad_imagen_test.go.
-// Cada módulo debe decidir igual en cada caso. Si cambias uno, cambia el otro.
-var casosParidadImagen = []struct {
-	nombre    string
-	ref       string
-	prefijos  []string
-	permitida bool
-}{
-	{"tag ok", "ghcr.io/ogaston/demo-target-app-qa-swarm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, true},
-	{"digest ok", "ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, true},
-	{"prefijo con barras", "ghcr.io/ogaston/agentic-qa-swarm/target-app:0.0.0", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm", "ghcr.io/ogaston/agentic-qa-swarm/target-app"}, true},
-	{"repo ajeno", "ghcr.io/evil/x:1", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"prefijo sin limite de nombre", "ghcr.io/ogaston/demo-target-app-qa-swarm-evil:1", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"ruta con ..", "ghcr.io/ogaston/demo-target-app-qa-swarm/../x:1", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"owner en mayusculas", "ghcr.io/OGASTON/demo-target-app-qa-swarm:1", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"subruta bajo el prefijo", "ghcr.io/ogaston/demo-target-app-qa-swarm/sub:1", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"tag latest", "ghcr.io/ogaston/demo-target-app-qa-swarm:latest", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"sin tag", "ghcr.io/ogaston/demo-target-app-qa-swarm", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"registro docker.io", "docker.io/ogaston/demo-target-app-qa-swarm:1", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"digest corto", "ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:corto", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"espacio en la ref", "ghcr.io/ogaston/demo-target-app-qa-swarm:1 x", []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}, false},
-	{"lista vacia (fail-closed)", "ghcr.io/ogaston/demo-target-app-qa-swarm:1", nil, false},
+// U11-T03 F-02: fuente ÚNICA de casos de paridad, testdata/imagen_casos.json, copiada byte a byte en
+// services/go-run-controller/adapters/testdata/imagen_casos.json. El SHA-256 fijado aquí (y en el controlador)
+// obliga a que las dos copias sean idénticas: si cambia una sola, la prueba de su módulo falla.
+// Para cambiar un caso: editar AMBAS copias y actualizar la constante en AMBOS tests.
+const casosImagenSHA256 = "d71a94d52ed8206cbd7959c152258ff3a537d681ae42fbe4aae2c6050f768888"
+
+type casoImagen struct {
+	Nombre    string   `json:"nombre"`
+	Kind      string   `json:"kind"`
+	Ref       string   `json:"ref"`
+	Prefijos  []string `json:"prefijos"`
+	Permitida bool     `json:"permitida"`
 }
 
-// TestParidadImagenComoEnWarm: go-warm-manager decide igual que el controlador en cada caso.
-func TestParidadImagenComoEnWarm(t *testing.T) {
-	for _, c := range casosParidadImagen {
-		err := wm.ValidateArtifact(wm.Artifact{Kind: "published-image", Ref: c.ref}, []string{"ghcr.io"}, c.prefijos)
-		if (err == nil) != c.permitida {
-			t.Errorf("%s (%s): permitida=%v, err=%v", c.nombre, c.ref, c.permitida, err)
+// TestParidadImagenCasosIdenticos: go-warm-manager decide igual que el controlador en cada caso, y la copia de
+// casos es la fijada. "Desplegable" = kind published-image y ValidateArtifact sin error.
+func TestParidadImagenCasosIdenticos(t *testing.T) {
+	raw, err := os.ReadFile("testdata/imagen_casos.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(raw)
+	if got := hex.EncodeToString(sum[:]); got != casosImagenSHA256 {
+		t.Fatalf("testdata/imagen_casos.json cambió (sha256 %s, fijado %s): actualiza AMBAS copias y la constante", got, casosImagenSHA256)
+	}
+	var casos []casoImagen
+	if err := json.Unmarshal(raw, &casos); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range casos {
+		err := wm.ValidateArtifact(wm.Artifact{Kind: c.Kind, Ref: c.Ref}, []string{"ghcr.io"}, c.Prefijos)
+		desplegable := err == nil && c.Kind == wm.KindPublishedImage
+		if desplegable != c.Permitida {
+			t.Errorf("%s (kind=%q ref=%q): desplegable=%v, esperado %v (err=%v)", c.Nombre, c.Kind, c.Ref, desplegable, c.Permitida, err)
 		}
 	}
 }

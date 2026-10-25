@@ -100,20 +100,35 @@ var (
 	tagRe     = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)
 )
 
-// imagePrefixRe exige registro/owner/repo en minúsculas: sin comodines, sin tag ni digest, sin barra final.
-var imagePrefixRe = regexp.MustCompile(`^[a-z0-9.-]+/[a-z0-9._-]+/[a-z0-9._-]+$`)
+// imagePrefixRe exige registro/owner/repo[/sub...] en minúsculas: al menos tres segmentos (así ghcr.io y
+// ghcr.io/owner nunca son un permiso), sin comodines, sin tag ni digest, sin barra final ni vacíos.
+var imagePrefixRe = regexp.MustCompile(`^[a-z0-9.-]+(/[a-z0-9._-]+){2,}$`)
 
-// ParseImagePrefixes lee WARM_ALLOWED_IMAGE_PREFIXES (lista separada por comas). Vacía = ninguna
-// imagen permitida (fail-closed). Un prefijo mal formado es error: el servicio no arranca.
+// hasDotSegment: un prefijo con un segmento "." o ".." no es un repositorio real.
+func hasDotSegment(p string) bool {
+	for _, s := range strings.Split(p, "/") {
+		if s == "." || s == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseImagePrefixes lee WARM_ALLOWED_IMAGE_PREFIXES (lista separada por comas). Vacía (o solo espacios) =
+// ninguna imagen permitida (fail-closed). Un elemento vacío (`a,,b`, coma final) o un prefijo mal formado es
+// error de configuración: el servicio no arranca (nunca se omite en silencio).
 func ParseImagePrefixes(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
 	var out []string
 	for _, p := range strings.Split(raw, ",") {
 		p = strings.TrimSpace(p)
 		if p == "" {
-			continue
+			return nil, errors.New("WARM_ALLOWED_IMAGE_PREFIXES: elemento vacío (sobra una coma)")
 		}
-		if !imagePrefixRe.MatchString(p) {
-			return nil, fmt.Errorf("WARM_ALLOWED_IMAGE_PREFIXES: prefijo %q mal formado (exige registro/owner/repo en minúsculas)", p)
+		if !imagePrefixRe.MatchString(p) || hasDotSegment(p) {
+			return nil, fmt.Errorf("WARM_ALLOWED_IMAGE_PREFIXES: prefijo %q mal formado (exige registro/owner/repo[/sub] en minúsculas)", p)
 		}
 		out = append(out, p)
 	}

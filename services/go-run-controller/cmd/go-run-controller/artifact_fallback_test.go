@@ -71,3 +71,26 @@ func counterValue(t *testing.T, reg *prometheus.Registry, name string) float64 {
 	t.Fatalf("métrica %s ausente", name)
 	return 0
 }
+
+// U11-T03 F-04: el conjunto de corridas avisadas tiene tope; al llenarse descarta la más antigua y
+// vuelve a avisar solo de esa (no crece sin límite).
+func TestFallbackSeenAcotado(t *testing.T) {
+	s := newSeenBounded(10)
+	for i := 0; i < 25; i++ {
+		if !s.addIfNew(string(rune('a' + i))) {
+			t.Fatalf("id nuevo %d marcado como visto", i)
+		}
+		if s.len() > 10 {
+			t.Fatalf("el conjunto creció más allá del tope: %d", s.len())
+		}
+	}
+	if s.addIfNew(string(rune('a' + 24))) {
+		t.Fatal("la más reciente debe seguir recordada")
+	}
+	if !s.addIfNew("a") {
+		t.Fatal("la más antigua fue descartada: debe poder volver a avisarse")
+	}
+	if s.len() != 10 {
+		t.Fatalf("len=%d, quiero 10", s.len())
+	}
+}

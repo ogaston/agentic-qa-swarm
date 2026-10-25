@@ -378,7 +378,7 @@ func TestDeployImageNotAllowedNoLlegaAlWarm(t *testing.T) {
 }
 
 // CA-2 (U11-T03): una imagen permitida sí llega al deploy de go-warm-manager con esa imagen.
-func TestDeployImageAllowedLlegaAlWarm(t *testing.T) {
+func TestArtifactDeployImageAllowedLlegaAlWarm(t *testing.T) {
 	var posts atomic.Int32
 	var got string
 	c := warmClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

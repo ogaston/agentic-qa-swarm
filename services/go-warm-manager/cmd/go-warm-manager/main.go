@@ -93,6 +93,7 @@ func run(getenv func(string) string, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	logImagePrefixes(log, len(imagePrefixes))
 
 	var cs kubernetes.Interface
 	seed := safeSeed()
@@ -293,4 +294,17 @@ type logAlerter struct{ log *slog.Logger }
 func (a logAlerter) Handoff(_ context.Context, phase, runID, reason string) error {
 	a.log.Warn("handoff a humano", "phase", phase, "run_id", runID, "reason", reason)
 	return nil
+}
+
+// logImagePrefixes registra cuántos prefijos de imagen quedaron cargados (nunca sus valores). Lista vacía = WARN:
+// todo published-image se rechaza (fail-closed) y conviene verlo al arrancar.
+func logImagePrefixes(log *slog.Logger, n int) {
+	if log == nil {
+		return
+	}
+	if n == 0 {
+		log.Warn("WARM_ALLOWED_IMAGE_PREFIXES vacía: ningún published-image se desplegará (fail-closed)")
+		return
+	}
+	log.Info("prefijos de imagen permitidos cargados", "count", n)
 }
