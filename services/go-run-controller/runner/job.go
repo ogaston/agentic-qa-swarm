@@ -33,6 +33,10 @@ type Config struct {
 
 var idRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$`)
 
+// flowIDRe es el patrón de flow_id del contrato (plan.FlowIDPattern): 1 a 35 caracteres, para que el nombre
+// del Job quepa en maxNameLength con un run_id real. Es el mismo valor que plan.FlowIDPattern.
+var flowIDRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,33}[a-z0-9])?$`)
+
 // ErrConfig marca una configuración inválida del Job.
 var ErrConfig = errors.New("configuración del Job runner inválida")
 
@@ -61,7 +65,7 @@ func BuildJob(c Config, runID, flowID string, spec JobSpec, now time.Time) (*bat
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
-	if !idRe.MatchString(runID) || !idRe.MatchString(flowID) || len(JobName(runID, flowID)) > maxNameLength {
+	if !idRe.MatchString(runID) || !flowIDRe.MatchString(flowID) || len(JobName(runID, flowID)) > maxNameLength {
 		return nil, fmt.Errorf("%w: run_id/flow_id no aptos para un nombre de Job", ErrConfig)
 	}
 	if err := checkSpec(spec); err != nil {

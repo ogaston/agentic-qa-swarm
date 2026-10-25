@@ -43,10 +43,10 @@ _alnum = "0123456789abcdefghijklmnopqrstuvwxyz"  # el orden fija a que se reduce
 
 
 @st.composite
-def flow_id(draw, valid=True, max_len=42):
-    """flow_id valido (forma ^[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?$); con valid=False, variantes invalidas controladas."""
+def flow_id(draw, valid=True, max_len=35):
+    """flow_id valido (forma ^[a-z0-9]([-a-z0-9]{0,33}[a-z0-9])?$, 1..35; U11-T04); con valid=False, variantes invalidas controladas."""
     if not valid:
-        return draw(st.sampled_from(["", "-a", "a-", "A", "a_b", "a" * 43, "ok\n", "a b", "é", "a/b", " a"]))
+        return draw(st.sampled_from(["", "-a", "a-", "A", "a_b", "a" * 36, "ok\n", "a b", "é", "a/b", " a"]))
     n = draw(st.integers(0, max_len - 1))
     first = draw(st.sampled_from(_alnum))
     if n == 0:
@@ -110,7 +110,7 @@ def flow_plan(draw, surf=None, wf=None, max_flows=MAX_FLOWS, max_steps=3):
     """Plan valido con 1..max_flows flujos (con peso explicito en max_flows) y flow_id unicos."""
     n = draw(st.one_of(st.just(max_flows), st.integers(1, max_flows), st.integers(1, min(3, max_flows)), st.integers(1, min(3, max_flows))))
     # unicidad por construccion (prefijo "<i>-"): mucho mas barato que lists(unique=True) sobre composites
-    ids = [draw(flow_id())] + [f"{i}-{draw(flow_id(max_len=38))}" for i in range(1, n)]
+    ids = [draw(flow_id())] + [f"{i}-{draw(flow_id(max_len=32))}" for i in range(1, n)]
     eps = surf["endpoints"] if surf else None
     return {
         "run_id": surf["run_id"] if surf else draw(run_id()),
