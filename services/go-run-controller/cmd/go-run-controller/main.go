@@ -40,9 +40,10 @@ type config struct {
 	evEndpoint, evBucket, evAccessFile, evSecretFile string
 	maxParallel                                      int
 	flowTimeout, runTimeout                          time.Duration
-	flowSource, u3URL, u3Workflow                    string // RUN_FLOW_SOURCE (""|u3|fake), U3_URL y U3_DEFAULT_WORKFLOW
-	reporterURL                                      string // REPORTER_URL (fase report, U8-T06)
-	transport, natsURL                               string // EVENTS_TRANSPORT (file|nats) y NATS_URL (U8-T02)
+	flowSource, u3URL, u3Workflow                    string   // RUN_FLOW_SOURCE (""|u3|fake), U3_URL y U3_DEFAULT_WORKFLOW
+	reporterURL                                      string   // REPORTER_URL (fase report, U8-T06)
+	imagePrefixes                                    []string // WARM_ALLOWED_IMAGE_PREFIXES (U11-T03), misma regla que go-warm-manager
+	transport, natsURL                               string   // EVENTS_TRANSPORT (file|nats) y NATS_URL (U8-T02)
 }
 
 // parseSeconds lee una duración en segundos (vacío: def). Valor no numérico o <=0 es un error.
@@ -149,6 +150,11 @@ func loadConfig(env func(string) string) (config, error) {
 		c.runnerImage, c.runnerSA = env("RUNNER_IMAGE"), env("RUNNER_SERVICE_ACCOUNT")
 		c.evBucket, c.evAccessFile, c.evSecretFile = env("EVIDENCE_BUCKET"), env("EVIDENCE_ACCESS_KEY_FILE"), env("EVIDENCE_SECRET_KEY_FILE")
 		c.reporterURL = env("REPORTER_URL")
+		prefixes, err := adapters.ParseImagePrefixes(env("WARM_ALLOWED_IMAGE_PREFIXES"))
+		if err != nil {
+			return c, err
+		}
+		c.imagePrefixes = prefixes
 		if _, err := adapters.ValidateHTTPURL(c.reporterURL); err != nil {
 			return c, fmt.Errorf("REPORTER_URL %w", err)
 		}

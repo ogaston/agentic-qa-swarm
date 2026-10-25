@@ -331,9 +331,11 @@ type RealPhases struct {
 	Warm     *WarmClient
 	Reset    *ResetClient
 	Artifact ArtifactSource
-	Rehearse runctl.PhaseLauncher
-	Run      runctl.PhaseLauncher // runners (U2-T05); sin él la fase run falla cerrado
-	Report   *ReporterClient      // reporter (U8-T06); sin él la fase report falla cerrado
+	// ImagePrefixes: WARM_ALLOWED_IMAGE_PREFIXES (U11-T03). El artefacto se valida antes de pedir el deploy.
+	ImagePrefixes []string
+	Rehearse      runctl.PhaseLauncher
+	Run           runctl.PhaseLauncher // runners (U2-T05); sin él la fase run falla cerrado
+	Report        *ReporterClient      // reporter (U8-T06); sin él la fase report falla cerrado
 }
 
 var (
@@ -354,6 +356,10 @@ func (p *RealPhases) Launch(ctx context.Context, phase string, run runctl.Run) (
 		kind, ref, err := p.Artifact(run.ID)
 		if err != nil {
 			return nil, err
+		}
+		// U11-T03: falla cerrada ANTES de go-warm-manager; el error nombra la imagen rechazada.
+		if err := ValidateImage(kind, ref, p.ImagePrefixes); err != nil {
+			return nil, fmt.Errorf("deploy no pedido: %w", err)
 		}
 		return nil, p.Warm.Deploy(ctx, run.ID, kind, ref)
 	case runctl.PhaseInfer:
