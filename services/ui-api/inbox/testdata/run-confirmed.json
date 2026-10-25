@@ -1,0 +1,19 @@
+{
+  "event_id": "6ac5eb6b-75c9-5deb-95ee-fb4c242386e7",
+  "type": "run.confirmed",
+  "version": 1,
+  "occurred_at": "2026-10-25T12:00:00Z",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "data": {
+    "run_id": "run-25919e4f2ad92de8",
+    "notification_id": "n-1",
+    "confirmed_by": "marta",
+    "flows": [
+      "checkout"
+    ],
+    "artifact": {
+      "kind": "published-image",
+      "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:cccccccccccccccccccccccccccccccccccccccc"
+    }
+  }
+}

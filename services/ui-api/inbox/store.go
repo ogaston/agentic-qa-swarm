@@ -89,6 +89,9 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 			s.Skipped++
 			continue
 		}
+		if r.Artifact != nil && (r.Artifact.Kind == "" || r.Artifact.Ref == "") {
+			r.Artifact = nil // artifact {} o incompleto: se trata como ausente (fail-closed en Publish) (F-09)
+		}
 		if _, dup := s.receipt[r.NotificationID]; !dup {
 			s.rorder = append(s.rorder, r.NotificationID)
 			s.receipt[r.NotificationID] = r.Receipt

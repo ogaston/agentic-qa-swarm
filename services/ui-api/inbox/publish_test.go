@@ -1,9 +1,11 @@
 package inbox
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -277,5 +279,65 @@ func TestPublishSinArtefactoDisponibleNoMarcaPublicado(t *testing.T) {
 	}
 	if len(rp.got) != 1 || rp.got[0].Data.Artifact == nil || !st.IsPublished("n-1") {
 		t.Fatalf("eventos=%d publicado=%v", len(rp.got), st.IsPublished("n-1"))
+	}
+}
+
+// F-09 (i): un registro editado a mano con artifact vacío ({}) se trata como AUSENTE: no se publica
+// con kind y ref vacíos; cae en la ruta fail-closed.
+func TestRegistroConArtefactoVacioSeTrataComoAusente(t *testing.T) {
+	dir := t.TempDir()
+	line := `{"run_id":"run-1","notification_id":"n-1","confirmed_by":"marta","confirmed_at":"2026-01-02T03:04:05Z","flows":["checkout"],"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","artifact":{}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, ConfirmationsFile), []byte(line), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	st, err := OpenStore(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rp := &recPub{}
+	if err := NewPublisher(st, rp, nil).Publish(context.Background(), "n-1"); err == nil || len(rp.got) != 0 || st.IsPublished("n-1") {
+		t.Fatalf("artifact {} debe ser ausente (fail-closed): err=%v eventos=%d publicado=%v", err, len(rp.got), st.IsPublished("n-1"))
+	}
+}
+
+// F-07: con el replay ya terminado y el recibo todavía sin artefacto, se registra UNA sola vez,
+// aunque el reintento periódico llame a Publish muchas veces.
+func TestSinArtefactoTrasReplayRegistraUnaVez(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"run_id":"run-1","notification_id":"n-1","confirmed_by":"marta","confirmed_at":"2026-01-02T03:04:05Z","flows":["checkout"],"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, ConfirmationsFile), []byte(legacy), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	st, err := OpenStore(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	p := NewPublisher(st, &recPub{}, slog.New(slog.NewTextHandler(&buf, nil)))
+	p.SetReplayed(func() bool { return true })
+	for i := 0; i < 5; i++ {
+		_ = p.Publish(context.Background(), "n-1")
+	}
+	if n := strings.Count(buf.String(), "sin artefacto"); n != 1 {
+		t.Fatalf("el aviso debe emitirse una vez, emitido %d veces:\n%s", n, buf.String())
+	}
+}
+
+// F-09 (ii): golden. La salida de NewRunConfirmed para una confirmación fija coincide con la copia
+// en testdata/run-confirmed.json (la misma que usa go-run-controller). Ambas copias deben mantenerse iguales.
+func TestNewRunConfirmedGoldenCoincideConFixtureDelControlador(t *testing.T) {
+	c := Confirmed{
+		Receipt: Receipt{RunID: "run-25919e4f2ad92de8", NotificationID: "n-1", ConfirmedBy: "marta",
+			ConfirmedAt: time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)},
+		Flows: []string{"checkout"}, TraceID: "4bf92f3577b34da6a3ce929d0e0e4736",
+		Artifact: &Artifact{Kind: "published-image", Ref: "ghcr.io/ogaston/demo-target-app-qa-swarm:" + strings.Repeat("c", 40)},
+	}
+	got, _ := json.MarshalIndent(NewRunConfirmed(c), "", "  ")
+	want, err := os.ReadFile(filepath.Join("testdata", "run-confirmed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(got)) != strings.TrimSpace(string(want)) {
+		t.Fatalf("golden distinto:\n%s\nquiero:\n%s", got, want)
 	}
 }
