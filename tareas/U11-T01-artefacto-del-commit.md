@@ -125,7 +125,10 @@ Detalle:
 ## Notas
 
 - Archivos que se **modifican en su sitio**; nada de duplicados con sufijo. Rama `tarea/U11-T01`, worktree `../agentic-qa-swarm-wt-U11-T01`, desde `main`.
-- `kind-e2e.sh` siempre usó el artefacto estático: el respaldo `RUN_ARTIFACT_REF` lo mantiene funcionando. No lo toques.
+- **Corrección (ronda 2, F-06; error de la especificación):** NO es cierto que `kind-e2e.sh` siga funcionando. Con esta tarea, un push del repositorio permitido
+  siempre produce un artefacto del evento, y `kind-e2e.sh`, `kind-smoke.sh` y `dashboard-smoke.sh` firman el webhook con `ogaston/agentic-qa-swarm` (422 `repo_not_allowed`).
+  Esos scripts **quedan rotos hasta U11-T02**, que los adapta (webhook del repo permitido y una imagen local con el tag del SHA firmado). Decisión del orquestador, a revisar por el humano
+  en el PR: no se tocan aquí `scripts/kind/` ni el overlay kind. El codificador lo declara en la bitácora y en el cuerpo del PR; `RUN_ARTIFACT_REF` queda como respaldo solo para eventos sin artefacto.
 - Regla `ValidateArtifact` de `go-warm-manager`: solo `ghcr.io` con tag explícito (nunca `latest`). El SHA de 40 hex cumple.
 - El tag de imagen es el SHA completo en minúsculas; el nombre del repo se pasa a minúsculas (GHCR lo exige).
 - Candidatas que surjan (p. ej. `build-from-repo` real, pull secrets para registros privados) van a `tareas/candidatas.md`, no a esta tarea.
