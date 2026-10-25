@@ -33,7 +33,7 @@ spec:
           env:
             - name: TZ
               value: UTC
-            # Variables de la app de referencia (demo/target-app, U8-T04). nginx las ignora.
+            # Variables de la app de referencia (repo ogaston/demo-target-app-qa-swarm, U8-T04). nginx las ignora.
             # PGPASSWORD viene del Secret de warm-db; DATABASE_URL la compone con $(PGPASSWORD).
             - name: PGPASSWORD
               valueFrom:

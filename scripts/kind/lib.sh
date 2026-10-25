@@ -260,3 +260,41 @@ kind_state_check() {
   done
   return $rc
 }
+
+# --- repositorio objetivo externo (U11-T02) ----------------------------------
+# La app objetivo vive en ogaston/demo-target-app-qa-swarm (no en este repo). Su CI publica
+# ghcr.io/ogaston/demo-target-app-qa-swarm:<sha40>; el SHA que usa el e2e debe tener imagen.
+TARGET_REPO_FULL=ogaston/demo-target-app-qa-swarm
+TARGET_REPO_URL=https://github.com/$TARGET_REPO_FULL
+TARGET_IMAGE_REPO=ghcr.io/$TARGET_REPO_FULL
+
+# resolve_target_sha: imprime el SHA (40 hex) con el que se despliega el repo objetivo.
+# TARGET_SHA gana si está definido; si no, el HEAD remoto de ${TARGET_BRANCH:-main}.
+# Sale 1 con mensaje a stderr si el valor no es 40 hex o si no hay red (ls-remote falla).
+resolve_target_sha() {
+  local sha=""
+  if [ -n "${TARGET_SHA:-}" ]; then
+    sha=$TARGET_SHA
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "TARGET_SHA='$sha' no es un SHA de 40 hex minúsculas" >&2; return 1; }
+  else
+    sha=$(timeout 30 git ls-remote "$TARGET_REPO_URL" "refs/heads/${TARGET_BRANCH:-main}" 2>/dev/null | awk 'NR==1{print $1}')
+    if [ -z "$sha" ]; then
+      echo "no se pudo leer el HEAD de $TARGET_REPO_URL (sin red o repo inaccesible); define TARGET_SHA con un commit que tenga imagen" >&2
+      return 1
+    fi
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "git ls-remote devolvió un SHA mal formado: '$sha'" >&2; return 1; }
+  fi
+  printf '%s' "$sha"
+}
+
+# target_image_exists <sha40>: 0 si ghcr.io/<repo-objetivo>:<sha> existe (pull anónimo), si no 1.
+target_image_exists() {
+  local sha=$1 tok code
+  tok=$(curl -fsS --max-time 20 "https://ghcr.io/token?scope=repository:$TARGET_REPO_FULL:pull" 2>/dev/null | jq -r '.token // empty') || return 1
+  [ -n "$tok" ] || return 1
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+    -H "Authorization: Bearer $tok" \
+    -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.docker.distribution.manifest.list.v2+json' \
+    "https://ghcr.io/v2/$TARGET_REPO_FULL/manifests/$sha") || return 1
+  [ "$code" = 200 ]
+}

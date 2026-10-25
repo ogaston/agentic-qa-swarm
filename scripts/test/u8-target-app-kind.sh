@@ -20,7 +20,10 @@ require_kind_context # sale 3 si el contexto no es kind-aqs
 
 NS_SYS=aqs-system
 NS_TEST=aqs-test
-IMAGE_REF="$IMAGE_PREFIX/target-app:$IMAGE_TAG"
+# U11-T02: la app objetivo es el repo externo ogaston/demo-target-app-qa-swarm; su imagen se fija por SHA
+# (nunca :latest). Sobreescribible con TARGET_IMAGE=ghcr.io/...:<sha40>.
+TARGET_IMAGE=${TARGET_IMAGE:-ghcr.io/ogaston/demo-target-app-qa-swarm:b97a719199d5ccbc2ff24f9cfc408ec7ee31114d}
+IMAGE_REF="$TARGET_IMAGE"
 RUN_ID="u8t04-$(date +%s)"
 P_WM=18610
 P_RESET=18611
