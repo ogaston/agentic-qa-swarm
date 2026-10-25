@@ -301,5 +301,9 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 | # | Hecho | Tarea | Historias | Comando de verificación |
 |---|---|---|---|---|
 | U11-T1 | [ ] | La corrida despliega la imagen del commit empujado (resolución a `published-image`, lista de repos, artefacto en `run.confirmed`, `ping` de GitHub) | US-M1, US-M2 | `tareas/U11-T01-artefacto-del-commit.md` |
+| U11-T2 | [ ] | La plataforma deja de llevar la app: baseline vendorizado, warm de kind desde la imagen del repo externo por SHA, scripts de kind al repo permitido, guion de la demo real | US-M1, US-M2, US-M10 | `tareas/U11-T02-kind-contra-repo-objetivo.md` |
+| U11-T3 | [ ] | El deploy solo acepta imágenes de los repositorios permitidos (`WARM_ALLOWED_IMAGE_PREFIXES`) y el respaldo `RUN_ARTIFACT_REF` queda registrado | US-M8.3, US-M2 | `tareas/U11-T03-prefijo-de-imagen-permitido.md` |
+| U11-T4 | [ ] | `flow_id` válido para el nombre del Job: patrón en el contrato, normalización en el planner y rechazo en la admisión del plan *(surgida de la corrida real de U11-T02)* | US-M4, US-M6, US-M9 | `tareas/U11-T04-flow-id-valido-para-job.md` |
+| U11-T5 | [ ] | El planner y el reporter salen siempre por una IP permitida por la NetworkPolicy (alias de host fijado) *(surgida de la corrida real de U11-T02)* | US-M8.2 | `tareas/U11-T05-egreso-llm-fijado-por-ip.md` |
 
 > **Tareas redactadas (2026-10-25)**, a pedido del humano («make a plan to solve everything that needs to be solved»). Plan en el historial de la sesión; sigue U11-T02 (webhook y rehearsal con el repositorio real, con el humano).
