@@ -180,9 +180,14 @@ describe('LoginPage (estructura del mockup, U10-T04)', () => {
     expect(tarjeta?.querySelector('.az-logo')?.textContent).toBe('aqs');
   });
 
-  it('sin cabecera de sesión en /login', () => {
+  // U10-T06 (LOGIN, arbitraje del orquestador): el mockup muestra la cabecera con la navegación «Principal» también
+  // en /login. Lo que sigue prohibido es la cabecera de sesión (chip y «Salir»): no hay sesión antes de entrar.
+  it('cabecera pública con navegación «Principal» y sin chip de sesión en /login', () => {
     renderApp('/login');
-    expect(document.querySelector('.az-header')).toBeNull();
+    expect(document.querySelector('.az-header')).not.toBeNull();
+    expect(screen.getByRole('navigation', { name: 'Principal' })).toBeTruthy();
+    expect(document.querySelector('.az-session-chip')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Salir' })).toBeNull();
   });
 
   it('las etiquetas de usuario, contraseña y TOTP son <label> visibles', async () => {
