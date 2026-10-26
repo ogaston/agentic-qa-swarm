@@ -8,12 +8,13 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [],
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 76276,
+      "distintos": 73690,
       "total": 1024000,
-      "porcentaje": 0.07448828125,
+      "porcentaje": 0.071962890625,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -37,8 +38,20 @@
     "ok": false,
     "desbordamientoHorizontal": {
       "app": 0,
-      "mock": 465
+      "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
     "estilos": [
       {
         "ancla": "tarjeta[2]",
@@ -49,20 +62,20 @@
       {
         "ancla": "tarjeta[4]",
         "propiedad": "height",
-        "app": "530.25px",
+        "app": "471.75px",
         "mock": "359.75px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 97819,
-      "total": 550500,
-      "porcentaje": 0.1776911898274296,
+      "distintos": 82289,
+      "total": 538500,
+      "porcentaje": 0.15281151346332406,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        1468
+        1436
       ],
       "tamanoMock": [
         375,
@@ -83,12 +96,13 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [],
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 74620,
+      "distintos": 74213,
       "total": 1024000,
-      "porcentaje": 0.07287109375,
+      "porcentaje": 0.0724736328125,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -112,8 +126,20 @@
     "ok": false,
     "desbordamientoHorizontal": {
       "app": 0,
-      "mock": 465
+      "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
     "estilos": [
       {
         "ancla": "tarjeta[2]",
@@ -124,20 +150,20 @@
       {
         "ancla": "tarjeta[4]",
         "propiedad": "height",
-        "app": "530.25px",
+        "app": "471.75px",
         "mock": "359.75px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 103210,
-      "total": 550500,
-      "porcentaje": 0.18748410535876475,
+      "distintos": 86868,
+      "total": 538500,
+      "porcentaje": 0.16131476323119778,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        1468
+        1436
       ],
       "tamanoMock": [
         375,
@@ -158,21 +184,28 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      }
+    ],
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 210404,
-      "total": 1386240,
-      "porcentaje": 0.15178035549399815,
+      "distintos": 81420,
+      "total": 1301760,
+      "porcentaje": 0.06254609144542773,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         1280,
-        1025
+        1017
       ],
       "tamanoMock": [
         1280,
-        1083
+        1017
       ]
     },
     "capturas": {
@@ -187,42 +220,53 @@
     "ok": false,
     "desbordamientoHorizontal": {
       "app": 0,
-      "mock": 94
+      "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
     "estilos": [
       {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "723.5px",
-        "mock": "669.438px"
+        "app": "755.594px",
+        "mock": "774.188px"
       },
       {
         "ancla": "tarjeta[1]",
         "propiedad": "height",
-        "app": "372.594px",
-        "mock": "395.594px"
-      },
-      {
-        "ancla": "tarjeta[2]",
-        "propiedad": "height",
-        "app": "670.094px",
-        "mock": "638px"
+        "app": "470.094px",
+        "mock": "472.094px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 124261,
-      "total": 847500,
-      "porcentaje": 0.14662064896755161,
+      "distintos": 145048,
+      "total": 900750,
+      "porcentaje": 0.16103025256730502,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        2260
+        2382
       ],
       "tamanoMock": [
         375,
-        2247
+        2402
       ]
     },
     "capturas": {
@@ -239,21 +283,28 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      }
+    ],
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 234360,
-      "total": 1386240,
-      "porcentaje": 0.16906163434903046,
+      "distintos": 88228,
+      "total": 1301760,
+      "porcentaje": 0.06777593411996066,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         1280,
-        1025
+        1017
       ],
       "tamanoMock": [
         1280,
-        1083
+        1017
       ]
     },
     "capturas": {
@@ -268,42 +319,53 @@
     "ok": false,
     "desbordamientoHorizontal": {
       "app": 0,
-      "mock": 94
+      "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
     "estilos": [
       {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "723.5px",
-        "mock": "669.438px"
+        "app": "755.594px",
+        "mock": "774.188px"
       },
       {
         "ancla": "tarjeta[1]",
         "propiedad": "height",
-        "app": "372.594px",
-        "mock": "395.594px"
-      },
-      {
-        "ancla": "tarjeta[2]",
-        "propiedad": "height",
-        "app": "670.094px",
-        "mock": "638px"
+        "app": "470.094px",
+        "mock": "472.094px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 137536,
-      "total": 847500,
-      "porcentaje": 0.1622843657817109,
+      "distintos": 154544,
+      "total": 900750,
+      "porcentaje": 0.17157257840688314,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        2260
+        2382
       ],
       "tamanoMock": [
         375,
-        2247
+        2402
       ]
     },
     "capturas": {
@@ -320,12 +382,13 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [],
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 28966,
+      "distintos": 14008,
       "total": 1024000,
-      "porcentaje": 0.028287109375,
+      "porcentaje": 0.0136796875,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -349,8 +412,20 @@
     "ok": false,
     "desbordamientoHorizontal": {
       "app": 0,
-      "mock": 156
+      "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
     "estilos": [
       {
         "ancla": "tarjeta[0]",
@@ -361,9 +436,9 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 18665,
+      "distintos": 17522,
       "total": 300000,
-      "porcentaje": 0.06221666666666667,
+      "porcentaje": 0.05840666666666667,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -389,12 +464,13 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [],
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 40846,
+      "distintos": 17034,
       "total": 1024000,
-      "porcentaje": 0.039888671875,
+      "porcentaje": 0.016634765625,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -418,8 +494,20 @@
     "ok": false,
     "desbordamientoHorizontal": {
       "app": 0,
-      "mock": 156
+      "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
     "estilos": [
       {
         "ancla": "tarjeta[0]",
@@ -430,9 +518,9 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 24376,
+      "distintos": 21515,
       "total": 300000,
-      "porcentaje": 0.08125333333333333,
+      "porcentaje": 0.07171666666666666,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -458,12 +546,19 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      }
+    ],
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 41627,
+      "distintos": 20960,
       "total": 1024000,
-      "porcentaje": 0.0406513671875,
+      "porcentaje": 0.02046875,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -489,6 +584,23 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
     "estilos": [
       {
         "ancla": "tarjeta[0]",
@@ -499,18 +611,18 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 60417,
-      "total": 372000,
-      "porcentaje": 0.16241129032258064,
+      "distintos": 25578,
+      "total": 345750,
+      "porcentaje": 0.07397830802603036,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        930
+        922
       ],
       "tamanoMock": [
         375,
-        992
+        922
       ]
     },
     "capturas": {
@@ -522,19 +634,26 @@
     "vista": "warm",
     "tema": "dark",
     "ancho": 1280,
-    "ok": false,
+    "ok": true,
     "desbordamientoHorizontal": {
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      }
+    ],
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 82160,
+      "distintos": 20890,
       "total": 1024000,
-      "porcentaje": 0.080234375,
+      "porcentaje": 0.020400390625,
       "umbral": 0.05,
-      "ok": false,
+      "ok": true,
       "tamanoApp": [
         1280,
         800
@@ -558,6 +677,23 @@
       "app": 0,
       "mock": 0
     },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
     "estilos": [
       {
         "ancla": "tarjeta[0]",
@@ -568,18 +704,18 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 77633,
-      "total": 372000,
-      "porcentaje": 0.20869086021505376,
+      "distintos": 26684,
+      "total": 345750,
+      "porcentaje": 0.07717715112075199,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        930
+        922
       ],
       "tamanoMock": [
         375,
-        992
+        922
       ]
     },
     "capturas": {
@@ -591,24 +727,24 @@
     "vista": "login",
     "tema": "light",
     "ancho": 1280,
-    "ok": false,
+    "ok": true,
     "desbordamientoHorizontal": {
       "app": 0,
       "mock": 0
     },
-    "estilos": [
+    "neutralizaciones": [
       {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "378.5px",
-        "mock": "468.5px"
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
       }
     ],
+    "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 13223,
+      "distintos": 5579,
       "total": 1024000,
-      "porcentaje": 0.0129130859375,
+      "porcentaje": 0.0054482421875,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -629,24 +765,34 @@
     "vista": "login",
     "tema": "light",
     "ancho": 375,
-    "ok": false,
+    "ok": true,
     "desbordamientoHorizontal": {
       "app": 0,
       "mock": 0
     },
-    "estilos": [
+    "neutralizaciones": [
       {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "378.5px",
-        "mock": "468.5px"
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
       }
     ],
+    "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 11180,
+      "distintos": 4820,
       "total": 300000,
-      "porcentaje": 0.03726666666666666,
+      "porcentaje": 0.016066666666666667,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -667,24 +813,24 @@
     "vista": "login",
     "tema": "dark",
     "ancho": 1280,
-    "ok": false,
+    "ok": true,
     "desbordamientoHorizontal": {
       "app": 0,
       "mock": 0
     },
-    "estilos": [
+    "neutralizaciones": [
       {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "378.5px",
-        "mock": "468.5px"
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
       }
     ],
+    "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 13870,
+      "distintos": 5582,
       "total": 1024000,
-      "porcentaje": 0.013544921875,
+      "porcentaje": 0.005451171875,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -705,24 +851,34 @@
     "vista": "login",
     "tema": "dark",
     "ancho": 375,
-    "ok": false,
+    "ok": true,
     "desbordamientoHorizontal": {
       "app": 0,
       "mock": 0
     },
-    "estilos": [
+    "neutralizaciones": [
       {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "378.5px",
-        "mock": "468.5px"
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
       }
     ],
+    "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 11745,
+      "distintos": 4820,
       "total": 300000,
-      "porcentaje": 0.03915,
+      "porcentaje": 0.016066666666666667,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
