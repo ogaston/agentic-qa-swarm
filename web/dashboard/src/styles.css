@@ -518,6 +518,30 @@ main.page-narrow {
   padding: 16px 18px;
 }
 
+/* Entorno (mockup): cuatro cuadros de estado sobre fondo de superficie 2, valores de 20 px y 18 px. */
+.kpi-fondo {
+  background: var(--surface-2);
+}
+
+.kpi-sin-margen {
+  margin-bottom: 0;
+}
+
+.kpi-val.kpi-valor-20 {
+  font-size: 20px;
+}
+
+.kpi-val.kpi-valor-18 {
+  font-size: 18px;
+}
+
+/* En la etiqueta del cuadro, el código hereda el tamaño y no lleva chip (mockup); DESIGN §2.2 rige el resto. */
+.kpi-label code {
+  font-size: inherit;
+  padding: 0;
+  background: none;
+}
+
 .kpi-label {
   font-size: 11px;
   font-weight: 600;

@@ -150,19 +150,23 @@ describe('WarmPage (estructura del mockup, U10-T04)', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Estado operativo de warm-1' })).toBeTruthy();
   });
 
-  it('la tarjeta expone estado, reset_verified, baseline_version y warm_id en un dl.kv-list', async () => {
+  it('la tarjeta expone estado, reset_verified, baseline_version y warm_id en un kpi-strip de 4 cuadros', async () => {
+    // U10-T06 (ENTORNO, instrucción del orquestador): el mockup muestra kpi-strip en vez de dl.kv-list (prueba T04 CA-2).
     contarPeticiones(() => HttpResponse.json(WARM));
     const { container } = renderWarm();
     await vaciar();
-    const lista = container.querySelector('dl.kv-list');
-    expect(lista).not.toBeNull();
-    const etiquetas = Array.from(lista?.querySelectorAll('dt') ?? []).map((dt) => dt.textContent ?? '');
-    expect(etiquetas.some((t) => t.startsWith('Estado'))).toBe(true);
-    expect(etiquetas.some((t) => t.startsWith('Reset verificado'))).toBe(true);
-    expect(etiquetas.some((t) => t.startsWith('Versión base'))).toBe(true);
-    expect(etiquetas.some((t) => t.startsWith('Identificador del entorno'))).toBe(true);
-    expect(lista?.textContent).toContain('v1.2.0');
-    expect(lista?.textContent).toContain('warm-1');
+    const rejilla = container.querySelector('.kpi-strip');
+    expect(rejilla).not.toBeNull();
+    expect(container.querySelector('dl.kv-list')).toBeNull();
+    const cuadros = Array.from(rejilla?.querySelectorAll('.kpi-box') ?? []);
+    expect(cuadros.length).toBe(4);
+    const etiquetas = cuadros.map((c) => c.querySelector('.kpi-label')?.textContent ?? '');
+    expect(etiquetas[0]?.startsWith('Estado')).toBe(true);
+    expect(etiquetas[1]?.startsWith('Reset verificado')).toBe(true);
+    expect(etiquetas[2]?.startsWith('Versión base')).toBe(true);
+    expect(etiquetas[3]?.startsWith('Identificador del entorno')).toBe(true);
+    expect(rejilla?.textContent).toContain('v1.2.0');
+    expect(rejilla?.textContent).toContain('warm-1');
   });
 
   it('los 4 estados se leen como texto y llevan un icono decorativo', async () => {

@@ -111,38 +111,43 @@ export function WarmPage() {
                 Pre-desplegado y reutilizado entre corridas con gate obligatorio <code>reset_verified=true</code>.
               </div>
             </div>
+            <span className={`badge badge-${COLOR_ESTADO[data.state]}`} data-testid="warm-estado" data-state={data.state}>
+              <IconoEstado estado={data.state} />
+              {ETIQUETAS[data.state]}
+            </span>
           </div>
-          <dl className="kv-list">
-            <dt>
-              Estado (<code className="campo-api">state</code>)
-            </dt>
-            <dd>
-              <span className={`badge badge-${COLOR_ESTADO[data.state]}`} data-testid="warm-estado" data-state={data.state}>
-                <IconoEstado estado={data.state} />
-                {ETIQUETAS[data.state]}
-              </span>
-            </dd>
-            <dt>
-              Reset verificado (<code className="campo-api">reset_verified</code>)
-            </dt>
-            <dd>
-              <span className={`badge badge-${data.reset_verified ? 'ok' : 'warn'}`}>
-                {data.reset_verified ? 'sí' : 'no'}
-              </span>
-            </dd>
-            <dt>
-              Versión base (<code className="campo-api">baseline_version</code>)
-            </dt>
-            <dd>
-              <code>{data.baseline_version}</code>
-            </dd>
-            <dt>
-              Identificador del entorno (<code className="campo-api">warm_id</code>)
-            </dt>
-            <dd>
-              <code>{data.warm_id}</code>
-            </dd>
-          </dl>
+          <div className="kpi-strip kpi-sin-margen">
+            <div className="card kpi-box kpi-fondo">
+              <div className="kpi-label">
+                Estado (<code>state</code>)
+              </div>
+              <div className="kpi-row">
+                <span className="kpi-val kpi-valor-20">{ETIQUETAS[data.state]}</span>
+              </div>
+            </div>
+            <div className="card kpi-box kpi-fondo">
+              <div className="kpi-label">
+                Reset verificado (<code>reset_verified</code>)
+              </div>
+              <div className="kpi-row">
+                <span className="kpi-val kpi-valor-20 mono">{data.reset_verified ? 'sí' : 'no'}</span>
+              </div>
+            </div>
+            <div className="card kpi-box kpi-fondo">
+              <div className="kpi-label">
+                Versión base (<code>baseline_version</code>)
+              </div>
+              <div className="kpi-row">
+                <span className="kpi-val kpi-valor-18 mono">{data.baseline_version}</span>
+              </div>
+            </div>
+            <div className="card kpi-box kpi-fondo">
+              <div className="kpi-label">Identificador del entorno</div>
+              <div className="kpi-row">
+                <span className="kpi-val kpi-valor-18 mono">{data.warm_id}</span>
+              </div>
+            </div>
+          </div>
         </section>
       )}
     </main>

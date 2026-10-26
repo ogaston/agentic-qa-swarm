@@ -19,12 +19,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
-import { INFORME_FIDELIDAD, NOTIFICACIONES, PLAN_FIDELIDAD, RECIBOS_FIDELIDAD, RUN_ID } from './fidelidad-datos.mjs';
+import { INFORME_FIDELIDAD, NOTIFICACIONES, PLAN_FIDELIDAD, RECIBOS_FIDELIDAD, RUN_ID, WARM_FIDELIDAD } from './fidelidad-datos.mjs';
 
 const DASHBOARD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAIZ = path.resolve(DASHBOARD, '../..');
 const MOCKUP = path.join(RAIZ, 'mockups/swarm-mock.html');
-const EJEMPLOS = path.join(RAIZ, 'contracts');
 const DEFECTO_SALIDA = path.join(RAIZ, 'bitacoras/U10-T05');
 const USO = 'uso: e2e-fidelidad.mjs [--control] [--out <directorio>]';
 
@@ -83,11 +82,10 @@ const ESTRUCTURA_SEL =
   'header, nav[aria-label], [role=tablist], h1, h2, h3, section[aria-label]:not(.view), details.card > summary';
 
 // Respuestas fijas de la API (la misma forma que los ejemplos del contrato).
-const leer = (...partes) => JSON.parse(fs.readFileSync(path.join(EJEMPLOS, ...partes), 'utf8'));
 const FIJOS = {
   notificaciones: NOTIFICACIONES,
   recibos: RECIBOS_FIDELIDAD,
-  warm: leer('plans/examples/valid/warm-state.ready.json'),
+  warm: WARM_FIDELIDAD,
   corrida: { id: ID, trace_id: 'tr-99201a4f-8c1e-44d0-a712', state: 'done', verdict: 'bug' },
   plan: PLAN_FIDELIDAD,
   informe: INFORME_FIDELIDAD,

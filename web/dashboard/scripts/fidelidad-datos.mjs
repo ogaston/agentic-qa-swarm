@@ -112,3 +112,13 @@ export const RECIBOS_FIDELIDAD = [
     confirmed_at: '2026-10-21T18:15:04Z',
   },
 ];
+
+// Entorno (mockups/swarm-mock.html, vista «warm», estado «Listo»). warm_id = aqs-test: el mockup lo muestra en el
+// título y en la cuarta tarjeta el identificador es env-aqs-test-01; la app tiene un solo campo, así que se usa aqs-test
+// en ambos sitios (diferencia de dato registrada en la bitácora).
+export const WARM_FIDELIDAD = {
+  warm_id: 'aqs-test',
+  state: 'ready',
+  reset_verified: true,
+  baseline_version: 'v1.4.2-baseline',
+};
