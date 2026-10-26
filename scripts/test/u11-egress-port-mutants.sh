@@ -90,6 +90,7 @@ caso f01-puerto-65536          '10#$digits <= 65535 ' '10#$digits <= 65536 '
 caso regla-vieja-u-port-or-80  'if [ "$scheme" = https ]; then port=443; else port=80; fi' 'port=${port:-80}'
 caso regla-https-http-invertida 'if [ "$scheme" = https ]; then port=443; else port=80; fi' 'if [ "$scheme" = http ]; then port=443; else port=80; fi'
 caso f06-sin-tope-digitos      '[ "${#digits}" -le 5 ] || return 1' 'true'
+caso f06-tope-cuatro-digitos   '[ "${#digits}" -le 5 ] || return 1' '[ "${#digits}" -le 4 ] || return 1'
 
 echo "---"
 echo "mutantes: $total · muertos: $muertos · vivos: $vivos · no aplicados: $noaplica"
