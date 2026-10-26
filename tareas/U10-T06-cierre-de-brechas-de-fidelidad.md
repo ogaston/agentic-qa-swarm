@@ -25,6 +25,8 @@ Brechas medidas por T05 (`bitacoras/U10-T05/informe.json`, a re-medir al empezar
 
 **Decisiones adicionales del humano (2026-10-26):** (a) se oculta también al medir el mockup el conmutador «Simular estado del entorno» (neutralización registrada); (b) Mis corridas formatea fechas con locale fijo `es-ES` en 24 h; (c) la copia de la app sigue al mockup («Entorno listo», «Revisar y confirmar →», etc.) cuando el dato real lo permite, actualizando las pruebas que la fijan; lo que requiera un dato inexistente es candidata; (d) se sigue al mockup en `line-height` 1.5 de títulos y se actualiza `DESIGN.md §2` para documentarlo (`DESIGN.md` entra en el alcance de esta tarea). CA-5 admite también `DESIGN.md`.
 
+**Decisión adicional del humano (2026-10-26), zona horaria:** Mis corridas muestra las fechas en **UTC** (`timeZone: 'UTC'`, locale `es-ES`, 24 h). El subtítulo fijo del informe («Generado por agent-reporter con redacción previa…») NO se porta: es candidata.
+
 **Fuera:** subir tolerancias o añadir excepciones en la compuerta (si una diferencia es de datos y no de CSS, se reporta como candidata, no se oculta); endpoints nuevos; CDN; relajar la CSP; cambios fuera de `web/dashboard/**`; portar lo que `DESIGN.md §1.3` excluye.
 
 ## Archivos de contexto
