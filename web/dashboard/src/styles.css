@@ -568,7 +568,9 @@ main.page-narrow {
   gap: 18px;
 }
 
+/* Ancestro posicionado: el texto .sr-only de las cabeceras queda recortado aquí y no amplía la página. */
 .table-wrap {
+  position: relative;
   padding: 0;
   overflow-x: auto;
 }
@@ -672,7 +674,8 @@ main.page-narrow {
 /* ---------- Botones y formularios ---------- */
 
 .btn {
-  font: inherit;
+  font-family: inherit;
+  line-height: normal;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -914,20 +917,26 @@ main.page-narrow {
   border-collapse: collapse;
 }
 
+/* Celdas del mockup (tablas genéricas: th 10 px/14 px, td 12 px/14 px). */
 .data-table th {
   text-align: left;
-  font-size: 0.625rem;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--text-faint);
   background: var(--surface-2);
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
 }
 
+/* En la cabecera, el nombre de campo hereda el tamaño de la celda (mockup: `code` sin tamaño propio). Acotado a .campo-api (U10-T04 F-02). */
+th .campo-api {
+  font-size: inherit;
+}
+
 .data-table td {
-  padding: 8px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle;
   overflow-wrap: anywhere;
@@ -1191,6 +1200,11 @@ ol.phase-timeline li[data-fase-estado="pendiente"] .phase-name {
 }
 
 /* Copiable: el texto de la URI se selecciona entero con un clic. */
+/* Mockup: la lista de pares de cada hallazgo va 8 px por debajo de su cabecera. */
+.finding-item dl.kv-list {
+  margin-top: 8px;
+}
+
 .evidence-uri {
   display: inline-block;
   padding: 5px 9px;
@@ -1198,11 +1212,6 @@ ol.phase-timeline li[data-fase-estado="pendiente"] .phase-name {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   font-size: 12px;
-/* Mockup: la lista de pares de cada hallazgo va 8 px por debajo de su cabecera. */
-.finding-item dl.kv-list {
-  margin-top: 8px;
-}
-
   color: var(--text);
   user-select: all;
 }
@@ -1235,15 +1244,15 @@ details[open] > .plan-summary {
   gap: 12px;
 }
 
+.flow-block + .flow-block {
+  margin-top: 14px;
+}
+
 .flow-block {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   overflow: hidden;
-}
-
-.flow-block + .flow-block {
-  margin-top: 14px;
 }
 
 details.flow-details summary {
@@ -1337,14 +1346,6 @@ pre.json-body {
 /* ---------- Pantallas estrechas (375 px sin desbordamiento horizontal de página) ---------- */
 
 @media (max-width: 620px) {
-  .az-header-inner {
-    gap: 8px 12px;
-  }
-
-  .az-nav-link {
-    padding: 0 10px;
-  }
-
   main.page {
     padding: 16px;
   }

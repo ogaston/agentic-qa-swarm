@@ -12,15 +12,15 @@
       {
         "ancla": "tarjeta[4]",
         "propiedad": "height",
-        "app": "161px",
+        "app": "271.75px",
         "mock": "263.75px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 82429,
+      "distintos": 88521,
       "total": 1024000,
-      "porcentaje": 0.0804970703125,
+      "porcentaje": 0.0864462890625,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -48,12 +48,6 @@
     },
     "estilos": [
       {
-        "ancla": "cabecera[0]",
-        "propiedad": "height",
-        "app": "155px",
-        "mock": "178px"
-      },
-      {
         "ancla": "tarjeta[2]",
         "propiedad": "height",
         "app": "101.094px",
@@ -62,20 +56,20 @@
       {
         "ancla": "tarjeta[4]",
         "propiedad": "height",
-        "app": "316.594px",
+        "app": "538.25px",
         "mock": "359.75px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 133332,
-      "total": 520500,
-      "porcentaje": 0.2561613832853026,
+      "distintos": 101965,
+      "total": 551625,
+      "porcentaje": 0.1848447767958305,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        1228
+        1471
       ],
       "tamanoMock": [
         375,
@@ -100,15 +94,15 @@
       {
         "ancla": "tarjeta[4]",
         "propiedad": "height",
-        "app": "161px",
+        "app": "271.75px",
         "mock": "263.75px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 85784,
+      "distintos": 89199,
       "total": 1024000,
-      "porcentaje": 0.0837734375,
+      "porcentaje": 0.0871083984375,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -136,12 +130,6 @@
     },
     "estilos": [
       {
-        "ancla": "cabecera[0]",
-        "propiedad": "height",
-        "app": "155px",
-        "mock": "178px"
-      },
-      {
         "ancla": "tarjeta[2]",
         "propiedad": "height",
         "app": "101.094px",
@@ -150,20 +138,20 @@
       {
         "ancla": "tarjeta[4]",
         "propiedad": "height",
-        "app": "316.594px",
+        "app": "538.25px",
         "mock": "359.75px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 138042,
-      "total": 520500,
-      "porcentaje": 0.26521037463976943,
+      "distintos": 106974,
+      "total": 551625,
+      "porcentaje": 0.19392522093813733,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        1228
+        1471
       ],
       "tamanoMock": [
         375,
@@ -184,58 +172,17 @@
       "app": 0,
       "mock": 0
     },
-    "estilos": [
-      {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "526.141px",
-        "mock": "492.344px"
-      },
-      {
-        "ancla": "tarjeta[1]",
-        "propiedad": "height",
-        "app": "199.688px",
-        "mock": "277.281px"
-      },
-      {
-        "ancla": "tarjeta[2]",
-        "propiedad": "height",
-        "app": "641.891px",
-        "mock": "638px"
-      },
-      {
-        "ancla": "insignia",
-        "propiedad": "(variante badge-warn ausente en mockup)",
-        "app": "PATCH",
-        "mock": "-"
-      }
-    ],
-    "estructura": [
-      {
-        "indice": 6,
-        "app": "region: Línea de tiempo de fases",
-        "mock": "encabezado: Flujos ejecutados"
-      },
-      {
-        "indice": 7,
-        "app": "encabezado: Línea de tiempo de la corrida",
-        "mock": "region: Línea de tiempo de fases"
-      },
-      {
-        "indice": 8,
-        "app": "(falta)",
-        "mock": "encabezado: Línea de tiempo de la corrida"
-      }
-    ],
+    "estilos": [],
+    "estructura": [],
     "pixeles": {
-      "distintos": 266711,
+      "distintos": 219470,
       "total": 1386240,
-      "porcentaje": 0.1923988631117267,
+      "porcentaje": 0.1583203485687904,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         1280,
-        976
+        1019
       ],
       "tamanoMock": [
         1280,
@@ -258,62 +205,34 @@
     },
     "estilos": [
       {
-        "ancla": "cabecera[0]",
-        "propiedad": "height",
-        "app": "155px",
-        "mock": "178px"
-      },
-      {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "701.141px",
+        "app": "723.5px",
         "mock": "669.438px"
       },
       {
         "ancla": "tarjeta[1]",
         "propiedad": "height",
-        "app": "291.688px",
+        "app": "372.594px",
         "mock": "395.594px"
       },
       {
         "ancla": "tarjeta[2]",
         "propiedad": "height",
-        "app": "673.984px",
+        "app": "670.094px",
         "mock": "638px"
-      },
-      {
-        "ancla": "insignia",
-        "propiedad": "(variante badge-warn ausente en mockup)",
-        "app": "PATCH",
-        "mock": "-"
       }
     ],
-    "estructura": [
-      {
-        "indice": 6,
-        "app": "region: Línea de tiempo de fases",
-        "mock": "encabezado: Flujos ejecutados"
-      },
-      {
-        "indice": 7,
-        "app": "encabezado: Línea de tiempo de la corrida",
-        "mock": "region: Línea de tiempo de fases"
-      },
-      {
-        "indice": 8,
-        "app": "(falta)",
-        "mock": "encabezado: Línea de tiempo de la corrida"
-      }
-    ],
+    "estructura": [],
     "pixeles": {
-      "distintos": 171854,
-      "total": 842625,
-      "porcentaje": 0.20395074914701083,
+      "distintos": 132556,
+      "total": 845625,
+      "porcentaje": 0.1567550628233555,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        2133
+        2255
       ],
       "tamanoMock": [
         375,
@@ -334,58 +253,17 @@
       "app": 0,
       "mock": 0
     },
-    "estilos": [
-      {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "526.141px",
-        "mock": "492.344px"
-      },
-      {
-        "ancla": "tarjeta[1]",
-        "propiedad": "height",
-        "app": "199.688px",
-        "mock": "277.281px"
-      },
-      {
-        "ancla": "tarjeta[2]",
-        "propiedad": "height",
-        "app": "641.891px",
-        "mock": "638px"
-      },
-      {
-        "ancla": "insignia",
-        "propiedad": "(variante badge-warn ausente en mockup)",
-        "app": "PATCH",
-        "mock": "-"
-      }
-    ],
-    "estructura": [
-      {
-        "indice": 6,
-        "app": "region: Línea de tiempo de fases",
-        "mock": "encabezado: Flujos ejecutados"
-      },
-      {
-        "indice": 7,
-        "app": "encabezado: Línea de tiempo de la corrida",
-        "mock": "region: Línea de tiempo de fases"
-      },
-      {
-        "indice": 8,
-        "app": "(falta)",
-        "mock": "encabezado: Línea de tiempo de la corrida"
-      }
-    ],
+    "estilos": [],
+    "estructura": [],
     "pixeles": {
-      "distintos": 278916,
+      "distintos": 241252,
       "total": 1386240,
-      "porcentaje": 0.20120325484764542,
+      "porcentaje": 0.17403335641735918,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         1280,
-        976
+        1019
       ],
       "tamanoMock": [
         1280,
@@ -408,62 +286,34 @@
     },
     "estilos": [
       {
-        "ancla": "cabecera[0]",
-        "propiedad": "height",
-        "app": "155px",
-        "mock": "178px"
-      },
-      {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "701.141px",
+        "app": "723.5px",
         "mock": "669.438px"
       },
       {
         "ancla": "tarjeta[1]",
         "propiedad": "height",
-        "app": "291.688px",
+        "app": "372.594px",
         "mock": "395.594px"
       },
       {
         "ancla": "tarjeta[2]",
         "propiedad": "height",
-        "app": "673.984px",
+        "app": "670.094px",
         "mock": "638px"
-      },
-      {
-        "ancla": "insignia",
-        "propiedad": "(variante badge-warn ausente en mockup)",
-        "app": "PATCH",
-        "mock": "-"
       }
     ],
-    "estructura": [
-      {
-        "indice": 6,
-        "app": "region: Línea de tiempo de fases",
-        "mock": "encabezado: Flujos ejecutados"
-      },
-      {
-        "indice": 7,
-        "app": "encabezado: Línea de tiempo de la corrida",
-        "mock": "region: Línea de tiempo de fases"
-      },
-      {
-        "indice": 8,
-        "app": "(falta)",
-        "mock": "encabezado: Línea de tiempo de la corrida"
-      }
-    ],
+    "estructura": [],
     "pixeles": {
-      "distintos": 186898,
-      "total": 842625,
-      "porcentaje": 0.2218044800474707,
+      "distintos": 145886,
+      "total": 845625,
+      "porcentaje": 0.17251855136733185,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        2133
+        2255
       ],
       "tamanoMock": [
         375,
@@ -479,24 +329,17 @@
     "vista": "runs",
     "tema": "light",
     "ancho": 1280,
-    "ok": false,
+    "ok": true,
     "desbordamientoHorizontal": {
       "app": 0,
       "mock": 0
     },
-    "estilos": [
-      {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "83px",
-        "mock": "139.75px"
-      }
-    ],
+    "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 29243,
+      "distintos": 29034,
       "total": 1024000,
-      "porcentaje": 0.0285576171875,
+      "porcentaje": 0.028353515625,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -524,23 +367,17 @@
     },
     "estilos": [
       {
-        "ancla": "cabecera[0]",
-        "propiedad": "height",
-        "app": "155px",
-        "mock": "178px"
-      },
-      {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "163.5px",
+        "app": "243.25px",
         "mock": "197.25px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 25750,
+      "distintos": 21133,
       "total": 300000,
-      "porcentaje": 0.08583333333333333,
+      "porcentaje": 0.07044333333333333,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -561,24 +398,17 @@
     "vista": "runs",
     "tema": "dark",
     "ancho": 1280,
-    "ok": false,
+    "ok": true,
     "desbordamientoHorizontal": {
       "app": 0,
       "mock": 0
     },
-    "estilos": [
-      {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "83px",
-        "mock": "139.75px"
-      }
-    ],
+    "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 34333,
+      "distintos": 33999,
       "total": 1024000,
-      "porcentaje": 0.0335283203125,
+      "porcentaje": 0.0332021484375,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -606,23 +436,17 @@
     },
     "estilos": [
       {
-        "ancla": "cabecera[0]",
-        "propiedad": "height",
-        "app": "155px",
-        "mock": "178px"
-      },
-      {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "163.5px",
+        "app": "243.25px",
         "mock": "197.25px"
       }
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 29647,
+      "distintos": 24929,
       "total": 300000,
-      "porcentaje": 0.09882333333333333,
+      "porcentaje": 0.08309666666666667,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -664,9 +488,9 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 44598,
+      "distintos": 41047,
       "total": 1024000,
-      "porcentaje": 0.043552734375,
+      "porcentaje": 0.0400849609375,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -694,12 +518,6 @@
     },
     "estilos": [
       {
-        "ancla": "cabecera[0]",
-        "propiedad": "height",
-        "app": "155px",
-        "mock": "178px"
-      },
-      {
         "ancla": "tarjeta",
         "propiedad": "(cantidad)",
         "app": "1",
@@ -714,9 +532,9 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 113053,
+      "distintos": 105564,
       "total": 372000,
-      "porcentaje": 0.30390591397849465,
+      "porcentaje": 0.2837741935483871,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -758,9 +576,9 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 47854,
+      "distintos": 44659,
       "total": 1024000,
-      "porcentaje": 0.046732421875,
+      "porcentaje": 0.0436123046875,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -788,12 +606,6 @@
     },
     "estilos": [
       {
-        "ancla": "cabecera[0]",
-        "propiedad": "height",
-        "app": "155px",
-        "mock": "178px"
-      },
-      {
         "ancla": "tarjeta",
         "propiedad": "(cantidad)",
         "app": "1",
@@ -808,9 +620,9 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 146165,
+      "distintos": 133681,
       "total": 372000,
-      "porcentaje": 0.3929166666666667,
+      "porcentaje": 0.35935752688172046,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -846,7 +658,7 @@
       {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "389.25px",
+        "app": "373.5px",
         "mock": "468.5px"
       }
     ],
@@ -868,11 +680,11 @@
       }
     ],
     "pixeles": {
-      "distintos": 51461,
+      "distintos": 51062,
       "total": 1024000,
-      "porcentaje": 0.0502548828125,
+      "porcentaje": 0.049865234375,
       "umbral": 0.05,
-      "ok": false,
+      "ok": true,
       "tamanoApp": [
         1280,
         800
@@ -906,7 +718,7 @@
       {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "389.25px",
+        "app": "373.5px",
         "mock": "468.5px"
       }
     ],
@@ -928,9 +740,9 @@
       }
     ],
     "pixeles": {
-      "distintos": 44614,
+      "distintos": 43445,
       "total": 300000,
-      "porcentaje": 0.14871333333333334,
+      "porcentaje": 0.14481666666666668,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -966,7 +778,7 @@
       {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "389.25px",
+        "app": "373.5px",
         "mock": "468.5px"
       }
     ],
@@ -988,9 +800,9 @@
       }
     ],
     "pixeles": {
-      "distintos": 52650,
+      "distintos": 52666,
       "total": 1024000,
-      "porcentaje": 0.051416015625,
+      "porcentaje": 0.051431640625,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -1026,7 +838,7 @@
       {
         "ancla": "tarjeta[0]",
         "propiedad": "height",
-        "app": "389.25px",
+        "app": "373.5px",
         "mock": "468.5px"
       }
     ],
@@ -1048,9 +860,9 @@
       }
     ],
     "pixeles": {
-      "distintos": 45597,
+      "distintos": 44415,
       "total": 300000,
-      "porcentaje": 0.15199,
+      "porcentaje": 0.14805,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
