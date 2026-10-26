@@ -1,0 +1,1070 @@
+[
+  {
+    "vista": "inbox",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "tarjeta[4]",
+        "propiedad": "height",
+        "app": "161px",
+        "mock": "263.75px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 82429,
+      "total": 1024000,
+      "porcentaje": 0.0804970703125,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-light-1280.png",
+      "mock": "capturas/mock-inbox-light-1280.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "light",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 465
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera[0]",
+        "propiedad": "height",
+        "app": "155px",
+        "mock": "178px"
+      },
+      {
+        "ancla": "tarjeta[2]",
+        "propiedad": "height",
+        "app": "101.094px",
+        "mock": "97.5469px"
+      },
+      {
+        "ancla": "tarjeta[4]",
+        "propiedad": "height",
+        "app": "316.594px",
+        "mock": "359.75px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 133332,
+      "total": 520500,
+      "porcentaje": 0.2561613832853026,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        1228
+      ],
+      "tamanoMock": [
+        375,
+        1388
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-light-375.png",
+      "mock": "capturas/mock-inbox-light-375.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "tarjeta[4]",
+        "propiedad": "height",
+        "app": "161px",
+        "mock": "263.75px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 85784,
+      "total": 1024000,
+      "porcentaje": 0.0837734375,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-dark-1280.png",
+      "mock": "capturas/mock-inbox-dark-1280.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 465
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera[0]",
+        "propiedad": "height",
+        "app": "155px",
+        "mock": "178px"
+      },
+      {
+        "ancla": "tarjeta[2]",
+        "propiedad": "height",
+        "app": "101.094px",
+        "mock": "97.5469px"
+      },
+      {
+        "ancla": "tarjeta[4]",
+        "propiedad": "height",
+        "app": "316.594px",
+        "mock": "359.75px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 138042,
+      "total": 520500,
+      "porcentaje": 0.26521037463976943,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        1228
+      ],
+      "tamanoMock": [
+        375,
+        1388
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-dark-375.png",
+      "mock": "capturas/mock-inbox-dark-375.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "526.141px",
+        "mock": "492.344px"
+      },
+      {
+        "ancla": "tarjeta[1]",
+        "propiedad": "height",
+        "app": "199.688px",
+        "mock": "277.281px"
+      },
+      {
+        "ancla": "tarjeta[2]",
+        "propiedad": "height",
+        "app": "641.891px",
+        "mock": "638px"
+      },
+      {
+        "ancla": "insignia",
+        "propiedad": "(variante badge-warn ausente en mockup)",
+        "app": "PATCH",
+        "mock": "-"
+      }
+    ],
+    "estructura": [
+      {
+        "indice": 6,
+        "app": "region: Línea de tiempo de fases",
+        "mock": "encabezado: Flujos ejecutados"
+      },
+      {
+        "indice": 7,
+        "app": "encabezado: Línea de tiempo de la corrida",
+        "mock": "region: Línea de tiempo de fases"
+      },
+      {
+        "indice": 8,
+        "app": "(falta)",
+        "mock": "encabezado: Línea de tiempo de la corrida"
+      }
+    ],
+    "pixeles": {
+      "distintos": 266711,
+      "total": 1386240,
+      "porcentaje": 0.1923988631117267,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        976
+      ],
+      "tamanoMock": [
+        1280,
+        1083
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-light-1280.png",
+      "mock": "capturas/mock-run-light-1280.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "light",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 94
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera[0]",
+        "propiedad": "height",
+        "app": "155px",
+        "mock": "178px"
+      },
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "701.141px",
+        "mock": "669.438px"
+      },
+      {
+        "ancla": "tarjeta[1]",
+        "propiedad": "height",
+        "app": "291.688px",
+        "mock": "395.594px"
+      },
+      {
+        "ancla": "tarjeta[2]",
+        "propiedad": "height",
+        "app": "673.984px",
+        "mock": "638px"
+      },
+      {
+        "ancla": "insignia",
+        "propiedad": "(variante badge-warn ausente en mockup)",
+        "app": "PATCH",
+        "mock": "-"
+      }
+    ],
+    "estructura": [
+      {
+        "indice": 6,
+        "app": "region: Línea de tiempo de fases",
+        "mock": "encabezado: Flujos ejecutados"
+      },
+      {
+        "indice": 7,
+        "app": "encabezado: Línea de tiempo de la corrida",
+        "mock": "region: Línea de tiempo de fases"
+      },
+      {
+        "indice": 8,
+        "app": "(falta)",
+        "mock": "encabezado: Línea de tiempo de la corrida"
+      }
+    ],
+    "pixeles": {
+      "distintos": 171854,
+      "total": 842625,
+      "porcentaje": 0.20395074914701083,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        2133
+      ],
+      "tamanoMock": [
+        375,
+        2247
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-light-375.png",
+      "mock": "capturas/mock-run-light-375.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "526.141px",
+        "mock": "492.344px"
+      },
+      {
+        "ancla": "tarjeta[1]",
+        "propiedad": "height",
+        "app": "199.688px",
+        "mock": "277.281px"
+      },
+      {
+        "ancla": "tarjeta[2]",
+        "propiedad": "height",
+        "app": "641.891px",
+        "mock": "638px"
+      },
+      {
+        "ancla": "insignia",
+        "propiedad": "(variante badge-warn ausente en mockup)",
+        "app": "PATCH",
+        "mock": "-"
+      }
+    ],
+    "estructura": [
+      {
+        "indice": 6,
+        "app": "region: Línea de tiempo de fases",
+        "mock": "encabezado: Flujos ejecutados"
+      },
+      {
+        "indice": 7,
+        "app": "encabezado: Línea de tiempo de la corrida",
+        "mock": "region: Línea de tiempo de fases"
+      },
+      {
+        "indice": 8,
+        "app": "(falta)",
+        "mock": "encabezado: Línea de tiempo de la corrida"
+      }
+    ],
+    "pixeles": {
+      "distintos": 278916,
+      "total": 1386240,
+      "porcentaje": 0.20120325484764542,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        976
+      ],
+      "tamanoMock": [
+        1280,
+        1083
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-dark-1280.png",
+      "mock": "capturas/mock-run-dark-1280.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 94
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera[0]",
+        "propiedad": "height",
+        "app": "155px",
+        "mock": "178px"
+      },
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "701.141px",
+        "mock": "669.438px"
+      },
+      {
+        "ancla": "tarjeta[1]",
+        "propiedad": "height",
+        "app": "291.688px",
+        "mock": "395.594px"
+      },
+      {
+        "ancla": "tarjeta[2]",
+        "propiedad": "height",
+        "app": "673.984px",
+        "mock": "638px"
+      },
+      {
+        "ancla": "insignia",
+        "propiedad": "(variante badge-warn ausente en mockup)",
+        "app": "PATCH",
+        "mock": "-"
+      }
+    ],
+    "estructura": [
+      {
+        "indice": 6,
+        "app": "region: Línea de tiempo de fases",
+        "mock": "encabezado: Flujos ejecutados"
+      },
+      {
+        "indice": 7,
+        "app": "encabezado: Línea de tiempo de la corrida",
+        "mock": "region: Línea de tiempo de fases"
+      },
+      {
+        "indice": 8,
+        "app": "(falta)",
+        "mock": "encabezado: Línea de tiempo de la corrida"
+      }
+    ],
+    "pixeles": {
+      "distintos": 186898,
+      "total": 842625,
+      "porcentaje": 0.2218044800474707,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        2133
+      ],
+      "tamanoMock": [
+        375,
+        2247
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-dark-375.png",
+      "mock": "capturas/mock-run-dark-375.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "83px",
+        "mock": "139.75px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 29243,
+      "total": 1024000,
+      "porcentaje": 0.0285576171875,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-light-1280.png",
+      "mock": "capturas/mock-runs-light-1280.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "light",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 156
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera[0]",
+        "propiedad": "height",
+        "app": "155px",
+        "mock": "178px"
+      },
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "163.5px",
+        "mock": "197.25px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 25750,
+      "total": 300000,
+      "porcentaje": 0.08583333333333333,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-light-375.png",
+      "mock": "capturas/mock-runs-light-375.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "83px",
+        "mock": "139.75px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 34333,
+      "total": 1024000,
+      "porcentaje": 0.0335283203125,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-dark-1280.png",
+      "mock": "capturas/mock-runs-dark-1280.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 156
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera[0]",
+        "propiedad": "height",
+        "app": "155px",
+        "mock": "178px"
+      },
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "163.5px",
+        "mock": "197.25px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 29647,
+      "total": 300000,
+      "porcentaje": 0.09882333333333333,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-dark-375.png",
+      "mock": "capturas/mock-runs-dark-375.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "tarjeta",
+        "propiedad": "(cantidad)",
+        "app": "1",
+        "mock": "5"
+      },
+      {
+        "ancla": "rejilla",
+        "propiedad": "(cantidad)",
+        "app": "0",
+        "mock": "5"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 44598,
+      "total": 1024000,
+      "porcentaje": 0.043552734375,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-light-1280.png",
+      "mock": "capturas/mock-warm-light-1280.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "light",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera[0]",
+        "propiedad": "height",
+        "app": "155px",
+        "mock": "178px"
+      },
+      {
+        "ancla": "tarjeta",
+        "propiedad": "(cantidad)",
+        "app": "1",
+        "mock": "5"
+      },
+      {
+        "ancla": "rejilla",
+        "propiedad": "(cantidad)",
+        "app": "0",
+        "mock": "5"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 113053,
+      "total": 372000,
+      "porcentaje": 0.30390591397849465,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        992
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-light-375.png",
+      "mock": "capturas/mock-warm-light-375.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "tarjeta",
+        "propiedad": "(cantidad)",
+        "app": "1",
+        "mock": "5"
+      },
+      {
+        "ancla": "rejilla",
+        "propiedad": "(cantidad)",
+        "app": "0",
+        "mock": "5"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 47854,
+      "total": 1024000,
+      "porcentaje": 0.046732421875,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-dark-1280.png",
+      "mock": "capturas/mock-warm-dark-1280.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera[0]",
+        "propiedad": "height",
+        "app": "155px",
+        "mock": "178px"
+      },
+      {
+        "ancla": "tarjeta",
+        "propiedad": "(cantidad)",
+        "app": "1",
+        "mock": "5"
+      },
+      {
+        "ancla": "rejilla",
+        "propiedad": "(cantidad)",
+        "app": "0",
+        "mock": "5"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 146165,
+      "total": 372000,
+      "porcentaje": 0.3929166666666667,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        992
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-dark-375.png",
+      "mock": "capturas/mock-warm-dark-375.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera",
+        "propiedad": "(cantidad)",
+        "app": "0",
+        "mock": "1"
+      },
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "389.25px",
+        "mock": "468.5px"
+      }
+    ],
+    "estructura": [
+      {
+        "indice": 0,
+        "app": "encabezado: Iniciar sesión",
+        "mock": "cabecera"
+      },
+      {
+        "indice": 1,
+        "app": "(falta)",
+        "mock": "navegacion: Principal"
+      },
+      {
+        "indice": 2,
+        "app": "(falta)",
+        "mock": "encabezado: Iniciar sesión"
+      }
+    ],
+    "pixeles": {
+      "distintos": 51461,
+      "total": 1024000,
+      "porcentaje": 0.0502548828125,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-light-1280.png",
+      "mock": "capturas/mock-login-light-1280.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "light",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera",
+        "propiedad": "(cantidad)",
+        "app": "0",
+        "mock": "1"
+      },
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "389.25px",
+        "mock": "468.5px"
+      }
+    ],
+    "estructura": [
+      {
+        "indice": 0,
+        "app": "encabezado: Iniciar sesión",
+        "mock": "cabecera"
+      },
+      {
+        "indice": 1,
+        "app": "(falta)",
+        "mock": "navegacion: Principal"
+      },
+      {
+        "indice": 2,
+        "app": "(falta)",
+        "mock": "encabezado: Iniciar sesión"
+      }
+    ],
+    "pixeles": {
+      "distintos": 44614,
+      "total": 300000,
+      "porcentaje": 0.14871333333333334,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-light-375.png",
+      "mock": "capturas/mock-login-light-375.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera",
+        "propiedad": "(cantidad)",
+        "app": "0",
+        "mock": "1"
+      },
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "389.25px",
+        "mock": "468.5px"
+      }
+    ],
+    "estructura": [
+      {
+        "indice": 0,
+        "app": "encabezado: Iniciar sesión",
+        "mock": "cabecera"
+      },
+      {
+        "indice": 1,
+        "app": "(falta)",
+        "mock": "navegacion: Principal"
+      },
+      {
+        "indice": 2,
+        "app": "(falta)",
+        "mock": "encabezado: Iniciar sesión"
+      }
+    ],
+    "pixeles": {
+      "distintos": 52650,
+      "total": 1024000,
+      "porcentaje": 0.051416015625,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-dark-1280.png",
+      "mock": "capturas/mock-login-dark-1280.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [
+      {
+        "ancla": "cabecera",
+        "propiedad": "(cantidad)",
+        "app": "0",
+        "mock": "1"
+      },
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "389.25px",
+        "mock": "468.5px"
+      }
+    ],
+    "estructura": [
+      {
+        "indice": 0,
+        "app": "encabezado: Iniciar sesión",
+        "mock": "cabecera"
+      },
+      {
+        "indice": 1,
+        "app": "(falta)",
+        "mock": "navegacion: Principal"
+      },
+      {
+        "indice": 2,
+        "app": "(falta)",
+        "mock": "encabezado: Iniciar sesión"
+      }
+    ],
+    "pixeles": {
+      "distintos": 45597,
+      "total": 300000,
+      "porcentaje": 0.15199,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-dark-375.png",
+      "mock": "capturas/mock-login-dark-375.png"
+    }
+  }
+]

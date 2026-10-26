@@ -300,10 +300,27 @@ export function InboxPage() {
       </div>
 
       <div className="kpi-strip">
-        <Kpi etiqueta="Notificaciones pendientes" valor={textoContador('pending')} />
-        <Kpi etiqueta="Corridas confirmadas" valor={textoContador('confirmed')} />
-        <Kpi etiqueta="Estado del entorno" valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'} />
-        <Kpi etiqueta="Rechazadas" valor={textoContador('rejected')} />
+        <Kpi
+          etiqueta="Notificaciones pendientes"
+          valor={textoContador('pending')}
+          insignia={{ clase: 'badge-accent', texto: 'esperando confirm' }}
+          barra={60}
+          colorBarra="var(--accent)"
+        />
+        <Kpi
+          etiqueta="Corridas confirmadas"
+          valor={textoContador('confirmed')}
+          insignia={{ clase: 'badge-info', texto: 'auditable' }}
+          barra={40}
+          colorBarra="var(--info)"
+        />
+        <Kpi
+          etiqueta="Estado del entorno"
+          valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'}
+          barra={100}
+          colorBarra="var(--ok)"
+        />
+        <Kpi etiqueta="Rechazadas" valor={textoContador('rejected')} barra={100} colorBarra="var(--teal)" />
       </div>
 
       <div id="inbox-lista" role="tabpanel" aria-labelledby={`tab-${estado}`}>
