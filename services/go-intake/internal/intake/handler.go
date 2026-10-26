@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +32,10 @@ type Deps struct {
 	Store     NotificationStore
 	Publisher EventPublisher
 	Resolver  ArtifactResolver
-	Now       func() time.Time
+	// AllowedRepos es la lista de repositorios owner/repo permitidos (INTAKE_ALLOWED_REPOS).
+	// Vacía = fail-closed: todo evento se rechaza con 422 repo_not_allowed.
+	AllowedRepos []string
+	Now          func() time.Time
 	// Log y Metrics son opcionales (nil = sin log / sin métricas de dominio).
 	Log     *slog.Logger
 	Metrics *obs.Intake
@@ -39,8 +43,21 @@ type Deps struct {
 
 // Handler sirve POST /webhooks/github.
 type Handler struct {
-	d  Deps
-	mu sync.Mutex // serializa persistir+publicar para que una entrega no se duplique
+	d       Deps
+	allowed map[string]struct{} // AllowedRepos en minúsculas (comparación exacta sin distinguir mayúsculas)
+	mu      sync.Mutex          // serializa persistir+publicar para que una entrega no se duplique
+}
+
+// ParseAllowedRepos interpreta INTAKE_ALLOWED_REPOS: lista separada por comas de owner/repo.
+// Espacios alrededor y entradas vacías se descartan; la comparación posterior no distingue mayúsculas.
+func ParseAllowedRepos(raw string) []string {
+	var out []string
+	for _, r := range strings.Split(raw, ",") {
+		if r = strings.TrimSpace(r); r != "" {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // NewHandler valida las dependencias y devuelve el handler HTTP completo.
@@ -57,7 +74,10 @@ func NewHandler(d Deps) (http.Handler, error) {
 	if d.Log == nil {
 		d.Log = slog.New(slog.DiscardHandler)
 	}
-	h := &Handler{d: d}
+	h := &Handler{d: d, allowed: map[string]struct{}{}}
+	for _, r := range d.AllowedRepos {
+		h.allowed[strings.ToLower(strings.TrimSpace(r))] = struct{}{}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /webhooks/github", h.webhook)
 	return mux, nil
@@ -129,7 +149,13 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Clasificacion.
+	// 3. Ping de GitHub (C-126): con firma válida responde 200 sin notificación ni evento.
+	if r.Header.Get("X-GitHub-Event") == "ping" {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "pong"})
+		return
+	}
+
+	// 4. Clasificacion.
 	c, err := Classify(r.Header.Get("X-GitHub-Event"), body)
 	switch {
 	case errors.Is(err, ErrUnsupported):
@@ -143,7 +169,13 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Persistir y luego publicar (idempotente por entrega).
+	// 5. Repositorio permitido: fail-closed (lista vacía = nada permitido).
+	if _, ok := h.allowed[strings.ToLower(c.Repo)]; !ok {
+		reject(http.StatusUnprocessableEntity, "repo_not_allowed", "el repositorio no está en la lista permitida")
+		return
+	}
+
+	// 6. Persistir y luego publicar (idempotente por entrega).
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	rec, found := h.d.Store.GetByDelivery(delivery)
@@ -203,7 +235,7 @@ func clip(s string) string {
 // ("" = no es un rechazo del remitente: 503 internos, que cuentan solo en las métricas HTTP).
 func rejectReason(code string) string {
 	switch code {
-	case "invalid_signature", "unsupported_event", "unresolvable_artifact":
+	case "invalid_signature", "unsupported_event", "unresolvable_artifact", "repo_not_allowed":
 		return code
 	case "payload_too_large":
 		return "too_large"

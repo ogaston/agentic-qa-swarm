@@ -150,6 +150,11 @@ func run(log *slog.Logger) error {
 	} else {
 		go func() { _ = tr.nats.Run(ctx, handle) }() // replay del stream y luego el durable, en segundo plano
 	}
+	if tr.nats != nil {
+		pub.SetReplayed(tr.nats.Replayed) // F-07: aviso del replay terminado
+	} else {
+		pub.SetReplayed(func() bool { return true }) // archivo: el Drain inicial ya cargó todo
+	}
 	go pub.Run(ctx, RepublishInterval) // al arrancar y cada 5 s: run.confirmed pendientes
 
 	srv := &http.Server{

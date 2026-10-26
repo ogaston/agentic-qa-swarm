@@ -50,7 +50,15 @@ type env struct {
 	dir   string
 }
 
+// testAllowed es la lista de repositorios permitidos de los fixtures (acme/shop).
+var testAllowed = []string{"acme/shop"}
+
 func newEnv(t *testing.T, v githubsig.Verifier) *env {
+	t.Helper()
+	return newEnvAllowed(t, v, testAllowed)
+}
+
+func newEnvAllowed(t *testing.T, v githubsig.Verifier, allowed []string) *env {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := OpenJSONLStore(dir)
@@ -58,17 +66,22 @@ func newEnv(t *testing.T, v githubsig.Verifier) *env {
 		t.Fatal(err)
 	}
 	e := &env{store: st, pub: &memPublisher{}, dir: dir}
-	e.srv = e.handler(t, st, v)
+	e.srv = e.handlerAllowed(t, st, v, allowed)
 	return e
 }
 
 func (e *env) handler(t *testing.T, st NotificationStore, v githubsig.Verifier) http.Handler {
 	t.Helper()
+	return e.handlerAllowed(t, st, v, testAllowed)
+}
+
+func (e *env) handlerAllowed(t *testing.T, st NotificationStore, v githubsig.Verifier, allowed []string) http.Handler {
+	t.Helper()
 	if v == nil {
 		v = githubsig.HMACVerifier{}
 	}
 	h, err := NewHandler(Deps{
-		Secret: []byte(secret), Verifier: v, Store: st, Publisher: e.pub, Resolver: NewArtifactResolver(""),
+		Secret: []byte(secret), Verifier: v, Store: st, Publisher: e.pub, Resolver: NewArtifactResolver(""), AllowedRepos: allowed,
 		Now: func() time.Time { return time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
@@ -150,7 +163,12 @@ func TestWebhook(t *testing.T) {
 			return r
 		}(), status: 401, code: "invalid_signature"},
 		{name: "JSON roto", req: signed("pull_request", "d1", broken), status: 400, code: "invalid_json"},
-		{name: "evento no soportado ping", req: signed("ping", "d1", ping), status: 400, code: "unsupported_event"},
+		{name: "ping firmado responde 200 sin notificacion", req: signed("ping", "d1", ping), status: 200},
+		{name: "ping con firma invalida rechazado", req: func() req {
+			r := signed("ping", "d1", ping)
+			r.sig = "sha256=" + strings.Repeat("0", 64)
+			return r
+		}(), status: 401, code: "invalid_signature"},
 		{name: "evento desconocido", req: signed("issues", "d1", pr), status: 400, code: "unsupported_event"},
 		{name: "accion no soportada", req: signed("pull_request", "d1", []byte(`{"action":"closed","repository":{"full_name":"a/b"}}`)), status: 400, code: "unsupported_event"},
 		{name: "cuerpo mayor a 1 MiB", req: signed("push", "d1", big), status: 413, code: "payload_too_large"},
@@ -181,10 +199,10 @@ func TestWebhook(t *testing.T) {
 func TestWebhookClassification(t *testing.T) {
 	a, c40, b40 := strings.Repeat("a", 40), strings.Repeat("c", 40), strings.Repeat("b", 40)
 	cases := []struct{ event, file, want, sha, kind, ref string }{
-		{"push", "push-branch.json", EventCommit, a, "build-from-repo", "acme/shop@" + a},
+		{"push", "push-branch.json", EventCommit, a, "published-image", "ghcr.io/acme/shop:" + a},
 		{"push", "push-tag.json", EventTag, a, "published-image", "ghcr.io/acme/shop:v1.2.0"},
-		{"pull_request", "pull-request-opened.json", EventPullRequest, a, "build-from-repo", "acme/shop@" + a},
-		{"pull_request", "pull-request-synchronize.json", EventPullRequest, c40, "build-from-repo", "acme/shop@" + c40},
+		{"pull_request", "pull-request-opened.json", EventPullRequest, a, "published-image", "ghcr.io/acme/shop:" + a},
+		{"pull_request", "pull-request-synchronize.json", EventPullRequest, c40, "published-image", "ghcr.io/acme/shop:" + c40},
 		{"release", "release-published.json", EventTag, b40, "published-image", "ghcr.io/acme/shop:v1.2.0"},
 	}
 	for _, c := range cases {
@@ -274,7 +292,7 @@ func TestWebhookRestartKeepsDeliveryIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		h, err := NewHandler(Deps{Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: st, Publisher: NewOutbox(events), Resolver: NewArtifactResolver("")})
+		h, err := NewHandler(Deps{Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: st, Publisher: NewOutbox(events), Resolver: NewArtifactResolver(""), AllowedRepos: testAllowed})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -417,7 +435,7 @@ func TestWebhookResolverErrors(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			e := newEnv(t, nil)
 			h, err := NewHandler(Deps{
-				Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: e.store, Publisher: e.pub,
+				Secret: []byte(secret), Verifier: githubsig.HMACVerifier{}, Store: e.store, Publisher: e.pub, AllowedRepos: testAllowed,
 				Resolver: ArtifactResolverFunc(func(Classified) (Artifact, error) { return Artifact{}, c.err }),
 			})
 			if err != nil {
@@ -431,5 +449,82 @@ func TestWebhookResolverErrors(t *testing.T) {
 				t.Fatal("un rechazo no debe persistir ni publicar")
 			}
 		})
+	}
+}
+
+// Lista de repositorios permitidos (INTAKE_ALLOWED_REPOS): fail-closed, sin distinguir
+// mayúsculas, y el ping de GitHub responde 200 sin notificar.
+func TestWebhookRepoAllowlist(t *testing.T) {
+	push := fixture(t, "push-branch.json")
+	other := bytes.Replace(push, []byte("acme/shop"), []byte("mallory/shop"), -1)
+	if bytes.Equal(other, push) {
+		t.Fatal("el fixture no contiene acme/shop")
+	}
+	ping := fixture(t, "ping.json")
+
+	t.Run("repo fuera de la lista: 422 repo_not_allowed sin notificar", func(t *testing.T) {
+		e := newEnvAllowed(t, nil, []string{"acme/shop"})
+		w := do(e.srv, signed("push", "d1", other))
+		if w.Code != 422 || errCode(t, w) != "repo_not_allowed" {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+		if _, ok := e.store.GetByDelivery("d1"); ok || len(e.pub.events) != 0 {
+			t.Fatal("un repo no permitido no debe persistir ni publicar")
+		}
+	})
+	t.Run("lista vacia: fail-closed, 422 repo_not_allowed", func(t *testing.T) {
+		for _, allowed := range [][]string{nil, {}} {
+			e := newEnvAllowed(t, nil, allowed)
+			w := do(e.srv, signed("push", "d1", push))
+			if w.Code != 422 || errCode(t, w) != "repo_not_allowed" {
+				t.Fatalf("lista %v: status=%d %s", allowed, w.Code, w.Body.String())
+			}
+			if _, ok := e.store.GetByDelivery("d1"); ok || len(e.pub.events) != 0 {
+				t.Fatalf("lista %v: un rechazo no debe persistir ni publicar", allowed)
+			}
+		}
+	})
+	t.Run("repo permitido en otra capitalizacion: 202", func(t *testing.T) {
+		for _, allowed := range [][]string{{"ACME/Shop"}, {"acme/SHOP"}} {
+			e := newEnvAllowed(t, nil, allowed)
+			if w := do(e.srv, signed("push", "d1", push)); w.Code != 202 {
+				t.Fatalf("lista %v: status=%d %s", allowed, w.Code, w.Body.String())
+			}
+		}
+	})
+	t.Run("repo que es prefijo o sufijo de uno permitido: 422", func(t *testing.T) {
+		e := newEnvAllowed(t, nil, []string{"acme/shop-extra"})
+		if w := do(e.srv, signed("push", "d1", push)); w.Code != 422 || errCode(t, w) != "repo_not_allowed" {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+	})
+	t.Run("ping firmado: 200 sin notificacion ni evento aunque el repo no este permitido", func(t *testing.T) {
+		e := newEnvAllowed(t, nil, nil)
+		w := do(e.srv, signed("ping", "d-ping", ping))
+		if w.Code != 200 {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+		if _, ok := e.store.GetByDelivery("d-ping"); ok || len(e.pub.events) != 0 {
+			t.Fatal("un ping no debe notificar ni publicar")
+		}
+	})
+	t.Run("ping con firma invalida: 401 sin notificacion", func(t *testing.T) {
+		e := newEnv(t, nil)
+		r := signed("ping", "d-ping", ping)
+		r.sig = "sha256=" + strings.Repeat("1", 64)
+		if w := do(e.srv, r); w.Code != 401 || errCode(t, w) != "invalid_signature" {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestParseAllowedRepos(t *testing.T) {
+	got := ParseAllowedRepos(" ogaston/demo-target-app-qa-swarm , ,Acme/Shop,")
+	want := []string{"ogaston/demo-target-app-qa-swarm", "Acme/Shop"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %q, quiero %q", got, want)
+	}
+	if n := len(ParseAllowedRepos("")); n != 0 {
+		t.Fatalf("vacía debe dar lista vacía, dio %d", n)
 	}
 }

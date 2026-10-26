@@ -46,6 +46,27 @@
             "minLength": 1
           },
           "minItems": 1
+        },
+        "artifact": {
+          "type": "object",
+          "description": "Artefacto de la notificación confirmada (opcional: eventos anteriores no lo traen; el controlador usa su respaldo).",
+          "properties": {
+            "kind": {
+              "enum": [
+                "build-from-repo",
+                "published-image"
+              ]
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "ref"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

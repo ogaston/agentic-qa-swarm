@@ -64,11 +64,40 @@ type runConfirmedWire struct {
 	OccurredAt string `json:"occurred_at"`
 	TraceID    string `json:"trace_id"`
 	Data       struct {
-		RunID          string   `json:"run_id"`
-		NotificationID string   `json:"notification_id"`
-		ConfirmedBy    string   `json:"confirmed_by"`
-		Flows          []string `json:"flows"`
+		RunID          string          `json:"run_id"`
+		NotificationID string          `json:"notification_id"`
+		ConfirmedBy    string          `json:"confirmed_by"`
+		Flows          []string        `json:"flows"`
+		Artifact       json.RawMessage `json:"artifact,omitempty"`
 	} `json:"data"`
+}
+
+// parseArtifact valida el artefacto opcional de run.confirmed (U11-T01) con las reglas de
+// notify.created: kind de un enum, ref no vacío y sin campos extra. Ausente (vacío) = nil, sin error.
+// Un null explícito se rechaza: el esquema exige un objeto.
+func parseArtifact(raw json.RawMessage) (*runctl.Artifact, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	if string(raw) == "null" {
+		return nil, errors.New("run.confirmed: artifact no puede ser null")
+	}
+	var a struct {
+		Kind string `json:"kind"`
+		Ref  string `json:"ref"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&a); err != nil {
+		return nil, errors.New("run.confirmed: artifact malformado o con campos desconocidos")
+	}
+	if a.Kind != "build-from-repo" && a.Kind != "published-image" {
+		return nil, errors.New("run.confirmed: artifact.kind desconocido")
+	}
+	if a.Ref == "" {
+		return nil, errors.New("run.confirmed: artifact.ref vacío")
+	}
+	return &runctl.Artifact{Kind: a.Kind, Ref: a.Ref}, nil
 }
 
 // ParseRunConfirmed valida una línea run.confirmed contra el esquema: campos exactos (sin extras),
@@ -106,8 +135,12 @@ func ParseRunConfirmed(line []byte) (runctl.Event, error) {
 			return runctl.Event{}, errors.New("run.confirmed: flows con elemento vacío")
 		}
 	}
+	art, err := parseArtifact(w.Data.Artifact)
+	if err != nil {
+		return runctl.Event{}, err
+	}
 	return runctl.Event{Type: w.Type, EventID: w.EventID, TraceID: w.TraceID, RunID: w.Data.RunID,
-		ConfirmedBy: w.Data.ConfirmedBy, Flows: w.Data.Flows}, nil
+		ConfirmedBy: w.Data.ConfirmedBy, Flows: w.Data.Flows, Artifact: art}, nil
 }
 
 // NATSSource entrega run.confirmed desde el consumidor durable go-run-controller-confirmed (AckExplicit).

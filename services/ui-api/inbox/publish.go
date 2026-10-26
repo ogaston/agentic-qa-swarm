@@ -27,11 +27,16 @@ type RunConfirmed struct {
 
 // RunConfirmedData es el cuerpo de run.confirmed.
 type RunConfirmedData struct {
-	RunID          string   `json:"run_id"`
-	NotificationID string   `json:"notification_id"`
-	ConfirmedBy    string   `json:"confirmed_by"`
-	Flows          []string `json:"flows"`
+	RunID          string    `json:"run_id"`
+	NotificationID string    `json:"notification_id"`
+	ConfirmedBy    string    `json:"confirmed_by"`
+	Flows          []string  `json:"flows"`
+	Artifact       *Artifact `json:"artifact,omitempty"`
 }
+
+// ErrArtifactUnavailable indica que la confirmación no tiene artefacto disponible (registro anterior
+// y notificación aún sin re-proyectar). run.confirmed no se publica: el reintento lo cubre (fail-closed).
+var ErrArtifactUnavailable = errors.New("run.confirmed sin artefacto disponible")
 
 // eventNamespace es el espacio de nombres UUIDv5 de los event_id de run.confirmed.
 var eventNamespace = [16]byte{0x7a, 0x1c, 0x52, 0x0e, 0x9b, 0x3d, 0x4f, 0x6a, 0x8e, 0x21, 0xc4, 0x5d, 0x90, 0x0b, 0x6e, 0x17}
@@ -59,7 +64,7 @@ func NewRunConfirmed(c Confirmed) RunConfirmed {
 	return RunConfirmed{
 		EventID: EventID(c.RunID), Type: "run.confirmed", Version: 1,
 		OccurredAt: c.ConfirmedAt.UTC(), TraceID: trace,
-		Data: RunConfirmedData{RunID: c.RunID, NotificationID: c.NotificationID, ConfirmedBy: c.ConfirmedBy, Flows: c.Flows},
+		Data: RunConfirmedData{RunID: c.RunID, NotificationID: c.NotificationID, ConfirmedBy: c.ConfirmedBy, Flows: c.Flows, Artifact: c.Artifact},
 	}
 }
 
@@ -103,10 +108,12 @@ func (o *Outbox) Publish(_ context.Context, ev RunConfirmed) error {
 
 // Publisher publica run.confirmed de las confirmaciones del Store y marca lo publicado.
 type Publisher struct {
-	store *Store
-	pub   EventPublisher
-	log   *slog.Logger
-	mu    sync.Mutex
+	store    *Store
+	pub      EventPublisher
+	log      *slog.Logger
+	mu       sync.Mutex
+	replayed func() bool     // nil = desconocido (no se avisa)
+	warned   map[string]bool // recibos ya avisados por falta de artefacto tras el replay
 }
 
 // NewPublisher crea el Publisher. log puede ser nil.
@@ -114,7 +121,14 @@ func NewPublisher(store *Store, pub EventPublisher, log *slog.Logger) *Publisher
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Publisher{store: store, pub: pub, log: log}
+	return &Publisher{store: store, pub: pub, log: log, warned: map[string]bool{}}
+}
+
+// SetReplayed indica al publicador si el replay inicial de notificaciones ya terminó (F-07).
+func (p *Publisher) SetReplayed(fn func() bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.replayed = fn
 }
 
 // Publish publica el run.confirmed de la notificacion id (ya confirmada). Si ya se publico, no hace nada.
@@ -127,6 +141,14 @@ func (p *Publisher) Publish(ctx context.Context, id string) error {
 	c, ok := p.store.Confirmation(id)
 	if !ok {
 		return ErrNotFound
+	}
+	if c.Artifact == nil { // F-01 (b): nunca publicar sin artefacto; no se marca publicado
+		if p.replayed != nil && p.replayed() && !p.warned[id] {
+			// F-07: replay terminado y sin artefacto: aviso una sola vez por recibo (no en cada reintento).
+			p.warned[id] = true
+			p.log.Warn("run.confirmed sin artefacto: el registro es anterior y la notificación no se re-proyectó tras el replay; no se publica hasta que llegue", "notification_id", id)
+		}
+		return ErrArtifactUnavailable
 	}
 	if err := p.pub.Publish(ctx, NewRunConfirmed(c)); err != nil {
 		return fmt.Errorf("publicando run.confirmed: %w", err)

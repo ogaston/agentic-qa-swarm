@@ -51,7 +51,8 @@ func run(log *slog.Logger) error {
 	if addr == "" {
 		addr = ":8080"
 	}
-	handler, err := newHandlerWith(log, []byte(secret), dataDir, os.Getenv("ARTIFACT_REGISTRY"), pub, ready)
+	allowed := intake.ParseAllowedRepos(os.Getenv("INTAKE_ALLOWED_REPOS"))
+	handler, err := newHandlerWith(log, []byte(secret), dataDir, os.Getenv("ARTIFACT_REGISTRY"), allowed, pub, ready)
 	if err != nil {
 		return err
 	}
@@ -121,13 +122,14 @@ func natsReadyChecks(dataDir string, secret []byte, nc *nats.Conn) []obs.Check {
 }
 
 // newHandler arma la cadena completa con el transporte de archivo (firma histórica).
-func newHandler(log *slog.Logger, secret []byte, dataDir, eventsFile, artifactRegistry string) (http.Handler, error) {
-	return newHandlerWith(log, secret, dataDir, artifactRegistry, intake.NewOutbox(eventsFile), obs.ReadyChecks(dataDir, eventsFile, secret))
+// allowed es la lista de repositorios permitidos (INTAKE_ALLOWED_REPOS).
+func newHandler(log *slog.Logger, secret []byte, dataDir, eventsFile, artifactRegistry string, allowed []string) (http.Handler, error) {
+	return newHandlerWith(log, secret, dataDir, artifactRegistry, allowed, intake.NewOutbox(eventsFile), obs.ReadyChecks(dataDir, eventsFile, secret))
 }
 
 // newHandlerWith arma la cadena completa: webhook + obs.Wrap, que sirve /healthz, /readyz y /metrics
 // (sin token) antes de la aplicación y añade identificadores, log de acceso y métricas HTTP.
-func newHandlerWith(log *slog.Logger, secret []byte, dataDir, artifactRegistry string, pub intake.EventPublisher, ready []obs.Check) (http.Handler, error) {
+func newHandlerWith(log *slog.Logger, secret []byte, dataDir, artifactRegistry string, allowed []string, pub intake.EventPublisher, ready []obs.Check) (http.Handler, error) {
 	store, err := intake.OpenJSONLStore(dataDir)
 	if err != nil {
 		return nil, err
@@ -135,13 +137,14 @@ func newHandlerWith(log *slog.Logger, secret []byte, dataDir, artifactRegistry s
 	reg := obs.NewRegistry()
 	httpMetrics := obs.NewHTTPMetrics(reg, serviceName)
 	h, err := intake.NewHandler(intake.Deps{
-		Secret:    secret,
-		Verifier:  githubsig.HMACVerifier{},
-		Store:     store,
-		Publisher: pub,
-		Resolver:  intake.NewArtifactResolver(artifactRegistry),
-		Log:       log,
-		Metrics:   obs.NewIntake(reg),
+		Secret:       secret,
+		Verifier:     githubsig.HMACVerifier{},
+		Store:        store,
+		Publisher:    pub,
+		Resolver:     intake.NewArtifactResolver(artifactRegistry),
+		AllowedRepos: allowed,
+		Log:          log,
+		Metrics:      obs.NewIntake(reg),
 	})
 	if err != nil {
 		return nil, err

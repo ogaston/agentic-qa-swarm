@@ -60,17 +60,17 @@ func TestNewHandlerWiringLabels(t *testing.T) {
 	if seen != 2 {
 		t.Errorf("las dos líneas de acceso del webhook deben llevar route=/webhooks/github: %d\n%s", seen, logs)
 	}
-	// solo los cinco motivos declarados: ninguna serie reason="other" ni extra
+	// solo los seis motivos declarados: ninguna serie reason="other" ni extra
 	reasons := regexp.MustCompile(`(?m)^aqs_intake_webhook_rejected_total\{reason="([^"]+)"\}`).FindAllStringSubmatch(metrics, -1)
 	got := map[string]bool{}
 	for _, m := range reasons {
 		got[m[1]] = true
 	}
-	for _, r := range []string{"invalid_signature", "unsupported_event", "unresolvable_artifact", "bad_request", "too_large"} {
+	for _, r := range []string{"invalid_signature", "unsupported_event", "unresolvable_artifact", "repo_not_allowed", "bad_request", "too_large"} {
 		delete(got, r)
 	}
-	if len(reasons) != 5 || len(got) != 0 {
-		t.Errorf("deben existir exactamente los 5 motivos declarados: %v", reasons)
+	if len(reasons) != 6 || len(got) != 0 {
+		t.Errorf("deben existir exactamente los 6 motivos declarados: %v", reasons)
 	}
 }
 
@@ -134,7 +134,7 @@ func TestStoreUnreadableLineGoesThroughJSONLogger(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "d", "notifications.jsonl"), []byte("basura\n"), 0o640); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := newHandler(lg, []byte("s"), filepath.Join(root, "d"), filepath.Join(root, "e"), ""); err != nil {
+	if _, err := newHandler(lg, []byte("s"), filepath.Join(root, "d"), filepath.Join(root, "e"), "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), `"message":"store: linea 1 ilegible, se ignora"`) {

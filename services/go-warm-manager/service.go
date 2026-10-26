@@ -385,7 +385,7 @@ func (s *Service) waitRollout(ctx context.Context, ref string) (bool, string) {
 		switch {
 		case err != nil:
 			if readFails++; readFails >= StatusReadRetries {
-				return false, "no se pudo leer el rollout de warm-app: " + err.Error()
+				return false, fmt.Sprintf("no se pudo leer el rollout de warm-app (imagen %s): %s", ref, err.Error())
 			}
 		case done:
 			return true, ""
@@ -393,7 +393,7 @@ func (s *Service) waitRollout(ctx context.Context, ref string) (bool, string) {
 			readFails = 0
 		}
 		if !s.Clock.Now().Before(deadline) {
-			return false, fmt.Sprintf("timeout esperando el rollout completo de warm-app tras %s", timeout)
+			return false, fmt.Sprintf("timeout esperando el rollout completo de warm-app (imagen %s) tras %s", ref, timeout)
 		}
 		if err := s.Clock.Sleep(ctx, s.pollInterval()); err != nil {
 			return false, "espera del rollout interrumpida: " + err.Error()

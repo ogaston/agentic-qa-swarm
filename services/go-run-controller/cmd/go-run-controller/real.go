@@ -100,6 +100,14 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 		MaxParallel: c.maxParallel, Obs: rm, Log: log,
 		Cfg: runner.Config{Namespace: c.namespace, Image: c.runnerImage, ServiceAccount: c.runnerSA}}
 	ref := c.artifactRef
+	// U11-T01: el deploy despliega el artefacto del evento (guardado en la corrida); RUN_ARTIFACT_REF
+	// es solo el respaldo para corridas cuyo run.confirmed no lo trajo (p. ej. kind-e2e.sh).
+	artifact := func(runID string) (string, string, error) {
+		if r, ok := store.Get(runID); ok && r.Artifact != nil {
+			return r.Artifact.Kind, r.Artifact.Ref, nil
+		}
+		return "published-image", ref, nil
+	}
 	base.Warm = wc
 	base.Results = l
 	base.Runners = rl
@@ -108,7 +116,7 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 		return base, err
 	}
 	base.Phases = &adapters.RealPhases{Warm: wc, Reset: rc, Rehearse: l, Run: rl, Report: rep,
-		Artifact: func(string) (string, string, error) { return "published-image", ref, nil }}
+		Artifact: artifact}
 	return base, nil
 }
 

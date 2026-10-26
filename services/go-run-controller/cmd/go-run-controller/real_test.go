@@ -271,3 +271,51 @@ func TestFlowSourceU3WorkflowFallbackAndLimit(t *testing.T) {
 		t.Fatal("workflow de 129 caracteres aceptado")
 	}
 }
+
+// CA-4 b/c/d: el deploy despliega el artefacto del evento (guardado en la corrida, persistido en el
+// journal) y solo cae al RUN_ARTIFACT_REF estático cuando el evento no lo trajo.
+func TestArtifactDelDeployEsElDelEvento(t *testing.T) {
+	const estatica = "ghcr.io/x/estatica:1"
+	sha := strings.Repeat("c", 40)
+	evento := runctl.Artifact{Kind: "published-image", Ref: "ghcr.io/ogaston/demo-target-app-qa-swarm:" + sha}
+	dir := t.TempDir()
+	j, err := adapters.OpenJournal(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := j.Save(runctl.Run{ID: "run-1", State: runctl.Confirmed, Artifact: &evento}); err != nil {
+		t.Fatal(err)
+	}
+	if err := j.Save(runctl.Run{ID: "run-2", State: runctl.Confirmed}); err != nil {
+		t.Fatal(err)
+	}
+	env := realEnv()
+	env["RUN_ARTIFACT_REF"] = estatica
+	c, err := loadConfig(envOf(env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(store runctl.RunStore) {
+		t.Helper()
+		cfg, err := buildConfig(c, fake.NewSimpleClientset(), runctl.AllowAll(), store, &runctl.FakePublisher{}, &runctl.FakeAlerter{}, nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rp := cfg.Phases.(*adapters.RealPhases)
+		kind, ref, err := rp.Artifact("run-1")
+		if err != nil || kind != evento.Kind || ref != evento.Ref {
+			t.Fatalf("run-1 con artefacto del evento: kind=%q ref=%q err=%v, quiero %+v", kind, ref, err, evento)
+		}
+		kind, ref, err = rp.Artifact("run-2")
+		if err != nil || kind != "published-image" || ref != estatica {
+			t.Fatalf("run-2 sin artefacto debe caer al respaldo: kind=%q ref=%q err=%v", kind, ref, err)
+		}
+	}
+	check(j)
+	// Reinicio: el artefacto se lee del estado persistido, no de memoria.
+	j2, err := adapters.OpenJournal(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(j2)
+}

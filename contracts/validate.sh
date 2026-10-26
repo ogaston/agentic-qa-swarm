@@ -30,7 +30,13 @@ for f in examples/valid/*.json; do
   s=$(schema_for "$f") || true
   [ -n "${s:-}" ] || { echo "SIN ESQUEMA $f"; fail=1; continue; }
   t=$(jq -r .type "$f" 2>/dev/null) || t=""
-  [ "$t" = "$(basename "$f" .json)" ] || { echo "FALLA type '$t' no coincide con el nombre del archivo: $f"; fail=1; continue; }
+  # El type debe ser consistente con el esquema: igual al nombre del esquema o <esquema>.<evento>
+  # (p. ej. deploy.done con deploy.schema.json). El nombre del archivo es <type>.json o
+  # <type>.<variante>.json (p. ej. run.confirmed.with-artifact.json).
+  n=${s%.schema.json}
+  base=$(basename "$f" .json)
+  case "$t" in "$n"|"$n."*) ;; *) echo "FALLA type '$t' no es consistente con el esquema '$n': $f"; fail=1; continue ;; esac
+  case "$base." in "$t."*) ;; *) echo "FALLA el nombre no empieza por el type '$t': $f"; fail=1; continue ;; esac
   run "$s" "$f"; r=$?
   [ $r -eq 0 ] && echo "ok   valido   $f" || { echo "FALLA valido deberia pasar: $f ($s, rc=$r)"; fail=1; }
 done

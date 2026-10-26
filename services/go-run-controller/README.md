@@ -101,3 +101,7 @@ Recorrido local sin clúster: `bash scripts/test/u2-demo-local.sh`; guion para d
   reset de la corrida, y su pod puede vivir hasta su `activeDeadlineSeconds`; no se lanza nada nuevo y la corrida sale con
   `FailReason`. Candidata: verificar que el reset borre esos Jobs. Si el marcador `started-at` no se puede escribir/leer, no se
   lanza nada; la cuota ya consultada puede consultarse otra vez en el reintento.
+
+## Orden de despliegue con el artefacto del evento (U11-T01)
+
+`run.confirmed` puede llevar `data.artifact` (opcional). Este controlador lo valida con `DisallowUnknownFields`, así que **debe desplegarse antes que `ui-api`** (o a la vez, pero nunca `ui-api` primero): un controlador anterior rechaza cualquier `run.confirmed` con `artifact` como evento inválido y la corrida no avanza. Orden: 1) go-run-controller, 2) ui-api. Un controlador nuevo lee también los eventos sin `artifact` (usa `RUN_ARTIFACT_REF` como respaldo).

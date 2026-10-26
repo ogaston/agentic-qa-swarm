@@ -3,7 +3,7 @@ package obs
 import "github.com/prometheus/client_golang/prometheus"
 
 // RejectReasons son los valores cerrados de aqs_intake_webhook_rejected_total{reason}.
-var RejectReasons = []string{"invalid_signature", "unsupported_event", "unresolvable_artifact", "bad_request", "too_large"}
+var RejectReasons = []string{"invalid_signature", "unsupported_event", "unresolvable_artifact", "repo_not_allowed", "bad_request", "too_large"}
 
 // Intake son las métricas de dominio de go-intake. Todas las series con contador arrancan en 0.
 // Un *Intake nil no hace nada.

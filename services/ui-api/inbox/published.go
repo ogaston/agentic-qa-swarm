@@ -15,8 +15,25 @@ const PublishedFile = "published.jsonl"
 // Confirmed es un recibo con lo necesario para publicar run.confirmed.
 type Confirmed struct {
 	Receipt
-	Flows   []string
-	TraceID string
+	Flows    []string
+	TraceID  string
+	Artifact *Artifact // artefacto de la notificación confirmada (nil si no lo tiene)
+}
+
+// artifactOf devuelve una copia del artefacto de la confirmación id: el persistido en el registro
+// o, si no lo hay (registro anterior), el de la notificación ya proyectada. nil si no hay ninguno.
+// Debe llamarse con s.mu tomado.
+func (s *Store) artifactOf(id string) *Artifact {
+	if a, ok := s.artifacts[id]; ok && a != nil {
+		c := *a
+		return &c
+	}
+	e, ok := s.items[id]
+	if !ok || e.n.Artifact == nil {
+		return nil
+	}
+	a := *e.n.Artifact
+	return &a
 }
 
 func (s *Store) loadPublished() error {
@@ -47,7 +64,7 @@ func (s *Store) Confirmation(id string) (Confirmed, bool) {
 	if !ok {
 		return Confirmed{}, false
 	}
-	return Confirmed{Receipt: r, Flows: append([]string(nil), s.flows[id]...), TraceID: s.traces[id]}, true
+	return Confirmed{Receipt: r, Flows: append([]string(nil), s.flows[id]...), TraceID: s.traces[id], Artifact: s.artifactOf(id)}, true
 }
 
 // PublishPending devuelve las confirmaciones sin run.confirmed publicado, las mas antiguas primero.
@@ -57,7 +74,7 @@ func (s *Store) PublishPending() []Confirmed {
 	var out []Confirmed
 	for id, r := range s.receipt {
 		if _, done := s.pubDone[id]; !done {
-			out = append(out, Confirmed{Receipt: r, Flows: append([]string(nil), s.flows[id]...), TraceID: s.traces[id]})
+			out = append(out, Confirmed{Receipt: r, Flows: append([]string(nil), s.flows[id]...), TraceID: s.traces[id], Artifact: s.artifactOf(id)})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {

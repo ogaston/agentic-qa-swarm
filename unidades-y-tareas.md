@@ -289,3 +289,17 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 
 > **Tareas redactadas (2026-10-22)**, a pedido del humano tras comparar el dashboard con el mockup («looks way different»). Causa: U9-T04 portó tokens pero no la estructura ni un criterio comparativo. Olas: **1** = T01; **2** = T02 ∥ T03 ∥ T04 ∥ T05 (máx. 3 en paralelo: T05 va tras la primera que cierre); todas exigen T01. Decisiones al redactar (el humano puede revertirlas): «Warm» → «Entorno» como en el mockup; KPI y metadatos solo con datos reales; el banner «Iniciar ejecución» y el conmutador demo no se portan.
 
+
+## U11 — Demo con repositorio y modelo reales
+
+- **Responsabilidad**: que un push real a `ogaston/demo-target-app-qa-swarm` recorra el ciclo completo en kind con DeepSeek real y deje un post-mortem en el dashboard del commit empujado.
+- **Bounded context**: transversal (ingesta, ejecución, operación). **Historias**: US-M1, US-M2, US-M9 de punta a punta con insumos reales.
+- **Límites**: igual que U8 (solo `kind-aqs`, sin apply a dev/prod, Secrets solo en el clúster). Sin `build-from-repo`: la imagen la publica la CI del repositorio objetivo (decisión del humano, 2026-10-25).
+- **Predecesoras**: U8 y U9 cerradas.
+- **Salida**: ensayo con commit con defecto (hallazgo del stock) y commit sano (sin hallazgos), con `reset_verified=true`.
+
+| # | Hecho | Tarea | Historias | Comando de verificación |
+|---|---|---|---|---|
+| U11-T1 | [ ] | La corrida despliega la imagen del commit empujado (resolución a `published-image`, lista de repos, artefacto en `run.confirmed`, `ping` de GitHub) | US-M1, US-M2 | `tareas/U11-T01-artefacto-del-commit.md` |
+
+> **Tareas redactadas (2026-10-25)**, a pedido del humano («make a plan to solve everything that needs to be solved»). Plan en el historial de la sesión; sigue U11-T02 (webhook y rehearsal con el repositorio real, con el humano).

@@ -127,6 +127,10 @@ spec:
                 secretKeyRef:
                   name: go-intake-webhook
                   key: secret
+            # U11-T01: repositorios permitidos (owner/repo, separados por comas; comparación sin distinguir mayúsculas).
+            # Vacía o ausente = fail-closed: todo evento responde 422 repo_not_allowed.
+            - name: INTAKE_ALLOWED_REPOS
+              value: ogaston/demo-target-app-qa-swarm
           image: ghcr.io/ogaston/agentic-qa-swarm/go-intake:0.0.0
           ports:
             - name: http

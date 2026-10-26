@@ -15,6 +15,8 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
+
+	"pgregory.net/rapid"
 )
 
 const contractsEvents = "../../../contracts/events"
@@ -249,5 +251,121 @@ func TestNATSSourceInvalidoSeHaceTermYNoSeEntrega(t *testing.T) {
 	}
 	if info.NumRedelivered != 0 {
 		t.Fatalf("redelivered = %d, quiero 0 (Term, no reentrega)", info.NumRedelivered)
+	}
+}
+
+// run.confirmed con artefacto opcional (U11-T01): el parser NATS lo acepta y lo entrega; un artefacto
+// malformado (kind desconocido, ref vacío, campo extra) se rechaza. Los ejemplos válidos del contrato
+// se leen del repositorio: el que lleva artifact y el que no.
+func TestParseRunConfirmedArtifactOpcional(t *testing.T) {
+	files, _ := filepath.Glob(filepath.Join(contractsEvents, "examples", "valid", "run.confirmed*.json"))
+	if len(files) < 2 {
+		t.Fatalf("faltan ejemplos válidos de run.confirmed: %v", files)
+	}
+	conArt, sinArt := 0, 0
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ev, err := ParseRunConfirmed(b)
+		if err != nil {
+			t.Fatalf("%s: ParseRunConfirmed rechaza un válido: %v", filepath.Base(f), err)
+		}
+		if ev.Artifact == nil {
+			sinArt++
+		} else {
+			conArt++
+			if ev.Artifact.Kind == "" || ev.Artifact.Ref == "" {
+				t.Fatalf("%s: artefacto vacío: %+v", filepath.Base(f), ev.Artifact)
+			}
+		}
+	}
+	if conArt == 0 || sinArt == 0 {
+		t.Fatalf("hacen falta ejemplos válidos con y sin artifact (con=%d sin=%d)", conArt, sinArt)
+	}
+	sha := strings.Repeat("a", 40)
+	con := strings.Replace(string(runConfirmedLine("55555555-5555-4555-8555-555555555555", "r-1")), `"flows":["login"]}`,
+		`"flows":["login"],"artifact":{"kind":"published-image","ref":"ghcr.io/ogaston/demo-target-app-qa-swarm:`+sha+`"}}`, 1)
+	ev, err := ParseRunConfirmed([]byte(con))
+	if err != nil || ev.Artifact == nil || ev.Artifact.Ref != "ghcr.io/ogaston/demo-target-app-qa-swarm:"+sha || ev.Artifact.Kind != "published-image" {
+		t.Fatalf("artefacto no entregado: %+v %v", ev.Artifact, err)
+	}
+	for name, art := range map[string]string{
+		"kind desconocido": `{"kind":"latest-image","ref":"ghcr.io/x/y:1"}`,
+		"ref vacio":        `{"kind":"published-image","ref":""}`,
+		"campo extra":      `{"kind":"published-image","ref":"ghcr.io/x/y:1","tag":"x"}`,
+		"sin ref":          `{"kind":"published-image"}`,
+	} {
+		bad := strings.Replace(string(runConfirmedLine("55555555-5555-4555-8555-555555555555", "r-1")), `"flows":["login"]}`,
+			`"flows":["login"],"artifact":`+art+`}`, 1)
+		if _, err := ParseRunConfirmed([]byte(bad)); err == nil {
+			t.Errorf("%s: ParseRunConfirmed acepta un artefacto malformado", name)
+		}
+	}
+}
+
+// El transporte de archivo (ParseEvent) también transporta el artefacto del run.confirmed.
+func TestParseEventArtifactDeArchivo(t *testing.T) {
+	sha := strings.Repeat("b", 40)
+	line := strings.Replace(string(runConfirmedLine("55555555-5555-4555-8555-555555555555", "r-1")), `"flows":["login"]}`,
+		`"flows":["login"],"artifact":{"kind":"published-image","ref":"ghcr.io/ogaston/demo-target-app-qa-swarm:`+sha+`"}}`, 1)
+	ev, ok, err := ParseEvent([]byte(line))
+	if err != nil || !ok || ev.Artifact == nil || ev.Artifact.Ref != "ghcr.io/ogaston/demo-target-app-qa-swarm:"+sha {
+		t.Fatalf("ParseEvent no entrega el artefacto: %+v ok=%v err=%v", ev.Artifact, ok, err)
+	}
+	bad := strings.Replace(string(runConfirmedLine("55555555-5555-4555-8555-555555555555", "r-1")), `"flows":["login"]}`,
+		`"flows":["login"],"artifact":{"kind":"published-image","ref":""}}`, 1)
+	if _, _, err := ParseEvent([]byte(bad)); err == nil {
+		t.Fatal("ParseEvent acepta un artefacto con ref vacío")
+	}
+}
+
+// PBT-02: para todo run.confirmed válido, con y sin artefacto, el parser NATS entrega exactamente
+// el artefacto que viajó en la línea (round-trip). Semilla: la de rapid (-rapid.seed para reproducir).
+func TestPBT_RunConfirmedArtifactRoundTrip(t *testing.T) {
+	kinds := []string{"build-from-repo", "published-image"}
+	rapid.Check(t, func(t *rapid.T) {
+		id := rapid.StringMatching(`[a-z0-9]{1,12}`).Draw(t, "run")
+		line := string(runConfirmedLine("55555555-5555-4555-8555-555555555555", "r-"+id))
+		var want *runctl.Artifact
+		if rapid.Bool().Draw(t, "conArtefacto") {
+			want = &runctl.Artifact{
+				Kind: rapid.SampledFrom(kinds).Draw(t, "kind"),
+				Ref:  rapid.StringMatching(`[a-z0-9.-]{1,20}/[a-z0-9._-]{1,20}:[A-Za-z0-9_.-]{1,40}`).Draw(t, "ref"),
+			}
+			line = strings.Replace(line, `"flows":["login"]}`, `"flows":["login"],"artifact":{"kind":"`+want.Kind+`","ref":"`+want.Ref+`"}}`, 1)
+		}
+		ev, err := ParseRunConfirmed([]byte(line))
+		if err != nil {
+			t.Fatalf("un run.confirmed válido no se parsea: %v\n%s", err, line)
+		}
+		if (ev.Artifact == nil) != (want == nil) || (want != nil && *ev.Artifact != *want) {
+			t.Fatalf("artefacto=%+v, quiero %+v", ev.Artifact, want)
+		}
+	})
+}
+
+// Variante Fixed_ de PBT-02 (como TestPBT_Fixed_ArtifactRef de go-intake): ejemplos fijos que el
+// round-trip debe cubrir siempre, con y sin artefacto, ambos kinds y refs con puerto y ruta.
+func TestPBT_Fixed_RunConfirmedArtifactRoundTrip(t *testing.T) {
+	cases := []*runctl.Artifact{
+		nil,
+		{Kind: "published-image", Ref: "ghcr.io/ogaston/demo-target-app-qa-swarm:" + strings.Repeat("a", 40)},
+		{Kind: "build-from-repo", Ref: "acme/shop@" + strings.Repeat("b", 40)},
+		{Kind: "published-image", Ref: "registro.local:5000/equipo/app:v1.2.3"},
+	}
+	for _, want := range cases {
+		line := string(runConfirmedLine("55555555-5555-4555-8555-555555555555", "r-fixed"))
+		if want != nil {
+			line = strings.Replace(line, `"flows":["login"]}`, `"flows":["login"],"artifact":{"kind":"`+want.Kind+`","ref":"`+want.Ref+`"}}`, 1)
+		}
+		ev, err := ParseRunConfirmed([]byte(line))
+		if err != nil {
+			t.Fatalf("no parsea: %v\n%s", err, line)
+		}
+		if (ev.Artifact == nil) != (want == nil) || (want != nil && *ev.Artifact != *want) {
+			t.Fatalf("artefacto=%+v, quiero %+v", ev.Artifact, want)
+		}
 	}
 }
