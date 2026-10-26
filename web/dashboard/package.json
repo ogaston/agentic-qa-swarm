@@ -12,6 +12,7 @@
     "test": "vitest run",
     "gen:api": "openapi-typescript ../../contracts/openapi/control-plane.yaml -o src/api/schema.gen.ts",
     "check:dist-urls": "bash scripts/check-dist-urls.sh",
+    "e2e:fidelidad": "node scripts/e2e-fidelidad.mjs",
     "check:api": "openapi-typescript ../../contracts/openapi/control-plane.yaml -o .schema.check.ts && (diff -q .schema.check.ts src/api/schema.gen.ts >/dev/null || (echo 'schema.gen.ts desactualizado: ejecuta npm run gen:api' >&2; rm -f .schema.check.ts; exit 1)) && rm -f .schema.check.ts"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "jsdom": "25.0.1",
     "msw": "2.6.8",
     "openapi-typescript": "7.4.4",
+    "playwright": "1.64.1",
     "typescript": "5.6.3",
     "typescript-eslint": "8.18.0",
     "vite": "5.4.11",

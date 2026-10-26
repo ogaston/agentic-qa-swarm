@@ -147,6 +147,15 @@ check warm-estado warm_estado
 check sin-token-401 sin_token_401
 check logout-invalida-token logout_invalida_token
 
+# fidelidad-visual (U10-T05): dashboard frente a mockups/swarm-mock.html (npm run e2e:fidelidad). No usa el
+# clúster, pero va bajo el mismo cerrojo que el resto de comprobaciones de kind para no solaparse con ellas.
+# El informe va a un directorio temporal del smoke ($work, se borra en cleanup): no se escribe en el árbol versionado.
+# Hasta U10-T06 el gate sale ≠0 (diferencias reales): aquí aparecerá «FALLA fidelidad-visual», no «OK».
+fidelidad_visual() {
+  (cd "$root/web/dashboard" && flock "${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock" npm run -s e2e:fidelidad -- --out "$work/fidelidad")
+}
+check fidelidad-visual fidelidad_visual
+
 # reporte-visible: solo si hay LLM real configurado; si no, PENDIENTE con su motivo.
 # Notificación de prueba: webhook push firmado a go-intake (el origen del dashboard no lo expone).
 webhook_de_prueba() {

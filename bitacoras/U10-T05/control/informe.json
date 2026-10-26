@@ -1,0 +1,622 @@
+[
+  {
+    "vista": "inbox",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-light-1280.png",
+      "mock": "capturas/mock-inbox-light-1280.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 465,
+      "mock": 465
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 520500,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        1388
+      ],
+      "tamanoMock": [
+        375,
+        1388
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-light-375.png",
+      "mock": "capturas/mock-inbox-light-375.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-dark-1280.png",
+      "mock": "capturas/mock-inbox-dark-1280.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 465,
+      "mock": 465
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 520500,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        1388
+      ],
+      "tamanoMock": [
+        375,
+        1388
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-dark-375.png",
+      "mock": "capturas/mock-inbox-dark-375.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1386240,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        1083
+      ],
+      "tamanoMock": [
+        1280,
+        1083
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-light-1280.png",
+      "mock": "capturas/mock-run-light-1280.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 94,
+      "mock": 94
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 842625,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        2247
+      ],
+      "tamanoMock": [
+        375,
+        2247
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-light-375.png",
+      "mock": "capturas/mock-run-light-375.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1386240,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        1083
+      ],
+      "tamanoMock": [
+        1280,
+        1083
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-dark-1280.png",
+      "mock": "capturas/mock-run-dark-1280.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 94,
+      "mock": 94
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 842625,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        2247
+      ],
+      "tamanoMock": [
+        375,
+        2247
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-dark-375.png",
+      "mock": "capturas/mock-run-dark-375.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-light-1280.png",
+      "mock": "capturas/mock-runs-light-1280.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 156,
+      "mock": 156
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 300000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-light-375.png",
+      "mock": "capturas/mock-runs-light-375.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-dark-1280.png",
+      "mock": "capturas/mock-runs-dark-1280.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 156,
+      "mock": 156
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 300000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-dark-375.png",
+      "mock": "capturas/mock-runs-dark-375.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-light-1280.png",
+      "mock": "capturas/mock-warm-light-1280.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 372000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        992
+      ],
+      "tamanoMock": [
+        375,
+        992
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-light-375.png",
+      "mock": "capturas/mock-warm-light-375.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-dark-1280.png",
+      "mock": "capturas/mock-warm-dark-1280.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 372000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        992
+      ],
+      "tamanoMock": [
+        375,
+        992
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-dark-375.png",
+      "mock": "capturas/mock-warm-dark-375.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-light-1280.png",
+      "mock": "capturas/mock-login-light-1280.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 300000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-light-375.png",
+      "mock": "capturas/mock-login-light-375.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-dark-1280.png",
+      "mock": "capturas/mock-login-dark-1280.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 300000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-dark-375.png",
+      "mock": "capturas/mock-login-dark-375.png"
+    }
+  }
+]
