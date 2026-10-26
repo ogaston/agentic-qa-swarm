@@ -248,7 +248,7 @@ export function InboxPage() {
   };
 
   return (
-    <main className="page">
+    <main className="az-container">
       <PageHeader
         titulo="Inbox de notificaciones"
         descripcion="Eventos recibidos desde GitHub. Cero auto-run: ninguna corrida arranca sin confirmación explícita."
