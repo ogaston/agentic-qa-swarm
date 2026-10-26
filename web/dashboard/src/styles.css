@@ -277,10 +277,12 @@ main.page-narrow {
   color: var(--text);
 }
 
+/* Mockup: el párrafo de título no tiene margen inferior (la regla global de p añade 8 px y la cabecera
+   queda 8 px más alta que la del mockup, con todo el contenido desplazado). */
 .az-page-title p {
   font-size: 13px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin: 4px 0 0;
 }
 
 .az-header-meta {
@@ -1369,8 +1371,9 @@ pre.json-body {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  /* minmax(0, 1fr): una insignia o tabla ancha no ensancha la columna y la página (DESIGN §4.4, 375 px). */
   .grid-main-side {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

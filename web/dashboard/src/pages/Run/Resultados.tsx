@@ -27,6 +27,7 @@ export function Veredicto({ verdict }: { verdict: Verdict }) {
   const v = VEREDICTOS[verdict];
   return (
     <span data-veredicto={verdict} className={`badge ${v.clase}`}>
+      <span className="badge-dot" aria-hidden="true" />
       {v.etiqueta}
     </span>
   );
@@ -62,7 +63,18 @@ function AvisoServicio({ onReintentar }: { onReintentar: () => void }) {
 }
 
 /** Tarjeta del post-mortem: cabecera del mockup y contenido (texto, nunca HTML). */
-function TarjetaPostMortem({ id, verdict, children }: { id: string; verdict: Verdict | undefined; children: ReactNode }) {
+function TarjetaPostMortem({
+  id,
+  verdict,
+  hallazgos,
+  children,
+}: {
+  id: string;
+  verdict: Verdict | undefined;
+  /** Número de hallazgos del informe cargado: si está, la cabecera muestra «veredicto (N hallazgos)» como el mockup. */
+  hallazgos?: number;
+  children: ReactNode;
+}) {
   return (
     <section aria-label="Informe post-mortem" className="card card-pad">
       <div className="card-head">
@@ -74,6 +86,12 @@ function TarjetaPostMortem({ id, verdict, children }: { id: string; verdict: Ver
             {verdict !== undefined ? VEREDICTOS[verdict].descripcion : 'Generado por agent-reporter al terminar la corrida.'}
           </div>
         </div>
+        {verdict !== undefined && hallazgos !== undefined && (
+          <span className={`badge ${VEREDICTOS[verdict].clase}`}>
+            <span className="badge-dot" aria-hidden="true" />
+            {`${verdict} (${hallazgos} ${hallazgos === 1 ? 'hallazgo' : 'hallazgos'})`}
+          </span>
+        )}
       </div>
       {children}
     </section>
@@ -139,7 +157,7 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
   if (data === null) return null;
 
   return (
-    <TarjetaPostMortem id={id} verdict={data.verdict}>
+    <TarjetaPostMortem id={id} verdict={data.verdict} hallazgos={data.findings.length}>
       <p className="report-summary">{data.summary}</p>
       {data.findings.length === 0 ? (
         <p className="empty">No se encontraron hallazgos en esta corrida.</p>
@@ -157,7 +175,7 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
               <dl className="kv-list">
                 <dt>Invariante violado</dt>
                 <dd>{f.invariant}</dd>
-                <dt>Causa raíz</dt>
+                <dt>Causa raíz (negocio)</dt>
                 <dd>{f.root_cause}</dd>
                 <dt>Evidencia (copiable)</dt>
                 <dd>
@@ -211,17 +229,20 @@ export function PlanFlujos({ id, activo, encabezado }: { id: string; activo: boo
   } else if (data !== null) {
     contenido = (
       <div className="flow-list">
-        {data.flows.map((flow) => (
+        {data.flows.map((flow, indice) => (
           <details key={flow.flow_id} className="flow-block flow-details">
             <summary>
               <span className="flow-title">
                 <svg className="chevron-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                <strong>{flow.name}</strong>
+                <strong>
+                  {indice + 1}. {flow.name}
+                </strong>
               </span>
+              {/* Insignia como en el mockup: tipo y el campo real invariant_probe del plan (sin comillas de markdown). */}
               <span className={`badge ${flow.invariant_probe ? 'badge-accent' : 'badge-ok'}`}>
-                {flow.invariant_probe ? 'sondeo de invariante' : 'happy-path'}
+                {`${flow.invariant_probe ? 'sondeo de invariante' : 'happy-path'} (invariant_probe: ${String(flow.invariant_probe)})`}
               </span>
             </summary>
             <div className="flow-content">
