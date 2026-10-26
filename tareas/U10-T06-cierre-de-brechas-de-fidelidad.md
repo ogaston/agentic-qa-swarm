@@ -19,6 +19,8 @@ Brechas medidas por T05 (`bitacoras/U10-T05/informe.json`, a re-medir al empezar
 - **Login:** el mockup muestra la cabecera con «Principal»; la app no. *Decisión por defecto al redactar (el humano puede revertirla): seguir al mockup.*
 - **Píxeles:** 2,86 % a 39,29 % de diferencia según vista y ancho.
 
+**Decisión del humano (2026-10-26), fixture compartido:** la compuerta alimenta hoy a la app con ejemplos de contrato (1 notificación) y el mockup pinta datos estáticos (3 filas, KPI distintas), lo que hace inalcanzable CA-1 solo con CSS. Se permite cambiar **únicamente los datos que `e2e-fidelidad.mjs` sirve a la app** (respuestas `page.route`) para que reproduzcan los datos del mockup. Si es posible, extráelos a `web/dashboard/scripts/fidelidad-datos.mjs`. Los datos deben ser válidos contra el OpenAPI (`check:api`). Las diferencias que sigan siendo de datos sin equivalente real (p. ej. KPI «Auto-ejecución sin humano») se reportan como candidatas, sin texto fijo inventado en la app.
+
 **Fuera:** subir tolerancias o añadir excepciones en la compuerta (si una diferencia es de datos y no de CSS, se reporta como candidata, no se oculta); endpoints nuevos; CDN; relajar la CSP; cambios fuera de `web/dashboard/**`; portar lo que `DESIGN.md §1.3` excluye.
 
 ## Archivos de contexto
@@ -27,9 +29,9 @@ Brechas medidas por T05 (`bitacoras/U10-T05/informe.json`, a re-medir al empezar
 ## Criterios de aceptación (desde `web/dashboard/`, tras `npm ci`)
 - [ ] **CA-1** — `npm run -s e2e:fidelidad; echo $?` → `0` y el informe dice «20 de 20 combinaciones OK».
 - [ ] **CA-2** — `npm run -s lint && npm run -s typecheck && npm run -s check:api && npx vitest run 2>&1 | grep -c -E 'failed|FAIL'` → `0`.
-- [ ] **CA-3** — La compuerta no se debilitó: `git diff $(git merge-base HEAD origin/main) -- scripts/e2e-fidelidad.mjs | wc -l` → `0`.
+- [ ] **CA-3** — La compuerta no se debilitó: en `git diff 173c245 -- web/dashboard/scripts/e2e-fidelidad.mjs`, ninguna línea añadida o quitada toca constantes (`TOLERANCIA_*`, `UMBRAL_PIXELES`), las funciones `comparar*` ni la lista de `VISTAS`; solo cambian los datos servidos a la app o su importación. Comando: `git diff -U0 173c245 -- web/dashboard/scripts/e2e-fidelidad.mjs | grep -E '^[+-]' | grep -v -E '^(\+\+\+|---)' | grep -c -E 'TOLERANCIA|UMBRAL|compar|VISTAS'` → `0`.
 - [ ] **CA-4** — CSP intacta: `npm run -s build >/dev/null && grep -c -E 'unsafe-inline|unsafe-eval' dist/index.html` → `0`.
-- [ ] **CA-5** — Alcance: `git diff --name-only $(git merge-base HEAD origin/main) | grep -v -E '^(web/dashboard/|tareas/U10-T06|bitacoras/U10-T06|revisiones/U10-T06/)' | wc -l` → `0`.
+- [ ] **CA-5** — Alcance: `git diff --name-only 173c245 | grep -v -E '^(unidades-y-tareas.md|web/dashboard/|tareas/U10-T06|bitacoras/U10-T06|revisiones/U10-T06/)' | wc -l` → `0`.
 
 **Rojo primero:** pegar la salida de `e2e:fidelidad` fallando antes de tocar las vistas.
 
