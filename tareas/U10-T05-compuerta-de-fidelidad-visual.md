@@ -18,9 +18,10 @@ U9-T04 pasó con tokens y contraste y nada que comparara el resultado con el moc
 **Fuera:** pruebas de comportamiento (ya existen en Vitest); cambios en vistas (T02–T04).
 
 ## Criterios de aceptación
-- [ ] **CA-1** — `npm run -s e2e:fidelidad` existe y devuelve código ≠ 0 sobre el estado actual de `main` (rojo primero: se pega la salida) y 0 tras T02–T04.
+- [ ] **CA-1** — `npm run -s e2e:fidelidad` existe y devuelve código ≠ 0 mientras haya diferencias reales entre el dashboard y el mockup (rojo primero: se pega la salida). *Cambio del humano (2026-10-26):* ya no se exige 0 tras T02–T04; cerrar las brechas es U10-T06. Se acepta MSW sustituido por `page.route` con fixtures de `contracts/**/examples/valid` (precedente de T03).
 - [ ] **CA-2** — El informe lista, por vista/tema/ancho, las diferencias de estilo calculado y el % de píxeles distintos.
 - [ ] **CA-3** — Se engancha a `scripts/kind/dashboard-smoke.sh` como `OK fidelidad-visual` (dentro de `flock ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock`).
 - [ ] **CA-4** — Alcance: solo `web/dashboard/**`, `scripts/kind/dashboard-smoke.sh` y archivos de la tarea.
+- [ ] **CA-5** — Control de ruido: una ejecución que compara el mockup contra sí mismo, con los mismos viewports y temas, sale con código 0 y 0 % de píxeles distintos (`npm run -s e2e:fidelidad -- --control`). Un fixture compartido entre mockup y app queda como candidata de T06.
 
 _Creado con ❤️ por Luis Felipe Ariza Vesga._
