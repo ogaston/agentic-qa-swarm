@@ -244,7 +244,7 @@ func TestRehearseHelpSaleCero(t *testing.T) {
 
 // --- U8-T08b: cuerpo JSON en los pasos e invariant_probe en el ensayo ---
 
-// seedStockProducto1 es el stock inicial del producto 1 en el baseline (demo/target-app/store.go:24-31).
+// seedStockProducto1 es el stock inicial del producto 1 en el baseline (store.go:24-31 de la app objetivo).
 const seedStockProducto1 = 10
 
 // recibidos guarda lo que el servidor de prueba vio en la última petición.
@@ -255,8 +255,8 @@ type recibidos struct {
 	path        string
 }
 
-// ordersHandler replica POST /orders de demo/target-app/main.go:170-186 y store.go:244 (sin base de datos).
-// Stock inicial del producto 1 = 10, el baseline real de demo/target-app/store.go:24-31 (seedProducts: {"cafe", 10}).
+// ordersHandler replica POST /orders de main.go:170-186 y store.go:244 de la app objetivo (sin base de datos).
+// Stock inicial del producto 1 = 10, el baseline real de store.go:24-31 de la app objetivo (seedProducts: {"cafe", 10}).
 // Sin el defecto, PlaceOrder rechaza con 409 si stock < qty (store.go:244); con oversell se omite esa comprobación.
 // No descuenta stock entre peticiones: cada prueba necesita solo la primera venta.
 func ordersHandler(oversell bool, last *recibidos) http.Handler {
@@ -532,11 +532,17 @@ func cuerpoMinimo(t *testing.T, eps []endpoint) map[string]int {
 	return nil
 }
 
-// CA-4: superficie inferida del OpenAPI servido por demo/target-app (parseOpenAPI), plan del planner
-// con LLM falso para esa superficie, y ejecucion del flujo contra el handler REAL de demo/target-app
+// CA-4: superficie inferida del OpenAPI servido por la app objetivo (parseOpenAPI), plan del planner
+// con LLM falso para esa superficie, y ejecucion del flujo contra el handler REAL de la app objetivo
 // (almacen en memoria, TARGET_APP_STORE=memoria). Con el cuerpo del plan: 201 y salida 0. Sin cuerpo,
 // el mismo paso recibe 400 y el runner sale 1 (par falla-pasa).
+// La app NO vive en este repo (U11-T02): TARGET_APP_DIR apunta al clon del repositorio externo
+// ogaston/demo-target-app-qa-swarm. Sin esa variable la prueba se salta con mensaje claro.
 func TestOrdersCuerpoFlujoSanoContraTargetApp(t *testing.T) {
+	appDir := os.Getenv("TARGET_APP_DIR")
+	if appDir == "" {
+		t.Skip("CA-4 OMITIDA: define TARGET_APP_DIR con el clon de https://github.com/ogaston/demo-target-app-qa-swarm (SHA b97a719…); la app ya no vive en este repo (U11-T02)")
+	}
 	py := os.Getenv("AQS_PLANNER_PYTHON")
 	if py == "" {
 		t.Skip("CA-4 OMITIDA: define AQS_PLANNER_PYTHON con un Python que tenga jsonschema (deps del planner); ver bitacoras/U8-T09a.md")
@@ -559,10 +565,10 @@ func TestOrdersCuerpoFlujoSanoContraTargetApp(t *testing.T) {
 	raiz := repoRaiz(t)
 	dir := t.TempDir()
 
-	// 1. Binario real de demo/target-app.
+	// 1. Binario real de la app objetivo (clon de TARGET_APP_DIR).
 	bin := filepath.Join(dir, "target-app")
 	build := exec.Command("go", "build", "-o", bin, ".")
-	build.Dir = filepath.Join(raiz, "demo", "target-app")
+	build.Dir = appDir
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build de target-app: %v\n%s", err, out)
 	}

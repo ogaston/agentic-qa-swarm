@@ -36,7 +36,7 @@ func newRig(st wm.WarmState) *rig {
 	r := &rig{state: &fakes.MemState{S: st}, probe: &fakes.FakeProbe{}, rt: &fakes.FakeRuntime{}, dep: &fakes.FakeDeployer{},
 		pub: &fakes.MemPublisher{}, al: &fakes.FakeAlerter{}, objs: &fakes.MemObjects{},
 		web: &fakes.FakeProber{Base: "http://warm-app.aqs-test.svc", Routes: map[string]fakes.FakeResponse{}}}
-	r.svc = &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, PollInterval: time.Second, DeployTimeout: time.Minute}, State: r.state, Probe: r.probe, Runtime: r.rt,
+	r.svc = &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, AllowedImagePrefixes: []string{"ghcr.io/a/b", "ghcr.io/acme/shop", "ghcr.io/ogaston/demo"}, PollInterval: time.Second, DeployTimeout: time.Minute}, State: r.state, Probe: r.probe, Runtime: r.rt,
 		Deployer: r.dep, Surface: r.web, Objects: r.objs, Alerts: r.al, Pub: r.pub,
 		Clock: &fakes.FakeClock{T: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}
 	return r

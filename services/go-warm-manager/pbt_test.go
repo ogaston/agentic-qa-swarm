@@ -51,3 +51,40 @@ func TestPBTAtMostThreePatches(t *testing.T) {
 		}
 	})
 }
+
+// U11-T03 (PBT): ningún published-image aceptado cuyo repositorio no sea exactamente un prefijo
+// permitido (el repositorio es lo que hay antes de ':' o '@'). Semilla: la que rapid registra al fallar.
+func TestPBTPublishedImageSoloDePrefijosPermitidos(t *testing.T) {
+	prefijos := []string{"ghcr.io/ogaston/demo-target-app-qa-swarm", "ghcr.io/ogaston/agentic-qa-swarm/target-app"}
+	segmento := rapid.StringMatching(`[a-zA-Z0-9._/-]{0,30}`)
+	rapid.Check(t, func(t *rapid.T) {
+		base := rapid.SampledFrom(append(prefijos, "ghcr.io/evil/x", "ghcr.io/ogaston/demo-target-app-qa-swarm-evil")).Draw(t, "base")
+		extra := segmento.Draw(t, "extra")
+		sep := rapid.SampledFrom([]string{":", "@", "/"}).Draw(t, "sep")
+		tag := "1.0.0"
+		ref := base + sep + extra + ":" + tag
+		if sep == ":" {
+			ref = base + ":" + tag
+		}
+		err := wm.ValidateArtifact(wm.Artifact{Kind: "published-image", Ref: ref}, []string{"ghcr.io"}, prefijos)
+		if err != nil {
+			return
+		}
+		repo := ref
+		for i, c := range ref {
+			if c == ':' || c == '@' {
+				repo = ref[:i]
+				break
+			}
+		}
+		permitido := false
+		for _, p := range prefijos {
+			if repo == p {
+				permitido = true
+			}
+		}
+		if !permitido {
+			t.Fatalf("aceptado %q con repositorio %q fuera de los prefijos", ref, repo)
+		}
+	})
+}

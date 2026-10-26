@@ -118,6 +118,9 @@ func (s *Server) Handler() http.Handler {
 			writeJSON(w, 409, warm)
 		case errors.Is(err, wm.ErrBuildNotSupported):
 			writeJSON(w, 422, map[string]string{"error": "unsupported_artifact", "reason": "build-from-repo no soportado"})
+		case errors.Is(err, wm.ErrImageNotAllowed):
+			s.Log.Warn("deploy rechazado: imagen fuera de WARM_ALLOWED_IMAGE_PREFIXES", "run_id", req.RunID, "trace_id", tr)
+			writeJSON(w, 422, map[string]string{"error": "image_not_allowed"})
 		case err != nil && (errors.Is(err, wm.ErrInvalidRunID) || errors.Is(err, wm.ErrInvalidArtifact) || errors.Is(err, wm.ErrRegistryNotAllowed)):
 			writeJSON(w, 400, map[string]string{"error": "invalid_request"})
 		case err != nil:

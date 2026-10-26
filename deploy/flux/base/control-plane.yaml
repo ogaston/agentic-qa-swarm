@@ -235,6 +235,9 @@ spec:
                   key: token
             - name: RUN_ARTIFACT_REF
               value: ghcr.io/ogaston/agentic-qa-swarm/target-app:0.0.0
+            # U11-T03: misma regla que go-warm-manager; el artefacto del evento y el respaldo deben estar aquí.
+            - name: WARM_ALLOWED_IMAGE_PREFIXES
+              value: ghcr.io/ogaston/demo-target-app-qa-swarm,ghcr.io/ogaston/agentic-qa-swarm/target-app
             - name: REHEARSAL_IMAGE
               value: ghcr.io/ogaston/agentic-qa-swarm/aqs-runner:0.0.0
             - name: REHEARSAL_TARGET_URL
@@ -404,6 +407,9 @@ spec:
                   key: secret-key
             - name: WARM_APP_URL
               value: http://warm-app.aqs-test.svc
+            # U11-T03: solo se despliegan imágenes de estos repositorios (fail-closed).
+            - name: WARM_ALLOWED_IMAGE_PREFIXES
+              value: ghcr.io/ogaston/demo-target-app-qa-swarm,ghcr.io/ogaston/agentic-qa-swarm/target-app
           image: ghcr.io/ogaston/agentic-qa-swarm/go-warm-manager:0.0.0
           ports:
             - name: http

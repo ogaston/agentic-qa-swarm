@@ -334,9 +334,10 @@ patches:
             value: /etc/aqs/evidence/secret-key
           - name: S3_CA_FILE
             value: /etc/aqs/minio-ca/ca.crt
-# U8-T04: en kind el warm arranca con la app de referencia (demo/target-app), que sirve el baseline real en :9090.
+# U8-T04/U11-T02: en kind el warm arranca con la app de referencia (repo ogaston/demo-target-app-qa-swarm, imagen fijada por SHA
+# del commit b97a719…, nunca :latest), que sirve el baseline real en :9090.
 # nginx (base) no tiene ese listener: sin esto, el warm no puede resetearse de dirty a ready en un clúster nuevo.
 images:
   - name: nginx
-    newName: ghcr.io/ogaston/agentic-qa-swarm/target-app
-    newTag: "0.0.0"
+    newName: ghcr.io/ogaston/demo-target-app-qa-swarm
+    newTag: "b97a719199d5ccbc2ff24f9cfc408ec7ee31114d"

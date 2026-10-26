@@ -97,10 +97,10 @@ ensure_namespace() {
 }
 
 # ConfigMap go-reset-baseline con el baseline REAL de la app de referencia (U8-T04, C-104), leido de
-# demo/target-app/baseline/baseline.sh. Sustituye al relleno kind-stub de U7-T03 (etiqueta aqs.io/kind-stub).
+# deploy/kind/target-app/baseline.sh (copia vendorizada del repo ogaston/demo-target-app-qa-swarm, ver PROCEDENCIA.md). Sustituye al relleno kind-stub de U7-T03 (etiqueta aqs.io/kind-stub).
 # Si el ConfigMap existe sin esa etiqueta (un baseline real aplicado a mano), no se toca.
 ensure_baseline_real() {
-  local ns=aqs-system name=go-reset-baseline src="$root/demo/target-app/baseline/baseline.sh" stub
+  local ns=aqs-system name=go-reset-baseline src="${TARGET_APP_BASELINE_SCRIPT:-$root/deploy/kind/target-app/baseline.sh}" stub
   [ -f "$src" ] || fail "falta el baseline de la app de referencia: $src"
   if kubectl get configmap "$name" -n "$ns" >/dev/null 2>&1; then
     stub=$(kubectl get configmap "$name" -n "$ns" -o jsonpath='{.metadata.labels.aqs\.io/kind-stub}')
@@ -114,7 +114,7 @@ ensure_baseline_real() {
   ensure_namespace "$ns"
   kubectl create configmap "$name" -n "$ns" --from-file=baseline.sh="$src" --dry-run=client -o yaml \
     | kubectl apply -f - >/dev/null || fail "no se pudo crear el ConfigMap $name"
-  echo "secrets: $ns/configmap $name creado (baseline real de demo/target-app)"
+  echo "secrets: $ns/configmap $name creado (baseline real de la app objetivo)"
 }
 
 # Secret target-app-baseline-token: el token del listener de baseline de la app (aqs-test, warm-app) y

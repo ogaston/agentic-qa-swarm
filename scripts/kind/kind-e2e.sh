@@ -122,6 +122,12 @@ if [ "$SIN_CONFIRMAR" = 1 ] && [ "$BUG" != off ]; then
   echo "--sin-confirmar excluye --bug oversell" >&2; exit 2
 fi
 
+# U11-T02: el commit del repo objetivo que se despliega (TARGET_SHA o HEAD remoto) debe tener imagen
+# en GHCR. Se comprueba ANTES de tocar el clúster y ANTES de confirmar nada.
+E2E_SHA=$(resolve_target_sha) || exit 2
+require_target_image "$E2E_SHA" || exit 2
+echo "kind-e2e: repo objetivo $TARGET_REPO_FULL @ $E2E_SHA (imagen verificada)"
+
 STATE_DIR="$AQS_KIND_RUNTIME_DIR"  # efímeros (trabajo, venvs); insumos en AQS_KIND_STATE_DIR (U9-T05)
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 work=$(mktemp -d "${STATE_DIR}/aqs-e2e.XXXXXX") || exit 1
@@ -321,15 +327,13 @@ auth_token() {
 }
 
 # --- webhook push firmado (202) ----------------------------------------------
-sha40() { printf '%s' "e2e-$(date +%s%N)-$$-$RANDOM" | sha1sum | cut -c1-40; }
-
 post_webhook() {
-  AFTER=$(sha40)
+  AFTER=$E2E_SHA
   local secret sig body code delivery
   secret=$(kcx -n "$NS_SYS" get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d)
   [ -n "$secret" ] || { echo "secret go-intake-webhook vacio"; return 1; }
   delivery=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'd-%s-%s' "$$" "$(date +%s%N)")
-  jq -n --arg a "$AFTER" '{ref:"refs/heads/main", after:$a, repository:{full_name:"ogaston/agentic-qa-swarm"}}' >"$work/hook.json" || return 1
+  jq -n --arg a "$AFTER" --arg r "$(target_branch_ref)" --arg repo "$TARGET_REPO_FULL" '{ref:$r, after:$a, repository:{full_name:$repo}}' >"$work/hook.json" || return 1
   body=$(cat "$work/hook.json")
   sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" -hex | awk '{print $2}')"
   code=$(curl -sS -o "$work/hook.out" -w '%{http_code}' --max-time 15 \
