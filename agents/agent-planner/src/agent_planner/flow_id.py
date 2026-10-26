@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import re
 
-FLOW_ID_PATTERN = r"^[a-z0-9]([-a-z0-9]{0,33}[a-z0-9])?$"
+FLOW_ID_PATTERN = r"^[a-z0-9]([-a-z0-9]{0,33}[a-z0-9])?$"  # igual que contracts/plans/flow-plan.schema.json (prueba de paridad)
 FLOW_ID_RE = re.compile(FLOW_ID_PATTERN)
 MAX_LEN = 35
 _CUT = 30
@@ -31,7 +31,8 @@ def normalize_flow_id(raw: str) -> str:
         return _FALLBACK
     if len(t) <= MAX_LEN:
         return t
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:4]
+    # surrogatepass: json.loads admite sustitutos sueltos (\ud800); el hash debe ser total y determinista.
+    digest = hashlib.sha256(raw.encode("utf-8", "surrogatepass")).hexdigest()[:4]
     return t[:_CUT].rstrip("-") + "-" + digest
 
 

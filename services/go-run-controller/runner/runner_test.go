@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -835,9 +836,29 @@ func TestJobNameFlowIDWithRealRunID(t *testing.T) {
 	}
 }
 
-// Paridad: el patrón de flow_id del runner es el del contrato (plan.FlowIDPattern).
-func TestFlowIDPatternParityRunnerWithPlan(t *testing.T) {
-	if flowIDRe.String() != plan.FlowIDPattern {
-		t.Fatalf("runner %q != plan %q", flowIDRe.String(), plan.FlowIDPattern)
+// Paridad: el patrón de flow_id del runner es el del contrato (leído del esquema, no de una constante).
+func TestFlowIDPatternParityRunnerWithContract(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "plans", "flow-plan.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Properties struct {
+			Flows struct {
+				Items struct {
+					Properties struct {
+						FlowID struct {
+							Pattern string `json:"pattern"`
+						} `json:"flow_id"`
+					} `json:"properties"`
+				} `json:"items"`
+			} `json:"flows"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if got := flowIDRe.String(); got != doc.Properties.Flows.Items.Properties.FlowID.Pattern {
+		t.Fatalf("runner %q != contrato %q", got, doc.Properties.Flows.Items.Properties.FlowID.Pattern)
 	}
 }

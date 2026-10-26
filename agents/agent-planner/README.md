@@ -43,3 +43,15 @@ Valores no positivos o no numericos impiden el arranque. Un timeout del modelo e
   directorio); una prueba vigila la deriva.
 - Con `LLM_PROVIDER=fake` el `FakeLLM` arranca sin respuestas registradas: todo prompt falla cerrado (502).
 - Pruebas: `python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt -e . && .venv/bin/python -m pytest -q`.
+
+## flow_id (U11-T04)
+
+`flow_id` cumple `^[a-z0-9]([-a-z0-9]{0,33}[a-z0-9])?$` (35 caracteres como máximo). `plan()` normaliza cada id
+con `normalize_flow_id` (minúsculas; resto de caracteres → `-`; guiones colapsados y recortados; vacío → `flujo`;
+si pasa de 35, 30 caracteres + `-` + 4 hex de sha256 del id original) y desambigua colisiones dentro del plan
+(`-2`, `-3`…). La normalización es total (también con sustitutos sueltos) y se aplica antes de validar.
+
+- Despliegue: planner y controlador juntos. Un plan guardado con id de más de 35 caracteres fallará aguas abajo
+  en el controlador («plan guardado inválido»).
+- `jsonschema` en Python acepta `'a\n'` con `pattern` (usa `re.search`); el validador del planner usa `fullmatch`
+  sobre el id y la normalización lo cubre.

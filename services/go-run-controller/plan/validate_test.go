@@ -137,3 +137,27 @@ func TestFlowIDPatternParityWithContract(t *testing.T) {
 		t.Fatalf("contrato %q != Go %q", got, FlowIDPattern)
 	}
 }
+
+// F-04: los ejemplos inválidos de flow_id (glob) fallan en ValidateFlowPlan; los válidos lo pasan.
+func TestFlowIDExamplesGlobAgainstValidateFlowPlan(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "contracts", "plans", "examples")
+	inv, _ := filepath.Glob(filepath.Join(dir, "invalid", "flow-plan.flow-id-*.json"))
+	val, _ := filepath.Glob(filepath.Join(dir, "valid", "flow-plan*.json"))
+	if len(inv) < 5 || len(val) < 2 {
+		t.Fatalf("ejemplos insuficientes: %d inválidos, %d válidos", len(inv), len(val))
+	}
+	for _, f := range inv {
+		var v FlowPlan
+		b, _ := os.ReadFile(f)
+		if err := strictDecode(b, &v); err == nil && ValidateFlowPlan(v) == nil {
+			t.Errorf("%s aceptado por ValidateFlowPlan", filepath.Base(f))
+		}
+	}
+	for _, f := range val {
+		var v FlowPlan
+		b, _ := os.ReadFile(f)
+		if err := strictDecode(b, &v); err != nil || ValidateFlowPlan(v) != nil {
+			t.Errorf("%s rechazado: %v %v", filepath.Base(f), err, ValidateFlowPlan(v))
+		}
+	}
+}

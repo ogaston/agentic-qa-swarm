@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/plan"
+
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -34,8 +36,8 @@ type Config struct {
 var idRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$`)
 
 // flowIDRe es el patrón de flow_id del contrato (plan.FlowIDPattern): 1 a 35 caracteres, para que el nombre
-// del Job quepa en maxNameLength con un run_id real. Es el mismo valor que plan.FlowIDPattern.
-var flowIDRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,33}[a-z0-9])?$`)
+// del Job quepa en maxNameLength con un run_id real.
+var flowIDRe = regexp.MustCompile(plan.FlowIDPattern)
 
 // ErrConfig marca una configuración inválida del Job.
 var ErrConfig = errors.New("configuración del Job runner inválida")
