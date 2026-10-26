@@ -922,7 +922,6 @@ main.page-narrow {
   color: var(--accent-text);
   font-weight: 700;
   text-decoration: underline;
-  overflow-wrap: normal;
 }
 
 /* Nombres de campo de la API (run_id, state…) marcados en las vistas de T04: conservan su grafía. */
@@ -979,11 +978,6 @@ th .campo-api {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle;
-}
-
-/* U10-T06: en las tablas el código no se parte por letra (mockup): el ancho mínimo de la columna es el del valor. */
-.data-table code {
-  word-break: normal;
 }
 
 .data-table tbody tr:last-child td {
@@ -1169,9 +1163,12 @@ ol.phase-timeline li[data-fase-estado="pendiente"] .phase-name {
   font-weight: 400;
 }
 
+/* Mockup: el código de la fase va sin fondo ni relleno (solo tamaño y color en línea). */
 .phase-code {
   font-size: 11px;
   color: var(--text-faint);
+  background: none;
+  padding: 0;
 }
 
 /* Corrida fallida: texto y fondo fijos (tokens --failed-*), también en el tema oscuro. */

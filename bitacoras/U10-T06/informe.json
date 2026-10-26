@@ -168,9 +168,9 @@
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 81420,
+      "distintos": 80458,
       "total": 1301760,
-      "porcentaje": 0.06254609144542773,
+      "porcentaje": 0.06180709193706981,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -229,9 +229,9 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 144669,
+      "distintos": 144655,
       "total": 900750,
-      "porcentaje": 0.16060949208992506,
+      "porcentaje": 0.160593949486539,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -267,9 +267,9 @@
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 88228,
+      "distintos": 87249,
       "total": 1301760,
-      "porcentaje": 0.06777593411996066,
+      "porcentaje": 0.06702387536873157,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
@@ -328,9 +328,9 @@
     ],
     "estructura": [],
     "pixeles": {
-      "distintos": 154142,
+      "distintos": 154045,
       "total": 900750,
-      "porcentaje": 0.17112628365251178,
+      "porcentaje": 0.17101859561476548,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
