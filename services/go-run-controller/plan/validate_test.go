@@ -94,3 +94,70 @@ func TestValidateFlowPlanBodyEInvariantProbe(t *testing.T) {
 		})
 	}
 }
+
+// U11-T04: un flow_id fuera del patrón DNS (1–35) se rechaza en la validación del plan y el error lo nombra.
+func TestValidateFlowPlanFlowIDRejectsOutOfPattern(t *testing.T) {
+	for _, id := range []string{"Oversell_Probe", "oversell probe", "-f1", "f1-", strings.Repeat("a", 36)} {
+		p := FlowPlan{RunID: "run-20d9efb7096b73d9", Workflow: "w", Flows: []Flow{{FlowID: id, Name: "n", Invariant: "i",
+			Steps: []Step{{Method: "GET", Path: "/x", ExpectStatus: 200}}}}}
+		err := ValidateFlowPlan(p)
+		if err == nil {
+			t.Errorf("flow_id %q aceptado en la admisión", id)
+			continue
+		}
+		if !strings.Contains(err.Error(), id) {
+			t.Errorf("el error no nombra el id %q: %v", id, err)
+		}
+	}
+}
+
+// Paridad: el patrón de flow_id de Go es exactamente el del contrato (una sola fuente por módulo).
+func TestFlowIDPatternParityWithContract(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "plans", "flow-plan.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Properties struct {
+			Flows struct {
+				Items struct {
+					Properties struct {
+						FlowID struct {
+							Pattern string `json:"pattern"`
+						} `json:"flow_id"`
+					} `json:"properties"`
+				} `json:"items"`
+			} `json:"flows"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if got := doc.Properties.Flows.Items.Properties.FlowID.Pattern; got != FlowIDPattern {
+		t.Fatalf("contrato %q != Go %q", got, FlowIDPattern)
+	}
+}
+
+// F-04: los ejemplos inválidos de flow_id (glob) fallan en ValidateFlowPlan; los válidos lo pasan.
+func TestFlowIDExamplesGlobAgainstValidateFlowPlan(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "contracts", "plans", "examples")
+	inv, _ := filepath.Glob(filepath.Join(dir, "invalid", "flow-plan.flow-id-*.json"))
+	val, _ := filepath.Glob(filepath.Join(dir, "valid", "flow-plan*.json"))
+	if len(inv) < 5 || len(val) < 2 {
+		t.Fatalf("ejemplos insuficientes: %d inválidos, %d válidos", len(inv), len(val))
+	}
+	for _, f := range inv {
+		var v FlowPlan
+		b, _ := os.ReadFile(f)
+		if err := strictDecode(b, &v); err == nil && ValidateFlowPlan(v) == nil {
+			t.Errorf("%s aceptado por ValidateFlowPlan", filepath.Base(f))
+		}
+	}
+	for _, f := range val {
+		var v FlowPlan
+		b, _ := os.ReadFile(f)
+		if err := strictDecode(b, &v); err != nil || ValidateFlowPlan(v) != nil {
+			t.Errorf("%s rechazado: %v %v", filepath.Base(f), err, ValidateFlowPlan(v))
+		}
+	}
+}

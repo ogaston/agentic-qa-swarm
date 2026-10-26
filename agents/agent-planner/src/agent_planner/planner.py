@@ -7,7 +7,8 @@ from .errors import BudgetExceeded, InvalidRequest, Limits, NoSurface
 from .llm import LLMClient, LLMTimeout
 from .prompt import build_prompt
 from .schemas_loader import validator
-from .validate import parse_and_validate
+from .flow_id import normalize_plan_flow_ids
+from .validate import load_plan_text, validate_plan_dict
 
 FlowPlan = dict
 MAX_WORKFLOW_LEN = 128  # caracteres; mas largo es invalid_request (422)
@@ -36,4 +37,6 @@ def plan(surface, workflow, llm: LLMClient, limits: Limits, usage: dict | None =
         usage["output"] = res.output_tokens
     if res.output_tokens > limits.max_output_tokens or est_tokens(res.text) > limits.max_output_tokens:
         raise BudgetExceeded("output")
-    return parse_and_validate(res.text, surface, workflow, limits)
+    # U11-T04: el flow_id se normaliza ANTES de validar el plan (determinista, sin colisiones).
+    plan_dict = normalize_plan_flow_ids(load_plan_text(res.text))
+    return validate_plan_dict(plan_dict, surface, workflow, limits)

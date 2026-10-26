@@ -67,6 +67,7 @@ func TestTransitionToReadyNeedsResetVerified(t *testing.T) {
 
 func TestValidateArtifact(t *testing.T) {
 	reg := []string{"ghcr.io"}
+	pre := []string{"ghcr.io/acme/shop"}
 	sha := "acme/shop@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	cases := []struct {
 		name string
@@ -91,11 +92,77 @@ func TestValidateArtifact(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := wm.ValidateArtifact(c.a, reg)
+			err := wm.ValidateArtifact(c.a, reg, pre)
 			if (c.want == nil) != (err == nil) || (c.want != nil && !errors.Is(err, c.want)) {
 				t.Fatalf("err=%v want=%v", err, c.want)
 			}
 		})
+	}
+}
+
+// CA-1 (U11-T03): solo las imágenes cuyo repositorio es exactamente un prefijo permitido.
+func TestPrefixImageAllowList(t *testing.T) {
+	reg := []string{"ghcr.io"}
+	pre := []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"}
+	const hex64 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	ok := []string{
+		"ghcr.io/ogaston/demo-target-app-qa-swarm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:" + hex64,
+	}
+	for _, r := range ok {
+		if err := wm.ValidateArtifact(wm.Artifact{Kind: "published-image", Ref: r}, reg, pre); err != nil {
+			t.Errorf("%s debia aceptarse: %v", r, err)
+		}
+	}
+	bad := map[string]error{
+		"ghcr.io/evil/x:1": wm.ErrImageNotAllowed,
+		"ghcr.io/ogaston/demo-target-app-qa-swarm-evil:1":       wm.ErrImageNotAllowed,
+		"ghcr.io/ogaston/demo-target-app-qa-swarm/../x:1":       wm.ErrImageNotAllowed,
+		"ghcr.io/OGASTON/demo-target-app-qa-swarm:1":            wm.ErrImageNotAllowed,
+		"ghcr.io/ogaston/demo-target-app-qa-swarm/sub:1":        wm.ErrImageNotAllowed,
+		"ghcr.io/ogaston/demo-target-app-qa-swarm:latest":       wm.ErrInvalidArtifact,
+		"ghcr.io/ogaston/demo-target-app-qa-swarm":              wm.ErrInvalidArtifact,
+		"docker.io/ogaston/demo-target-app-qa-swarm:1":          wm.ErrRegistryNotAllowed,
+		"ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:corto": wm.ErrInvalidArtifact,
+	}
+	for r, want := range bad {
+		err := wm.ValidateArtifact(wm.Artifact{Kind: "published-image", Ref: r}, reg, pre)
+		if !errors.Is(err, want) {
+			t.Errorf("%s: err=%v want=%v", r, err, want)
+		}
+	}
+	// Lista vacía (fail-closed): todo published-image se rechaza, incluso uno válido en otro caso.
+	if err := wm.ValidateArtifact(wm.Artifact{Kind: "published-image", Ref: ok[0]}, reg, nil); !errors.Is(err, wm.ErrImageNotAllowed) {
+		t.Errorf("lista vacía debe rechazar todo: %v", err)
+	}
+	// Prefijo sin límite de nombre: ghcr.io solo o ghcr.io/owner nunca son válidos como permiso.
+	for _, p := range []string{"ghcr.io", "ghcr.io/ogaston", "ghcr.io/ogaston/*", "ghcr.io/ogaston/demo:1", "GHCR.IO/a/b", "ghcr.io/a/b/"} {
+		if _, err := wm.ParseImagePrefixes(p); err == nil {
+			t.Errorf("prefijo %q debía ser mal formado", p)
+		}
+	}
+}
+
+func TestParseImagePrefixesVacioEsFailClosed(t *testing.T) {
+	got, err := wm.ParseImagePrefixes("  ")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("vacío debe ser lista vacía sin error: %v %v", got, err)
+	}
+	got, err = wm.ParseImagePrefixes(" ghcr.io/ogaston/a , ghcr.io/x/y/z ")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("lista válida (3 y 4 segmentos): %v %v", got, err)
+	}
+	// U11-T03 F-04: un elemento vacío es error de configuración, nunca se omite en silencio.
+	for _, bad := range []string{"ghcr.io/ogaston/a,,ghcr.io/x/y", "ghcr.io/ogaston/a,", ",ghcr.io/x/y", "ghcr.io/ogaston/a, ,ghcr.io/x/y"} {
+		if _, err := wm.ParseImagePrefixes(bad); err == nil {
+			t.Errorf("%q debía ser error por elemento vacío", bad)
+		}
+	}
+	// Prefijos con ".." o sin límite de segmentos no son permisos.
+	for _, bad := range []string{"ghcr.io/ogaston/../x", "ghcr.io/ogaston/a/..", "ghcr.io/ogaston/a/./b"} {
+		if _, err := wm.ParseImagePrefixes(bad); err == nil {
+			t.Errorf("%q debía ser mal formado", bad)
+		}
 	}
 }
 

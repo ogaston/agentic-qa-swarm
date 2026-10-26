@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/plan"
+
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -32,6 +34,10 @@ type Config struct {
 }
 
 var idRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$`)
+
+// flowIDRe es el patrón de flow_id del contrato (plan.FlowIDPattern): 1 a 35 caracteres, para que el nombre
+// del Job quepa en maxNameLength con un run_id real.
+var flowIDRe = regexp.MustCompile(plan.FlowIDPattern)
 
 // ErrConfig marca una configuración inválida del Job.
 var ErrConfig = errors.New("configuración del Job runner inválida")
@@ -61,7 +67,7 @@ func BuildJob(c Config, runID, flowID string, spec JobSpec, now time.Time) (*bat
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
-	if !idRe.MatchString(runID) || !idRe.MatchString(flowID) || len(JobName(runID, flowID)) > maxNameLength {
+	if !idRe.MatchString(runID) || !flowIDRe.MatchString(flowID) || len(JobName(runID, flowID)) > maxNameLength {
 		return nil, fmt.Errorf("%w: run_id/flow_id no aptos para un nombre de Job", ErrConfig)
 	}
 	if err := checkSpec(spec); err != nil {

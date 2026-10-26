@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -347,5 +348,60 @@ func TestDefaultTimeoutsAndEnsureOwnDeadline(t *testing.T) {
 	w.EnsureTimeout = 100 * time.Millisecond
 	if err := w.Ensure(t.Context()); err == nil {
 		t.Fatal("ensure debe fallar al agotar su plazo")
+	}
+}
+
+// CA-2 (U11-T03): el controlador no pide el deploy de una imagen fuera de WARM_ALLOWED_IMAGE_PREFIXES:
+// la fase deploy falla cerrada y go-warm-manager no recibe POST /deploys.
+func TestDeployImageNotAllowedNoLlegaAlWarm(t *testing.T) {
+	var posts atomic.Int32
+	c := warmClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/deploys":
+			posts.Add(1)
+			js(w, 202, `{"run_id":"run-x","state":"done","attempts":1}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/warm/ensure":
+			js(w, 200, warmReady)
+		default:
+			js(w, 404, `{"code":"not_found"}`)
+		}
+	}))
+	rp := &RealPhases{Warm: c, ImagePrefixes: []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"},
+		Artifact: func(string) (string, string, error) { return "published-image", "ghcr.io/evil/x:1", nil }}
+	_, err := rp.Launch(context.Background(), runctl.PhaseDeploy, runctl.Run{ID: "run-x"})
+	if err == nil || !strings.Contains(err.Error(), "ghcr.io/evil") || posts.Load() != 0 {
+		t.Fatalf("ghcr.io/evil/x:1 debe fallar cerrado y nombrarse, sin llegar al warm: err=%v posts=%d", err, posts.Load())
+	}
+	if !errors.Is(err, ErrImageNotAllowed) {
+		t.Fatalf("el error debe ser ErrImageNotAllowed: %v", err)
+	}
+}
+
+// CA-2 (U11-T03): una imagen permitida sí llega al deploy de go-warm-manager con esa imagen.
+func TestArtifactDeployImageAllowedLlegaAlWarm(t *testing.T) {
+	var posts atomic.Int32
+	var got string
+	c := warmClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/deploys":
+			posts.Add(1)
+			b := make([]byte, 512)
+			n, _ := r.Body.Read(b)
+			got = string(b[:n])
+			js(w, 202, `{"run_id":"run-y","state":"done","attempts":1}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/warm/ensure":
+			js(w, 200, warmReady)
+		default:
+			js(w, 404, `{"code":"not_found"}`)
+		}
+	}))
+	img := "ghcr.io/ogaston/demo-target-app-qa-swarm:" + strings.Repeat("a", 40)
+	rp := &RealPhases{Warm: c, ImagePrefixes: []string{"ghcr.io/ogaston/demo-target-app-qa-swarm"},
+		Artifact: func(string) (string, string, error) { return "published-image", img, nil }}
+	if _, err := rp.Launch(context.Background(), runctl.PhaseDeploy, runctl.Run{ID: "run-y"}); err != nil {
+		t.Fatalf("imagen permitida: %v", err)
+	}
+	if posts.Load() != 1 || !strings.Contains(got, img) {
+		t.Fatalf("el warm debe recibir el deploy con %s: posts=%d cuerpo=%s", img, posts.Load(), got)
 	}
 }

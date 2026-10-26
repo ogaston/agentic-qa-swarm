@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -213,5 +214,31 @@ func TestFileStoreFencesAndExplicitStore(t *testing.T) {
 	e = fakeEnv(map[string]string{"WARM_OBJECT_STORE": "file", "WARM_ALLOW_FILE_STORE": "true", "WARM_APP_URL": "warm-app:8080"})
 	if err := run(env(e), nil); err == nil || !strings.Contains(err.Error(), "WARM_APP_URL") {
 		t.Fatalf("WARM_APP_URL invalida: %v", err)
+	}
+}
+
+// CA-1 (U11-T03): un prefijo mal formado impide arrancar (ghcr.io o ghcr.io/owner, comodines, mayúsculas);
+// vacío es válido y deja todo published-image rechazado (fail-closed).
+func TestImagePrefixesMalFormadoNoArranca(t *testing.T) {
+	for _, bad := range []string{"ghcr.io", "ghcr.io/ogaston", "ghcr.io/ogaston/*", "GHCR.IO/a/b"} {
+		err := run(env(fakeEnv(map[string]string{"WARM_ALLOWED_IMAGE_PREFIXES": bad})), slog.New(slog.NewJSONHandler(io.Discard, nil)))
+		if err == nil || !strings.Contains(err.Error(), "WARM_ALLOWED_IMAGE_PREFIXES") {
+			t.Errorf("prefijo %q debía impedir arrancar: %v", bad, err)
+		}
+	}
+}
+
+// U11-T03 F-04: al arrancar, un INFO con el conteo (sin valores) y un WARN si la lista está vacía.
+func TestLogImagePrefixesVacioWarnYConteo(t *testing.T) {
+	var b strings.Builder
+	lg := slog.New(slog.NewTextHandler(&b, nil))
+	logImagePrefixes(lg, 0)
+	if !strings.Contains(b.String(), "level=WARN") || !strings.Contains(b.String(), "vacía") {
+		t.Fatalf("lista vacía sin WARN: %s", b.String())
+	}
+	b.Reset()
+	logImagePrefixes(lg, 2)
+	if !strings.Contains(b.String(), "level=INFO") || !strings.Contains(b.String(), "count=2") || strings.Contains(b.String(), "ghcr.io") {
+		t.Fatalf("INFO con conteo esperado y sin valores: %s", b.String())
 	}
 }

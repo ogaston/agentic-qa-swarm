@@ -73,9 +73,9 @@ Detalle:
 
 - [ ] **CA-5** — Módulos y alcance.
   ```bash
-  for d in services/go-warm-manager services/go-run-controller; do (cd $d && GOTOOLCHAIN=auto go vet ./... && GOTOOLCHAIN=auto go test ./... -count=1 2>&1 | tail -1); done; git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(services/(go-warm-manager|go-run-controller)/|deploy/flux/base/control-plane\.yaml|tareas/U11-T0[23]-|unidades-y-tareas\.md|bitacoras/U11-T03\.md|revisiones/U11-T03/)' | wc -l
+  for d in services/go-warm-manager services/go-run-controller; do (cd $d && GOTOOLCHAIN=auto go vet ./... && GOTOOLCHAIN=auto go test ./... -count=1 2>&1 | grep -v 'no test files' | grep -c '^FAIL'); done; git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(services/(go-warm-manager|go-run-controller)/|deploy/flux/base/control-plane\.yaml|tareas/U11-T0[23]-|unidades-y-tareas\.md|bitacoras/U11-T03\.md|revisiones/U11-T03/)' | wc -l
   ```
-  Esperado: dos `ok`, `0` y `0`.
+  Esperado: `0` y `0` por cada módulo (cero líneas `FAIL`; `go vet` sin salida), luego `0` y `0` (árbol limpio y alcance). Lo que cuenta es la ausencia de `FAIL`, no un `ok` final (hay paquetes sin pruebas).
 
 ---
 

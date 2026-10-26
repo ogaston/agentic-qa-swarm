@@ -331,3 +331,18 @@ func TestRunnerPartialLaunchKeepsAdoptedJobs(t *testing.T) {
 		t.Fatalf("el Job adoptado se borró: %+v", js)
 	}
 }
+
+// U11-T04: un flow_id malo se rechaza al admitir el plan (antes de tocar Kubernetes) y el error nombra el id.
+func TestRunnerFlowIDRejectedAtAdmissionNamesID(t *testing.T) {
+	for _, bad := range []string{"Oversell_Probe", strings.Repeat("a", 36)} {
+		r := newRig(bad)
+		ck := withCount(r)
+		_, err := r.l.Launch(context.Background(), runctl.PhaseRun, passedRun("run-20d9efb7096b73d9"))
+		if err == nil || !strings.Contains(err.Error(), bad) {
+			t.Fatalf("flow_id %q no rechazado con su nombre: %v", bad, err)
+		}
+		if ck.created != 0 || len(r.jobs(t)) != 0 {
+			t.Fatalf("flow_id %q: se creó Job (creados %d)", bad, ck.created)
+		}
+	}
+}

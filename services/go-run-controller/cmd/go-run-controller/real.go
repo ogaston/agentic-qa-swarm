@@ -64,6 +64,9 @@ func inClusterClient() (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(rc)
 }
 
+// artifactFallbackObserver lo implementa obs.RunMetrics: cuenta los deploys con el respaldo RUN_ARTIFACT_REF.
+type artifactFallbackObserver interface{ ArtifactFallback() }
+
 // buildConfig elige en UNA rama los puertos de warm y de fase: o todos reales (con cs) o todos fakes.
 func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, store runctl.RunStore, pub runctl.EventPublisher,
 	al runctl.Alerter, obs runctl.Observer, rm runner.Observer, log *slog.Logger) (runctl.Config, error) {
@@ -102,9 +105,20 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 	ref := c.artifactRef
 	// U11-T01: el deploy despliega el artefacto del evento (guardado en la corrida); RUN_ARTIFACT_REF
 	// es solo el respaldo para corridas cuyo run.confirmed no lo trajo (p. ej. kind-e2e.sh).
+	// U11-T03: el respaldo queda registrado: un WARN y un contador, una vez por corrida.
+	fallbackSeen := newSeenBounded(maxFallbackSeen)
 	artifact := func(runID string) (string, string, error) {
 		if r, ok := store.Get(runID); ok && r.Artifact != nil {
 			return r.Artifact.Kind, r.Artifact.Ref, nil
+		}
+		if fallbackSeen.addIfNew(runID) {
+			if log != nil {
+				log.Warn("deploy con el artefacto de respaldo RUN_ARTIFACT_REF: el evento no trajo artifact",
+					"run_id", runID, "artifact_source", "fallback")
+			}
+			if fo, ok := obs.(artifactFallbackObserver); ok {
+				fo.ArtifactFallback()
+			}
 		}
 		return "published-image", ref, nil
 	}
@@ -116,7 +130,7 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 		return base, err
 	}
 	base.Phases = &adapters.RealPhases{Warm: wc, Reset: rc, Rehearse: l, Run: rl, Report: rep,
-		Artifact: artifact}
+		Artifact: artifact, ImagePrefixes: c.imagePrefixes}
 	return base, nil
 }
 

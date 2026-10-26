@@ -105,3 +105,17 @@ Recorrido local sin clúster: `bash scripts/test/u2-demo-local.sh`; guion para d
 ## Orden de despliegue con el artefacto del evento (U11-T01)
 
 `run.confirmed` puede llevar `data.artifact` (opcional). Este controlador lo valida con `DisallowUnknownFields`, así que **debe desplegarse antes que `ui-api`** (o a la vez, pero nunca `ui-api` primero): un controlador anterior rechaza cualquier `run.confirmed` con `artifact` como evento inválido y la corrida no avanza. Orden: 1) go-run-controller, 2) ui-api. Un controlador nuevo lee también los eventos sin `artifact` (usa `RUN_ARTIFACT_REF` como respaldo).
+
+## flow_id: patrón y despliegue (U11-T04)
+
+`flow_id` es una etiqueta DNS de 1 a 35 caracteres (`^[a-z0-9]([-a-z0-9]{0,33}[a-z0-9])?$`): forma parte del
+nombre del Job (`runner-<run_id>-<flow_id>` ≤ 63 con un `run_id` de 20 caracteres). La validación de admisión
+(`plan.ValidateFlowPlan`) lo exige y nombra el id rechazado; el runner usa el mismo patrón (`plan.FlowIDPattern`).
+
+- Orden de despliegue: el planner (que normaliza los ids) y el controlador (que rechaza los malos) salen juntos. Un
+  planner viejo con un controlador nuevo falla al admitir el plan con un mensaje claro.
+- Planes ya guardados (`Run.Plan`) con un `flow_id` de más de 35 caracteres o fuera de patrón fallarán en
+  `DecodeStoredPlan` con «plan guardado inválido» tras el despliegue. Es el comportamiento esperado: no se relanzan
+  Jobs con nombres que no caben. Comprobar antes del despliegue si hay corridas en curso con ids largos.
+- El esquema de Python (`jsonschema` con `re.search`) acepta `'a\n'`; la defensa en el planner es el `fullmatch`
+  y la normalización previa a la validación; el controlador usa `regexp` de Go con `^…$`, que no lo acepta.

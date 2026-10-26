@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 import json
-import re
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, UnknownType
 
 from .errors import Limits, PlanRejected
+from .flow_id import FLOW_ID_RE
 from .schemas_loader import validator
-
-FLOW_ID_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?")
 
 
 def _bad_const(_):
@@ -47,13 +45,23 @@ def _check_body(st: dict, request_body, i: int, j: int) -> None:
         raise PlanRejected(f"body_invalido:{i}/{j}:{where}:{err.validator}")
 
 
-def parse_and_validate(text: str, surface: dict, workflow: str, limits: Limits) -> dict:
+def load_plan_text(text: str) -> dict:
+    """Texto de la respuesta del modelo -> objeto JSON (sin validar el esquema)."""
     try:
         plan = json.loads(text, parse_constant=_bad_const)
     except (ValueError, RecursionError):
         raise PlanRejected("json_invalido") from None
     if not isinstance(plan, dict):
         raise PlanRejected("no_es_objeto")
+    return plan
+
+
+def parse_and_validate(text: str, surface: dict, workflow: str, limits: Limits) -> dict:
+    return validate_plan_dict(load_plan_text(text), surface, workflow, limits)
+
+
+def validate_plan_dict(plan: dict, surface: dict, workflow: str, limits: Limits) -> dict:
+    """Validacion fail-closed de un plan ya parseado (no repara: la normalizacion de flow_id va antes, en planner)."""
     errs = sorted(validator("flow-plan.schema.json").iter_errors(plan), key=lambda e: list(map(str, e.absolute_path)))
     if errs:
         e = errs[0]

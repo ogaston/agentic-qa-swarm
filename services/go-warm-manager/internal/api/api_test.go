@@ -23,7 +23,7 @@ const tok = "s3cret-token"
 func srv(st wm.WarmState) (*httptest.Server, *fakes.FakeDeployer) {
 	m := obs.NewMetrics()
 	dep := &fakes.FakeDeployer{}
-	svc := &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, PollInterval: time.Millisecond},
+	svc := &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, AllowedImagePrefixes: []string{"ghcr.io/a/b", "ghcr.io/acme/shop", "ghcr.io/ogaston/demo"}, PollInterval: time.Millisecond},
 		State: &fakes.MemState{S: st}, Probe: &fakes.FakeProbe{}, Runtime: &fakes.FakeRuntime{}, Deployer: dep,
 		Surface: &fakes.FakeProber{Base: "http://x", Routes: map[string]fakes.FakeResponse{"/openapi.json": {Status: 200, Body: `{"paths":{"/a":{"get":{}}}}`}}},
 		Objects: &fakes.MemObjects{}, Alerts: &fakes.FakeAlerter{}, Pub: &fakes.MemPublisher{}, Clock: wm.RealClock{}, Observer: m}
@@ -216,7 +216,7 @@ func TestAPITraceIDIsSameInLogAndEvent(t *testing.T) {
 	m := obs.NewMetrics()
 	pub := &fakes.MemPublisher{}
 	var logs fakes.SyncBuffer
-	svc := &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, PollInterval: time.Millisecond},
+	svc := &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, AllowedImagePrefixes: []string{"ghcr.io/a/b", "ghcr.io/acme/shop", "ghcr.io/ogaston/demo"}, PollInterval: time.Millisecond},
 		State: &fakes.MemState{S: wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"}},
 		Probe: &fakes.FakeProbe{}, Deployer: &fakes.FakeDeployer{}, Alerts: &fakes.FakeAlerter{}, Pub: pub, Clock: wm.RealClock{}}
 	lg := slog.New(slog.NewJSONHandler(&logs, nil))
@@ -326,7 +326,7 @@ func TestAPISurfaceUnreachableIs502AndNoEvent(t *testing.T) {
 	m := obs.NewMetrics()
 	pub := &fakes.MemPublisher{}
 	dep := &fakes.FakeDeployer{}
-	svc := &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries},
+	svc := &wm.Service{Cfg: wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, AllowedImagePrefixes: []string{"ghcr.io/a/b", "ghcr.io/acme/shop", "ghcr.io/ogaston/demo"}},
 		State:    &fakes.MemState{S: wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"}},
 		Deployer: dep, Surface: &fakes.FakeProber{Base: "http://x", Err: errors.New("refused")}, Objects: &fakes.MemObjects{},
 		Alerts: &fakes.FakeAlerter{}, Pub: pub, Clock: wm.RealClock{}}
@@ -364,5 +364,16 @@ func TestAPIBuildFromRepoRejectedIs422AndTouchesNothing(t *testing.T) {
 	}
 	if _, b := call(t, "GET", s.URL+"/warm", tok, ""); !strings.Contains(b, `"ready"`) {
 		t.Fatalf("el warm no debia cambiar: %s", b)
+	}
+}
+
+// U11-T03 (rojo): una imagen publicada de un repositorio fuera de WARM_ALLOWED_IMAGE_PREFIXES no
+// se despliega: 422 image_not_allowed y ningún parche.
+func TestAPIImageNotAllowedIs422SinParchear(t *testing.T) {
+	s, dep := srv(wm.WarmState{WarmID: "w", State: "ready", ResetVerified: true, BaselineVersion: "b"})
+	defer s.Close()
+	code, body := call(t, "POST", s.URL+"/deploys", tok, `{"run_id":"r-9","artifact":{"kind":"published-image","ref":"ghcr.io/evil/x:1"}}`)
+	if code != 422 || !strings.Contains(body, "image_not_allowed") || dep.Patches() != 0 {
+		t.Fatalf("ghcr.io/evil/x:1 debe rechazarse sin parchear: %d %s parches=%d", code, body, dep.Patches())
 	}
 }

@@ -1,0 +1,361 @@
+[
+  {
+    "nombre": "tag ok",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": true
+  },
+  {
+    "nombre": "digest ok",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": true
+  },
+  {
+    "nombre": "prefijo con barras",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/agentic-qa-swarm/target-app:0.0.0",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm",
+      "ghcr.io/ogaston/agentic-qa-swarm/target-app"
+    ],
+    "permitida": true
+  },
+  {
+    "nombre": "repo ajeno",
+    "kind": "published-image",
+    "ref": "ghcr.io/evil/x:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "prefijo sin limite de nombre",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm-evil:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "ruta con ..",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm/../x:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "owner en mayusculas",
+    "kind": "published-image",
+    "ref": "ghcr.io/OGASTON/demo-target-app-qa-swarm:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "subruta bajo el prefijo",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm/sub:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "tag latest",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:latest",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "tag LATEST",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:LATEST",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "sin tag",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "registro docker.io",
+    "kind": "published-image",
+    "ref": "docker.io/ogaston/demo-target-app-qa-swarm:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "digest de 63 hex",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "digest de 65 hex",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "digest en mayusculas",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "espacio en la ref",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:1 x",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "registro en mayusculas",
+    "kind": "published-image",
+    "ref": "GHCR.IO/ogaston/demo-target-app-qa-swarm:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "registro con puerto 443",
+    "kind": "published-image",
+    "ref": "ghcr.io:443/ogaston/demo-target-app-qa-swarm:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "registro con punto final",
+    "kind": "published-image",
+    "ref": "ghcr.io./ogaston/demo-target-app-qa-swarm:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "comilla en la ref",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:1\"",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "salto de linea LF",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:1\n",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "salto de linea CRLF",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:1\r\n",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "barra invertida",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm\\x:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "tag y digest a la vez",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": true
+  },
+  {
+    "nombre": "tag de 128 caracteres",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": true
+  },
+  {
+    "nombre": "tag de 129 caracteres",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "tag vacio",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "tag con guion inicial",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:-x",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "ref vacia",
+    "kind": "published-image",
+    "ref": "",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "sin registro",
+    "kind": "published-image",
+    "ref": "shop:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "caracter invisible en el repo",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm\u200b:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "digest bajo prefijo ajeno",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "prefijos": [
+      "ghcr.io/ogaston/agentic-qa-swarm/target-app"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "lista vacia (fail-closed)",
+    "kind": "published-image",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:1",
+    "prefijos": [],
+    "permitida": false
+  },
+  {
+    "nombre": "kind build-from-repo valido",
+    "kind": "build-from-repo",
+    "ref": "ogaston/demo-target-app-qa-swarm@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "kind desconocido",
+    "kind": "x",
+    "ref": "ghcr.io/ogaston/demo-target-app-qa-swarm:1",
+    "prefijos": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "registro docker.io aunque el prefijo coincida",
+    "kind": "published-image",
+    "ref": "docker.io/ogaston/demo-target-app-qa-swarm:1",
+    "prefijos": [
+      "docker.io/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "registro en mayusculas aunque el prefijo coincida",
+    "kind": "published-image",
+    "ref": "GHCR.IO/ogaston/demo-target-app-qa-swarm:1",
+    "prefijos": [
+      "GHCR.IO/ogaston/demo-target-app-qa-swarm"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "prefijo con comilla, ref igual",
+    "kind": "published-image",
+    "ref": "ghcr.io/o/r\"x:1",
+    "prefijos": [
+      "ghcr.io/o/r\"x"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "prefijo con salto de linea, ref igual",
+    "kind": "published-image",
+    "ref": "ghcr.io/o/r\n:1",
+    "prefijos": [
+      "ghcr.io/o/r\n"
+    ],
+    "permitida": false
+  },
+  {
+    "nombre": "prefijo con barra invertida, ref igual",
+    "kind": "published-image",
+    "ref": "ghcr.io/o/r\\x:1",
+    "prefijos": [
+      "ghcr.io/o/r\\x"
+    ],
+    "permitida": false
+  }
+]
