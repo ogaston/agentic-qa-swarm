@@ -1342,56 +1342,11 @@ pre.json-body {
     padding: 6px 8px;
   }
 
-  /* Tablas como tarjetas apiladas: sin columnas que desborden 375 px. */
+  /* DESIGN §4.4: las tablas se desplazan dentro de su .table-wrap, sin desbordar la página a 375 px. */
   .table-wrap {
-    overflow-x: visible;
-  }
-
-  .data-table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-  }
-
-  .data-table,
-  .data-table tbody,
-  .data-table tr,
-  .data-table td {
-    display: block;
     width: 100%;
-  }
-
-  .data-table tr {
-    border-bottom: 1px solid var(--border-subtle);
-    padding: 8px 0;
-  }
-
-  .data-table tbody tr:last-child {
-    border-bottom: none;
-  }
-
-  .data-table td {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
-    gap: 8px;
-    border: none;
-    padding: 3px 12px;
-  }
-
-  .data-table td::before {
-    content: attr(data-label);
-    font-size: 0.625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-faint);
-    align-self: center;
-  }
-
-  .data-table td code {
-    justify-self: start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
