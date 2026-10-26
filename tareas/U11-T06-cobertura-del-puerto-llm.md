@@ -2,7 +2,7 @@
 
 **Unidad:** U11 — Demo con repositorio y modelo reales
 **Historias que implementa:** US-M8.2 (el control de egreso debe ser fiable y comprobable).
-**Depende de:** U11-T05 fusionada. **Tope: 3 rondas**.
+**Depende de:** U11-T05 (PR #139; esta rama parte de `origin/tarea/U11-T05` mientras no se fusione: el alcance de CA-3 se mide contra esa rama). **Tope: 3 rondas**.
 
 ---
 
@@ -61,7 +61,7 @@ Detalle:
 
 - [ ] **CA-3** — Nada más cambió.
   ```bash
-  bash -n scripts/kind/lib.sh scripts/kind/kind-smoke.sh && echo SINTAXIS_OK; git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(scripts/kind/lib\.sh|scripts/test/u11-egress-port-(test|mutants)\.sh|bitacoras/U11-T0[56]\.md|tareas/U11-T06-|unidades-y-tareas\.md|revisiones/U11-T06/)' | wc -l; git diff --name-only $b -- deploy services agents scripts/kind/kind-smoke.sh scripts/kind/secrets.sh | wc -l
+  bash -n scripts/kind/lib.sh scripts/kind/kind-smoke.sh && echo SINTAXIS_OK; git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T05); git diff --name-only $b | grep -v -E '^(scripts/kind/lib\.sh|scripts/test/u11-egress-port-(test|mutants)\.sh|bitacoras/U11-T0[56]\.md|tareas/U11-T06-|unidades-y-tareas\.md|revisiones/U11-T06/)' | wc -l; git diff --name-only $b -- deploy services agents scripts/kind/kind-smoke.sh scripts/kind/secrets.sh | wc -l
   ```
   Esperado: `SINTAXIS_OK`, `0`, `0` y `0`. La verificación en un clúster real **no** se repite (la regla no cambia salvo el tope de dígitos, que el revisor comprueba sin clúster).
 
@@ -76,7 +76,7 @@ Detalle:
 
 ## Notas
 
-- Archivos que se **modifican en su sitio**. Rama `tarea/U11-T06`, worktree `../agentic-qa-swarm-wt-U11-T06`, desde `origin/main` (tras fusionar U11-T05).
+- Archivos que se **modifican en su sitio**. Rama `tarea/U11-T06`, worktree `../agentic-qa-swarm-wt-U11-T06`, desde `origin/tarea/U11-T05` (apilada sobre el PR #139; si #139 ya está fusionada al abrir el PR de esta tarea, se rebasa/fusiona `origin/main` y el alcance se mide contra `origin/main`).
 - Candidatas que surjan van a la bitácora.
 
 ---

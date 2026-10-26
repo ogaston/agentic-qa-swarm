@@ -342,7 +342,7 @@ require_target_image() {
 # Las credenciales (user:pass@) se descartan;
 # una IPv6 entre corchetes sale sin corchetes. Cubierta por scripts/test/u11-egress-port-test.sh.
 llm_endpoint_host_port() {
-  local url=$1 scheme hostport host port
+  local url=$1 scheme hostport host port digits
   [[ "$url" =~ ^([Hh][Tt][Tt][Pp][Ss]?)://([^/?#]*)([/?#].*)?$ ]] || return 1
   scheme=${BASH_REMATCH[1],,}
   hostport=${BASH_REMATCH[2]}
@@ -359,6 +359,11 @@ llm_endpoint_host_port() {
   if [ -z "$port" ]; then
     if [ "$scheme" = https ]; then port=443; else port=80; fi
   fi
-  (( 10#$port >= 1 && 10#$port <= 65535 )) || return 1
-  printf '%s %s' "$host" "$((10#$port))"
+  # U11-T06 (F-06): sin ceros a la izquierda y con como mucho 5 dígitos ANTES de la aritmética; así un
+  # puerto de 20 dígitos no desborda los 64 bits de bash (p. ej. 2^64+80 daba «h 80»). «0» se queda «0» y sale 1.
+  digits=${port#"${port%%[!0]*}"}
+  digits=${digits:-0}
+  [ "${#digits}" -le 5 ] || return 1
+  (( 10#$digits >= 1 && 10#$digits <= 65535 )) || return 1
+  printf '%s %s' "$host" "$((10#$digits))"
 }
