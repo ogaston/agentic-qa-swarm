@@ -1,0 +1,130 @@
+[
+  {
+    "nombre": "vacio",
+    "crudo": "",
+    "error": false,
+    "lista": []
+  },
+  {
+    "nombre": "solo espacios",
+    "crudo": "   ",
+    "error": false,
+    "lista": []
+  },
+  {
+    "nombre": "un prefijo de 3 segmentos",
+    "crudo": "ghcr.io/ogaston/demo-target-app-qa-swarm",
+    "error": false,
+    "lista": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm"
+    ]
+  },
+  {
+    "nombre": "dos prefijos, uno de 4 segmentos",
+    "crudo": "ghcr.io/ogaston/demo-target-app-qa-swarm,ghcr.io/ogaston/agentic-qa-swarm/target-app",
+    "error": false,
+    "lista": [
+      "ghcr.io/ogaston/demo-target-app-qa-swarm",
+      "ghcr.io/ogaston/agentic-qa-swarm/target-app"
+    ]
+  },
+  {
+    "nombre": "espacios alrededor",
+    "crudo": " ghcr.io/a/b , ghcr.io/x/y/z ",
+    "error": false,
+    "lista": [
+      "ghcr.io/a/b",
+      "ghcr.io/x/y/z"
+    ]
+  },
+  {
+    "nombre": "elemento vacio en medio",
+    "crudo": "ghcr.io/ogaston/a,,ghcr.io/x/y",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "coma final",
+    "crudo": "ghcr.io/ogaston/a,",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "coma inicial",
+    "crudo": ",ghcr.io/x/y",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "elemento solo espacios",
+    "crudo": "ghcr.io/ogaston/a, ,ghcr.io/x/y",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "registro solo",
+    "crudo": "ghcr.io",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "registro y owner",
+    "crudo": "ghcr.io/ogaston",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "comodin",
+    "crudo": "ghcr.io/ogaston/*",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "registro en mayusculas",
+    "crudo": "GHCR.IO/a/b",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "tag en el prefijo",
+    "crudo": "ghcr.io/a/b:1",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "barra final",
+    "crudo": "ghcr.io/a/b/",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "dot-dot en medio",
+    "crudo": "ghcr.io/ogaston/../x",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "dot-dot al final",
+    "crudo": "ghcr.io/ogaston/a/..",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "punto en medio",
+    "crudo": "ghcr.io/ogaston/a/./b",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "mayusculas en el repo",
+    "crudo": "ghcr.io/ogaston/Demo",
+    "error": true,
+    "lista": null
+  },
+  {
+    "nombre": "comilla",
+    "crudo": "ghcr.io/ogaston/a\"b",
+    "error": true,
+    "lista": null
+  }
+]

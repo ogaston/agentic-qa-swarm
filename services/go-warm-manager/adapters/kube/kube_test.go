@@ -114,7 +114,7 @@ func service(cs *fake.Clientset) (*wm.Service, *fakes.MemPublisher, *fakes.FakeA
 		panic(err)
 	}
 	return &wm.Service{
-		Cfg:   wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, PollInterval: time.Second, DeployTimeout: time.Minute},
+		Cfg:   wm.Config{AllowedRegistries: wm.DefaultAllowedRegistries, AllowedImagePrefixes: []string{"ghcr.io/a/b", "ghcr.io/acme/shop", "ghcr.io/ogaston/demo"}, PollInterval: time.Second, DeployTimeout: time.Minute},
 		State: st, Probe: &fakes.FakeProbe{}, Runtime: &kube.Runtime{C: cs}, Deployer: &kube.Deployer{C: cs},
 		Surface: &fakes.FakeProber{}, Objects: &fakes.MemObjects{}, Alerts: al, Pub: pub, Clock: &fakes.FakeClock{T: time.Unix(0, 0)},
 	}, pub, al

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +26,7 @@ func realEnv() map[string]string {
 	m["REPORTER_URL"] = "http://agent-reporter.aqs-system.svc:8080"
 	m["WARM_SERVICE_TOKEN"], m["RESET_SERVICE_TOKEN"] = "w", "r"
 	m["RUN_ARTIFACT_REF"] = "ghcr.io/x/app:1.0"
+	m["WARM_ALLOWED_IMAGE_PREFIXES"] = "ghcr.io/ogaston/demo-target-app-qa-swarm,ghcr.io/x/app"
 	m["REHEARSAL_IMAGE"] = "ghcr.io/ogaston/aqs-rehearsal:0.1.0"
 	m["REHEARSAL_TARGET_URL"] = "http://warm-app.aqs-test.svc:8080"
 	m["RUNNER_IMAGE"] = "ghcr.io/ogaston/aqs-runner:0.1.0"
@@ -87,7 +89,7 @@ func TestNoBypassConfigIgnoresSkipVariables(t *testing.T) {
 		m[k] = "true"
 	}
 	b, err := loadConfig(envOf(m))
-	if err != nil || a != b {
+	if err != nil || !reflect.DeepEqual(a, b) {
 		t.Fatalf("la configuración cambió con variables de salto: %v", err)
 	}
 }

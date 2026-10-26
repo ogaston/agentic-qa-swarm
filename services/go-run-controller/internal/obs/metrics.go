@@ -14,6 +14,7 @@ type RunMetrics struct {
 	dropped     *prometheus.CounterVec
 	persist     prometheus.Counter
 	tail        prometheus.Counter
+	fallback    prometheus.Counter
 }
 
 var _ runctl.Observer = (*RunMetrics)(nil)
@@ -34,8 +35,10 @@ func NewRunMetrics(reg prometheus.Registerer, active func() float64) *RunMetrics
 			Help: "Guardados del diario de corridas que fallaron."}),
 		tail: prometheus.NewCounter(prometheus.CounterOpts{Name: "aqs_journal_tail_discarded_total",
 			Help: "Colas incompletas (sin salto de línea) del diario descartadas al arrancar."}),
+		fallback: prometheus.NewCounter(prometheus.CounterOpts{Name: "aqs_run_artifact_fallback_total",
+			Help: "Corridas desplegadas con el artefacto de respaldo RUN_ARTIFACT_REF (el evento no trajo artifact)."}),
 	}
-	reg.MustRegister(m.transitions, m.gate, m.handoff, m.dropped, m.persist, m.tail,
+	reg.MustRegister(m.transitions, m.gate, m.handoff, m.dropped, m.persist, m.tail, m.fallback,
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "aqs_runs_active", Help: "Corridas no terminales."}, active))
 	// Series iniciales para que existan desde el arranque.
 	m.gate.WithLabelValues(runctl.ResAllow)
@@ -59,6 +62,9 @@ func (m *RunMetrics) EventDropped(t string) { m.dropped.WithLabelValues(t).Inc()
 
 // PersistError implementa runctl.Observer.
 func (m *RunMetrics) PersistError() { m.persist.Inc() }
+
+// ArtifactFallback cuenta una corrida desplegada con RUN_ARTIFACT_REF (U11-T03).
+func (m *RunMetrics) ArtifactFallback() { m.fallback.Inc() }
 
 // JournalTailDiscarded cuenta una cola de diario descartada al arrancar.
 func (m *RunMetrics) JournalTailDiscarded() { m.tail.Inc() }

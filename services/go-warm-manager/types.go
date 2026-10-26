@@ -48,6 +48,7 @@ var (
 	ErrInvalidArtifact    = errors.New("artefacto invalido")
 	ErrRegistryNotAllowed = errors.New("registro no permitido")
 	ErrBuildNotSupported  = errors.New("build-from-repo no soportado")
+	ErrImageNotAllowed    = errors.New("imagen no permitida por WARM_ALLOWED_IMAGE_PREFIXES")
 )
 
 var runIDRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
@@ -99,9 +100,53 @@ var (
 	tagRe     = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)
 )
 
-// ValidateArtifact valida kind/ref y que una imagen publicada venga de un registro permitido
-// y con tag fijado (nunca latest ni sin tag; un digest sha256 también vale).
-func ValidateArtifact(a Artifact, allowedRegistries []string) error {
+// imagePrefixRe exige registro/owner/repo[/sub...] en minúsculas: al menos tres segmentos (así ghcr.io y
+// ghcr.io/owner nunca son un permiso), sin comodines, sin tag ni digest, sin barra final ni vacíos.
+var imagePrefixRe = regexp.MustCompile(`^[a-z0-9.-]+(/[a-z0-9._-]+){2,}$`)
+
+// hasDotSegment: un prefijo con un segmento "." o ".." no es un repositorio real.
+func hasDotSegment(p string) bool {
+	for _, s := range strings.Split(p, "/") {
+		if s == "." || s == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseImagePrefixes lee WARM_ALLOWED_IMAGE_PREFIXES (lista separada por comas). Vacía (o solo espacios) =
+// ninguna imagen permitida (fail-closed). Un elemento vacío (`a,,b`, coma final) o un prefijo mal formado es
+// error de configuración: el servicio no arranca (nunca se omite en silencio).
+func ParseImagePrefixes(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var out []string
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			return nil, errors.New("WARM_ALLOWED_IMAGE_PREFIXES: elemento vacío (sobra una coma)")
+		}
+		if !imagePrefixRe.MatchString(p) || hasDotSegment(p) {
+			return nil, fmt.Errorf("WARM_ALLOWED_IMAGE_PREFIXES: prefijo %q mal formado (exige registro/owner/repo[/sub] en minúsculas)", p)
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// imageRepo devuelve el repositorio de una imagen: todo hasta el primer ':' o '@' (tag o digest).
+func imageRepo(ref string) string {
+	if i := strings.IndexAny(ref, ":@"); i >= 0 {
+		return ref[:i]
+	}
+	return ref
+}
+
+// ValidateArtifact valida kind/ref y que una imagen publicada venga de un registro permitido,
+// con tag fijado (nunca latest ni sin tag; un digest sha256 también vale) y de un repositorio
+// exactamente igual a uno de allowedPrefixes (ErrImageNotAllowed si no).
+func ValidateArtifact(a Artifact, allowedRegistries, allowedPrefixes []string) error {
 	switch a.Kind {
 	case KindBuildFromRepo:
 		if !repoRefRe.MatchString(a.Ref) {
@@ -132,17 +177,23 @@ func ValidateArtifact(a Artifact, allowedRegistries []string) error {
 		if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(rest[i+len("@sha256:"):]) {
 			return fmt.Errorf("%w: digest invalido", ErrInvalidArtifact)
 		}
-		return nil
+	} else {
+		c := strings.LastIndex(rest, ":")
+		if c < 0 || strings.Contains(rest[c:], "/") {
+			return fmt.Errorf("%w: la imagen debe llevar tag fijado", ErrInvalidArtifact)
+		}
+		tag := rest[c+1:]
+		if !tagRe.MatchString(tag) || strings.EqualFold(tag, "latest") {
+			return fmt.Errorf("%w: tag %q no permitido", ErrInvalidArtifact, tag)
+		}
 	}
-	c := strings.LastIndex(rest, ":")
-	if c < 0 || strings.Contains(rest[c:], "/") {
-		return fmt.Errorf("%w: la imagen debe llevar tag fijado", ErrInvalidArtifact)
+	repo := imageRepo(ref)
+	for _, p := range allowedPrefixes {
+		if p != "" && p == repo { // exacto hasta ':' o '@': ni prefijos sin límite, ni rutas, ni mayúsculas
+			return nil
+		}
 	}
-	tag := rest[c+1:]
-	if !tagRe.MatchString(tag) || strings.EqualFold(tag, "latest") {
-		return fmt.Errorf("%w: tag %q no permitido", ErrInvalidArtifact, tag)
-	}
-	return nil
+	return fmt.Errorf("%w: %q", ErrImageNotAllowed, repo)
 }
 
 // DefaultAllowedRegistries son los registros permitidos si WARM_ALLOWED_REGISTRIES no se define.

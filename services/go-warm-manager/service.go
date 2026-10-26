@@ -25,9 +25,11 @@ const MaxRetries = 2
 // Config del servicio.
 type Config struct {
 	AllowedRegistries []string
-	WarmReadyTimeout  time.Duration // 120 s por defecto
-	PollInterval      time.Duration
-	DeployTimeout     time.Duration // espera maxima del rollout de cada intento (10 min por defecto)
+	// AllowedImagePrefixes: WARM_ALLOWED_IMAGE_PREFIXES (U11-T03). Vacía = ninguna published-image permitida.
+	AllowedImagePrefixes []string
+	WarmReadyTimeout     time.Duration // 120 s por defecto
+	PollInterval         time.Duration
+	DeployTimeout        time.Duration // espera maxima del rollout de cada intento (10 min por defecto)
 }
 
 // Service reúne el dominio y los puertos.
@@ -177,7 +179,7 @@ func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, tra
 	if err := ValidateRunID(runID); err != nil {
 		return DeployStatus{}, WarmState{}, err
 	}
-	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries); err != nil {
+	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries, s.Cfg.AllowedImagePrefixes); err != nil {
 		return DeployStatus{}, WarmState{}, err
 	}
 	if a.Kind == KindBuildFromRepo {
@@ -295,7 +297,7 @@ func (s *Service) Deploy(ctx context.Context, runID string, a Artifact, trace st
 	if err := ValidateRunID(runID); err != nil {
 		return err
 	}
-	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries); err != nil {
+	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries, s.Cfg.AllowedImagePrefixes); err != nil {
 		return err
 	}
 	if a.Kind == KindBuildFromRepo {
