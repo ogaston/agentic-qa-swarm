@@ -72,9 +72,9 @@ Detalle:
 
 - [ ] **CA-4** — Cadena sin clúster: lo que el modelo falso produzca con ids malos llega al runner ya normalizado.
   ```bash
-  cd agents/agent-planner && python -m pytest -q -k 'cadena or chain or fixtures' 2>&1 | tail -3; cd ../../ && python3 scripts/kind/gen_agent_fixtures.py >/dev/null 2>&1; git diff --exit-code -- deploy/flux/kind/agents >/dev/null && echo FIXTURES_AL_DIA
+  cd agents/agent-planner && python -m pytest -q -k 'cadena or chain or fixtures' 2>&1 | tail -3; cd ../../ && PYTHONPATH=agents/agent-reporter/src python3 scripts/kind/gen_agent_fixtures.py >/dev/null 2>&1; git diff --exit-code -- deploy/flux/kind/agents >/dev/null && echo FIXTURES_AL_DIA
   ```
-  Esperado: verde y `FIXTURES_AL_DIA` (regenerar con el script existente no cambia nada respecto a lo comprometido; el script no tiene modo `--check`, por eso se regenera y se compara con `git diff`). Las fixtures se comprometen ya regeneradas.
+  Esperado: verde y `FIXTURES_AL_DIA` (regenerar con el script existente no cambia nada respecto a lo comprometido; el script no tiene modo `--check` y necesita `PYTHONPATH=agents/agent-reporter/src`; solo regenera `reporter/fixtures.json`: la fixture del planner no lleva prompt con hash y no se regenera). Las fixtures se comprometen ya regeneradas.
 
 - [ ] **CA-5** — Módulos y alcance.
   ```bash
