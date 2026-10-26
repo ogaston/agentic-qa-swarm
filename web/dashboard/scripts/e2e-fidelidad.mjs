@@ -1,5 +1,8 @@
 // U10-T05: compuerta de fidelidad visual, dashboard frente a mockups/swarm-mock.html.
-// Uso (desde web/dashboard, tras `npm ci`): `npm run -s e2e:fidelidad`.
+// Uso (desde web/dashboard, tras `npm ci`): `npm run -s e2e:fidelidad [-- --out <dir>] [-- --control]`.
+//   --out <dir>  directorio del informe y las capturas (por defecto bitacoras/U10-T05/ en la raíz).
+//   --control    CA-5: compara el mockup contra sí mismo (mismas vistas, temas y anchos). Debe salir 0 y 0 %.
+//                Escribe en <dir>/control/ para no pisar el informe real. Argumentos desconocidos: error.
 // Para cada vista (inbox, run, runs, warm, login) x tema (claro, oscuro) x ancho (1280, 375):
 //   1. estilos calculados de anclas (cabecera, títulos, tarjetas, insignias) con ±1 px y colores exactos;
 //   2. estructura: secuencia de regiones y encabezados (tipo + etiqueta) de la vista activa;
@@ -21,7 +24,31 @@ const DASHBOARD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const RAIZ = path.resolve(DASHBOARD, '../..');
 const MOCKUP = path.join(RAIZ, 'mockups/swarm-mock.html');
 const EJEMPLOS = path.join(RAIZ, 'contracts');
-const SALIDA = path.join(RAIZ, 'bitacoras/U10-T05');
+const DEFECTO_SALIDA = path.join(RAIZ, 'bitacoras/U10-T05');
+const USO = 'uso: e2e-fidelidad.mjs [--control] [--out <directorio>]';
+
+// Argumentos: solo --control y --out. Cualquier otro se rechaza (no se ignora en silencio).
+function leerOpciones(argv) {
+  const opciones = { control: false, out: DEFECTO_SALIDA };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--control') opciones.control = true;
+    else if (a === '--out') {
+      if (!argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`--out necesita un directorio. ${USO}`);
+      opciones.out = path.resolve(argv[++i]);
+    } else throw new Error(`argumento desconocido: ${a}. ${USO}`);
+  }
+  return opciones;
+}
+
+let OPCIONES;
+try {
+  OPCIONES = leerOpciones(process.argv.slice(2));
+} catch (e) {
+  console.error(e.message);
+  process.exit(2);
+}
+const SALIDA = OPCIONES.control ? path.join(OPCIONES.out, 'control') : OPCIONES.out;
 const CAPTURAS = path.join(SALIDA, 'capturas');
 const DIST = fs.mkdtempSync(path.join(os.tmpdir(), 'u10-t05-dist-'));
 
@@ -313,9 +340,15 @@ async function vistaMockup(navegador, vista, tema, ancho) {
 }
 
 async function main() {
-  construir();
-  const srv = await servir();
-  const base = `http://127.0.0.1:${srv.address().port}`;
+  const control = OPCIONES.control;
+  // En control no hay dashboard: el «lado app» es el mockup otra vez (CA-5). Así no se construye ni se sirve nada.
+  let srv = null;
+  let base = null;
+  if (!control) {
+    construir();
+    srv = await servir();
+    base = `http://127.0.0.1:${srv.address().port}`;
+  }
   const navegador = await chromium.launch();
   const informe = [];
   fs.mkdirSync(CAPTURAS, { recursive: true });
@@ -324,7 +357,9 @@ async function main() {
       for (const tema of TEMAS) {
         for (const ancho of ANCHOS) {
           const etiqueta = `${vista.id}-${tema}-${ancho}`;
-          const app = await vistaApp(navegador, base, vista, tema, ancho);
+          const app = control
+            ? await vistaMockup(navegador, vista, tema, ancho)
+            : await vistaApp(navegador, base, vista, tema, ancho);
           const mock = await vistaMockup(navegador, vista, tema, ancho);
           fs.writeFileSync(path.join(CAPTURAS, `app-${etiqueta}.png`), app.png);
           fs.writeFileSync(path.join(CAPTURAS, `mock-${etiqueta}.png`), mock.png);
@@ -354,13 +389,15 @@ async function main() {
     }
   } finally {
     await navegador.close();
-    srv.close();
+    if (srv) srv.close();
     fs.rmSync(DIST, { recursive: true, force: true });
   }
   fs.writeFileSync(path.join(SALIDA, 'informe.json'), JSON.stringify(informe, null, 2) + '\n');
   fs.writeFileSync(path.join(SALIDA, 'informe.html'), generarHtml(informe));
   const fallos = informe.filter((x) => !x.ok).length;
-  console.log(`e2e:fidelidad: ${informe.length - fallos} de ${informe.length} combinaciones OK`);
+  const pixelesMaximo = Math.max(...informe.map((x) => x.pixeles.porcentaje));
+  console.log(`e2e:fidelidad${control ? ' --control' : ''}: ${informe.length - fallos} de ${informe.length} combinaciones OK (píxeles distintos máx. ${(pixelesMaximo * 100).toFixed(2)} %)`);
+  console.log(`informe: ${path.join(SALIDA, 'informe.json')}`);
   return fallos === 0 ? 0 : 1;
 }
 
