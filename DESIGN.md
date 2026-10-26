@@ -196,9 +196,9 @@ Furthermore, `U9-T04` CA-2 runs an automated check verifying that **zero** exter
 | Element / Role | CSS Selector / Element | Font Family | Size | Weight | Line Height | Letter Spacing / Case | Color Token |
 |---|---|---|---|---|---|---|---|
 | **Brand Wordmark** | `.azia-logo` | `--font-sans` | `22px` (`1.375rem`) | `800` | `1.0` | `-0.04em`, lowercase `aqs` | `--accent-text` (`--accent` dot) |
-| **Page Title** | `h1`, `.azia-page-title h1` | `--font-sans` | `22px` (`1.375rem`) | `700` | `1.25` | `-0.02em` | `--text` |
+| **Page Title** | `h1`, `.azia-page-title h1` | `--font-sans` | `22px` (`1.375rem`) | `700` | `1.5` (mockup; decisión U10-T06) | `-0.02em` | `--text` |
 | **KPI Metric Value** | `.kpi-value` | `--font-sans` | `24px–28px` | `700` | `1.15` | `-0.02em`, `tabular-nums` | `--text` (or semantic token) |
-| **Card / Section Title** | `h2`, `.card-title` | `--font-sans` | `14px` (`0.875rem`) | `700` | `1.35` | `-0.01em` | `--text` |
+| **Card / Section Title** | `h2`, `.card-title` | `--font-sans` | `14px` (`0.875rem`) | `700` | `1.5` (mockup; decisión U10-T06) | `-0.01em` | `--text` |
 | **Body / Table Cell** | `body`, `td`, `dd`, `p` | `--font-sans` | `13px` (`0.8125rem`) | `400` | `1.5` | `normal` | `--text` |
 | **Secondary / Subtitle** | `.card-subtitle`, `.text-muted` | `--font-sans` | `12px–13px` | `400` | `1.45` | `normal` | `--text-muted` |
 | **Metadata / Table Header** | `th`, `dt`, `.meta-label`, `.kpi-label` | `--font-sans` | `10px–11px` | `600–700` | `1.2` | `0.06em`, `uppercase` | `--text-faint` |

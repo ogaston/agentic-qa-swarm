@@ -320,10 +320,11 @@ async function vistaApp(navegador, base, vista, tema, ancho) {
 // `neutralizaciones` de cada combinación). Demo: el conmutador «Previsualizar estado (Demo)» de la corrida y
 // los paneles «Previsualizar estados de error (U6-T03)» del login son previsualizaciones que U10 excluye de la
 // app (DESIGN.md §1.3; unidades-y-tareas.md, límites de U10). Se ocultan con display:none al medir el mockup.
-// El conmutador «Simular estado del entorno» de Entorno no está en esta lista: no se oculta.
+// Decisión del humano (2026-10-26, (a)): también el conmutador «Simular estado del entorno» de Entorno.
 const OCULTAR_MOCK = [
   { id: 'demo-conmutador-corrida', vista: 'run', sel: '.az-meta-item:has(> #runDemoSwitcher)' },
   { id: 'demo-paneles-error-login', vista: 'login', sel: 'div:has(> .segmented > [data-login-demo])' },
+  { id: 'demo-conmutador-entorno', vista: 'warm', sel: '.az-meta-item:has(> #warmDemoSwitcher)' },
 ];
 // Desbordamiento horizontal del mockup a 375 px (DESIGN.md §4.4 prohíbe copiarlo). Dos reglas mínimas, solo a
 // ese ancho: (1) la columna de 1fr del mockup (≤860 px) crece con el contenido ancho de la tabla; (2) el

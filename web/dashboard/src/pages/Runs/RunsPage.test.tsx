@@ -67,7 +67,7 @@ describe('RunsPage (Mis corridas)', () => {
     expect(enlace.getAttribute('href')).toBe(`/runs/${primero.run_id}`);
     expect(screen.getByText('not-1')).toBeTruthy();
     expect(screen.getAllByText('ana').length).toBe(2);
-    const hora = new Date(primero.confirmed_at).toLocaleString();
+    const hora = new Date(primero.confirmed_at).toLocaleString('es-ES', { hour12: false });
     expect(screen.getByText(hora)).toBeTruthy();
   });
 

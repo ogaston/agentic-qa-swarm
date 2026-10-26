@@ -39,6 +39,12 @@ const MSG_NO_EXISTE = 'La notificación ya no existe';
 const RUN_ID = /^run-[0-9a-f]{16}$/;
 
 /** Inbox: pestañas por estado, KPI, listado en tarjeta y confirmación explícita. Sin polling ni confirmaciones automáticas. */
+/** Etiqueta del tipo de artefacto como en el mockup (image, build_from_repo); el dato real es el contrato. */
+const ETIQUETA_ARTEFACTO: Record<string, string> = { 'published-image': 'image', 'build-from-repo': 'build_from_repo' };
+function textoArtefacto(a: { kind: string; ref: string }): string {
+  return `${ETIQUETA_ARTEFACTO[a.kind] ?? a.kind} · ${a.ref}`;
+}
+
 export function InboxPage() {
   const navigate = useNavigate();
   const [estado, setEstado] = useState<Estado>('pending');
@@ -365,7 +371,7 @@ export function InboxPage() {
                       </td>
                       <td data-label="Artefacto">
                         <span className="mono">
-                          {n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}
+                          {n.artifact ? textoArtefacto(n.artifact) : '—'}
                         </span>
                       </td>
                       <td data-label="Estado">
@@ -385,7 +391,7 @@ export function InboxPage() {
                             setMensajeAccion(null);
                           }}
                         >
-                          Ver detalle
+                          Revisar y confirmar →
                         </button>
                       </td>
                     </tr>
@@ -415,7 +421,7 @@ export function InboxPage() {
             <dt>Artefacto</dt>
             <dd>
               {seleccionada.artifact
-                ? `${seleccionada.artifact.kind} · ${seleccionada.artifact.ref}`
+                ? textoArtefacto(seleccionada.artifact)
                 : 'Sin artefacto'}
             </dd>
             <dt>Estado</dt>
@@ -455,7 +461,7 @@ export function InboxPage() {
               <dt>Artefacto</dt>
               <dd>
                 {seleccionada.artifact
-                  ? `${seleccionada.artifact.kind} · ${seleccionada.artifact.ref}`
+                  ? textoArtefacto(seleccionada.artifact)
                   : 'Sin artefacto'}
               </dd>
             </dl>

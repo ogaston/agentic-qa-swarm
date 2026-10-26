@@ -12,7 +12,7 @@ const ID_RUN = /^run-[0-9a-f]{16}$/;
 const INTERVALO_MS = 3000;
 const FASES = [
   { estado: 'confirmed', etiqueta: 'Confirmada' },
-  { estado: 'warm_ready', etiqueta: 'Warm listo' },
+  { estado: 'warm_ready', etiqueta: 'Entorno listo' },
   { estado: 'deploying', etiqueta: 'Desplegando' },
   { estado: 'inferring', etiqueta: 'Infiriendo superficie' },
   { estado: 'rehearsing', etiqueta: 'Ensayando' },
@@ -98,12 +98,6 @@ function VistaCorrida({ id }: { id: string }) {
           <div className="az-meta-item">
             <span className="az-meta-label">Estado de corrida</span>
             <span className="az-meta-value mono">{data !== null ? descripcionEstado(data) : 'Cargando…'}</span>
-          </div>
-          <div className="az-meta-item">
-            <span className="az-meta-label">Sondeo</span>
-            <span className="az-meta-value">
-              {data !== null && esTerminal(data) ? 'terminado' : detenido ? 'detenido' : 'cada 3 s'}
-            </span>
           </div>
         </div>
       </div>

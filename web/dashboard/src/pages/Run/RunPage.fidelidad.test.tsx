@@ -50,7 +50,7 @@ afterEach(() => {
 
 const FASES_ESPERADAS = [
   'Confirmada',
-  'Warm listo',
+  'Entorno listo',
   'Desplegando',
   'Infiriendo superficie',
   'Ensayando',
@@ -68,8 +68,7 @@ describe('RunPage fidelidad: encabezado y línea de tiempo', () => {
     expect(screen.getByRole('heading', { level: 1, name: /Corrida/ })).toBeTruthy();
     expect(screen.getByText('tr-fid')).toBeTruthy();
     expect(screen.getByText('Estado de corrida')).toBeTruthy();
-    expect(screen.getByText('Sondeo')).toBeTruthy();
-    expect(screen.getByText('cada 3 s')).toBeTruthy();
+    expect(screen.queryByText('Sondeo')).toBeNull();
   });
 
   it('9 fases con estado textual (hecha, actual, pendiente) además del color', async () => {

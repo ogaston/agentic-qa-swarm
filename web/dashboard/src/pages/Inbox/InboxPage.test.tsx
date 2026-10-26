@@ -114,7 +114,7 @@ function filaDe(repo: string): HTMLElement {
 /** Selecciona la notificación pendiente del repo indicado y abre el panel de confirmación. */
 async function abrirPanel(user: ReturnType<typeof userEvent.setup>, repo: string) {
   await screen.findByText(repo);
-  await user.click(within(filaDe(repo)).getByRole('button', { name: 'Ver detalle' }));
+  await user.click(within(filaDe(repo)).getByRole('button', { name: 'Revisar y confirmar →' }));
   await user.click(screen.getByRole('button', { name: 'Revisar y confirmar' }));
   return screen.getByRole('dialog');
 }
@@ -377,12 +377,12 @@ describe('Inbox confirma', () => {
     ]);
     await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
     await screen.findByText('acme/confirmado');
-    await user.click(within(filaDe('acme/confirmado')).getByRole('button', { name: 'Ver detalle' }));
+    await user.click(within(filaDe('acme/confirmado')).getByRole('button', { name: 'Revisar y confirmar →' }));
     expect(screen.queryByRole('button', { name: 'Revisar y confirmar' })).toBeNull();
 
     await user.click(screen.getByRole('tab', { name: /^Rechazadas/ }));
     await screen.findByText('acme/rechazado');
-    await user.click(within(filaDe('acme/rechazado')).getByRole('button', { name: 'Ver detalle' }));
+    await user.click(within(filaDe('acme/rechazado')).getByRole('button', { name: 'Revisar y confirmar →' }));
     expect(screen.queryByRole('button', { name: 'Revisar y confirmar' })).toBeNull();
   });
 

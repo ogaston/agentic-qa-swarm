@@ -75,7 +75,7 @@ export function RunsPage() {
                       <td data-label="Notificación" className="mono">
                         {r.notification_id}
                       </td>
-                      <td data-label="Confirmada">{new Date(r.confirmed_at).toLocaleString()}</td>
+                      <td data-label="Confirmada">{new Date(r.confirmed_at).toLocaleString('es-ES', { hour12: false })}</td>
                       <td data-label="Confirmada por">
                         <code>{r.confirmed_by}</code>
                       </td>
