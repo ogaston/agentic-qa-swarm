@@ -20,8 +20,10 @@ set -uo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root" || exit 1
-# shellcheck disable=SC1091  # lib.sh se carga por ruta dinámica (relativa a root)
-. "$root/scripts/kind/lib.sh"
+# LIB_SH apunta a la copia de lib.sh que se prueba (por defecto, la real). scripts/test/u11-egress-port-mutants.sh
+# la usa para comprobar que cada mutante hace fallar esta prueba sin tocar el lib.sh original.
+# shellcheck disable=SC1091  # lib.sh se carga por ruta dinámica (relativa a root o a LIB_SH)
+. "${LIB_SH:-$root/scripts/kind/lib.sh}"
 
 fail=0
 ok() { echo "OK $1"; }
@@ -79,6 +81,41 @@ caso_err "$R" "https://h evil"
 caso_err "$R" "https://h;x"
 caso_err "$R" 'https://$(x)'
 caso_err "$R" "https://h(x)"
+
+# --- U11-T06 (F-05): hosts reales del control, IPv6, ceros a la izquierda, ancla del esquema, puerto vacío
+# y fin del authority. Cada caso mata al menos un mutante de scripts/test/u11-egress-port-mutants.sh.
+caso_ok "$R" "https://api.deepseek.com" api.deepseek.com 443
+caso_ok "$R" "https://llm-gw.ns.svc:4000/v1" llm-gw.ns.svc 4000
+caso_ok "$R" "https://10.0.0.1:8443" 10.0.0.1 8443
+caso_ok "$R" "https://a_b-c.d9:443" a_b-c.d9 443
+caso_ok "$R" "https://[::ffff:1.2.3.4]" ::ffff:1.2.3.4 443
+caso_ok "$R" "https://[fe80::a]" fe80::a 443
+caso_ok "$R" "https://[FE80::A]" FE80::A 443
+caso_err "$R" 'https://[;x]'
+caso_err "$R" 'https://[$(x)]'
+caso_err "$R" "https://::1"
+caso_ok "$R" "https://h:08" h 8
+caso_ok "$R" "https://h:0080" h 80
+caso_ok "$R" "https://h:008080" h 8080
+caso_err "$R" "https://h:00065536"
+caso_err "$R" "https://h:00"
+caso_ok "$R" "https://h:000443" h 443
+caso_err "$R" "xhttps://h"
+caso_err "$R" "ftp://http://h"
+caso_err "$R" " https://h"
+caso_err "$R" "https://h:"
+caso_err "$R" "https://h:/x"
+caso_ok "$R" "https://h?x" h 443
+caso_ok "$R" "https://h:8443?x" h 8443
+caso_ok "$R" "https://h#f" h 443
+caso_ok "$R" "https://a@b@h" h 443
+
+# --- U11-T06 (F-06): tope de dígitos tras quitar los ceros a la izquierda, antes de la aritmética de 64 bits.
+caso_err "$R" "https://h:18446744073709551696"
+caso_err "$R" "https://h:18446744073709551617"
+caso_ok "$R" "https://h:00000080" h 80
+caso_ok "$R" "https://h:65535" h 65535
+caso_ok "$R" "https://h:0000000001" h 1
 
 # Sensibilidad: el par falla-pasa. La regla vieja debe dar EXACTAMENTE «h 80» en https://h.
 # Sin python3 no hay forma de comprobarla: se falla explícitamente.
