@@ -62,7 +62,8 @@ code {
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   padding: 1px 4px;
-  word-break: break-all;
+  /* U10-T06: el mockup no parte el código por letra; solo rompe si una palabra no cabe en la línea. */
+  overflow-wrap: break-word;
 }
 
 small {
@@ -535,6 +536,11 @@ main.page-narrow {
   margin-bottom: 0;
 }
 
+/* Valor de la cabecera de la vista en verde (estado operativo, mockup «Listo (aqs-test)»). */
+.meta-ok {
+  color: var(--ok);
+}
+
 .kpi-val.kpi-valor-20 {
   font-size: 20px;
 }
@@ -916,6 +922,7 @@ main.page-narrow {
   color: var(--accent-text);
   font-weight: 700;
   text-decoration: underline;
+  overflow-wrap: normal;
 }
 
 /* Nombres de campo de la API (run_id, state…) marcados en las vistas de T04: conservan su grafía. */
@@ -972,7 +979,11 @@ th .campo-api {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle;
-  overflow-wrap: anywhere;
+}
+
+/* U10-T06: en las tablas el código no se parte por letra (mockup): el ancho mínimo de la columna es el del valor. */
+.data-table code {
+  word-break: normal;
 }
 
 .data-table tbody tr:last-child td {
@@ -1382,11 +1393,6 @@ pre.json-body {
 @media (max-width: 620px) {
   main.page {
     padding: 16px;
-  }
-
-  .data-table th,
-  .data-table td {
-    padding: 6px 8px;
   }
 
   /* DESIGN §4.4: las tablas se desplazan dentro de su .table-wrap, sin desbordar la página a 375 px. */

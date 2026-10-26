@@ -58,7 +58,7 @@ describe('RunsPage (Mis corridas)', () => {
     await waitFor(() => expect(urls).toEqual(['?limit=20']));
   });
 
-  it('cada run_id enlaza a /runs/<run_id> y muestra notification_id, hora local y confirmed_by', async () => {
+  it('cada run_id enlaza a /runs/<run_id> y muestra notification_id, hora UTC y confirmed_by', async () => {
     server.use(http.get('/api/confirmations', () => HttpResponse.json(RECIBOS)));
     renderMisCorridas();
     const [primero] = RECIBOS;
@@ -67,8 +67,9 @@ describe('RunsPage (Mis corridas)', () => {
     expect(enlace.getAttribute('href')).toBe(`/runs/${primero.run_id}`);
     expect(screen.getByText('not-1')).toBeTruthy();
     expect(screen.getAllByText('ana').length).toBe(2);
-    const hora = new Date(primero.confirmed_at).toLocaleString('es-ES', { hour12: false });
-    expect(screen.getByText(hora)).toBeTruthy();
+    // U10-T06: fechas en UTC con locale es-ES y 24 h. Literal fijo: no depende de la zona del proceso.
+    expect(primero.confirmed_at).toBe('2026-10-09T12:00:00Z');
+    expect(screen.getByText('9/10/2026, 12:00:00')).toBeTruthy();
   });
 
   it('lista vacía muestra el mensaje de vacío', async () => {
@@ -94,7 +95,7 @@ describe('RunsPage (estructura del mockup, U10-T04)', () => {
     const cabeceras = screen.getAllByRole('columnheader').map((th) => th.textContent ?? '');
     expect(cabeceras.some((t) => /^Corrida/.test(t))).toBe(true);
     expect(cabeceras.some((t) => /^Notificación/.test(t))).toBe(true);
-    expect(cabeceras.some((t) => /^Confirmada \(hora local\)/.test(t))).toBe(true);
+    expect(cabeceras.some((t) => /^Confirmada \(hora en UTC\)/.test(t))).toBe(true);
     expect(cabeceras.some((t) => t === 'Confirmada por')).toBe(true);
   });
 

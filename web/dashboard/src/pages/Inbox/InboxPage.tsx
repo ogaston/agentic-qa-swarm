@@ -241,7 +241,11 @@ export function InboxPage() {
   // Cabecera: solo celdas con dato real de la API. «Familias activas» no existe en la API: se omite.
   const meta: ElementoMeta[] = [];
   if (warm !== null) {
-    meta.push({ etiqueta: 'Entorno', valor: ETIQUETA_ENTORNO[warm.state] });
+    // U10-T06: el mockup muestra el identificador del entorno (warm_id, dato real) en verde, como su estado.
+    meta.push({
+      etiqueta: 'Entorno',
+      valor: <span className="meta-ok">{`${ETIQUETA_ENTORNO[warm.state]} (${warm.warm_id})`}</span>,
+    });
     meta.push({
       etiqueta: 'Reset verificado',
       valor: <span className="mono">{warm.reset_verified ? 'sí' : 'no'}</span>,
@@ -323,6 +327,8 @@ export function InboxPage() {
         <Kpi
           etiqueta="Estado del entorno"
           valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'}
+          claseValor="kpi-valor-20"
+          insignia={warm !== null ? { clase: 'badge-ok', texto: warm.state, punto: true } : undefined}
           barra={100}
           colorBarra="var(--ok)"
         />
@@ -364,7 +370,7 @@ export function InboxPage() {
                         <strong>{n.repo}</strong>
                       </td>
                       <td data-label="Evento">
-                        <code>{n.github_event}</code>
+                        <span className="badge badge-neutral mono">{n.github_event}</span>
                       </td>
                       <td data-label="SHA">
                         <code>{n.sha.slice(0, 7)}</code>
@@ -382,7 +388,7 @@ export function InboxPage() {
                       <td data-label="Acciones">
                         <button
                           type="button"
-                          className="btn btn-secondary btn-sm"
+                          className="btn btn-primary btn-sm"
                           disabled={enVuelo}
                           onClick={() => {
                             setSeleccionadaId(n.id);
