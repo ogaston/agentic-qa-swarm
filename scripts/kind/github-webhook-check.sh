@@ -3,7 +3,8 @@
 # go-intake, se valida (HMAC) y aparece en el inbox de ui-api con el SHA empujado.
 #
 # Uso:  bash scripts/kind/github-webhook-check.sh [<sha-40>]
-#   Sin <sha>: toma el HEAD remoto de la rama ${WEBHOOK_BRANCH:-main} (git ls-remote origin).
+#   Sin <sha>: toma el HEAD remoto de la rama ${WEBHOOK_BRANCH:-main} del repo objetivo
+#   ${TARGET_REPO:-ogaston/demo-target-app-qa-swarm} (U11-T02; ya NO el origin de la plataforma).
 #   ${WEBHOOK_TIMEOUT_S:-600}: espera máxima a que la notificación aparezca (sondeo cada 5 s).
 #
 # Abre port-forwards propios en 127.0.0.1:18625 (ui-api) y 127.0.0.1:18626 (go-identity) y los cierra
@@ -44,7 +45,8 @@ require_kind_context
 # 1. SHA esperado: argumento o HEAD remoto de la rama.
 sha="${1:-}"
 if [ -z "$sha" ]; then
-  sha=$(git ls-remote origin "refs/heads/$BRANCH" 2>/dev/null | awk 'NR==1{print $1}')
+  TARGET_REPO=${TARGET_REPO:-$TARGET_REPO_FULL}
+  sha=$(GIT_TERMINAL_PROMPT=0 timeout 30 git ls-remote "https://github.com/$TARGET_REPO" "refs/heads/$BRANCH" 2>/dev/null | awk 'NR==1{print $1}')
 fi
 if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
   echo "FALLA webhook-github-recibido: SHA esperado ausente o mal formado (pásalo como argumento de 40 hex)"

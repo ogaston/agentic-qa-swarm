@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Construye con podman las imágenes de la plataforma (U7-T02): services/* y agents/* con Dockerfile, y las de demo/* (U8-T04).
+# Construye con podman las imágenes de la plataforma (U7-T02): services/* y agents/* con Dockerfile. La app objetivo (demo/*, U8-T04) ya no vive aquí: su imagen es la de GHCR fijada por SHA (U11-T02).
 # Contexto = directorio del servicio (igual que ci.yml), tag <prefijo>/<nombre>:0.0.0 (sin latest).
 # AQS_IMAGES="ui-api go-identity" construye solo un subconjunto. No publica nada. Una imagen que
 # falla corta el script con su nombre.

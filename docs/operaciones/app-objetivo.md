@@ -1,6 +1,6 @@
-# App objetivo: qué debe cumplir una app para sustituir a `demo/target-app`
+# App objetivo: qué debe cumplir una app para sustituir a la app de referencia
 
-La app de referencia (`demo/target-app`, U8-T04) es lo que el warm despliega por defecto en kind. La app
+La app de referencia (repo `ogaston/demo-target-app-qa-swarm`, U8-T04; ya no vive en este repo, U11-T02) es lo que el warm despliega en kind. La app
 definitiva del cliente la aporta el humano (U8-T09) y debe cumplir este contrato.
 
 ## 1. OpenAPI en una ruta conocida
@@ -17,18 +17,28 @@ definitiva del cliente la aporta el humano (U8-T09) y debe cumplir este contrato
 
 El script corre dentro de la imagen de `go-reset` (alpine, busybox): solo `sh` y `wget`. Para hablar con
 la app debe usar un canal de administración **solo dentro del clúster** y **autenticado** (token en
-archivo montado, nunca en argumentos ni en logs). La referencia es `demo/target-app/baseline/baseline.sh`
+archivo montado, nunca en argumentos ni en logs). La referencia es `deploy/kind/target-app/baseline.sh`
+(copia byte a byte de `baseline/baseline.sh` del repo de referencia en su SHA; ver `deploy/kind/target-app/PROCEDENCIA.md`)
 con el listener `:9090` de la app.
 
 ## 3. Imagen con tag fijado
 - Imagen construida desde un Dockerfile del repositorio o publicada, con tag explícito (nunca `latest`).
+  La de referencia es `ghcr.io/ogaston/demo-target-app-qa-swarm:<sha40>`: el tag es el SHA del commit,
+  publicado por la CI del repo objetivo en cada push a `main`. En kind el overlay `deploy/flux/kind` la fija.
 - Puerto HTTP: el nombrado `http` del `warm-app` (hoy `80`). Ejecución sin root si es posible.
 - Las variables de conexión a la base del warm (`warm-db`) vienen del Secret `warm-db-credentials`.
 
-## 4. Cómo apuntar `RUN_ARTIFACT_REF` a la app
-- En `deploy/flux/base/control-plane.yaml`, `go-run-controller` lee `RUN_ARTIFACT_REF`
-  (hoy `ghcr.io/ogaston/agentic-qa-swarm/target-app:0.0.0`). Cambiar ese valor a la imagen del cliente
-  con tag fijado.
+## 4. De dónde sale la imagen de la app
+- En la demo la imagen **viene del evento**: el push a `main` del repo objetivo produce la notificación, y
+  la imagen de ese commit (`ghcr.io/ogaston/demo-target-app-qa-swarm:<sha>`) es la que se despliega. Ya no se
+  edita `RUN_ARTIFACT_REF` para cambiar de app ni de commit en la demo.
+- **Al añadir un repositorio objetivo hay que tocar dos listas, no una:** `INTAKE_ALLOWED_REPOS` (go-intake, qué
+  repositorios aceptan webhooks) **y también** `WARM_ALLOWED_IMAGE_PREFIXES` (go-warm-manager, qué prefijos de imagen
+  puede desplegar el warm; cada elemento es un prefijo `registro/owner/repo`, p. ej. `ghcr.io/ogaston/demo-target-app-qa-swarm`). Esta última variable es de U11-T03: cuando U11-T03 se fusione, sin el prefijo del nuevo
+  repositorio en ella el warm rechaza la imagen. Hasta entonces solo está activa la lista de `ghcr.io` por defecto.
+- Para una app del cliente, la imagen debe ser pública o accesible con pull anónimo, con tag fijado (ver §3).
+  El valor `RUN_ARTIFACT_REF` de `deploy/flux/base/control-plane.yaml` (hoy `…/agentic-qa-swarm/target-app:0.0.0`) es
+  un resto de U8 y se trata en la tarea candidata correspondiente; no se cambia en U11-T02.
 - El registro debe estar en la lista permitida de `go-warm-manager` (`DefaultAllowedRegistries`: `ghcr.io`).
-- El `baseline.sh` del cliente sustituye al de `demo/target-app/baseline/` en `scripts/kind/secrets.sh`.
+- El `baseline.sh` del cliente sustituye al vendorizado en `deploy/kind/target-app/` (vía `TARGET_APP_BASELINE_SCRIPT` en `scripts/kind/secrets.sh`).
   Si ya existe un ConfigMap `go-reset-baseline` sin la etiqueta `aqs.io/kind-stub`, el script no lo toca.

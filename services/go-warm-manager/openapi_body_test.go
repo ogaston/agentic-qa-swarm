@@ -34,9 +34,9 @@ func hallar(sa wm.SurfaceArtifact, method, path string) (wm.Endpoint, bool) {
 	return wm.Endpoint{}, false
 }
 
-// CA-2: la inferencia conserva el requestBody application/json del OpenAPI de demo/target-app.
+// CA-2: la inferencia conserva el requestBody application/json del OpenAPI de la app objetivo (fixture en testdata/, copia byte a byte del repo externo).
 func TestOpenAPIRequestBodyDeTargetApp(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "demo", "target-app", "openapi.json"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "target-app-openapi.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

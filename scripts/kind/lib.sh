@@ -260,3 +260,76 @@ kind_state_check() {
   done
   return $rc
 }
+
+# --- repositorio objetivo externo (U11-T02) ----------------------------------
+# La app objetivo vive en ogaston/demo-target-app-qa-swarm (no en este repo). Su CI publica
+# ghcr.io/ogaston/demo-target-app-qa-swarm:<sha40>; el SHA que usa el e2e debe tener imagen.
+# Fuente única del repo objetivo: los scripts de kind usan estas variables (no repiten el literal).
+TARGET_REPO_FULL=ogaston/demo-target-app-qa-swarm
+TARGET_REPO_URL=https://github.com/$TARGET_REPO_FULL
+TARGET_IMAGE_REPO=ghcr.io/$TARGET_REPO_FULL
+
+# target_branch_ref: refs/heads/<rama> del repo objetivo (TARGET_BRANCH, por defecto main).
+target_branch_ref() { printf 'refs/heads/%s' "${TARGET_BRANCH:-main}"; }
+
+# resolve_target_sha: imprime el SHA (40 hex) con el que se despliega el repo objetivo.
+# TARGET_SHA gana si está definido; si no, el HEAD remoto de la rama objetivo.
+# Sale 1 con mensaje a stderr en cada caso distinto: SHA mal formado, sin red / error de git
+# (rc de git y su primera línea de error), repo no encontrado, o rama sin commits.
+resolve_target_sha() {
+  local sha="" err="" rc=0 out
+  if [ -n "${TARGET_SHA:-}" ]; then
+    [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "TARGET_SHA='$TARGET_SHA' no es un SHA de 40 hex minúsculas" >&2; return 1; }
+    printf '%s' "$TARGET_SHA"
+    return 0
+  fi
+  err=$(mktemp) || return 1
+  out=$(GIT_TERMINAL_PROMPT=0 timeout 30 git ls-remote "$TARGET_REPO_URL" "$(target_branch_ref)" 2>"$err") || rc=$?
+  if [ "$rc" != 0 ]; then
+    if grep -qiE 'not found|does not exist|could not read|repository .* not' "$err"; then
+      echo "repo objetivo $TARGET_REPO_URL no encontrado o inaccesible sin credenciales: $(head -n1 "$err")" >&2
+    else
+      echo "git ls-remote a $TARGET_REPO_URL falló (rc=$rc, sin red o error de git): $(head -n1 "$err")" >&2
+    fi
+    rm -f "$err"; return 1
+  fi
+  rm -f "$err"
+  sha=$(printf '%s\n' "$out" | awk 'NR==1{print $1}')
+  if [ -z "$sha" ]; then
+    echo "la rama $(target_branch_ref) no existe en $TARGET_REPO_URL (ls-remote sin resultados)" >&2
+    return 1
+  fi
+  [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "git ls-remote devolvió un SHA mal formado: '$sha'" >&2; return 1; }
+  printf '%s' "$sha"
+}
+
+# target_image_exists <sha40>: códigos de salida distintos:
+#   0 la imagen existe (manifiesto 200); 1 no existe (404); 2 no se pudo comprobar
+#   (token anónimo fallido, red, 429 u otro código de GHCR).
+target_image_exists() {
+  local sha=$1 tok code
+  tok=$(curl -fsS --max-time 20 "https://ghcr.io/token?scope=repository:$TARGET_REPO_FULL:pull" 2>/dev/null | jq -r '.token // empty' 2>/dev/null) || return 2
+  [ -n "$tok" ] || return 2
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+    -H "Authorization: Bearer $tok" \
+    -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.docker.distribution.manifest.list.v2+json' \
+    "https://ghcr.io/v2/$TARGET_REPO_FULL/manifests/$sha") || return 2
+  case "$code" in
+    200) return 0 ;;
+    404) return 1 ;;
+    *) echo "GHCR respondió HTTP $code al pedir el manifiesto" >&2; return 2 ;;
+  esac
+}
+
+# require_target_image <sha40>: imprime el mensaje que corresponde y sale 1 si la imagen no está
+# lista. Distingue «la imagen no existe» de «no pude comprobarla» (token, red, 429).
+require_target_image() {
+  local rc=0
+  target_image_exists "$1" || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    1) echo "no hay imagen $TARGET_IMAGE_REPO:$1 (404 en GHCR): espera a la CI del repo objetivo (solo push a main publica imagen) o define TARGET_SHA con un commit que la tenga" >&2 ;;
+    *) echo "no pude comprobar la imagen $TARGET_IMAGE_REPO:$1 (token anónimo, red o límite de GHCR); no es que falte: reintenta más tarde" >&2 ;;
+  esac
+  return 1
+}

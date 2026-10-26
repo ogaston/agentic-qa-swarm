@@ -287,7 +287,8 @@ ciclo_webhook_confirm_corrida() {
   # `after` debe ser un SHA (40 hex): el intake valida el payload del push (invalid_payload si no).
   after=$(printf '%s' "smoke-$(date +%s%N)-$$-$RANDOM" | sha1sum | cut -c1-40)
   jq -n --arg a "$after" \
-    '{ref:"refs/heads/main", after:$a, repository:{full_name:"ogaston/agentic-qa-swarm"}}' >"$work/hook.json" || return 1
+    --arg r "$(target_branch_ref)" --arg repo "$TARGET_REPO_FULL" \
+    '{ref:$r, after:$a, repository:{full_name:$repo}}' >"$work/hook.json" || return 1
   body=$(cat "$work/hook.json")
   sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" -hex | awk '{print $2}')"
   code=$(curl -s -o "$work/hook.out" -w '%{http_code}' --max-time 15 \
@@ -352,7 +353,7 @@ socket.create_connection((u.hostname, u.port or 80), timeout=5).close()' >/dev/n
 }
 check llm-egress-acotado llm_egress_acotado
 
-echo "reset verificado: cubierto por scripts/test/u8-target-app-kind.sh (U8-T04, baseline real de demo/target-app)"
+echo "reset verificado: cubierto por scripts/test/u8-target-app-kind.sh (U8-T04, baseline real de la app objetivo)"
 echo "usuario MinIO de los agentes: cubierto por scripts/test/u8-minio-user-kind.sh (U8-T05, C-107)"
 
 if [ "$fail" -eq 0 ]; then
