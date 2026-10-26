@@ -316,18 +316,49 @@ async function vistaApp(navegador, base, vista, tema, ancho) {
   return { ...medida, png };
 }
 
+// Neutralizaciones de la PREPARACIÓN del mockup (no de la app). Cada una queda en el informe (campo
+// `neutralizaciones` de cada combinación). Demo: el conmutador «Previsualizar estado (Demo)» de la corrida y
+// los paneles «Previsualizar estados de error (U6-T03)» del login son previsualizaciones que U10 excluye de la
+// app (DESIGN.md §1.3; unidades-y-tareas.md, límites de U10). Se ocultan con display:none al medir el mockup.
+// El conmutador «Simular estado del entorno» de Entorno no está en esta lista: no se oculta.
+const OCULTAR_MOCK = [
+  { id: 'demo-conmutador-corrida', vista: 'run', sel: '.az-meta-item:has(> #runDemoSwitcher)' },
+  { id: 'demo-paneles-error-login', vista: 'login', sel: 'div:has(> .segmented > [data-login-demo])' },
+];
+// Desbordamiento horizontal del mockup a 375 px (DESIGN.md §4.4 prohíbe copiarlo). Dos reglas mínimas, solo a
+// ese ancho: (1) la columna de 1fr del mockup (≤860 px) crece con el contenido ancho de la tabla; (2) el
+// .sr-only de la cabecera de tabla escapa a la página porque .table-wrap no es ancestro posicionado.
+const ANCHO_DESBORDE = 375;
+const CSS_DESBORDE_MOCK = [
+  { id: 'desbordamiento-grid-main-side', css: '.grid-main-side { grid-template-columns: minmax(0, 1fr); }' },
+  { id: 'desbordamiento-table-wrap', css: '.table-wrap { position: relative; }' },
+];
+
 async function vistaMockup(navegador, vista, tema, ancho) {
   const contexto = await navegador.newContext({ viewport: { width: ancho, height: 800 }, deviceScaleFactor: 1 });
   const pagina = await contexto.newPage();
   await pagina.goto(pathToFileURL(MOCKUP).href);
+  const ocultar = OCULTAR_MOCK.filter((o) => o.vista === vista.id);
+  const css = ancho === ANCHO_DESBORDE ? CSS_DESBORDE_MOCK : [];
+  for (const c of css) await pagina.addStyleTag({ content: c.css });
+  // Un selector que no aparece en el mockup es un error: la neutralización no puede quedar en silencio.
   await pagina.evaluate(
-    ({ mock, tema, demo }) => {
+    ({ mock, tema, demo, ocultar }) => {
       document.documentElement.setAttribute('data-theme', tema);
       showView(mock);
       if (demo) applyRunDemo(demo);
+      for (const o of ocultar) {
+        const el = document.querySelector(o.sel);
+        if (!el) throw new Error(`neutralización ${o.id}: no hay «${o.sel}» en el mockup`);
+        el.style.setProperty('display', 'none', 'important');
+      }
     },
-    { mock: vista.mock, tema, demo: vista.demoMock },
+    { mock: vista.mock, tema, demo: vista.demoMock, ocultar },
   );
+  const neutralizaciones = [
+    ...ocultar.map((o) => ({ id: o.id, tipo: 'ocultar', sel: o.sel })),
+    ...css.map((c) => ({ id: c.id, tipo: 'css', regla: c.css })),
+  ];
   await pagina.waitForTimeout(300);
   const medida = await pagina.evaluate(medirEnPagina, { anclas: ANCLAS, estructuraSel: ESTRUCTURA_SEL });
   // Se compara el ancho del viewport (lo que ve el usuario sin desplazarse en horizontal). El desbordamiento
@@ -338,7 +369,7 @@ async function vistaMockup(navegador, vista, tema, ancho) {
     clip: { x: 0, y: 0, width: ancho, height: medida.alto },
   });
   await contexto.close();
-  return { ...medida, png };
+  return { ...medida, png, neutralizaciones };
 }
 
 async function main() {
@@ -380,6 +411,7 @@ async function main() {
             ancho,
             ok,
             desbordamientoHorizontal: { app: app.desbordamiento, mock: mock.desbordamiento },
+            neutralizaciones: mock.neutralizaciones,
             estilos,
             estructura,
             pixeles: { distintos: pixeles.distintos, total: pixeles.total, porcentaje: pixeles.porcentaje, umbral: UMBRAL_PIXELES, ok: pixelesOk, tamanoApp: [pixeles.ancho[0], pixeles.alto[0]], tamanoMock: [pixeles.ancho[1], pixeles.alto[1]] },
