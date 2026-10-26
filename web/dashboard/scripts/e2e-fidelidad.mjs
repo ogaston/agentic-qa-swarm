@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
-import { NOTIFICACIONES } from './fidelidad-datos.mjs';
+import { INFORME_FIDELIDAD, NOTIFICACIONES, PLAN_FIDELIDAD, RECIBOS_FIDELIDAD, RUN_ID } from './fidelidad-datos.mjs';
 
 const DASHBOARD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAIZ = path.resolve(DASHBOARD, '../..');
@@ -53,7 +53,7 @@ const SALIDA = OPCIONES.control ? path.join(OPCIONES.out, 'control') : OPCIONES.
 const CAPTURAS = path.join(SALIDA, 'capturas');
 const DIST = fs.mkdtempSync(path.join(os.tmpdir(), 'u10-t05-dist-'));
 
-const ID = 'run-0123456789abcdef';
+const ID = RUN_ID;
 const UMBRAL_PIXELES = 0.05; // ≤ 5 % del área de la captura
 const TOLERANCIA_CANAL = 16; // diferencia máxima por canal (0–255) para considerar «igual»
 const TOLERANCIA_PX = 1; // ±1 px en propiedades de longitud
@@ -86,11 +86,11 @@ const ESTRUCTURA_SEL =
 const leer = (...partes) => JSON.parse(fs.readFileSync(path.join(EJEMPLOS, ...partes), 'utf8'));
 const FIJOS = {
   notificaciones: NOTIFICACIONES,
-  recibos: [leer('openapi/examples/valid/ConfirmationReceipt.ok.json')],
+  recibos: RECIBOS_FIDELIDAD,
   warm: leer('plans/examples/valid/warm-state.ready.json'),
   corrida: { id: ID, trace_id: 'tr-99201a4f-8c1e-44d0-a712', state: 'done', verdict: 'bug' },
-  plan: { ...leer('plans/examples/valid/flow-plan.body-y-sondeo.json'), run_id: ID },
-  informe: { ...leer('plans/examples/valid/report.dos-hallazgos.json'), run_id: ID },
+  plan: PLAN_FIDELIDAD,
+  informe: INFORME_FIDELIDAD,
 };
 
 function construir() {

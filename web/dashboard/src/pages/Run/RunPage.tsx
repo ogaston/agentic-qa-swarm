@@ -132,7 +132,7 @@ function VistaCorrida({ id }: { id: string }) {
       <div className="grid-main-side">
         <div className="stack">
           {data !== null && <PostMortem id={id} activo={informeListo} verdict={data.verdict} />}
-          <PlanFlujos id={id} activo={alcanzoEnsayo} />
+          <PlanFlujos id={id} activo={alcanzoEnsayo} encabezado={encabezadoPlan(data?.state)} />
         </div>
 
         <section className="card card-pad" aria-label="Línea de tiempo de fases">
@@ -150,6 +150,13 @@ function VistaCorrida({ id }: { id: string }) {
       </div>
     </main>
   );
+}
+
+/** Encabezado del plan según el estado de la corrida (mockup: inferidos, en ejecución, ejecutados). */
+function encabezadoPlan(estado: string | undefined): string {
+  if (estado === 'done' || estado === 'failed') return 'Flujos ejecutados';
+  if (estado === 'running') return 'Flujos en ejecución';
+  return 'Flujos inferidos';
 }
 
 /** Texto del estado para la franja de metadatos: etiqueta legible y código, sin repetir la fase. */

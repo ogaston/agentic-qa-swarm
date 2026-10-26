@@ -45,3 +45,70 @@ export const NOTIFICACIONES = [
     state: 'confirmed',
   },
 ];
+
+// Corrida de la vista /runs/:id (mockups/swarm-mock.html, applyRunDemo('bug')). Plan de dos flujos con los
+// métodos y estados del mockup (GET/POST con 201; POST con 409) e informe con su único hallazgo. Sin cuerpos
+// de solicitud: el mockup no los muestra y los flujos van plegados.
+export const RUN_ID = 'run-84a1d9b4c02e11ef';
+
+export const PLAN_FIDELIDAD = {
+  run_id: RUN_ID,
+  workflow: 'default',
+  flows: [
+    {
+      flow_id: 'f-camino-feliz',
+      name: 'Camino feliz de consulta y pedido válido',
+      invariant: 'Un pedido con unidades dentro del stock disponible devuelve 201 y reduce el inventario exactamente en la cantidad pedida.',
+      invariant_probe: false,
+      steps: [
+        { method: 'GET', path: '/products', expect_status: 200 },
+        { method: 'POST', path: '/orders', expect_status: 201 },
+      ],
+    },
+    {
+      flow_id: 'f-sondeo-stock',
+      name: 'Sondeo de agotamiento de stock',
+      invariant: 'Solicitar una cantidad mayor al stock disponible debe ser rechazado con 409 o 422 sin alterar el saldo.',
+      invariant_probe: true,
+      steps: [{ method: 'POST', path: '/orders', expect_status: 409 }],
+    },
+  ],
+};
+
+export const INFORME_FIDELIDAD = {
+  run_id: RUN_ID,
+  verdict: 'bug',
+  summary:
+    'Se detectó una violación del invariante de inventario en el endpoint de creación de pedidos: al enviar una cantidad superior al stock disponible, el servicio descontó existencias dejando el saldo en negativo (-3 unidades) y respondió 201 Created en lugar de rechazar la operación.',
+  findings: [
+    {
+      finding_id: 'finding-stock-negativo-01',
+      root_cause:
+        'El handler de POST /orders deduce la cantidad solicitada sin validar previamente la disponibilidad actual cuando el pedido incluye el flag promocional.',
+      invariant: 'El stock de un producto nunca puede quedar menor que 0 tras crear o confirmar un pedido (stock >= 0).',
+      method: 'POST',
+      path: '/orders',
+      evidence_uris: [
+        `s3://evidence/${RUN_ID}/runner-flow-stock-probe.json`,
+        `s3://evidence/${RUN_ID}/http-trace-orders-post.log`,
+      ],
+    },
+  ],
+};
+
+// Mis corridas (mockups/swarm-mock.html, vista «runs»): dos recibos, del más reciente al más antiguo.
+// La hora se envía en UTC; la app la muestra con toLocaleString() del navegador (dato de presentación).
+export const RECIBOS_FIDELIDAD = [
+  {
+    run_id: RUN_ID,
+    notification_id: 'notif-7f4790e-01',
+    confirmed_by: 'operador-demo',
+    confirmed_at: '2026-10-21T20:41:12Z',
+  },
+  {
+    run_id: 'run-3c09e12a77b40019',
+    notification_id: 'notif-a1c9e02-02',
+    confirmed_by: 'operador-demo',
+    confirmed_at: '2026-10-21T18:15:04Z',
+  },
+];
