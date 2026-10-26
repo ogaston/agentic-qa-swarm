@@ -72,7 +72,7 @@ except Exception: print("PUERTO80_BLOQUEADO")'
 
 - [ ] **CA-4** — Alcance.
   ```bash
-  git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T02); git diff --name-only $b | grep -v -E '^(scripts/kind/(kind-smoke|lib)\.sh|scripts/test/|tareas/U11-T05-|bitacoras/U11-T05\.md|revisiones/U11-T05/)' | wc -l; git diff --name-only $b -- deploy services agents | wc -l
+  git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T02); git diff --name-only $b | grep -v -E '^(scripts/kind/(kind-smoke|lib)\.sh|scripts/test/|tareas/U11-T05-|unidades-y-tareas\.md|bitacoras/U11-T05\.md|revisiones/U11-T05/)' | wc -l; git diff --name-only $b -- deploy services agents | wc -l
   ```
   Esperado: `0`, `0` y `0`.
 
