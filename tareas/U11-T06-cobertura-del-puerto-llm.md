@@ -27,7 +27,7 @@ Detalle:
    - fin del authority: `https://h?x` → `h 443`, `https://h:8443?x` → `h 8443`, `https://h#f` → `h 443`, `https://a@b@h` → `h 443`.
 2. **Tope de dígitos (F-06):** `https://h:18446744073709551696` y `https://h:18446744073709551617` (2^64+80, 2^64+1) → error; `:00000080` → `h 80`; `:65535` → ok. Cambio mínimo en `lib.sh`: tras quitar los ceros a la izquierda, rechazar más de 5 dígitos antes de la comparación.
 3. **Bitácora de U11-T05 (F-07):** pegar el comando literal de la sonda del puerto 80 y los comandos completos del bring-up.
-4. **Mutantes**: re-ejecutar el barrido (puede adaptar el `mut.py` del revisor, que está descrito en `revisiones/U11-T05/ronda-3.md`; si se reconstruye, vivirá fuera del repo o bajo `scripts/test/` con su propia ruta) y listar en la bitácora cuáles de los 19 siguen vivos (deben ser 0) y los 11 equivalentes.
+4. **Guion de mutantes** `scripts/test/u11-egress-port-mutants.sh` (ver CA-2): reproducible, sin tocar `lib.sh`; la bitácora lista los 11 equivalentes del revisor con una línea de por qué lo son.
 
 **Fuera** (lo que el codificador debe rechazar aunque lo vea roto):
 
@@ -52,16 +52,16 @@ Detalle:
   ```
   Esperado: termina en `OK` y `rc=0`, con al menos 25 + 30 casos (los previos y los nuevos del punto 1 y 2).
 
-- [ ] **CA-2** — Los 19 mutantes no equivalentes de F-05 mueren y el desbordamiento está cerrado.
+- [ ] **CA-2** — Los 19 mutantes no equivalentes de F-05 mueren y el desbordamiento está cerrado, **con un guion que se puede re-ejecutar**.
   ```bash
-  for m in sin_punto sin_guion sin_guionbajo sin_digitos ipv6_clase_abierta ipv6_sin_hex_punto ipv6_sin_hex_min ipv6_sin_hex_may ipv6_sin_corchetes sin_10almohadilla_cmp sin_10almohadilla_printf esquema_sin_ancla puerto_vacio_permitido authority_incluye_query authority_incluye_fragmento strip_un_arroba; do echo "$m"; done | wc -l; bash scripts/test/u11-egress-port-test.sh >/dev/null 2>&1; echo "base rc=$?"
+  bash scripts/test/u11-egress-port-mutants.sh; echo "rc=$?"
+  bash -c '. scripts/kind/lib.sh; llm_endpoint_host_port https://h:18446744073709551696; echo "rc=$?"'
   ```
-  Esperado: el codificador aplica cada mutante (en una copia de `lib.sh` en el scratchpad) y pega en la bitácora la tabla mutante → resultado: **todos** deben hacer fallar la prueba; el comando de arriba solo comprueba la línea base; la evidencia está en la bitácora y la reproduce el revisor.
-  Además: `bash -c '. scripts/kind/lib.sh; llm_endpoint_host_port https://h:18446744073709551696; echo "rc=$?"'` → `rc=1` sin salida.
+  Esperado: el guion nuevo `scripts/test/u11-egress-port-mutants.sh` aplica, sobre una **copia** temporal de `scripts/kind/lib.sh` (nunca sobre el original), cada uno de los 19 mutantes no equivalentes de F-05 (más los de puerto 0 y 65536 de F-01 y la regla vieja `u.port or 80`), ejecuta contra esa copia la prueba `u11-egress-port-test.sh` y comprueba que **FALLA**; imprime una línea `MUERTO <nombre>` por mutante y termina con `OK todos los mutantes mueren` y `rc=0`; si alguno sobrevive imprime `VIVO <nombre>` y sale distinto de 0. La prueba debe poder apuntar a la copia (p. ej. una variable de entorno `LIB_SH` que el guion de prueba use al hacer `source`, con valor por defecto `scripts/kind/lib.sh`). El segundo comando debe dar `rc=1` y ninguna salida.
 
 - [ ] **CA-3** — Nada más cambió.
   ```bash
-  bash -n scripts/kind/lib.sh scripts/kind/kind-smoke.sh && echo SINTAXIS_OK; git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(scripts/kind/lib\.sh|scripts/test/u11-egress-port-test\.sh|bitacoras/U11-T0[56]\.md|tareas/U11-T06-|unidades-y-tareas\.md|revisiones/U11-T06/)' | wc -l; git diff --name-only $b -- deploy services agents scripts/kind/kind-smoke.sh scripts/kind/secrets.sh | wc -l
+  bash -n scripts/kind/lib.sh scripts/kind/kind-smoke.sh && echo SINTAXIS_OK; git status --short | wc -l; b=$(git merge-base HEAD origin/main); git diff --name-only $b | grep -v -E '^(scripts/kind/lib\.sh|scripts/test/u11-egress-port-(test|mutants)\.sh|bitacoras/U11-T0[56]\.md|tareas/U11-T06-|unidades-y-tareas\.md|revisiones/U11-T06/)' | wc -l; git diff --name-only $b -- deploy services agents scripts/kind/kind-smoke.sh scripts/kind/secrets.sh | wc -l
   ```
   Esperado: `SINTAXIS_OK`, `0`, `0` y `0`. La verificación en un clúster real **no** se repite (la regla no cambia salvo el tope de dígitos, que el revisor comprueba sin clúster).
 
