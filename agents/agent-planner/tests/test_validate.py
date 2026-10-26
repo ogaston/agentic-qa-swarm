@@ -61,7 +61,7 @@ def test_validate_runid_and_workflow_mismatch():
             run(p)
 
 
-@pytest.mark.parametrize("fid", ["Flow", "-a", "a-", "a_b", "a" * 43, "", "a b", "f1\n", "\nf1", "a\n"])
+@pytest.mark.parametrize("fid", ["Flow", "-a", "a-", "a_b", "a" * 36, "", "a b", "f1\n", "\nf1", "a\n"])
 def test_validate_flow_id_invalid(fid):
     p = good_plan(); p["flows"][0]["flow_id"] = fid
     with pytest.raises(PlanRejected):
@@ -69,7 +69,7 @@ def test_validate_flow_id_invalid(fid):
 
 
 def test_validate_flow_id_valid_edges():
-    for fid in ("a", "ab", "a" * 42, "a-b"):
+    for fid in ("a", "ab", "a" * 35, "a-b", "a" + "b" * 33 + "c"):
         p = good_plan(); p["flows"][0]["flow_id"] = fid
         run(p)
 

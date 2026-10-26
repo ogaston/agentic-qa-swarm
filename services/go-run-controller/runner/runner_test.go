@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -818,4 +819,46 @@ func TestRunnerProperty(t *testing.T) {
 		}
 		rt.Fatal("no terminó")
 	})
+}
+
+// U11-T04: con el run_id real (20 caracteres) un flow_id de 35 cabe en el nombre del Job y uno de 36 no.
+func TestJobNameFlowIDWithRealRunID(t *testing.T) {
+	const run = "run-20d9efb7096b73d9"
+	ok35 := "a" + strings.Repeat("b", 33) + "c"
+	if n := len(JobName(run, ok35)); n > 63 {
+		t.Fatalf("nombre de %d caracteres", n)
+	}
+	if _, err := BuildJob(goodCfg(), run, ok35, JobSpec{}, t0); err != nil {
+		t.Fatalf("flow_id de 35 rechazado: %v", err)
+	}
+	if _, err := BuildJob(goodCfg(), run, strings.Repeat("a", 36), JobSpec{}, t0); !errors.Is(err, ErrConfig) {
+		t.Fatalf("flow_id de 36 aceptado: %v", err)
+	}
+}
+
+// Paridad: el patrón de flow_id del runner es el del contrato (leído del esquema, no de una constante).
+func TestFlowIDPatternParityRunnerWithContract(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "plans", "flow-plan.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Properties struct {
+			Flows struct {
+				Items struct {
+					Properties struct {
+						FlowID struct {
+							Pattern string `json:"pattern"`
+						} `json:"flow_id"`
+					} `json:"properties"`
+				} `json:"items"`
+			} `json:"flows"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if got := flowIDRe.String(); got != doc.Properties.Flows.Items.Properties.FlowID.Pattern {
+		t.Fatalf("runner %q != contrato %q", got, doc.Properties.Flows.Items.Properties.FlowID.Pattern)
+	}
 }

@@ -6,8 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 )
+
+// FlowIDPattern es el patrón de flow_id del contrato (contracts/plans/flow-plan.schema.json): etiqueta
+// DNS de 1 a 35 caracteres, porque el nombre del Job runner es runner-<run_id>-<flow_id> y debe caber en 63.
+const FlowIDPattern = `^[a-z0-9]([-a-z0-9]{0,33}[a-z0-9])?$`
+
+var flowIDRe = regexp.MustCompile(FlowIDPattern)
 
 var methods = map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
 
@@ -36,6 +43,9 @@ func ValidateFlowPlan(p FlowPlan) error {
 	for i, f := range p.Flows {
 		if f.FlowID == "" || f.Name == "" || f.Invariant == "" || len(f.Steps) == 0 {
 			return fmt.Errorf("flow-plan: flujo %d incompleto", i)
+		}
+		if !flowIDRe.MatchString(f.FlowID) {
+			return fmt.Errorf("flow-plan: flujo %d: flow_id %q no cumple %s", i, f.FlowID, FlowIDPattern)
 		}
 		for j, s := range f.Steps {
 			if !validMethod(s.Method) || !validPath(s.Path) || s.ExpectStatus < 100 || s.ExpectStatus > 599 {

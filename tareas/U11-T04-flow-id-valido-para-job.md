@@ -72,13 +72,13 @@ Detalle:
 
 - [ ] **CA-4** — Cadena sin clúster: lo que el modelo falso produzca con ids malos llega al runner ya normalizado.
   ```bash
-  cd agents/agent-planner && python -m pytest -q -k 'cadena or chain or fixtures' 2>&1 | tail -3; cd ../../ && python3 scripts/kind/gen_agent_fixtures.py >/dev/null 2>&1; git diff --exit-code -- deploy/flux/kind/agents >/dev/null && echo FIXTURES_AL_DIA
+  cd agents/agent-planner && python -m pytest -q -k 'cadena or chain or fixtures' 2>&1 | tail -3; cd ../../ && PYTHONPATH=agents/agent-reporter/src python3 scripts/kind/gen_agent_fixtures.py >/dev/null 2>&1; git diff --exit-code -- deploy/flux/kind/agents >/dev/null && echo FIXTURES_AL_DIA
   ```
-  Esperado: verde y `FIXTURES_AL_DIA` (regenerar con el script existente no cambia nada respecto a lo comprometido; el script no tiene modo `--check`, por eso se regenera y se compara con `git diff`). Las fixtures se comprometen ya regeneradas.
+  Esperado: verde y `FIXTURES_AL_DIA` (regenerar con el script existente no cambia nada respecto a lo comprometido; el script no tiene modo `--check` y necesita `PYTHONPATH=agents/agent-reporter/src`; solo regenera `reporter/fixtures.json`: la fixture del planner no lleva prompt con hash y no se regenera). Las fixtures se comprometen ya regeneradas.
 
 - [ ] **CA-5** — Módulos y alcance.
   ```bash
-  (cd services/go-run-controller && GOTOOLCHAIN=auto go vet ./... && GOTOOLCHAIN=auto go test ./... -count=1 2>&1 | grep -v 'no test files' | grep -c '^FAIL'); (cd agents/agent-planner && python -m pytest -q 2>&1 | tail -1); git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(contracts/plans/|agents/agent-planner/|services/go-run-controller/(runner|plan|adapters)/|deploy/flux/kind/agents/|tareas/U11-T0[2-5]-|unidades-y-tareas\.md|bitacoras/U11-T04\.md|revisiones/U11-T04/)' | wc -l
+  (cd services/go-run-controller && GOTOOLCHAIN=auto go vet ./... && GOTOOLCHAIN=auto go test ./... -count=1 2>&1 | grep -v 'no test files' | grep -c '^FAIL'); (cd agents/agent-planner && python -m pytest -q 2>&1 | tail -1); git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(contracts/plans/|agents/agent-planner/|services/go-run-controller/(runner|plan|adapters|runctl|rehearsal)/|services/go-run-controller/README\.md|deploy/flux/kind/agents/|tareas/U11-T0[2-5]-|unidades-y-tareas\.md|bitacoras/U11-T04\.md|revisiones/U11-T04/)' | wc -l
   ```
   Esperado: `0` (sin FAIL), `passed`, `0` y `0`.
 
