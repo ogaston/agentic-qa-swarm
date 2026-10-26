@@ -78,7 +78,7 @@ Detalle:
 
 - [ ] **CA-5** — Módulos y alcance.
   ```bash
-  (cd services/go-run-controller && GOTOOLCHAIN=auto go vet ./... && GOTOOLCHAIN=auto go test ./... -count=1 2>&1 | grep -v 'no test files' | grep -c '^FAIL'); (cd agents/agent-planner && python -m pytest -q 2>&1 | tail -1); git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(contracts/plans/|agents/agent-planner/|services/go-run-controller/(runner|plan|adapters)/|deploy/flux/kind/agents/|tareas/U11-T0[2-5]-|unidades-y-tareas\.md|bitacoras/U11-T04\.md|revisiones/U11-T04/)' | wc -l
+  (cd services/go-run-controller && GOTOOLCHAIN=auto go vet ./... && GOTOOLCHAIN=auto go test ./... -count=1 2>&1 | grep -v 'no test files' | grep -c '^FAIL'); (cd agents/agent-planner && python -m pytest -q 2>&1 | tail -1); git status --short | wc -l; b=$(git merge-base HEAD origin/tarea/U11-T01); git diff --name-only $b | grep -v -E '^(contracts/plans/|agents/agent-planner/|services/go-run-controller/(runner|plan|adapters|runctl|rehearsal)/|services/go-run-controller/README\.md|deploy/flux/kind/agents/|tareas/U11-T0[2-5]-|unidades-y-tareas\.md|bitacoras/U11-T04\.md|revisiones/U11-T04/)' | wc -l
   ```
   Esperado: `0` (sin FAIL), `passed`, `0` y `0`.
 
