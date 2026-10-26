@@ -331,7 +331,7 @@ export function InboxPage() {
         ) : null}
         {lista !== null && errorLista === null && lista.length > 0 ? (
           <div className="card">
-            <div className="card-pad">
+            <div className="card-pad listado-cabecera">
               <div className="card-title">Listado de notificaciones</div>
               <div className="card-sub">
                 Eventos recibidos listos para revisión y confirmación previa a la inferencia de flujos sobre el entorno.

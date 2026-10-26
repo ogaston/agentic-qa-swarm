@@ -272,6 +272,7 @@ main.page-narrow {
 .az-page-title h1 {
   font-size: 22px;
   font-weight: 700;
+  line-height: 1.5;
   letter-spacing: -0.02em;
   color: var(--text);
 }
@@ -493,6 +494,11 @@ main.page-narrow {
 }
 
 /* Mockup: el título de tarjeta hereda line-height 1.5 y sin margen inferior (la altura de la tarjeta depende de ello). */
+/* Mockup: la cabecera del listado de notificaciones tiene 12 px de relleno inferior. */
+.listado-cabecera {
+  padding-bottom: 12px;
+}
+
 .card-title {
   font-size: 14px;
   font-weight: 700;
