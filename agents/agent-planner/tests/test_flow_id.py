@@ -15,10 +15,10 @@ def test_cadena_flow_id_malo_llega_normalizado():
 import copy
 import re
 
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from agent_planner.flow_id import FLOW_ID_PATTERN, normalize_flow_id, normalize_plan_flow_ids
+from agent_planner.flow_id import FLOW_ID_PATTERN, _clean, normalize_flow_id, normalize_plan_flow_ids
 from helpers import load, ROOT
 
 FLOW_RE = re.compile(FLOW_ID_PATTERN)
@@ -98,9 +98,24 @@ def test_plan_sustituto_suelto_en_flow_id_no_lanza():
     assert FLOW_RE.fullmatch(out["flows"][0]["flow_id"])
 
 
-@given(st.text(alphabet=st.characters(blacklist_categories=()), min_size=36, max_size=80))
+_LIMPIO = st.sampled_from("abcdefghijklmnopqrstuvwxyz0123456789-")
+_ALFABETO_CON_SUSTITUTOS = st.one_of(_LIMPIO, st.characters(blacklist_categories=()))
+
+
+@st.composite
+def _id_largo_con_sustituto(draw):
+    """Id de 36 a 80 caracteres con al menos un sustituto suelto: fuerza la rama del hash (>35)."""
+    n = draw(st.integers(36, 80))
+    chars = draw(st.lists(_ALFABETO_CON_SUSTITUTOS, min_size=n, max_size=n))
+    pos = draw(st.integers(0, n - 1))
+    chars[pos] = "\ud800"  # sustituto garantizado, en posicion arbitraria
+    return "".join(chars)
+
+
+@given(_id_largo_con_sustituto())
 @settings(max_examples=500)
 def test_flow_id_pbt_alfabeto_con_sustitutos(raw):
+    assume(len(_clean(raw)) > 35)  # garantiza que se ejercita la rama del hash (>35 tras limpiar)
     out = normalize_flow_id(raw)
     assert FLOW_RE.fullmatch(out) and len(out) <= 35
     assert normalize_flow_id(out) == out
