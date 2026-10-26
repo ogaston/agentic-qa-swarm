@@ -340,11 +340,17 @@ check llm-real-configurado llm_real_configurado
 llm_egress_acotado() {
   kubectl exec deploy/agent-planner -n "$NS_SYS" -- python3 -c 'print("ok")' >/dev/null 2>&1 \
     || { echo "no se puede ejecutar python3 en deploy/agent-planner (precondición)"; return 1; }
+  # Host y puerto del proveedor: los deriva llm_endpoint_host_port (lib.sh, U11-T05 ronda 2; regla del esquema,
+  # probada en scripts/test/u11-egress-port-test.sh). La URL sale del pod y no se imprime.
+  local url hp host port
+  url=$(kubectl exec deploy/agent-planner -n "$NS_SYS" -- sh -c 'printf %s "$LLM_BASE_URL"' 2>/dev/null) \
+    || { echo "no se pudo leer LLM_BASE_URL del pod del planner"; return 1; }
+  hp=$(llm_endpoint_host_port "$url") \
+    || { echo "LLM_BASE_URL del planner no tiene forma http(s)://host[:puerto] (control de egreso)"; return 1; }
+  read -r host port <<<"$hp"
   kubectl exec deploy/agent-planner -n "$NS_SYS" -- python3 -c '
-import os, socket
-from urllib.parse import urlsplit
-u = urlsplit(os.environ["LLM_BASE_URL"])
-socket.create_connection((u.hostname, u.port or 80), timeout=5).close()' >/dev/null 2>&1 \
+import socket, sys
+socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=5).close()' "$host" "$port" >/dev/null 2>&1 \
     || { echo "el planner no alcanza el gateway (control positivo del egreso)"; return 1; }
   if kubectl exec deploy/agent-planner -n "$NS_SYS" -- python3 -c 'import socket; socket.create_connection(("1.1.1.1", 443), timeout=5)' >/dev/null 2>&1; then
     echo "deploy/agent-planner alcanza 1.1.1.1:443: el egreso no está acotado al gateway"

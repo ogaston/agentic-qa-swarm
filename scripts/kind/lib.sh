@@ -333,3 +333,32 @@ require_target_image() {
   esac
   return 1
 }
+
+# --- U11-T05 (ronda 2): host y puerto del proveedor LLM para el control llm-egress-acotado -------------
+# llm_endpoint_host_port <url>: imprime «host puerto» de LLM_BASE_URL y sale 0; sale 1 sin imprimir nada si
+# la URL no es http(s)://host[:puerto][/ruta], si el puerto no es numérico o está fuera de 1-65535.
+# Regla única: https → 443, http → 80, puerto explícito → ese. Esquema sin distinguir mayúsculas. Host solo
+# [A-Za-z0-9._-]+ (o IPv6 entre corchetes); cualquier otro carácter (espacio, ;, $, (, salto de línea) → rc=1.
+# Las credenciales (user:pass@) se descartan;
+# una IPv6 entre corchetes sale sin corchetes. Cubierta por scripts/test/u11-egress-port-test.sh.
+llm_endpoint_host_port() {
+  local url=$1 scheme hostport host port
+  [[ "$url" =~ ^([Hh][Tt][Tt][Pp][Ss]?)://([^/?#]*)([/?#].*)?$ ]] || return 1
+  scheme=${BASH_REMATCH[1],,}
+  hostport=${BASH_REMATCH[2]}
+  hostport=${hostport##*@}
+  if [[ "$hostport" =~ ^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9._-]+)(:([0-9]+))?$ ]]; then
+    host=${BASH_REMATCH[1]}
+    port=${BASH_REMATCH[3]}
+  else
+    return 1
+  fi
+  host=${host#[}
+  host=${host%]}
+  [ -n "$host" ] || return 1
+  if [ -z "$port" ]; then
+    if [ "$scheme" = https ]; then port=443; else port=80; fi
+  fi
+  (( 10#$port >= 1 && 10#$port <= 65535 )) || return 1
+  printf '%s %s' "$host" "$((10#$port))"
+}
