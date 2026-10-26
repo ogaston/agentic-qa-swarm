@@ -19,6 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
+import { NOTIFICACIONES } from './fidelidad-datos.mjs';
 
 const DASHBOARD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAIZ = path.resolve(DASHBOARD, '../..');
@@ -84,7 +85,7 @@ const ESTRUCTURA_SEL =
 // Respuestas fijas de la API (la misma forma que los ejemplos del contrato).
 const leer = (...partes) => JSON.parse(fs.readFileSync(path.join(EJEMPLOS, ...partes), 'utf8'));
 const FIJOS = {
-  notificaciones: [leer('openapi/examples/valid/Notification.pending-artifact.json')],
+  notificaciones: NOTIFICACIONES,
   recibos: [leer('openapi/examples/valid/ConfirmationReceipt.ok.json')],
   warm: leer('plans/examples/valid/warm-state.ready.json'),
   corrida: { id: ID, trace_id: 'tr-99201a4f-8c1e-44d0-a712', state: 'done', verdict: 'bug' },
@@ -118,7 +119,10 @@ async function rutaApi(route) {
   const p = url.pathname;
   if (p === '/api/auth/login') return json({ token: 'token-fidelidad', expires_at: new Date(Date.now() + 3600e3).toISOString() });
   if (p === '/api/auth/session') return json({ principal_id: 'operador-demo', role: 'user' });
-  if (p === '/api/notifications') return json(FIJOS.notificaciones);
+  if (p === '/api/notifications') {
+    const estado = url.searchParams.get('state');
+    return json(FIJOS.notificaciones.filter((n) => estado === null || n.state === estado));
+  }
   if (p === '/api/confirmations') return json(FIJOS.recibos);
   if (p === '/api/warm') return json(FIJOS.warm);
   if (p === `/api/runs/${ID}`) return json(FIJOS.corrida);
