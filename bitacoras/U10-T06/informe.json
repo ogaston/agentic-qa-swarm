@@ -516,9 +516,9 @@
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 20236,
+      "distintos": 18873,
       "total": 1024000,
-      "porcentaje": 0.01976171875,
+      "porcentaje": 0.0184306640625,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -561,24 +561,17 @@
         "regla": ".table-wrap { position: relative; }"
       }
     ],
-    "estilos": [
-      {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "506.688px",
-        "mock": "525.688px"
-      }
-    ],
+    "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 25578,
+      "distintos": 21793,
       "total": 345750,
-      "porcentaje": 0.07397830802603036,
+      "porcentaje": 0.06303109182935647,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        922
+        921
       ],
       "tamanoMock": [
         375,
@@ -609,9 +602,9 @@
     "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 20222,
+      "distintos": 20205,
       "total": 1024000,
-      "porcentaje": 0.019748046875,
+      "porcentaje": 0.0197314453125,
       "umbral": 0.05,
       "ok": true,
       "tamanoApp": [
@@ -654,24 +647,17 @@
         "regla": ".table-wrap { position: relative; }"
       }
     ],
-    "estilos": [
-      {
-        "ancla": "tarjeta[0]",
-        "propiedad": "height",
-        "app": "506.688px",
-        "mock": "525.688px"
-      }
-    ],
+    "estilos": [],
     "estructura": [],
     "pixeles": {
-      "distintos": 26684,
+      "distintos": 24150,
       "total": 345750,
-      "porcentaje": 0.07717715112075199,
+      "porcentaje": 0.06984815618221259,
       "umbral": 0.05,
       "ok": false,
       "tamanoApp": [
         375,
-        922
+        921
       ],
       "tamanoMock": [
         375,
