@@ -27,7 +27,15 @@ Brechas medidas por T05 (`bitacoras/U10-T05/informe.json`, a re-medir al empezar
 
 **Decisión adicional del humano (2026-10-26), zona horaria:** Mis corridas muestra las fechas en **UTC** (`timeZone: 'UTC'`, locale `es-ES`, 24 h). El subtítulo fijo del informe («Generado por agent-reporter con redacción previa…») NO se porta: es candidata.
 
-**Fuera:** subir tolerancias o añadir excepciones en la compuerta (si una diferencia es de datos y no de CSS, se reporta como candidata, no se oculta); endpoints nuevos; CDN; relajar la CSP; cambios fuera de `web/dashboard/**`; portar lo que `DESIGN.md §1.3` excluye.
+**Decisión del humano (2026-10-27), opción A aprobada:** entrada literal «continue. do A», sobre `aidlc-docs/construction/u10-reference-questions.md`. Se amplía únicamente la preparación del contenido de la página del mockup en la prueba para hacerlo comparable con datos y funcionalidades reales:
+
+- Bandeja: retirar enlace «Nueva aplicación» y metadatos «Familias activas»/«sí (100%)»; usar KPI de rechazos y contadores disponibles como en la aplicación.
+- Corrida: igualar subtítulo real, etiqueta del estado y contenido de hallazgos como texto plano del contrato, sin interpretar HTML arbitrario.
+- Entorno: usar un único identificador real y descripción sin composición ni namespace inventados.
+
+Cada preparación adicional debe tener nombre, comentario y registro JSON por combinación. No se modifica `mockups/swarm-mock.html`; no se copian estilos de la app al mockup, no se ocultan regiones completas ni se alteran estilos/estructura medidos, comparadores, tolerancias, umbral de píxeles o las 20 combinaciones. Se vuelve a medir todo y se corrige el CSS residual que falle. Esta autorización sustituye exclusivamente la prohibición previa de preparar esas diferencias de contenido enumeradas; las demás restricciones siguen vigentes. `--control` debe conservar 20/20 con 0%. No autoriza funcionalidades/endpoints nuevos ni datos inventados visibles en producción.
+
+**Fuera:** subir tolerancias o añadir excepciones en la compuerta (salvo la preparación de contenido expresamente autorizada en la opción A; las demás diferencias se reportan como candidatas); endpoints nuevos; CDN; relajar la CSP; cambios fuera de `web/dashboard/**`; portar lo que `DESIGN.md §1.3` excluye.
 
 ## Archivos de contexto
 `mockups/swarm-mock.html`, `DESIGN.md`, `web/dashboard/scripts/e2e-fidelidad.mjs`, `bitacoras/U10-T05.md`, `bitacoras/U10-T05/informe.json`, bitácoras de U10-T02..T04.
@@ -35,7 +43,7 @@ Brechas medidas por T05 (`bitacoras/U10-T05/informe.json`, a re-medir al empezar
 ## Criterios de aceptación (desde `web/dashboard/`, tras `npm ci`)
 - [ ] **CA-1** — `npm run -s e2e:fidelidad; echo $?` → `0` y el informe dice «20 de 20 combinaciones OK».
 - [ ] **CA-2** — `npm run -s lint && npm run -s typecheck && npm run -s check:api && npx vitest run 2>&1 | grep -c -E 'failed|FAIL'` → `0`.
-- [ ] **CA-3** — La compuerta no se debilitó: en `git diff 173c245 -- web/dashboard/scripts/e2e-fidelidad.mjs`, ninguna línea añadida o quitada fuera de la preparación de la página del mockup y de los datos servidos toca constantes (`TOLERANCIA_*`, `UMBRAL_PIXELES`), las funciones `comparar*` ni la lista de `VISTAS`; solo cambian los datos servidos a la app o su importación. Comando: `git diff -U0 173c245 -- web/dashboard/scripts/e2e-fidelidad.mjs | grep -E '^[+-]' | grep -v -E '^(\+\+\+|---)' | grep -c -E 'TOLERANCIA|UMBRAL|compar|VISTAS'` → `0`.
+- [ ] **CA-3** — La compuerta no se debilitó: en `git diff 173c245 -- web/dashboard/scripts/e2e-fidelidad.mjs`, ninguna línea añadida o quitada fuera de la preparación de la página del mockup y de los datos servidos toca constantes (`TOLERANCIA_*`, `UMBRAL_PIXELES`), las funciones `comparar*` ni la lista de `VISTAS`; solo cambian los datos servidos a la app, su importación y la preparación del mockup expresamente autorizada. Comando: `git diff -U0 173c245 -- web/dashboard/scripts/e2e-fidelidad.mjs | grep -E '^[+-]' | grep -v -E '^(\+\+\+|---)' | grep -c -E 'TOLERANCIA|UMBRAL|compar|VISTAS'` → `0`.
 - [ ] **CA-4** — CSP intacta: `npm run -s build >/dev/null && grep -c -E 'unsafe-inline|unsafe-eval' dist/index.html` → `0`.
 - [ ] **CA-5** — Alcance: `git diff --name-only 173c245 | grep -v -E '^(unidades-y-tareas.md|DESIGN.md|web/dashboard/|tareas/U10-T06|bitacoras/U10-T06|revisiones/U10-T06/)' | wc -l` → `0`.
 
