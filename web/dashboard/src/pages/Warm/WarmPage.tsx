@@ -73,8 +73,7 @@ export function WarmPage() {
         titulo="Entorno"
         descripcion={
           <>
-            Estado en vivo del namespace aislado <span className="mono">aqs-test</span> (<code>GET /api/warm</code>,
-            sondeo cada 10 s en solo lectura).
+            Estado en vivo del entorno (<code>GET /api/warm</code>, sondeo cada 10 s en solo lectura).
           </>
         }
         acciones={
@@ -113,8 +112,7 @@ export function WarmPage() {
                 Estado operativo de <code>{data.warm_id}</code>
               </h2>
               <div className="card-sub">
-                Pre-desplegado (App + Postgres + Redis) y reutilizado entre corridas con gate obligatorio{' '}
-                <code>reset_verified=true</code>.
+                El reset debe estar verificado antes de confiar en los resultados.
               </div>
             </div>
             <span className={`badge badge-${COLOR_ESTADO[data.state]}`} data-testid="warm-estado" data-state={data.state}>

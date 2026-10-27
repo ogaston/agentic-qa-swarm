@@ -1,0 +1,13 @@
+
+ RUN  v2.1.8 /home/omarjayg/Javeriana/topicos-especiales/agentic-qa-swarm-wt-U10-T06/web/dashboard
+
+ ✓ src/pages/Warm/WarmPage.test.tsx (17 tests) 509ms
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  18:01:58
+   Duration  1.48s (transform 108ms, setup 178ms, collect 98ms, tests 509ms, environment 357ms, prepare 79ms)
+
+stderr | src/pages/Warm/WarmPage.test.tsx > WarmPage > muestra el identificador real sin inventar composición ni namespace
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.

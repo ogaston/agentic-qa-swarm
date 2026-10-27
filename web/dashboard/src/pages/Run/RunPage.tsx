@@ -37,7 +37,7 @@ export function RunPage() {
   const { id = '' } = useParams();
   if (!ID_RUN.test(id)) {
     return (
-      <main className="az-container">
+      <main className="az-container run-page">
         <h1>Corrida</h1>
         <p role="alert" className="alert-box alert-danger">
           Identificador de corrida no válido.
@@ -72,7 +72,7 @@ function VistaCorrida({ id }: { id: string }) {
   const informeListo = data !== null && (data.state === 'done' || (data.state === 'failed' && data.report_uri !== undefined));
 
   return (
-    <main className="az-container">
+    <main className="az-container run-page">
       <div className="az-page-header">
         <div className="az-page-title">
           <div className="run-titulo">

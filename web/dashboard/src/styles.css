@@ -1428,3 +1428,33 @@ pre.json-body {
     padding: 12px;
   }
 }
+
+/* U10-T06: en la corrida el mockup presenta código en línea, sin chip.
+ * El tamaño/peso del contexto conserva la línea base del título y las notas de API;
+ * las URI de evidencia conservan su caja y tamaño propios. */
+.run-page .run-id,
+.run-page .az-page-title p .mono,
+.run-page .card-title code,
+.run-page .card-sub code {
+  background: none;
+  padding: 0;
+  font-weight: inherit;
+}
+
+.run-page .az-page-title p .mono,
+.run-page .card-title code {
+  font-size: inherit;
+}
+
+.run-page .card-title {
+  letter-spacing: normal;
+}
+
+.run-page .evidence-uri {
+  font-weight: inherit;
+}
+
+.run-page .finding-path {
+  background: none;
+  padding: 0;
+}

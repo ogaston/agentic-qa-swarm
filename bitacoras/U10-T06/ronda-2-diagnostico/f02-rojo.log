@@ -1,0 +1,36 @@
+
+ RUN  v2.1.8 /home/omarjayg/Javeriana/topicos-especiales/agentic-qa-swarm-wt-U10-T06/web/dashboard
+
+ ❯ src/pages/Warm/WarmPage.test.tsx (17 tests | 1 failed) 549ms
+   × WarmPage > muestra el identificador real sin inventar composición ni namespace 86ms
+     → expected [ <span class="mono"></span>, …(1) ] to have a length of +0 but got 2
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  18:01:56
+   Duration  1.58s (transform 113ms, setup 179ms, collect 107ms, tests 549ms, environment 394ms, prepare 84ms)
+
+stderr | src/pages/Warm/WarmPage.test.tsx > WarmPage > muestra el identificador real sin inventar composición ni namespace
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/Warm/WarmPage.test.tsx > WarmPage > muestra el identificador real sin inventar composición ni namespace
+AssertionError: expected [ <span class="mono"></span>, …(1) ] to have a length of +0 but got 2
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ src/pages/Warm/WarmPage.test.tsx:50:62
+     48|     await vaciar();
+     49|     expect(screen.getAllByText('otro-entorno').length).toBeGreaterThan…
+     50|     expect(screen.queryAllByText(/aqs-test|Postgres|Redis/)).toHaveLen…
+       |                                                              ^
+     51|   });
+     52|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

@@ -42,6 +42,14 @@ afterEach(() => {
 });
 
 describe('WarmPage', () => {
+  it('muestra el identificador real sin inventar composición ni namespace', async () => {
+    contarPeticiones(() => HttpResponse.json({ ...WARM, warm_id: 'otro-entorno' }));
+    renderWarm();
+    await vaciar();
+    expect(screen.getAllByText('otro-entorno').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/aqs-test|Postgres|Redis/)).toHaveLength(0);
+  });
+
   it('los 4 estados se muestran con texto distinto', async () => {
     const textos = new Set<string>();
     for (const state of ['ready', 'dirty', 'cuarentena', 'idle-escalado']) {

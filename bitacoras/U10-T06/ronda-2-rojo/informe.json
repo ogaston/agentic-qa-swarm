@@ -1,0 +1,858 @@
+[
+  {
+    "vista": "inbox",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 68645,
+      "total": 1024000,
+      "porcentaje": 0.0670361328125,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-light-1280.png",
+      "mock": "capturas/mock-inbox-light-1280.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "light",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 82817,
+      "total": 520500,
+      "porcentaje": 0.1591104707012488,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        1320
+      ],
+      "tamanoMock": [
+        375,
+        1388
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-light-375.png",
+      "mock": "capturas/mock-inbox-light-375.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 68830,
+      "total": 1024000,
+      "porcentaje": 0.067216796875,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-dark-1280.png",
+      "mock": "capturas/mock-inbox-dark-1280.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 87529,
+      "total": 520500,
+      "porcentaje": 0.16816330451488953,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        1320
+      ],
+      "tamanoMock": [
+        375,
+        1388
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-dark-375.png",
+      "mock": "capturas/mock-inbox-dark-375.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 80458,
+      "total": 1301760,
+      "porcentaje": 0.06180709193706981,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        1017
+      ],
+      "tamanoMock": [
+        1280,
+        1017
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-light-1280.png",
+      "mock": "capturas/mock-run-light-1280.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "light",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "755.594px",
+        "mock": "774.188px"
+      },
+      {
+        "ancla": "tarjeta[1]",
+        "propiedad": "height",
+        "app": "470.094px",
+        "mock": "472.094px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 144655,
+      "total": 900750,
+      "porcentaje": 0.160593949486539,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        2382
+      ],
+      "tamanoMock": [
+        375,
+        2402
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-light-375.png",
+      "mock": "capturas/mock-run-light-375.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 87249,
+      "total": 1301760,
+      "porcentaje": 0.06702387536873157,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        1280,
+        1017
+      ],
+      "tamanoMock": [
+        1280,
+        1017
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-dark-1280.png",
+      "mock": "capturas/mock-run-dark-1280.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "755.594px",
+        "mock": "774.188px"
+      },
+      {
+        "ancla": "tarjeta[1]",
+        "propiedad": "height",
+        "app": "470.094px",
+        "mock": "472.094px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 154045,
+      "total": 900750,
+      "porcentaje": 0.17101859561476548,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        2382
+      ],
+      "tamanoMock": [
+        375,
+        2402
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-dark-375.png",
+      "mock": "capturas/mock-run-dark-375.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 14033,
+      "total": 1024000,
+      "porcentaje": 0.0137041015625,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-light-1280.png",
+      "mock": "capturas/mock-runs-light-1280.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 9696,
+      "total": 300000,
+      "porcentaje": 0.03232,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-light-375.png",
+      "mock": "capturas/mock-runs-light-375.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 17049,
+      "total": 1024000,
+      "porcentaje": 0.0166494140625,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-dark-1280.png",
+      "mock": "capturas/mock-runs-dark-1280.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 12589,
+      "total": 300000,
+      "porcentaje": 0.04196333333333333,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-dark-375.png",
+      "mock": "capturas/mock-runs-dark-375.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 19684,
+      "total": 1024000,
+      "porcentaje": 0.01922265625,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-light-1280.png",
+      "mock": "capturas/mock-warm-light-1280.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "light",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "506.688px",
+        "mock": "525.688px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 33558,
+      "total": 345750,
+      "porcentaje": 0.097058568329718,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        903
+      ],
+      "tamanoMock": [
+        375,
+        922
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-light-375.png",
+      "mock": "capturas/mock-warm-light-375.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 20935,
+      "total": 1024000,
+      "porcentaje": 0.0204443359375,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-dark-1280.png",
+      "mock": "capturas/mock-warm-dark-1280.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": false,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [
+      {
+        "ancla": "tarjeta[0]",
+        "propiedad": "height",
+        "app": "506.688px",
+        "mock": "525.688px"
+      }
+    ],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 38872,
+      "total": 345750,
+      "porcentaje": 0.11242805495300072,
+      "umbral": 0.05,
+      "ok": false,
+      "tamanoApp": [
+        375,
+        903
+      ],
+      "tamanoMock": [
+        375,
+        922
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-dark-375.png",
+      "mock": "capturas/mock-warm-dark-375.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 5579,
+      "total": 1024000,
+      "porcentaje": 0.0054482421875,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-light-1280.png",
+      "mock": "capturas/mock-login-light-1280.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 4820,
+      "total": 300000,
+      "porcentaje": 0.016066666666666667,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-light-375.png",
+      "mock": "capturas/mock-login-light-375.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 5582,
+      "total": 1024000,
+      "porcentaje": 0.005451171875,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-dark-1280.png",
+      "mock": "capturas/mock-login-dark-1280.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 4820,
+      "total": 300000,
+      "porcentaje": 0.016066666666666667,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-dark-375.png",
+      "mock": "capturas/mock-login-dark-375.png"
+    }
+  }
+]
