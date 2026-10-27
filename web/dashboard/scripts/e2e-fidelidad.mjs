@@ -335,16 +335,41 @@ const CSS_DESBORDE_MOCK = [
   { id: 'desbordamiento-table-wrap', css: '.table-wrap { position: relative; }' },
 ];
 
+// Opción A, aprobada 2026-10-27: solo contenido de la referencia, sin trasladar estilos de la app.
+// Cada ajuste es explícito y falla si su selector desaparece; el informe conserva su id y operación.
+const CONTENIDO_MOCK = [
+  // Bandeja: funcionalidades/metadatos inexistentes y conteos aún no consultados por la carga perezosa.
+  { id: 'contenido-inbox-nueva-aplicacion', vista: 'inbox', sel: '[data-view="inbox"] .az-subbar-actions a', operacion: 'retirar' },
+  { id: 'contenido-inbox-familias', vista: 'inbox', sel: '[data-view="inbox"] .az-header-meta .az-meta-item:nth-child(3)', operacion: 'retirar' },
+  { id: 'contenido-inbox-reset', vista: 'inbox', sel: '[data-view="inbox"] .az-header-meta .az-meta-item:nth-child(2) .az-meta-value', texto: WARM_FIDELIDAD.reset_verified ? 'sí' : 'no' },
+  { id: 'contenido-inbox-tab-confirmadas', vista: 'inbox', sel: '#tab-confirmed', texto: 'Confirmadas' },
+  { id: 'contenido-inbox-tab-rechazadas', vista: 'inbox', sel: '#tab-rejected', texto: 'Rechazadas' },
+  { id: 'contenido-inbox-kpi-confirmadas', vista: 'inbox', sel: '[data-view="inbox"] .kpi-box:nth-child(2) .kpi-val', texto: '—' },
+  { id: 'contenido-inbox-kpi-rechazadas-etiqueta', vista: 'inbox', sel: '[data-view="inbox"] .kpi-box:nth-child(4) .kpi-label', texto: 'Rechazadas' },
+  { id: 'contenido-inbox-kpi-rechazadas-valor', vista: 'inbox', sel: '[data-view="inbox"] .kpi-box:nth-child(4) .kpi-val', texto: '—' },
+  { id: 'contenido-inbox-kpi-rechazadas-insignia', vista: 'inbox', sel: '[data-view="inbox"] .kpi-box:nth-child(4) .badge', operacion: 'retirar' },
+  // Corrida: la API entrega texto plano; los textos no anuncian una redacción de secretos inexistente.
+  { id: 'contenido-run-subtitulo', vista: 'run', sel: '#runReportCard .card-sub', texto: 'Se encontraron fallos de lógica de negocio.' },
+  { id: 'contenido-run-estado', vista: 'run', sel: '#runHeaderState', texto: 'Completada (done)' },
+  { id: 'contenido-run-invariante', vista: 'run', sel: '#runReportCard dd:nth-of-type(1)', texto: INFORME_FIDELIDAD.findings[0].invariant },
+  { id: 'contenido-run-causa', vista: 'run', sel: '#runReportCard dd:nth-of-type(2)', texto: INFORME_FIDELIDAD.findings[0].root_cause },
+  // Entorno: el contrato ofrece un solo id, sin namespace ni composición de infraestructura.
+  { id: 'contenido-warm-descripcion', vista: 'warm', sel: '[data-view="warm"] .az-page-title p', operacion: 'texto-con-codigo', antes: 'Estado en vivo del entorno (', despues: ', sondeo cada 10 s en solo lectura).' },
+  { id: 'contenido-warm-subtitulo', vista: 'warm', sel: '[data-view="warm"] .card-head .card-sub', texto: 'El reset debe estar verificado antes de confiar en los resultados.' },
+  { id: 'contenido-warm-identificador', vista: 'warm', sel: '[data-view="warm"] .kpi-box:nth-child(4) .kpi-val', texto: WARM_FIDELIDAD.warm_id },
+];
+
 async function vistaMockup(navegador, vista, tema, ancho) {
   const contexto = await navegador.newContext({ viewport: { width: ancho, height: 800 }, deviceScaleFactor: 1 });
   const pagina = await contexto.newPage();
   await pagina.goto(pathToFileURL(MOCKUP).href);
   const ocultar = OCULTAR_MOCK.filter((o) => o.vista === vista.id);
   const css = ancho === ANCHO_DESBORDE ? CSS_DESBORDE_MOCK : [];
+  const contenido = CONTENIDO_MOCK.filter((c) => c.vista === vista.id);
   for (const c of css) await pagina.addStyleTag({ content: c.css });
   // Un selector que no aparece en el mockup es un error: la neutralización no puede quedar en silencio.
   await pagina.evaluate(
-    ({ mock, tema, demo, ocultar }) => {
+    ({ mock, tema, demo, ocultar, contenido }) => {
       document.documentElement.setAttribute('data-theme', tema);
       showView(mock);
       if (demo) applyRunDemo(demo);
@@ -353,12 +378,23 @@ async function vistaMockup(navegador, vista, tema, ancho) {
         if (!el) throw new Error(`neutralización ${o.id}: no hay «${o.sel}» en el mockup`);
         el.style.setProperty('display', 'none', 'important');
       }
+      for (const c of contenido) {
+        const el = document.querySelector(c.sel);
+        if (!el) throw new Error(`preparación ${c.id}: no hay «${c.sel}» en el mockup`);
+        if (c.operacion === 'retirar') el.remove();
+        else if (c.operacion === 'texto-con-codigo') {
+          const codigo = el.querySelector('code');
+          if (!codigo) throw new Error(`preparación ${c.id}: falta code`);
+          el.replaceChildren(document.createTextNode(c.antes), codigo, document.createTextNode(c.despues));
+        } else el.textContent = c.texto;
+      }
     },
-    { mock: vista.mock, tema, demo: vista.demoMock, ocultar },
+    { mock: vista.mock, tema, demo: vista.demoMock, ocultar, contenido },
   );
   const neutralizaciones = [
     ...ocultar.map((o) => ({ id: o.id, tipo: 'ocultar', sel: o.sel })),
     ...css.map((c) => ({ id: c.id, tipo: 'css', regla: c.css })),
+    ...contenido.map((c) => ({ ...c, tipo: 'contenido' })),
   ];
   await pagina.waitForTimeout(300);
   const medida = await pagina.evaluate(medirEnPagina, { anclas: ANCLAS, estructuraSel: ESTRUCTURA_SEL });

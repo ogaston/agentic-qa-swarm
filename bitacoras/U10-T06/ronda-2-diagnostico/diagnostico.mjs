@@ -460,6 +460,7 @@ function generarHtml(informe) {
   return `<!doctype html><meta charset="utf-8"><title>e2e:fidelidad</title><body style="font:14px sans-serif">${filas}</body>`;
 }
 
+fs.mkdirSync(SALIDA, { recursive: true });
 const srv = (construir(), await servir());
 const browser = await chromium.launch();
 const base = `http://127.0.0.1:${srv.address().port}`;

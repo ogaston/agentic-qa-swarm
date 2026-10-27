@@ -1458,3 +1458,16 @@ pre.json-body {
   background: none;
   padding: 0;
 }
+
+/* U10-T06: el identificador del título de Entorno conserva el tamaño/peso del título
+ * del mockup, sin el chip global de code. Evita adelantar 1 px el resto de la tarjeta. */
+.warm-page .card-title code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.warm-page .card-title {
+  letter-spacing: normal;
+}

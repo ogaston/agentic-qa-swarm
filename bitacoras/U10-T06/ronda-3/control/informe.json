@@ -1,0 +1,1276 @@
+[
+  {
+    "vista": "inbox",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "contenido-inbox-nueva-aplicacion",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-subbar-actions a",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-familias",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-header-meta .az-meta-item:nth-child(3)",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-reset",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-header-meta .az-meta-item:nth-child(2) .az-meta-value",
+        "texto": "sí",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-tab-confirmadas",
+        "vista": "inbox",
+        "sel": "#tab-confirmed",
+        "texto": "Confirmadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-tab-rechazadas",
+        "vista": "inbox",
+        "sel": "#tab-rejected",
+        "texto": "Rechazadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-confirmadas",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(2) .kpi-val",
+        "texto": "—",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-etiqueta",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .kpi-label",
+        "texto": "Rechazadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-valor",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .kpi-val",
+        "texto": "—",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-insignia",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .badge",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-light-1280.png",
+      "mock": "capturas/mock-inbox-light-1280.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      },
+      {
+        "id": "contenido-inbox-nueva-aplicacion",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-subbar-actions a",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-familias",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-header-meta .az-meta-item:nth-child(3)",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-reset",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-header-meta .az-meta-item:nth-child(2) .az-meta-value",
+        "texto": "sí",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-tab-confirmadas",
+        "vista": "inbox",
+        "sel": "#tab-confirmed",
+        "texto": "Confirmadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-tab-rechazadas",
+        "vista": "inbox",
+        "sel": "#tab-rejected",
+        "texto": "Rechazadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-confirmadas",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(2) .kpi-val",
+        "texto": "—",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-etiqueta",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .kpi-label",
+        "texto": "Rechazadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-valor",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .kpi-val",
+        "texto": "—",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-insignia",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .badge",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 495000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        1320
+      ],
+      "tamanoMock": [
+        375,
+        1320
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-light-375.png",
+      "mock": "capturas/mock-inbox-light-375.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "contenido-inbox-nueva-aplicacion",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-subbar-actions a",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-familias",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-header-meta .az-meta-item:nth-child(3)",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-reset",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-header-meta .az-meta-item:nth-child(2) .az-meta-value",
+        "texto": "sí",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-tab-confirmadas",
+        "vista": "inbox",
+        "sel": "#tab-confirmed",
+        "texto": "Confirmadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-tab-rechazadas",
+        "vista": "inbox",
+        "sel": "#tab-rejected",
+        "texto": "Rechazadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-confirmadas",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(2) .kpi-val",
+        "texto": "—",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-etiqueta",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .kpi-label",
+        "texto": "Rechazadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-valor",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .kpi-val",
+        "texto": "—",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-insignia",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .badge",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-dark-1280.png",
+      "mock": "capturas/mock-inbox-dark-1280.png"
+    }
+  },
+  {
+    "vista": "inbox",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      },
+      {
+        "id": "contenido-inbox-nueva-aplicacion",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-subbar-actions a",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-familias",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-header-meta .az-meta-item:nth-child(3)",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-reset",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .az-header-meta .az-meta-item:nth-child(2) .az-meta-value",
+        "texto": "sí",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-tab-confirmadas",
+        "vista": "inbox",
+        "sel": "#tab-confirmed",
+        "texto": "Confirmadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-tab-rechazadas",
+        "vista": "inbox",
+        "sel": "#tab-rejected",
+        "texto": "Rechazadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-confirmadas",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(2) .kpi-val",
+        "texto": "—",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-etiqueta",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .kpi-label",
+        "texto": "Rechazadas",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-valor",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .kpi-val",
+        "texto": "—",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-inbox-kpi-rechazadas-insignia",
+        "vista": "inbox",
+        "sel": "[data-view=\"inbox\"] .kpi-box:nth-child(4) .badge",
+        "operacion": "retirar",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 495000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        1320
+      ],
+      "tamanoMock": [
+        375,
+        1320
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-inbox-dark-375.png",
+      "mock": "capturas/mock-inbox-dark-375.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      },
+      {
+        "id": "contenido-run-subtitulo",
+        "vista": "run",
+        "sel": "#runReportCard .card-sub",
+        "texto": "Se encontraron fallos de lógica de negocio.",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-estado",
+        "vista": "run",
+        "sel": "#runHeaderState",
+        "texto": "Completada (done)",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-invariante",
+        "vista": "run",
+        "sel": "#runReportCard dd:nth-of-type(1)",
+        "texto": "El stock de un producto nunca puede quedar menor que 0 tras crear o confirmar un pedido (stock >= 0).",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-causa",
+        "vista": "run",
+        "sel": "#runReportCard dd:nth-of-type(2)",
+        "texto": "El handler de POST /orders deduce la cantidad solicitada sin validar previamente la disponibilidad actual cuando el pedido incluye el flag promocional.",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1301760,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        1017
+      ],
+      "tamanoMock": [
+        1280,
+        1017
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-light-1280.png",
+      "mock": "capturas/mock-run-light-1280.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      },
+      {
+        "id": "contenido-run-subtitulo",
+        "vista": "run",
+        "sel": "#runReportCard .card-sub",
+        "texto": "Se encontraron fallos de lógica de negocio.",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-estado",
+        "vista": "run",
+        "sel": "#runHeaderState",
+        "texto": "Completada (done)",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-invariante",
+        "vista": "run",
+        "sel": "#runReportCard dd:nth-of-type(1)",
+        "texto": "El stock de un producto nunca puede quedar menor que 0 tras crear o confirmar un pedido (stock >= 0).",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-causa",
+        "vista": "run",
+        "sel": "#runReportCard dd:nth-of-type(2)",
+        "texto": "El handler de POST /orders deduce la cantidad solicitada sin validar previamente la disponibilidad actual cuando el pedido incluye el flag promocional.",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 894000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        2384
+      ],
+      "tamanoMock": [
+        375,
+        2384
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-light-375.png",
+      "mock": "capturas/mock-run-light-375.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      },
+      {
+        "id": "contenido-run-subtitulo",
+        "vista": "run",
+        "sel": "#runReportCard .card-sub",
+        "texto": "Se encontraron fallos de lógica de negocio.",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-estado",
+        "vista": "run",
+        "sel": "#runHeaderState",
+        "texto": "Completada (done)",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-invariante",
+        "vista": "run",
+        "sel": "#runReportCard dd:nth-of-type(1)",
+        "texto": "El stock de un producto nunca puede quedar menor que 0 tras crear o confirmar un pedido (stock >= 0).",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-causa",
+        "vista": "run",
+        "sel": "#runReportCard dd:nth-of-type(2)",
+        "texto": "El handler de POST /orders deduce la cantidad solicitada sin validar previamente la disponibilidad actual cuando el pedido incluye el flag promocional.",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1301760,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        1017
+      ],
+      "tamanoMock": [
+        1280,
+        1017
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-dark-1280.png",
+      "mock": "capturas/mock-run-dark-1280.png"
+    }
+  },
+  {
+    "vista": "run",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-corrida",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #runDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      },
+      {
+        "id": "contenido-run-subtitulo",
+        "vista": "run",
+        "sel": "#runReportCard .card-sub",
+        "texto": "Se encontraron fallos de lógica de negocio.",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-estado",
+        "vista": "run",
+        "sel": "#runHeaderState",
+        "texto": "Completada (done)",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-invariante",
+        "vista": "run",
+        "sel": "#runReportCard dd:nth-of-type(1)",
+        "texto": "El stock de un producto nunca puede quedar menor que 0 tras crear o confirmar un pedido (stock >= 0).",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-run-causa",
+        "vista": "run",
+        "sel": "#runReportCard dd:nth-of-type(2)",
+        "texto": "El handler de POST /orders deduce la cantidad solicitada sin validar previamente la disponibilidad actual cuando el pedido incluye el flag promocional.",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 894000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        2384
+      ],
+      "tamanoMock": [
+        375,
+        2384
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-run-dark-375.png",
+      "mock": "capturas/mock-run-dark-375.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-light-1280.png",
+      "mock": "capturas/mock-runs-light-1280.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 300000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-light-375.png",
+      "mock": "capturas/mock-runs-light-375.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-dark-1280.png",
+      "mock": "capturas/mock-runs-dark-1280.png"
+    }
+  },
+  {
+    "vista": "runs",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 300000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-runs-dark-375.png",
+      "mock": "capturas/mock-runs-dark-375.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      },
+      {
+        "id": "contenido-warm-descripcion",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .az-page-title p",
+        "operacion": "texto-con-codigo",
+        "antes": "Estado en vivo del entorno (",
+        "despues": ", sondeo cada 10 s en solo lectura).",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-warm-subtitulo",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .card-head .card-sub",
+        "texto": "El reset debe estar verificado antes de confiar en los resultados.",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-warm-identificador",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .kpi-box:nth-child(4) .kpi-val",
+        "texto": "aqs-test",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-light-1280.png",
+      "mock": "capturas/mock-warm-light-1280.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      },
+      {
+        "id": "contenido-warm-descripcion",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .az-page-title p",
+        "operacion": "texto-con-codigo",
+        "antes": "Estado en vivo del entorno (",
+        "despues": ", sondeo cada 10 s en solo lectura).",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-warm-subtitulo",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .card-head .card-sub",
+        "texto": "El reset debe estar verificado antes de confiar en los resultados.",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-warm-identificador",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .kpi-box:nth-child(4) .kpi-val",
+        "texto": "aqs-test",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 339000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        904
+      ],
+      "tamanoMock": [
+        375,
+        904
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-light-375.png",
+      "mock": "capturas/mock-warm-light-375.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      },
+      {
+        "id": "contenido-warm-descripcion",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .az-page-title p",
+        "operacion": "texto-con-codigo",
+        "antes": "Estado en vivo del entorno (",
+        "despues": ", sondeo cada 10 s en solo lectura).",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-warm-subtitulo",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .card-head .card-sub",
+        "texto": "El reset debe estar verificado antes de confiar en los resultados.",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-warm-identificador",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .kpi-box:nth-child(4) .kpi-val",
+        "texto": "aqs-test",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-dark-1280.png",
+      "mock": "capturas/mock-warm-dark-1280.png"
+    }
+  },
+  {
+    "vista": "warm",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-conmutador-entorno",
+        "tipo": "ocultar",
+        "sel": ".az-meta-item:has(> #warmDemoSwitcher)"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      },
+      {
+        "id": "contenido-warm-descripcion",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .az-page-title p",
+        "operacion": "texto-con-codigo",
+        "antes": "Estado en vivo del entorno (",
+        "despues": ", sondeo cada 10 s en solo lectura).",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-warm-subtitulo",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .card-head .card-sub",
+        "texto": "El reset debe estar verificado antes de confiar en los resultados.",
+        "tipo": "contenido"
+      },
+      {
+        "id": "contenido-warm-identificador",
+        "vista": "warm",
+        "sel": "[data-view=\"warm\"] .kpi-box:nth-child(4) .kpi-val",
+        "texto": "aqs-test",
+        "tipo": "contenido"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 339000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        904
+      ],
+      "tamanoMock": [
+        375,
+        904
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-warm-dark-375.png",
+      "mock": "capturas/mock-warm-dark-375.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "light",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-light-1280.png",
+      "mock": "capturas/mock-login-light-1280.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "light",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 300000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-light-375.png",
+      "mock": "capturas/mock-login-light-375.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "dark",
+    "ancho": 1280,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 1024000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        1280,
+        800
+      ],
+      "tamanoMock": [
+        1280,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-dark-1280.png",
+      "mock": "capturas/mock-login-dark-1280.png"
+    }
+  },
+  {
+    "vista": "login",
+    "tema": "dark",
+    "ancho": 375,
+    "ok": true,
+    "desbordamientoHorizontal": {
+      "app": 0,
+      "mock": 0
+    },
+    "neutralizaciones": [
+      {
+        "id": "demo-paneles-error-login",
+        "tipo": "ocultar",
+        "sel": "div:has(> .segmented > [data-login-demo])"
+      },
+      {
+        "id": "desbordamiento-grid-main-side",
+        "tipo": "css",
+        "regla": ".grid-main-side { grid-template-columns: minmax(0, 1fr); }"
+      },
+      {
+        "id": "desbordamiento-table-wrap",
+        "tipo": "css",
+        "regla": ".table-wrap { position: relative; }"
+      }
+    ],
+    "estilos": [],
+    "estructura": [],
+    "pixeles": {
+      "distintos": 0,
+      "total": 300000,
+      "porcentaje": 0,
+      "umbral": 0.05,
+      "ok": true,
+      "tamanoApp": [
+        375,
+        800
+      ],
+      "tamanoMock": [
+        375,
+        800
+      ]
+    },
+    "capturas": {
+      "app": "capturas/app-login-dark-375.png",
+      "mock": "capturas/mock-login-dark-375.png"
+    }
+  }
+]

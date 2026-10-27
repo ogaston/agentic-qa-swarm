@@ -1,0 +1,31 @@
+vite v5.4.11 building for production...
+transforming...
+✓ 54 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../../../tmp/u10-t05-dist-fBYfRS/index.html                   0.40 kB │ gzip:  0.27 kB
+../../../../../../../tmp/u10-t05-dist-fBYfRS/assets/index-Dcsb5Yns.css   20.27 kB │ gzip:  4.60 kB
+../../../../../../../tmp/u10-t05-dist-fBYfRS/assets/index-DnESNgXI.js   209.76 kB │ gzip: 66.30 kB
+✓ built in 1.03s
+FALLA inbox-light-1280 estilos=0 estructura=0 pixeles=6.70%
+FALLA inbox-light-375 estilos=0 estructura=0 pixeles=15.91%
+FALLA inbox-dark-1280 estilos=0 estructura=0 pixeles=6.72%
+FALLA inbox-dark-375 estilos=0 estructura=0 pixeles=16.82%
+OK run-light-1280 estilos=0 estructura=0 pixeles=4.80%
+FALLA run-light-375 estilos=1 estructura=0 pixeles=14.65%
+OK run-dark-1280 estilos=0 estructura=0 pixeles=4.92%
+FALLA run-dark-375 estilos=1 estructura=0 pixeles=15.04%
+OK runs-light-1280 estilos=0 estructura=0 pixeles=1.37%
+OK runs-light-375 estilos=0 estructura=0 pixeles=3.23%
+OK runs-dark-1280 estilos=0 estructura=0 pixeles=1.66%
+OK runs-dark-375 estilos=0 estructura=0 pixeles=4.20%
+OK warm-light-1280 estilos=0 estructura=0 pixeles=1.92%
+FALLA warm-light-375 estilos=1 estructura=0 pixeles=9.71%
+OK warm-dark-1280 estilos=0 estructura=0 pixeles=2.04%
+FALLA warm-dark-375 estilos=1 estructura=0 pixeles=11.24%
+OK login-light-1280 estilos=0 estructura=0 pixeles=0.54%
+OK login-light-375 estilos=0 estructura=0 pixeles=1.61%
+OK login-dark-1280 estilos=0 estructura=0 pixeles=0.55%
+OK login-dark-375 estilos=0 estructura=0 pixeles=1.61%
+e2e:fidelidad: 12 de 20 combinaciones OK (píxeles distintos máx. 16.82 %)
+informe: /home/omarjayg/Javeriana/topicos-especiales/agentic-qa-swarm-wt-U10-T06/bitacoras/U10-T06/ronda-3-rojo/informe.json

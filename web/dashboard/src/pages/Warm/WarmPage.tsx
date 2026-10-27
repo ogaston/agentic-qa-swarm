@@ -68,7 +68,7 @@ export function WarmPage() {
   const warmNoDisponible = error instanceof ApiError && error.status === 503 && error.code === 'warm_unavailable';
 
   return (
-    <main className="az-container">
+    <main className="az-container warm-page">
       <PageHeader
         titulo="Entorno"
         descripcion={
