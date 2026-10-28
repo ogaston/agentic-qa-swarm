@@ -1202,3 +1202,12 @@ de U8-T08). Se añadió `scripts/demo/README.md` con el flujo y un enlace desde
 `docs/demo-real.md`. Verificación: `bash -n` en los tres scripts; pruebas funcionales con
 mocks en 10-push-commit; end-to-end pendiente de la primera corrida real (requiere clúster
 desplegado, túnel y push real del humano).
+
+## 2026-10-28T14:05:00Z — docs/demo-real.md reescrito sobre los scripts asistidos
+
+**Entrada del usuario (verbatim)**: «can you update the demo-real doc to use those scritps».
+
+**Acción**: `docs/demo-real.md` ahora usa los scripts de `scripts/demo/` como camino principal
+(Paso 0 = `00-setup.sh`, Paso 1/2 = `10-push-commit.sh` + `20-run-and-watch.sh`); los comandos
+manuales se conservan en la sección nueva «Guion manual (referencia)» para diagnóstico.
+Precondiciones y «Si la imagen aún no existe» actualizadas a los scripts. Mismo PR #149.
