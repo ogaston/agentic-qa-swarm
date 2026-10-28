@@ -34,6 +34,23 @@ const ETIQUETA_ENTORNO: Record<WarmState['state'], string> = {
   'idle-escalado': 'Inactivo (escalado)',
 };
 
+type TonoEntorno = 'ok' | 'warn' | 'neutral';
+
+/** Tono semántico por estado del warm: el mismo mapeo que la vista del entorno (WarmPage). */
+const TONO_ENTORNO: Record<WarmState['state'], TonoEntorno> = {
+  ready: 'ok',
+  dirty: 'warn',
+  cuarentena: 'warn',
+  'idle-escalado': 'neutral',
+};
+
+/** Color de la barra del KPI por tono del estado del warm. */
+const BARRA_ENTORNO: Record<TonoEntorno, string> = {
+  ok: 'var(--ok)',
+  warn: 'var(--warn)',
+  neutral: 'var(--text-muted)',
+};
+
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';
 const MSG_NO_EXISTE = 'La notificación ya no existe';
 const RUN_ID = /^run-[0-9a-f]{16}$/;
@@ -241,10 +258,11 @@ export function InboxPage() {
   // Cabecera: solo celdas con dato real de la API. «Familias activas» no existe en la API: se omite.
   const meta: ElementoMeta[] = [];
   if (warm !== null) {
-    // U10-T06: el mockup muestra el identificador del entorno (warm_id, dato real) en verde, como su estado.
+    // U10-T06: el mockup muestra el identificador del entorno (warm_id, dato real) con el tono de su estado.
+    const tono = TONO_ENTORNO[warm.state];
     meta.push({
       etiqueta: 'Entorno',
-      valor: <span className="meta-ok">{`${ETIQUETA_ENTORNO[warm.state]} (${warm.warm_id})`}</span>,
+      valor: <span className={`meta-${tono}`}>{`${ETIQUETA_ENTORNO[warm.state]} (${warm.warm_id})`}</span>,
     });
     meta.push({
       etiqueta: 'Reset verificado',
@@ -328,9 +346,13 @@ export function InboxPage() {
           etiqueta="Estado del entorno"
           valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'}
           claseValor="kpi-valor-20"
-          insignia={warm !== null ? { clase: 'badge-ok', texto: warm.state, punto: true } : undefined}
+          insignia={
+            warm !== null
+              ? { clase: `badge-${TONO_ENTORNO[warm.state]}`, texto: warm.state, punto: true }
+              : undefined
+          }
           barra={100}
-          colorBarra="var(--ok)"
+          colorBarra={warm !== null ? BARRA_ENTORNO[TONO_ENTORNO[warm.state]] : 'var(--ok)'}
         />
         <Kpi etiqueta="Rechazadas" valor={textoContador('rejected')} barra={100} colorBarra="var(--teal)" />
       </div>

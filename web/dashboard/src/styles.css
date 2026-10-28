@@ -541,6 +541,15 @@ main.page-narrow {
   color: var(--ok);
 }
 
+/* Estados no listos en la cabecera: el mismo tono semántico que la vista del entorno. */
+.meta-warn {
+  color: var(--warn);
+}
+
+.meta-neutral {
+  color: var(--text-muted);
+}
+
 .kpi-val.kpi-valor-20 {
   font-size: 20px;
 }
