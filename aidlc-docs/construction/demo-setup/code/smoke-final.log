@@ -1,0 +1,28 @@
+OK healthz-go-identity
+OK healthz-ui-api
+OK healthz-go-intake
+OK healthz-go-run-controller
+OK healthz-go-warm-manager
+OK healthz-go-reset
+OK healthz-go-governance
+OK readyz-go-identity
+OK readyz-ui-api
+OK readyz-go-intake
+OK readyz-go-run-controller
+OK readyz-go-warm-manager
+OK readyz-go-reset
+OK readyz-go-governance
+OK login-demo
+OK inbox-con-token
+OK inbox-sin-token-401
+OK warm-estado
+OK rbac-test-ns-only
+OK netpol-control-positivo
+OK netpol-sin-egress-test
+OK secrets-no-en-logs
+PENDIENTE ciclo-webhook-confirm-corrida (preflight no envía webhooks ni confirma corridas; corresponde al paso humano de la demo)
+OK llm-real-configurado
+OK llm-egress-acotado
+reset verificado: cubierto por scripts/test/u8-target-app-kind.sh (U8-T04, baseline real de la app objetivo)
+usuario MinIO de los agentes: cubierto por scripts/test/u8-minio-user-kind.sh (U8-T05, C-107)
+smoke: OK (sin FALLA; pendientes declarados arriba)

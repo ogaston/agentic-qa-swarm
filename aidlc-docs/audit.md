@@ -1211,3 +1211,104 @@ desplegado, túnel y push real del humano).
 (Paso 0 = `00-setup.sh`, Paso 1/2 = `10-push-commit.sh` + `20-run-and-watch.sh`); los comandos
 manuales se conservan en la sección nueva «Guion manual (referencia)» para diagnóstico.
 Precondiciones y «Si la imagen aún no existe» actualizadas a los scripts. Mismo PR #149.
+
+## CONSTRUCTION — Reanudación del diagnóstico de setup de demo
+**Timestamp**: 2026-10-28T14:24:06Z
+**User Input**:
+```text
+can you continue this work: stá desplegada
+OK cluster-kind-aqs
+OK contexto-kind-aqs
+FALLA despliegue-plataforma
+    el namespace aqs-system no existe (¿falta bash scripts/kind/deploy.sh?)
+    el namespace aqs-test no existe (¿falta bash scripts/kind/deploy.sh?)
+    sugerencia: bash scripts/kind/deploy.sh (o repite este script con --deploy)
+setup: FALLA (despliegue incompleto; el resto de comprobaciones se salta)
+
+Javeriana/topicos-especiales/agentic-qa-swarm →   feat/scripts-demo[?]
+```
+**AI Response**: Retomar el diagnóstico del setup local, conservar los cambios existentes y verificar el estado real antes de proponer cambios de infraestructura.
+**Context**: CONSTRUCTION activa; no se avanza de etapa. La consulta de cobertura del grafo fue rechazada por la política de aprobación del MCP; se usa lectura directa de los scripts.
+
+---
+
+## CONSTRUCTION — Corrección verificada y solicitud de recuperación local
+**Timestamp**: 2026-10-28T14:29:11Z
+**AI Response**: La API responde y ambos namespaces existen. El rollout de warm-app está bloqueado por ImagePullBackOff de ghcr.io/ogaston/demo-target-app-qa-swarm:a776a34327b88fc188616558cf6df80884c0e1b1. Se conservó el trabajo previo y se mejoró el diagnóstico de 00-setup.sh. Sintaxis, 8 regresiones aisladas y git diff --check pasan. La consulta real de disponibilidad devuelve correctamente rc=1 con el motivo de espera. No se modificó el clúster.
+**Approval Prompt**: «¿Apruebas restaurar la imagen de referencia de warm-app en kind-aqs/aqs-test y repetir el setup local? A) Aprobar la recuperación: ejecutar kubectl set image con la imagen b97a719199d5ccbc2ff24f9cfc408ec7ee31114d, esperar el rollout y ejecutar 00-setup.sh, incluidos port-forwards, túnel público de go-intake y pod temporal de humo. B) Request Changes».
+**Context**: Pregunta y comandos exactos en aidlc-docs/construction/demo-setup-recovery-questions.md. Requiere aprobación humana registrada conforme a AUTONOMIA-01. Etapa CONSTRUCTION conservada; recuperación real y setup completo pendientes.
+
+---
+
+## CONSTRUCTION — Aprobación de recuperación local del Paso 0
+**Timestamp**: 2026-10-28T14:33:36Z
+**User Input**: "hazlo"
+**AI Response**: Autorización recibida para restaurar la imagen de referencia de warm-app en kind-aqs/aqs-test, verificar su rollout y repetir el setup completo, incluidos port-forwards, túnel y pod de humo temporal.
+**Context**: Aprobación explícita de la opción A de aidlc-docs/construction/demo-setup-recovery-questions.md. AUTONOMIA-01 satisfecha para los comandos y alcance allí descritos. No incluye eventos GitHub ni confirmación de corridas QA.
+
+---
+
+## CONSTRUCTION — Recuperación de imagen ejecutada y bloqueo de reset identificado
+**Timestamp**: 2026-10-28T14:41:05Z
+**AI Response**: Se ejecutó la recuperación autorizada de warm-app a b97a719199d5ccbc2ff24f9cfc408ec7ee31114d; rollout exitoso. El lock existente pertenecía a kubectl port-forward PID 66553, sin scripts de prueba activos; se siguió la pauta de residuos del setup. El primer setup terminó rc=1: todos los checks previos pasaron, pero ciclo-webhook-confirm-corrida falló porque el controlador devolvió 404.
+**Scope Incident**: El humo histórico sí envió un webhook sintético y confirmó su notificación (run-4b7d795ebc8a92e4), efecto no advertido y excluido del alcance anunciado. Los logs del controlador registraron gate denegado por reset_verified=false. Se informó al usuario en commentary; no se eliminaron registros ni se repitió esa confirmación.
+**Correction**: Se agregó kind-smoke.sh --preflight y 00-setup.sh ahora lo usa: no envía webhooks ni confirma corridas; exige warm ready con reset_verified=true. La invocación histórica de kind-smoke.sh sin argumentos conserva el ciclo activo. Pasan 8 regresiones de setup y 5 pruebas adicionales de seguridad del preflight (incluyen 4 combinaciones de estado/verificación), además de bash -n y git diff --check.
+**Evidence**: ConfigMap warm-state consultado en modo lectura: dirty, reset_verified=false. El segundo setup preflight detecta ese bloqueo y deja ciclo-webhook-confirm-corrida explícitamente PENDIENTE.
+**Approval Prompt**: «¿Apruebas ejecutar el reset verificado del warm local, que elimina los datos de prueba actuales y vacía su caché? A) Aprobar reset mediante go-reset y repetir setup preflight. B) Request Changes».
+**Context**: Operación concreta y efectos destructivos documentados en aidlc-docs/construction/demo-setup-reset-questions.md. El reset no fue ejecutado; requiere nueva aprobación humana porque borra datos y excede la restauración de imagen autorizada.
+
+---
+
+## CONSTRUCTION — Consulta de estado y verificación final
+**Timestamp**: 2026-10-28T14:50:33Z
+**User Input**: "listo?"
+**AI Response**: La consulta actual del ConfigMap warm-state devuelve state=ready y reset_verified=true. El archivo de aprobación del reset sigue sin respuesta; no se ejecutó el reset propuesto ni se requiere ya para la comprobación. Se repite únicamente el setup preflight previamente autorizado, sin webhooks ni confirmaciones de corridas.
+**Context**: El estado cambió desde la última comprobación por una acción externa a esta sesión; no se atribuye ese reset al asistente. Verificación final para cerrar la recuperación.
+
+---
+
+## CONSTRUCTION — Setup local recuperado y verificación final satisfactoria
+**Timestamp**: 2026-10-28T14:51:57Z
+**AI Response**: Verificación final de bash scripts/demo/00-setup.sh completada con rc=0, setup: OK y humo preflight con 0 líneas FALLA. Warm ready/reset_verified=true. Se conservó el túnel existente y la prueba no envió webhooks ni confirmó corridas. El reset propuesto no fue ejecutado por el asistente; su solicitud de aprobación queda obsoleta porque el estado ya estaba verificado.
+**Context**: Evidencia en aidlc-docs/construction/demo-setup/code/setup-final.log y smoke-final.log. Recuperación del Paso 0 completada. Ensayo real y etapa Build and Test del proyecto continúan pendientes; no se avanza de etapa.
+
+---
+
+## CONSTRUCTION — Instrucciones para la primera demo
+**Timestamp**: 2026-10-28T14:54:05Z
+**User Input**: "que debo hacer ahora?"
+**AI Response**: Revisar el guion y dar la secuencia de configuración del webhook en GitHub, dashboard, commit sano con imagen publicada, vigilancia y confirmación humana. Los comandos de push se presentan como instrucciones, no se ejecutan. La lectura de github-webhook-check.sh confirma que espera la entrega real de GitHub; no envía un webhook sintético.
+**Context**: Paso 0 recuperado. La demo real sigue pendiente; ninguna nueva corrida se confirma por esta consulta.
+
+---
+
+## CONSTRUCTION — Consulta del secreto de intake
+**Timestamp**: 2026-10-28T14:59:38Z
+**User Input**: "como puedo ver el secret de go intake?"
+**AI Response**: Proporcionar el comando kubectl para que el usuario lea localmente la clave secret del Secret go-intake-webhook en kind-aqs/aqs-system y la decodifique con base64. No ejecutar la lectura ni registrar el valor del secreto.
+**Context**: Configuración manual del webhook de GitHub para la demo.
+
+---
+
+## CONSTRUCTION — Consulta de contraseña del usuario demo
+**Timestamp**: 2026-10-28T15:02:39Z
+**User Input**: "how to see the password for demo user?"
+**AI Response**: Proporcionar un comando sed para que el usuario vea localmente la segunda línea de demo.txt, respetando AQS_KIND_STATE_DIR y XDG_STATE_HOME. No leer ni registrar la contraseña.
+**Context**: Inicio de sesión manual en el dashboard de la demo.
+
+---
+
+## CONSTRUCTION — Revisión de corrida real
+**Timestamp**: 2026-10-28T15:09:12Z
+**User Input**: "okay the run is done, can you check if everything went well?"
+**AI Response**: Revisar la corrida más reciente, el reporte, la imagen desplegada, los resultados de Jobs y el reset verificado del warm. Consultas de lectura; sin confirmar ni lanzar nuevas corridas ni modificar infraestructura.
+**Context**: El usuario informa que terminó la corrida de la demo y solicita verificación independiente.
+
+---
+
+## CONSTRUCTION — Corrida sana comprobada
+**Timestamp**: 2026-10-28T15:10:48Z
+**AI Response**: La última confirmación corresponde a run-d3fdad3c9118b08a (15:07:07Z), SHA 460b66b36e0db2ad12e7a7437fbfa43039541692. GET /runs devuelve done y sin-hallazgos; GET /reports devuelve findings vacío. Los siete logs de runner reportan ok:true: HTTP 200/200/200/201/201/404/409 según flujo. Un ensayo y siete runners completados, sin fallos de Job registrados. La imagen del warm coincide con el SHA confirmado; TARGET_APP_BUG=off. Warm ready/reset_verified=true/baseline v1. No se modificó infraestructura ni se enviaron eventos.
+**Context**: Evidencia en aidlc-docs/construction/demo-setup/code/run-d3fdad3c9118b08a-verification.md. Caso sano demostrado en esta revisión; el caso con oversell no se ejecutó por esta solicitud. No se avanza de etapa AI-DLC.
+
+---

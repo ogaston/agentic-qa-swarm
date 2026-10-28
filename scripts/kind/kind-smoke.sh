@@ -5,6 +5,7 @@
 # que los logs no contienen secretos. Imprime «OK|FALLA <comprobación>» y sale 0 solo si ninguna falla.
 # Al final imprime «PENDIENTE <paso> (<motivo>)» para lo que el ciclo de corrida aún no hace en kind.
 # No imprime valores de Secrets ni tokens. Limpia port-forwards y el pod de prueba siempre (trap).
+# --preflight comprueba preparación sin enviar webhooks ni confirmar corridas; exige warm ready y reset verificado.
 # shellcheck disable=SC2317  # las funciones de comprobación se invocan indirectamente (check)
 set -uo pipefail
 
@@ -12,6 +13,13 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root" || exit 1
 # shellcheck disable=SC1091  # lib.sh se carga por ruta dinámica (relativa a root)
 . "$root/scripts/kind/lib.sh"
+
+preflight=0
+case "$*" in
+  "") ;;
+  --preflight) preflight=1 ;;
+  *) echo "uso: bash scripts/kind/kind-smoke.sh [--preflight]" >&2; exit 2 ;;
+esac
 
 require_kind_context # sale 3 si el contexto no es kind-aqs (antes de crear nada)
 
@@ -140,6 +148,12 @@ warm_estado() {
   st=$(jq -r '.state // empty' "$work/body")
   enum=$(jq -r '.properties.state.enum[]' "$root/contracts/plans/warm-state.schema.json") || return 1
   grep -qxF "$st" <<<"$enum" || { echo "state='$st' no pertenece al enum WarmState"; return 1; }
+  if [ "$preflight" -eq 1 ]; then
+    jq -e '.state == "ready" and .reset_verified == true' "$work/body" >/dev/null || {
+      echo "warm no preparado para demo: state=$st, reset_verified=$(jq -r '.reset_verified' "$work/body"); requiere reset verificado antes de confirmar corridas"
+      return 1
+    }
+  fi
 }
 check warm-estado warm_estado
 
@@ -316,7 +330,14 @@ ciclo_webhook_confirm_corrida() {
   echo "la corrida $run_id no aparece en el controlador (GET /runs -> $code)"
   return 1
 }
-check ciclo-webhook-confirm-corrida ciclo_webhook_confirm_corrida
+check_ciclo_corrida() {
+  if [ "$preflight" -eq 1 ]; then
+    echo "PENDIENTE ciclo-webhook-confirm-corrida (preflight no envía webhooks ni confirma corridas; corresponde al paso humano de la demo)"
+  else
+    check ciclo-webhook-confirm-corrida ciclo_webhook_confirm_corrida
+  fi
+}
+check_ciclo_corrida
 
 # 9. LLM real (U8-T09, ronda 3): planner y reporter disponibles con LLM_PROVIDER=http. El egreso de los agentes
 # está acotado al gateway: desde el pod del planner, el gateway (host:puerto de LLM_BASE_URL, leído dentro del pod
