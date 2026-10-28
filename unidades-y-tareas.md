@@ -286,6 +286,7 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 | U10-T3 | [x] | Corrida: encabezado, post-mortem, plan plegable, línea de tiempo en rejilla | S5, US-M9, US-M4 | `tareas/U10-T03-corrida-fiel.md` |
 | U10-T4 | [x] | Mis corridas, Entorno y Login | S5, US-M10 | `tareas/U10-T04-runs-warm-login-fieles.md` |
 | U10-T5 | [ ] | `e2e:fidelidad`: compara estilos calculados, estructura y píxeles contra el mockup; enganchado al smoke | S5 | `tareas/U10-T05-compuerta-de-fidelidad-visual.md` |
+| U10-T6 | [ ] | Cierra las brechas que mide la compuerta hasta `e2e:fidelidad` en 0 (20 de 20) | S5 | `tareas/U10-T06-cierre-de-brechas-de-fidelidad.md` |
 
 > **Tareas redactadas (2026-10-22)**, a pedido del humano tras comparar el dashboard con el mockup («looks way different»). Causa: U9-T04 portó tokens pero no la estructura ni un criterio comparativo. Olas: **1** = T01; **2** = T02 ∥ T03 ∥ T04 ∥ T05 (máx. 3 en paralelo: T05 va tras la primera que cierre); todas exigen T01. Decisiones al redactar (el humano puede revertirlas): «Warm» → «Entorno» como en el mockup; KPI y metadatos solo con datos reales; el banner «Iniciar ejecución» y el conmutador demo no se portan.
 

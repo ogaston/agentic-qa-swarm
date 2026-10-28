@@ -19,11 +19,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
+import { INFORME_FIDELIDAD, NOTIFICACIONES, PLAN_FIDELIDAD, RECIBOS_FIDELIDAD, RUN_ID, WARM_FIDELIDAD } from './fidelidad-datos.mjs';
 
 const DASHBOARD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAIZ = path.resolve(DASHBOARD, '../..');
 const MOCKUP = path.join(RAIZ, 'mockups/swarm-mock.html');
-const EJEMPLOS = path.join(RAIZ, 'contracts');
 const DEFECTO_SALIDA = path.join(RAIZ, 'bitacoras/U10-T05');
 const USO = 'uso: e2e-fidelidad.mjs [--control] [--out <directorio>]';
 
@@ -52,7 +52,7 @@ const SALIDA = OPCIONES.control ? path.join(OPCIONES.out, 'control') : OPCIONES.
 const CAPTURAS = path.join(SALIDA, 'capturas');
 const DIST = fs.mkdtempSync(path.join(os.tmpdir(), 'u10-t05-dist-'));
 
-const ID = 'run-0123456789abcdef';
+const ID = RUN_ID;
 const UMBRAL_PIXELES = 0.05; // ≤ 5 % del área de la captura
 const TOLERANCIA_CANAL = 16; // diferencia máxima por canal (0–255) para considerar «igual»
 const TOLERANCIA_PX = 1; // ±1 px en propiedades de longitud
@@ -82,14 +82,13 @@ const ESTRUCTURA_SEL =
   'header, nav[aria-label], [role=tablist], h1, h2, h3, section[aria-label]:not(.view), details.card > summary';
 
 // Respuestas fijas de la API (la misma forma que los ejemplos del contrato).
-const leer = (...partes) => JSON.parse(fs.readFileSync(path.join(EJEMPLOS, ...partes), 'utf8'));
 const FIJOS = {
-  notificaciones: [leer('openapi/examples/valid/Notification.pending-artifact.json')],
-  recibos: [leer('openapi/examples/valid/ConfirmationReceipt.ok.json')],
-  warm: leer('plans/examples/valid/warm-state.ready.json'),
+  notificaciones: NOTIFICACIONES,
+  recibos: RECIBOS_FIDELIDAD,
+  warm: WARM_FIDELIDAD,
   corrida: { id: ID, trace_id: 'tr-99201a4f-8c1e-44d0-a712', state: 'done', verdict: 'bug' },
-  plan: { ...leer('plans/examples/valid/flow-plan.body-y-sondeo.json'), run_id: ID },
-  informe: { ...leer('plans/examples/valid/report.dos-hallazgos.json'), run_id: ID },
+  plan: PLAN_FIDELIDAD,
+  informe: INFORME_FIDELIDAD,
 };
 
 function construir() {
@@ -118,7 +117,10 @@ async function rutaApi(route) {
   const p = url.pathname;
   if (p === '/api/auth/login') return json({ token: 'token-fidelidad', expires_at: new Date(Date.now() + 3600e3).toISOString() });
   if (p === '/api/auth/session') return json({ principal_id: 'operador-demo', role: 'user' });
-  if (p === '/api/notifications') return json(FIJOS.notificaciones);
+  if (p === '/api/notifications') {
+    const estado = url.searchParams.get('state');
+    return json(FIJOS.notificaciones.filter((n) => estado === null || n.state === estado));
+  }
   if (p === '/api/confirmations') return json(FIJOS.recibos);
   if (p === '/api/warm') return json(FIJOS.warm);
   if (p === `/api/runs/${ID}`) return json(FIJOS.corrida);
@@ -314,18 +316,86 @@ async function vistaApp(navegador, base, vista, tema, ancho) {
   return { ...medida, png };
 }
 
+// Neutralizaciones de la PREPARACIÓN del mockup (no de la app). Cada una queda en el informe (campo
+// `neutralizaciones` de cada combinación). Demo: el conmutador «Previsualizar estado (Demo)» de la corrida y
+// los paneles «Previsualizar estados de error (U6-T03)» del login son previsualizaciones que U10 excluye de la
+// app (DESIGN.md §1.3; unidades-y-tareas.md, límites de U10). Se ocultan con display:none al medir el mockup.
+// Decisión del humano (2026-10-26, (a)): también el conmutador «Simular estado del entorno» de Entorno.
+const OCULTAR_MOCK = [
+  { id: 'demo-conmutador-corrida', vista: 'run', sel: '.az-meta-item:has(> #runDemoSwitcher)' },
+  { id: 'demo-paneles-error-login', vista: 'login', sel: 'div:has(> .segmented > [data-login-demo])' },
+  { id: 'demo-conmutador-entorno', vista: 'warm', sel: '.az-meta-item:has(> #warmDemoSwitcher)' },
+];
+// Desbordamiento horizontal del mockup a 375 px (DESIGN.md §4.4 prohíbe copiarlo). Dos reglas mínimas, solo a
+// ese ancho: (1) la columna de 1fr del mockup (≤860 px) crece con el contenido ancho de la tabla; (2) el
+// .sr-only de la cabecera de tabla escapa a la página porque .table-wrap no es ancestro posicionado.
+const ANCHO_DESBORDE = 375;
+const CSS_DESBORDE_MOCK = [
+  { id: 'desbordamiento-grid-main-side', css: '.grid-main-side { grid-template-columns: minmax(0, 1fr); }' },
+  { id: 'desbordamiento-table-wrap', css: '.table-wrap { position: relative; }' },
+];
+
+// Opción A, aprobada 2026-10-27: solo contenido de la referencia, sin trasladar estilos de la app.
+// Cada ajuste es explícito y falla si su selector desaparece; el informe conserva su id y operación.
+const CONTENIDO_MOCK = [
+  // Bandeja: funcionalidades/metadatos inexistentes y conteos aún no consultados por la carga perezosa.
+  { id: 'contenido-inbox-nueva-aplicacion', vista: 'inbox', sel: '[data-view="inbox"] .az-subbar-actions a', operacion: 'retirar' },
+  { id: 'contenido-inbox-familias', vista: 'inbox', sel: '[data-view="inbox"] .az-header-meta .az-meta-item:nth-child(3)', operacion: 'retirar' },
+  { id: 'contenido-inbox-reset', vista: 'inbox', sel: '[data-view="inbox"] .az-header-meta .az-meta-item:nth-child(2) .az-meta-value', texto: WARM_FIDELIDAD.reset_verified ? 'sí' : 'no' },
+  { id: 'contenido-inbox-tab-confirmadas', vista: 'inbox', sel: '#tab-confirmed', texto: 'Confirmadas' },
+  { id: 'contenido-inbox-tab-rechazadas', vista: 'inbox', sel: '#tab-rejected', texto: 'Rechazadas' },
+  { id: 'contenido-inbox-kpi-confirmadas', vista: 'inbox', sel: '[data-view="inbox"] .kpi-box:nth-child(2) .kpi-val', texto: '—' },
+  { id: 'contenido-inbox-kpi-rechazadas-etiqueta', vista: 'inbox', sel: '[data-view="inbox"] .kpi-box:nth-child(4) .kpi-label', texto: 'Rechazadas' },
+  { id: 'contenido-inbox-kpi-rechazadas-valor', vista: 'inbox', sel: '[data-view="inbox"] .kpi-box:nth-child(4) .kpi-val', texto: '—' },
+  { id: 'contenido-inbox-kpi-rechazadas-insignia', vista: 'inbox', sel: '[data-view="inbox"] .kpi-box:nth-child(4) .badge', operacion: 'retirar' },
+  // Corrida: la API entrega texto plano; los textos no anuncian una redacción de secretos inexistente.
+  { id: 'contenido-run-subtitulo', vista: 'run', sel: '#runReportCard .card-sub', texto: 'Se encontraron fallos de lógica de negocio.' },
+  { id: 'contenido-run-estado', vista: 'run', sel: '#runHeaderState', texto: 'Completada (done)' },
+  { id: 'contenido-run-invariante', vista: 'run', sel: '#runReportCard dd:nth-of-type(1)', texto: INFORME_FIDELIDAD.findings[0].invariant },
+  { id: 'contenido-run-causa', vista: 'run', sel: '#runReportCard dd:nth-of-type(2)', texto: INFORME_FIDELIDAD.findings[0].root_cause },
+  // Entorno: el contrato ofrece un solo id, sin namespace ni composición de infraestructura.
+  { id: 'contenido-warm-descripcion', vista: 'warm', sel: '[data-view="warm"] .az-page-title p', operacion: 'texto-con-codigo', antes: 'Estado en vivo del entorno (', despues: ', sondeo cada 10 s en solo lectura).' },
+  { id: 'contenido-warm-subtitulo', vista: 'warm', sel: '[data-view="warm"] .card-head .card-sub', texto: 'El reset debe estar verificado antes de confiar en los resultados.' },
+  { id: 'contenido-warm-identificador', vista: 'warm', sel: '[data-view="warm"] .kpi-box:nth-child(4) .kpi-val', texto: WARM_FIDELIDAD.warm_id },
+];
+
 async function vistaMockup(navegador, vista, tema, ancho) {
   const contexto = await navegador.newContext({ viewport: { width: ancho, height: 800 }, deviceScaleFactor: 1 });
   const pagina = await contexto.newPage();
   await pagina.goto(pathToFileURL(MOCKUP).href);
+  const ocultar = OCULTAR_MOCK.filter((o) => o.vista === vista.id);
+  const css = ancho === ANCHO_DESBORDE ? CSS_DESBORDE_MOCK : [];
+  const contenido = CONTENIDO_MOCK.filter((c) => c.vista === vista.id);
+  for (const c of css) await pagina.addStyleTag({ content: c.css });
+  // Un selector que no aparece en el mockup es un error: la neutralización no puede quedar en silencio.
   await pagina.evaluate(
-    ({ mock, tema, demo }) => {
+    ({ mock, tema, demo, ocultar, contenido }) => {
       document.documentElement.setAttribute('data-theme', tema);
       showView(mock);
       if (demo) applyRunDemo(demo);
+      for (const o of ocultar) {
+        const el = document.querySelector(o.sel);
+        if (!el) throw new Error(`neutralización ${o.id}: no hay «${o.sel}» en el mockup`);
+        el.style.setProperty('display', 'none', 'important');
+      }
+      for (const c of contenido) {
+        const el = document.querySelector(c.sel);
+        if (!el) throw new Error(`preparación ${c.id}: no hay «${c.sel}» en el mockup`);
+        if (c.operacion === 'retirar') el.remove();
+        else if (c.operacion === 'texto-con-codigo') {
+          const codigo = el.querySelector('code');
+          if (!codigo) throw new Error(`preparación ${c.id}: falta code`);
+          el.replaceChildren(document.createTextNode(c.antes), codigo, document.createTextNode(c.despues));
+        } else el.textContent = c.texto;
+      }
     },
-    { mock: vista.mock, tema, demo: vista.demoMock },
+    { mock: vista.mock, tema, demo: vista.demoMock, ocultar, contenido },
   );
+  const neutralizaciones = [
+    ...ocultar.map((o) => ({ id: o.id, tipo: 'ocultar', sel: o.sel })),
+    ...css.map((c) => ({ id: c.id, tipo: 'css', regla: c.css })),
+    ...contenido.map((c) => ({ ...c, tipo: 'contenido' })),
+  ];
   await pagina.waitForTimeout(300);
   const medida = await pagina.evaluate(medirEnPagina, { anclas: ANCLAS, estructuraSel: ESTRUCTURA_SEL });
   // Se compara el ancho del viewport (lo que ve el usuario sin desplazarse en horizontal). El desbordamiento
@@ -336,7 +406,7 @@ async function vistaMockup(navegador, vista, tema, ancho) {
     clip: { x: 0, y: 0, width: ancho, height: medida.alto },
   });
   await contexto.close();
-  return { ...medida, png };
+  return { ...medida, png, neutralizaciones };
 }
 
 async function main() {
@@ -378,6 +448,7 @@ async function main() {
             ancho,
             ok,
             desbordamientoHorizontal: { app: app.desbordamiento, mock: mock.desbordamiento },
+            neutralizaciones: mock.neutralizaciones,
             estilos,
             estructura,
             pixeles: { distintos: pixeles.distintos, total: pixeles.total, porcentaje: pixeles.porcentaje, umbral: UMBRAL_PIXELES, ok: pixelesOk, tamanoApp: [pixeles.ancho[0], pixeles.alto[0]], tamanoMock: [pixeles.ancho[1], pixeles.alto[1]] },

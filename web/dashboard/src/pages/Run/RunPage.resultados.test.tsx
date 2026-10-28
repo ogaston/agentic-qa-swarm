@@ -226,8 +226,8 @@ describe('RunPage: plan de flujos', () => {
     await vaciar();
     await avanzar(10_000);
     expect(plan.n).toBe(1);
-    expect(screen.getByText('Plan de flujos')).toBeTruthy();
-    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
+    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
     const pre = document.querySelector('pre');
     expect(pre?.textContent).toBe(JSON.stringify({ product_id: 1, qty: 11 }, null, 2));
   });
@@ -247,8 +247,8 @@ describe('RunPage: plan de flujos', () => {
     await vaciar();
     await avanzar(10_000);
     expect(plan.n).toBe(1);
-    expect(screen.getByText('Plan de flujos')).toBeTruthy();
-    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
+    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
   });
 
   it('failed llegando desde rehearsing pide el plan y lo muestra', async () => {
@@ -258,8 +258,8 @@ describe('RunPage: plan de flujos', () => {
     await vaciar();
     await avanzar(3000);
     expect(plan.n).toBe(1);
-    expect(screen.getByText('Plan de flujos')).toBeTruthy();
-    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
+    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
   });
 
   it('failed sin plan muestra «Plan aún no disponible»', async () => {
@@ -306,6 +306,6 @@ describe('RunPage: plan de flujos', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeTruthy();
     await pulsar('Reintentar');
     expect(plan.n).toBe(2);
-    expect(screen.getByText('Plan de flujos')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
   });
 });

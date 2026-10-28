@@ -1,0 +1,232 @@
+[
+  {
+    "id": "inbox",
+    "ancho": 375,
+    "rows": [
+      {
+        "label": "base",
+        "W": 375,
+        "H": 1396,
+        "distintos": 83956,
+        "total": 523500,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          1325,
+          1396
+        ],
+        "porcentaje": 0.16037440305635148
+      },
+      {
+        "label": "sin familias activas",
+        "W": 375,
+        "H": 1356,
+        "distintos": 68022,
+        "total": 508500,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          1325,
+          1356
+        ],
+        "porcentaje": 0.13376991150442477
+      },
+      {
+        "label": "sin nueva aplicacion",
+        "W": 375,
+        "H": 1352,
+        "distintos": 65432,
+        "total": 507000,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          1325,
+          1352
+        ],
+        "porcentaje": 0.12905719921104536
+      },
+      {
+        "label": "sin contadores no disponibles",
+        "W": 375,
+        "H": 1329,
+        "distintos": 20121,
+        "total": 498375,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          1325,
+          1329
+        ],
+        "porcentaje": 0.0403732129420617
+      }
+    ]
+  },
+  {
+    "id": "run",
+    "ancho": 1280,
+    "rows": [
+      {
+        "label": "base",
+        "W": 1280,
+        "H": 1022,
+        "distintos": 66310,
+        "total": 1308160,
+        "ancho": [
+          1280,
+          1280
+        ],
+        "alto": [
+          1019,
+          1022
+        ],
+        "porcentaje": 0.050689518101761255
+      },
+      {
+        "label": "subtitulo de la app solo en sonda",
+        "W": 1280,
+        "H": 1021,
+        "distintos": 45509,
+        "total": 1306880,
+        "ancho": [
+          1280,
+          1280
+        ],
+        "alto": [
+          1019,
+          1021
+        ],
+        "porcentaje": 0.03482263099902057
+      },
+      {
+        "label": "estado igual",
+        "W": 1280,
+        "H": 1021,
+        "distintos": 44100,
+        "total": 1306880,
+        "ancho": [
+          1280,
+          1280
+        ],
+        "alto": [
+          1019,
+          1021
+        ],
+        "porcentaje": 0.03374449069539667
+      },
+      {
+        "label": "datos de hallazgo como texto plano",
+        "W": 1280,
+        "H": 1019,
+        "distintos": 4635,
+        "total": 1304320,
+        "ancho": [
+          1280,
+          1280
+        ],
+        "alto": [
+          1019,
+          1019
+        ],
+        "porcentaje": 0.003553575809617272
+      }
+    ]
+  },
+  {
+    "id": "run",
+    "ancho": 375,
+    "rows": [
+      {
+        "label": "base",
+        "W": 375,
+        "H": 2410,
+        "distintos": 133124,
+        "total": 903750,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          2389,
+          2410
+        ],
+        "porcentaje": 0.14730179806362378
+      },
+      {
+        "label": "subtitulo de la app solo en sonda",
+        "W": 375,
+        "H": 2391,
+        "distintos": 56753,
+        "total": 896625,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          2389,
+          2391
+        ],
+        "porcentaje": 0.0632962498257354
+      },
+      {
+        "label": "estado igual",
+        "W": 375,
+        "H": 2391,
+        "distintos": 56158,
+        "total": 896625,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          2389,
+          2391
+        ],
+        "porcentaje": 0.0626326502160881
+      },
+      {
+        "label": "datos de hallazgo como texto plano",
+        "W": 375,
+        "H": 2389,
+        "distintos": 2769,
+        "total": 895875,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          2389,
+          2389
+        ],
+        "porcentaje": 0.0030908329845123483
+      },
+      {
+        "label": "reintroducir mono 12px/500 solo en sonda app",
+        "W": 375,
+        "H": 2389,
+        "distintos": 62753,
+        "total": 895875,
+        "ancho": [
+          375,
+          375
+        ],
+        "alto": [
+          2388,
+          2389
+        ],
+        "porcentaje": 0.07004660248360542,
+        "gridY": {
+          "before": 405.59375,
+          "after": 404.59375
+        }
+      }
+    ]
+  }
+]

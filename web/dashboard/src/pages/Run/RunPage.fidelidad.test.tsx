@@ -50,7 +50,7 @@ afterEach(() => {
 
 const FASES_ESPERADAS = [
   'Confirmada',
-  'Warm listo',
+  'Entorno listo',
   'Desplegando',
   'Infiriendo superficie',
   'Ensayando',
@@ -68,8 +68,7 @@ describe('RunPage fidelidad: encabezado y línea de tiempo', () => {
     expect(screen.getByRole('heading', { level: 1, name: /Corrida/ })).toBeTruthy();
     expect(screen.getByText('tr-fid')).toBeTruthy();
     expect(screen.getByText('Estado de corrida')).toBeTruthy();
-    expect(screen.getByText('Sondeo')).toBeTruthy();
-    expect(screen.getByText('cada 3 s')).toBeTruthy();
+    expect(screen.queryByText('Sondeo')).toBeNull();
   });
 
   it('9 fases con estado textual (hecha, actual, pendiente) además del color', async () => {
@@ -180,7 +179,7 @@ describe('RunPage fidelidad: plan de flujos plegable', () => {
     ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
     renderRun();
     await vaciar();
-    const plan = screen.getByText('Plan de flujos').closest('details');
+    const plan = screen.getByRole('region', { name: 'Plan de flujos' }).querySelector('details');
     expect(plan).not.toBeNull();
     expect(plan?.tagName).toBe('DETAILS');
     const flujos = plan?.querySelectorAll('details.flow-block');
@@ -188,15 +187,15 @@ describe('RunPage fidelidad: plan de flujos plegable', () => {
     flujos?.forEach((f) => expect(f.hasAttribute('open')).toBe(false));
   });
 
-  it('insignia de método por verbo, de esperado por familia y cuerpo en pre.json-body', async () => {
+  it('insignia de método por verbo; estado esperado como código, sin insignia (mockup); cuerpo en pre.json-body', async () => {
     ruta(`/api/runs/${ID}`, [corrida('rehearsing')]);
     ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
     renderRun();
     await vaciar();
     const metodo = screen.getByText('POST', { selector: 'span.badge' });
     expect(metodo.classList.contains('badge-info')).toBe(true);
-    const esperado = screen.getByText('409', { selector: 'span.badge' });
-    expect(esperado.classList.contains('badge-warn')).toBe(true);
+    const esperado = screen.getByText('409', { selector: 'code' });
+    expect(esperado.closest('.badge')).toBeNull();
     const cuerpo = document.querySelector('pre.json-body');
     expect(cuerpo?.textContent).toBe(JSON.stringify({ product_id: 1, qty: 11 }, null, 2));
   });

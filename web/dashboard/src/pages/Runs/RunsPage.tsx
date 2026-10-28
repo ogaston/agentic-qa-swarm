@@ -57,7 +57,7 @@ export function RunsPage() {
                     <th scope="col">
                       Notificación (<code className="campo-api">notification_id</code>)
                     </th>
-                    <th scope="col">Confirmada (hora local)</th>
+                    <th scope="col">Confirmada (hora en UTC)</th>
                     <th scope="col">Confirmada por</th>
                     <th scope="col">
                       <span className="sr-only">Acción</span>
@@ -75,7 +75,7 @@ export function RunsPage() {
                       <td data-label="Notificación" className="mono">
                         {r.notification_id}
                       </td>
-                      <td data-label="Confirmada">{new Date(r.confirmed_at).toLocaleString()}</td>
+                      <td data-label="Confirmada">{new Date(r.confirmed_at).toLocaleString('es-ES', { hour12: false, timeZone: 'UTC' })}</td>
                       <td data-label="Confirmada por">
                         <code>{r.confirmed_by}</code>
                       </td>

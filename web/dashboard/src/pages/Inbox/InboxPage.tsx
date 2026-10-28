@@ -34,11 +34,34 @@ const ETIQUETA_ENTORNO: Record<WarmState['state'], string> = {
   'idle-escalado': 'Inactivo (escalado)',
 };
 
+type TonoEntorno = 'ok' | 'warn' | 'neutral';
+
+/** Tono semántico por estado del warm: el mismo mapeo que la vista del entorno (WarmPage). */
+const TONO_ENTORNO: Record<WarmState['state'], TonoEntorno> = {
+  ready: 'ok',
+  dirty: 'warn',
+  cuarentena: 'warn',
+  'idle-escalado': 'neutral',
+};
+
+/** Color de la barra del KPI por tono del estado del warm. */
+const BARRA_ENTORNO: Record<TonoEntorno, string> = {
+  ok: 'var(--ok)',
+  warn: 'var(--warn)',
+  neutral: 'var(--text-muted)',
+};
+
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';
 const MSG_NO_EXISTE = 'La notificación ya no existe';
 const RUN_ID = /^run-[0-9a-f]{16}$/;
 
 /** Inbox: pestañas por estado, KPI, listado en tarjeta y confirmación explícita. Sin polling ni confirmaciones automáticas. */
+/** Etiqueta del tipo de artefacto como en el mockup (image, build_from_repo); el dato real es el contrato. */
+const ETIQUETA_ARTEFACTO: Record<string, string> = { 'published-image': 'image', 'build-from-repo': 'build_from_repo' };
+function textoArtefacto(a: { kind: string; ref: string }): string {
+  return `${ETIQUETA_ARTEFACTO[a.kind] ?? a.kind} · ${a.ref}`;
+}
+
 export function InboxPage() {
   const navigate = useNavigate();
   const [estado, setEstado] = useState<Estado>('pending');
@@ -235,7 +258,12 @@ export function InboxPage() {
   // Cabecera: solo celdas con dato real de la API. «Familias activas» no existe en la API: se omite.
   const meta: ElementoMeta[] = [];
   if (warm !== null) {
-    meta.push({ etiqueta: 'Entorno', valor: ETIQUETA_ENTORNO[warm.state] });
+    // U10-T06: el mockup muestra el identificador del entorno (warm_id, dato real) con el tono de su estado.
+    const tono = TONO_ENTORNO[warm.state];
+    meta.push({
+      etiqueta: 'Entorno',
+      valor: <span className={`meta-${tono}`}>{`${ETIQUETA_ENTORNO[warm.state]} (${warm.warm_id})`}</span>,
+    });
     meta.push({
       etiqueta: 'Reset verificado',
       valor: <span className="mono">{warm.reset_verified ? 'sí' : 'no'}</span>,
@@ -248,7 +276,7 @@ export function InboxPage() {
   };
 
   return (
-    <main className="page">
+    <main className="az-container">
       <PageHeader
         titulo="Inbox de notificaciones"
         descripcion="Eventos recibidos desde GitHub. Cero auto-run: ninguna corrida arranca sin confirmación explícita."
@@ -300,10 +328,33 @@ export function InboxPage() {
       </div>
 
       <div className="kpi-strip">
-        <Kpi etiqueta="Notificaciones pendientes" valor={textoContador('pending')} />
-        <Kpi etiqueta="Corridas confirmadas" valor={textoContador('confirmed')} />
-        <Kpi etiqueta="Estado del entorno" valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'} />
-        <Kpi etiqueta="Rechazadas" valor={textoContador('rejected')} />
+        <Kpi
+          etiqueta="Notificaciones pendientes"
+          valor={textoContador('pending')}
+          insignia={{ clase: 'badge-accent', texto: 'esperando confirm' }}
+          barra={60}
+          colorBarra="var(--accent)"
+        />
+        <Kpi
+          etiqueta="Corridas confirmadas"
+          valor={textoContador('confirmed')}
+          insignia={{ clase: 'badge-info', texto: 'auditable' }}
+          barra={40}
+          colorBarra="var(--info)"
+        />
+        <Kpi
+          etiqueta="Estado del entorno"
+          valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'}
+          claseValor="kpi-valor-20"
+          insignia={
+            warm !== null
+              ? { clase: `badge-${TONO_ENTORNO[warm.state]}`, texto: warm.state, punto: true }
+              : undefined
+          }
+          barra={100}
+          colorBarra={warm !== null ? BARRA_ENTORNO[TONO_ENTORNO[warm.state]] : 'var(--ok)'}
+        />
+        <Kpi etiqueta="Rechazadas" valor={textoContador('rejected')} barra={100} colorBarra="var(--teal)" />
       </div>
 
       <div id="inbox-lista" role="tabpanel" aria-labelledby={`tab-${estado}`}>
@@ -314,7 +365,7 @@ export function InboxPage() {
         ) : null}
         {lista !== null && errorLista === null && lista.length > 0 ? (
           <div className="card">
-            <div className="card-pad">
+            <div className="card-pad listado-cabecera">
               <div className="card-title">Listado de notificaciones</div>
               <div className="card-sub">
                 Eventos recibidos listos para revisión y confirmación previa a la inferencia de flujos sobre el entorno.
@@ -341,14 +392,14 @@ export function InboxPage() {
                         <strong>{n.repo}</strong>
                       </td>
                       <td data-label="Evento">
-                        <code>{n.github_event}</code>
+                        <span className="badge badge-neutral mono">{n.github_event}</span>
                       </td>
                       <td data-label="SHA">
                         <code>{n.sha.slice(0, 7)}</code>
                       </td>
                       <td data-label="Artefacto">
                         <span className="mono">
-                          {n.artifact ? `${n.artifact.kind} · ${n.artifact.ref}` : '—'}
+                          {n.artifact ? textoArtefacto(n.artifact) : '—'}
                         </span>
                       </td>
                       <td data-label="Estado">
@@ -359,7 +410,7 @@ export function InboxPage() {
                       <td data-label="Acciones">
                         <button
                           type="button"
-                          className="btn btn-secondary btn-sm"
+                          className="btn btn-primary btn-sm"
                           disabled={enVuelo}
                           onClick={() => {
                             setSeleccionadaId(n.id);
@@ -368,7 +419,7 @@ export function InboxPage() {
                             setMensajeAccion(null);
                           }}
                         >
-                          Ver detalle
+                          Revisar y confirmar →
                         </button>
                       </td>
                     </tr>
@@ -398,7 +449,7 @@ export function InboxPage() {
             <dt>Artefacto</dt>
             <dd>
               {seleccionada.artifact
-                ? `${seleccionada.artifact.kind} · ${seleccionada.artifact.ref}`
+                ? textoArtefacto(seleccionada.artifact)
                 : 'Sin artefacto'}
             </dd>
             <dt>Estado</dt>
@@ -438,7 +489,7 @@ export function InboxPage() {
               <dt>Artefacto</dt>
               <dd>
                 {seleccionada.artifact
-                  ? `${seleccionada.artifact.kind} · ${seleccionada.artifact.ref}`
+                  ? textoArtefacto(seleccionada.artifact)
                   : 'Sin artefacto'}
               </dd>
             </dl>

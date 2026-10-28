@@ -1,0 +1,22 @@
+OK inbox-light-1280 estilos=0 estructura=0 pixeles=0.00%
+OK inbox-light-375 estilos=0 estructura=0 pixeles=0.00%
+OK inbox-dark-1280 estilos=0 estructura=0 pixeles=0.00%
+OK inbox-dark-375 estilos=0 estructura=0 pixeles=0.00%
+OK run-light-1280 estilos=0 estructura=0 pixeles=0.00%
+OK run-light-375 estilos=0 estructura=0 pixeles=0.00%
+OK run-dark-1280 estilos=0 estructura=0 pixeles=0.00%
+OK run-dark-375 estilos=0 estructura=0 pixeles=0.00%
+OK runs-light-1280 estilos=0 estructura=0 pixeles=0.00%
+OK runs-light-375 estilos=0 estructura=0 pixeles=0.00%
+OK runs-dark-1280 estilos=0 estructura=0 pixeles=0.00%
+OK runs-dark-375 estilos=0 estructura=0 pixeles=0.00%
+OK warm-light-1280 estilos=0 estructura=0 pixeles=0.00%
+OK warm-light-375 estilos=0 estructura=0 pixeles=0.00%
+OK warm-dark-1280 estilos=0 estructura=0 pixeles=0.00%
+OK warm-dark-375 estilos=0 estructura=0 pixeles=0.00%
+OK login-light-1280 estilos=0 estructura=0 pixeles=0.00%
+OK login-light-375 estilos=0 estructura=0 pixeles=0.00%
+OK login-dark-1280 estilos=0 estructura=0 pixeles=0.00%
+OK login-dark-375 estilos=0 estructura=0 pixeles=0.00%
+e2e:fidelidad --control: 20 de 20 combinaciones OK (píxeles distintos máx. 0.00 %)
+informe: /home/omarjayg/Javeriana/topicos-especiales/agentic-qa-swarm-wt-U10-T06/bitacoras/U10-T06/ronda-3/control/informe.json

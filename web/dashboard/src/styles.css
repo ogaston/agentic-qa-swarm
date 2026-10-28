@@ -62,7 +62,8 @@ code {
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   padding: 1px 4px;
-  word-break: break-all;
+  /* U10-T06: el mockup no parte el código por letra; solo rompe si una palabra no cabe en la línea. */
+  overflow-wrap: break-word;
 }
 
 small {
@@ -272,14 +273,17 @@ main.page-narrow {
 .az-page-title h1 {
   font-size: 22px;
   font-weight: 700;
+  line-height: 1.5;
   letter-spacing: -0.02em;
   color: var(--text);
 }
 
+/* Mockup: el párrafo de título no tiene margen inferior (la regla global de p añade 8 px y la cabecera
+   queda 8 px más alta que la del mockup, con todo el contenido desplazado). */
 .az-page-title p {
   font-size: 13px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin: 4px 0 0;
 }
 
 .az-header-meta {
@@ -492,9 +496,17 @@ main.page-narrow {
   flex-wrap: wrap;
 }
 
+/* Mockup: el título de tarjeta hereda line-height 1.5 y sin margen inferior (la altura de la tarjeta depende de ello). */
+/* Mockup: la cabecera del listado de notificaciones tiene 12 px de relleno inferior. */
+.listado-cabecera {
+  padding-bottom: 12px;
+}
+
 .card-title {
   font-size: 14px;
   font-weight: 700;
+  line-height: 1.5;
+  margin-bottom: 0;
   color: var(--text);
 }
 
@@ -513,6 +525,44 @@ main.page-narrow {
 
 .kpi-box {
   padding: 16px 18px;
+}
+
+/* Entorno (mockup): cuatro cuadros de estado sobre fondo de superficie 2, valores de 20 px y 18 px. */
+.kpi-fondo {
+  background: var(--surface-2);
+}
+
+.kpi-sin-margen {
+  margin-bottom: 0;
+}
+
+/* Valor de la cabecera de la vista en verde (estado operativo, mockup «Listo (aqs-test)»). */
+.meta-ok {
+  color: var(--ok);
+}
+
+/* Estados no listos en la cabecera: el mismo tono semántico que la vista del entorno. */
+.meta-warn {
+  color: var(--warn);
+}
+
+.meta-neutral {
+  color: var(--text-muted);
+}
+
+.kpi-val.kpi-valor-20 {
+  font-size: 20px;
+}
+
+.kpi-val.kpi-valor-18 {
+  font-size: 18px;
+}
+
+/* En la etiqueta del cuadro, el código hereda el tamaño y no lleva chip (mockup); DESIGN §2.2 rige el resto. */
+.kpi-label code {
+  font-size: inherit;
+  padding: 0;
+  background: none;
 }
 
 .kpi-label {
@@ -565,7 +615,9 @@ main.page-narrow {
   gap: 18px;
 }
 
+/* Ancestro posicionado: el texto .sr-only de las cabeceras queda recortado aquí y no amplía la página. */
 .table-wrap {
+  position: relative;
   padding: 0;
   overflow-x: auto;
 }
@@ -669,7 +721,8 @@ main.page-narrow {
 /* ---------- Botones y formularios ---------- */
 
 .btn {
-  font: inherit;
+  font-family: inherit;
+  line-height: normal;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -855,6 +908,7 @@ main.page-narrow {
 .login-titulo {
   font-size: 20px;
   font-weight: 700;
+  line-height: 1.5;
   margin: 0;
 }
 
@@ -911,23 +965,28 @@ main.page-narrow {
   border-collapse: collapse;
 }
 
+/* Celdas del mockup (tablas genéricas: th 10 px/14 px, td 12 px/14 px). */
 .data-table th {
   text-align: left;
-  font-size: 0.625rem;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--text-faint);
   background: var(--surface-2);
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
 }
 
+/* En la cabecera, el nombre de campo hereda el tamaño de la celda (mockup: `code` sin tamaño propio). Acotado a .campo-api (U10-T04 F-02). */
+th .campo-api {
+  font-size: inherit;
+}
+
 .data-table td {
-  padding: 8px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle;
-  overflow-wrap: anywhere;
 }
 
 .data-table tbody tr:last-child td {
@@ -1113,9 +1172,12 @@ ol.phase-timeline li[data-fase-estado="pendiente"] .phase-name {
   font-weight: 400;
 }
 
+/* Mockup: el código de la fase va sin fondo ni relleno (solo tamaño y color en línea). */
 .phase-code {
   font-size: 11px;
   color: var(--text-faint);
+  background: none;
+  padding: 0;
 }
 
 /* Corrida fallida: texto y fondo fijos (tokens --failed-*), también en el tema oscuro. */
@@ -1181,13 +1243,18 @@ ol.phase-timeline li[data-fase-estado="pendiente"] .phase-name {
 .evidence-list {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 8px 0 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 /* Copiable: el texto de la URI se selecciona entero con un clic. */
+/* Mockup: la lista de pares de cada hallazgo va 8 px por debajo de su cabecera. */
+.finding-item dl.kv-list {
+  margin-top: 8px;
+}
+
 .evidence-uri {
   display: inline-block;
   padding: 5px 9px;
@@ -1214,17 +1281,21 @@ ol.phase-timeline li[data-fase-estado="pendiente"] .phase-name {
 .plan-summary > span:first-child {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
-.plan-body {
-  margin-top: 12px;
+details[open] > .plan-summary {
+  border-bottom: 1px solid var(--border);
 }
 
 .flow-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.flow-block + .flow-block {
+  margin-top: 14px;
 }
 
 .flow-block {
@@ -1317,81 +1388,24 @@ pre.json-body {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  /* minmax(0, 1fr): una insignia o tabla ancha no ensancha la columna y la página (DESIGN §4.4, 375 px). */
   .grid-main-side {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 /* ---------- Pantallas estrechas (375 px sin desbordamiento horizontal de página) ---------- */
 
 @media (max-width: 620px) {
-  .az-header-inner {
-    gap: 8px 12px;
-  }
-
-  .az-nav-link {
-    padding: 0 10px;
-  }
-
   main.page {
     padding: 16px;
   }
 
-  .data-table th,
-  .data-table td {
-    padding: 6px 8px;
-  }
-
-  /* Tablas como tarjetas apiladas: sin columnas que desborden 375 px. */
+  /* DESIGN §4.4: las tablas se desplazan dentro de su .table-wrap, sin desbordar la página a 375 px. */
   .table-wrap {
-    overflow-x: visible;
-  }
-
-  .data-table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-  }
-
-  .data-table,
-  .data-table tbody,
-  .data-table tr,
-  .data-table td {
-    display: block;
     width: 100%;
-  }
-
-  .data-table tr {
-    border-bottom: 1px solid var(--border-subtle);
-    padding: 8px 0;
-  }
-
-  .data-table tbody tr:last-child {
-    border-bottom: none;
-  }
-
-  .data-table td {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
-    gap: 8px;
-    border: none;
-    padding: 3px 12px;
-  }
-
-  .data-table td::before {
-    content: attr(data-label);
-    font-size: 0.625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-faint);
-    align-self: center;
-  }
-
-  .data-table td code {
-    justify-self: start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -1422,4 +1436,47 @@ pre.json-body {
   .card-vista {
     padding: 12px;
   }
+}
+
+/* U10-T06: en la corrida el mockup presenta código en línea, sin chip.
+ * El tamaño/peso del contexto conserva la línea base del título y las notas de API;
+ * las URI de evidencia conservan su caja y tamaño propios. */
+.run-page .run-id,
+.run-page .az-page-title p .mono,
+.run-page .card-title code,
+.run-page .card-sub code {
+  background: none;
+  padding: 0;
+  font-weight: inherit;
+}
+
+.run-page .az-page-title p .mono,
+.run-page .card-title code {
+  font-size: inherit;
+}
+
+.run-page .card-title {
+  letter-spacing: normal;
+}
+
+.run-page .evidence-uri {
+  font-weight: inherit;
+}
+
+.run-page .finding-path {
+  background: none;
+  padding: 0;
+}
+
+/* U10-T06: el identificador del título de Entorno conserva el tamaño/peso del título
+ * del mockup, sin el chip global de code. Evita adelantar 1 px el resto de la tarjeta. */
+.warm-page .card-title code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.warm-page .card-title {
+  letter-spacing: normal;
 }

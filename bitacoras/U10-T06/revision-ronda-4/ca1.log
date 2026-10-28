@@ -1,0 +1,31 @@
+vite v5.4.11 building for production...
+transforming...
+✓ 54 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../u10-t05-dist-utiydD/index.html                   0.40 kB │ gzip:  0.27 kB
+../../../u10-t05-dist-utiydD/assets/index-RY9epg-5.css   20.47 kB │ gzip:  4.63 kB
+../../../u10-t05-dist-utiydD/assets/index-C1tOr6UB.js   209.97 kB │ gzip: 66.36 kB
+✓ built in 1.02s
+OK inbox-light-1280 estilos=0 estructura=0 pixeles=1.42%
+OK inbox-light-375 estilos=0 estructura=0 pixeles=3.95%
+OK inbox-dark-1280 estilos=0 estructura=0 pixeles=1.42%
+OK inbox-dark-375 estilos=0 estructura=0 pixeles=4.00%
+OK run-light-1280 estilos=0 estructura=0 pixeles=0.36%
+OK run-light-375 estilos=0 estructura=0 pixeles=0.31%
+OK run-dark-1280 estilos=0 estructura=0 pixeles=0.38%
+OK run-dark-375 estilos=0 estructura=0 pixeles=0.34%
+OK runs-light-1280 estilos=0 estructura=0 pixeles=1.37%
+OK runs-light-375 estilos=0 estructura=0 pixeles=3.23%
+OK runs-dark-1280 estilos=0 estructura=0 pixeles=1.66%
+OK runs-dark-375 estilos=0 estructura=0 pixeles=4.20%
+OK warm-light-1280 estilos=0 estructura=0 pixeles=0.29%
+OK warm-light-375 estilos=0 estructura=0 pixeles=2.32%
+OK warm-dark-1280 estilos=0 estructura=0 pixeles=0.45%
+OK warm-dark-375 estilos=0 estructura=0 pixeles=2.65%
+OK login-light-1280 estilos=0 estructura=0 pixeles=0.54%
+OK login-light-375 estilos=0 estructura=0 pixeles=1.61%
+OK login-dark-1280 estilos=0 estructura=0 pixeles=0.55%
+OK login-dark-375 estilos=0 estructura=0 pixeles=1.61%
+e2e:fidelidad: 20 de 20 combinaciones OK (píxeles distintos máx. 4.20 %)
+informe: /tmp/u10t06-review-r4-BGdgxmgV/official/informe.json

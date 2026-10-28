@@ -27,6 +27,7 @@ export function Veredicto({ verdict }: { verdict: Verdict }) {
   const v = VEREDICTOS[verdict];
   return (
     <span data-veredicto={verdict} className={`badge ${v.clase}`}>
+      <span className="badge-dot" aria-hidden="true" />
       {v.etiqueta}
     </span>
   );
@@ -49,14 +50,6 @@ function claseMetodo(metodo: string): string {
   }
 }
 
-/** Clase de la insignia de estado esperado por familia (2xx, 4xx, 5xx). */
-function claseEsperado(estado: number): string {
-  if (estado >= 200 && estado < 300) return 'badge-ok';
-  if (estado >= 400 && estado < 500) return 'badge-warn';
-  if (estado >= 500) return 'badge-danger';
-  return 'badge-neutral';
-}
-
 /** Errores que se muestran igual en el informe y en el plan: aviso sin reintento automático. */
 function AvisoServicio({ onReintentar }: { onReintentar: () => void }) {
   return (
@@ -70,16 +63,35 @@ function AvisoServicio({ onReintentar }: { onReintentar: () => void }) {
 }
 
 /** Tarjeta del post-mortem: cabecera del mockup y contenido (texto, nunca HTML). */
-function TarjetaPostMortem({ verdict, children }: { verdict: Verdict | undefined; children: ReactNode }) {
+function TarjetaPostMortem({
+  id,
+  verdict,
+  hallazgos,
+  children,
+}: {
+  id: string;
+  verdict: Verdict | undefined;
+  /** Número de hallazgos del informe cargado: si está, la cabecera muestra «veredicto (N hallazgos)» como el mockup. */
+  hallazgos?: number;
+  children: ReactNode;
+}) {
   return (
     <section aria-label="Informe post-mortem" className="card card-pad">
       <div className="card-head">
         <div>
-          <h2 className="card-title">Informe post-mortem</h2>
+          <h2 className="card-title">
+            Informe post-mortem (<code>GET /api/reports/{id}</code>)
+          </h2>
           <div className="card-sub">
             {verdict !== undefined ? VEREDICTOS[verdict].descripcion : 'Generado por agent-reporter al terminar la corrida.'}
           </div>
         </div>
+        {verdict !== undefined && hallazgos !== undefined && (
+          <span className={`badge ${VEREDICTOS[verdict].clase}`}>
+            <span className="badge-dot" aria-hidden="true" />
+            {`${verdict} (${hallazgos} ${hallazgos === 1 ? 'hallazgo' : 'hallazgos'})`}
+          </span>
+        )}
       </div>
       {children}
     </section>
@@ -95,14 +107,14 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
 
   if (!activo) {
     return (
-      <TarjetaPostMortem verdict={verdict}>
+      <TarjetaPostMortem id={id} verdict={verdict}>
         <p className="empty">Sin reporte aún.</p>
       </TarjetaPostMortem>
     );
   }
   if (cargando) {
     return (
-      <TarjetaPostMortem verdict={verdict}>
+      <TarjetaPostMortem id={id} verdict={verdict}>
         <p>Cargando informe…</p>
       </TarjetaPostMortem>
     );
@@ -111,7 +123,7 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
   if (error !== null) {
     if (error instanceof ApiError && error.status === 404 && error.code === 'report_not_ready') {
       return (
-        <TarjetaPostMortem verdict={verdict}>
+        <TarjetaPostMortem id={id} verdict={verdict}>
           <p>
             El informe aún no está disponible.{' '}
             <button type="button" className="btn btn-secondary" onClick={reintentar}>
@@ -123,20 +135,20 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
     }
     if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
       return (
-        <TarjetaPostMortem verdict={verdict}>
+        <TarjetaPostMortem id={id} verdict={verdict}>
           <p role="alert" className="notice notice-danger">Sin acceso al informe.</p>
         </TarjetaPostMortem>
       );
     }
     if (error instanceof ApiError && (error.status >= 500 || error.status === 0)) {
       return (
-        <TarjetaPostMortem verdict={verdict}>
+        <TarjetaPostMortem id={id} verdict={verdict}>
           <AvisoServicio onReintentar={reintentar} />
         </TarjetaPostMortem>
       );
     }
     return (
-      <TarjetaPostMortem verdict={verdict}>
+      <TarjetaPostMortem id={id} verdict={verdict}>
         <ApiErrorNotice error={error} />
       </TarjetaPostMortem>
     );
@@ -145,7 +157,7 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
   if (data === null) return null;
 
   return (
-    <TarjetaPostMortem verdict={data.verdict}>
+    <TarjetaPostMortem id={id} verdict={data.verdict} hallazgos={data.findings.length}>
       <p className="report-summary">{data.summary}</p>
       {data.findings.length === 0 ? (
         <p className="empty">No se encontraron hallazgos en esta corrida.</p>
@@ -163,7 +175,7 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
               <dl className="kv-list">
                 <dt>Invariante violado</dt>
                 <dd>{f.invariant}</dd>
-                <dt>Causa raíz</dt>
+                <dt>Causa raíz (negocio)</dt>
                 <dd>{f.root_cause}</dd>
                 <dt>Evidencia (copiable)</dt>
                 <dd>
@@ -184,8 +196,11 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
   );
 }
 
-/** Plan de flujos guardado (`GET /api/runs/{id}/plan`), una sola vez. La tarjeta se pliega; cada flujo, también. */
-export function PlanFlujos({ id, activo }: { id: string; activo: boolean }) {
+/**
+ * Plan de flujos guardado (`GET /api/runs/{id}/plan`), una sola vez. Región «Plan de flujos» con su encabezado
+ * de estado (mockup: «Flujos inferidos», «Flujos en ejecución», «Flujos ejecutados»). La tarjeta se pliega; cada flujo, también.
+ */
+export function PlanFlujos({ id, activo, encabezado }: { id: string; activo: boolean; encabezado: string }) {
   const { data, error, cargando, reintentar } = useUnaVez<FlowPlan>(
     () => apiFetch<FlowPlan>(`/api/runs/${id}/plan`),
     activo,
@@ -214,17 +229,20 @@ export function PlanFlujos({ id, activo }: { id: string; activo: boolean }) {
   } else if (data !== null) {
     contenido = (
       <div className="flow-list">
-        {data.flows.map((flow) => (
+        {data.flows.map((flow, indice) => (
           <details key={flow.flow_id} className="flow-block flow-details">
             <summary>
               <span className="flow-title">
                 <svg className="chevron-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                <strong>{flow.name}</strong>
+                <strong>
+                  {indice + 1}. {flow.name}
+                </strong>
               </span>
+              {/* Insignia como en el mockup: tipo y el campo real invariant_probe del plan (sin comillas de markdown). */}
               <span className={`badge ${flow.invariant_probe ? 'badge-accent' : 'badge-ok'}`}>
-                {flow.invariant_probe ? 'sondeo de invariante' : 'happy-path'}
+                {`${flow.invariant_probe ? 'sondeo de invariante' : 'happy-path'} (invariant_probe: ${String(flow.invariant_probe)})`}
               </span>
             </summary>
             <div className="flow-content">
@@ -258,7 +276,7 @@ export function PlanFlujos({ id, activo }: { id: string; activo: boolean }) {
                           <code>{paso.path}</code>
                         </td>
                         <td data-label="Estado esperado">
-                          <span className={`badge mono ${claseEsperado(paso.expect_status)}`}>{paso.expect_status}</span>
+                          <code>{paso.expect_status}</code>
                         </td>
                         <td data-label="Solicitud">
                           {paso.body !== undefined ? (
@@ -282,19 +300,23 @@ export function PlanFlujos({ id, activo }: { id: string; activo: boolean }) {
   }
 
   return (
-    <details className="card card-pad plan-card" open>
-      <summary className="plan-summary">
-        <span>
-          <strong>Plan de flujos</strong>
-          <span className="card-sub">Flujos de prueba y sondeo de invariantes de negocio</span>
-        </span>
-        {data !== null && (
-          <span className="badge badge-neutral mono">
-            workflow: {data.workflow} · {data.flows.length} flujos
+    <section className="card plan-card" aria-label="Plan de flujos">
+      <details open>
+        <summary className="plan-summary card-pad">
+          <span>
+            <h2 className="card-title">
+              {encabezado} (<code>GET /api/runs/{id}/plan</code>)
+            </h2>
+            <span className="card-sub">Plan de flujos de prueba y sondeo de invariantes de negocio</span>
           </span>
-        )}
-      </summary>
-      <div className="plan-body">{contenido}</div>
-    </details>
+          {data !== null && (
+            <span className="badge badge-neutral mono">
+              workflow: {data.workflow} · {data.flows.length} flujos
+            </span>
+          )}
+        </summary>
+        <div className="plan-body card-pad">{contenido}</div>
+      </details>
+    </section>
   );
 }

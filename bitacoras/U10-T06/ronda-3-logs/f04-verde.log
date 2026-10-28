@@ -1,0 +1,78 @@
+vite v5.4.11 building for production...
+transforming...
+✓ 54 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../../../../tmp/u10-t05-dist-1p5LpC/index.html                   0.40 kB │ gzip:  0.27 kB
+../../../../../../../tmp/u10-t05-dist-1p5LpC/assets/index-Dcsb5Yns.css   20.27 kB │ gzip:  4.60 kB
+../../../../../../../tmp/u10-t05-dist-1p5LpC/assets/index-DnESNgXI.js   209.76 kB │ gzip: 66.30 kB
+✓ built in 997ms
+[
+  {
+    "id": "inbox",
+    "rows": [
+      {
+        "label": "base",
+        "pct": 16.037440305635148
+      },
+      {
+        "label": "sin familias activas",
+        "pct": 13.376991150442477
+      },
+      {
+        "label": "sin nueva aplicacion",
+        "pct": 12.905719921104536
+      },
+      {
+        "label": "sin contadores no disponibles",
+        "pct": 4.03732129420617
+      }
+    ]
+  },
+  {
+    "id": "run",
+    "rows": [
+      {
+        "label": "base",
+        "pct": 5.0689518101761255
+      },
+      {
+        "label": "subtitulo de la app solo en sonda",
+        "pct": 3.482263099902057
+      },
+      {
+        "label": "estado igual",
+        "pct": 3.374449069539667
+      },
+      {
+        "label": "datos de hallazgo como texto plano",
+        "pct": 0.3553575809617272
+      }
+    ]
+  },
+  {
+    "id": "run",
+    "rows": [
+      {
+        "label": "base",
+        "pct": 14.73017980636238
+      },
+      {
+        "label": "subtitulo de la app solo en sonda",
+        "pct": 6.32962498257354
+      },
+      {
+        "label": "estado igual",
+        "pct": 6.26326502160881
+      },
+      {
+        "label": "datos de hallazgo como texto plano",
+        "pct": 0.30908329845123483
+      },
+      {
+        "label": "reintroducir mono 12px/500 solo en sonda app",
+        "pct": 7.004660248360542
+      }
+    ]
+  }
+]

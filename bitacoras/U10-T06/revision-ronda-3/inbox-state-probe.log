@@ -1,0 +1,21 @@
+
+ RUN  v2.1.8 /tmp/u10t06-review-r3-twhv8y3o/web/dashboard
+
+stderr | src/pages/Inbox/InboxPage.test.tsx > review probe real warm dirty
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stdout | src/pages/Inbox/InboxPage.test.tsx > review probe real warm dirty
+REVIEW_PROBE [{"label":"Notificaciones pendientes","value":"0","badge":"badge badge-accent","badgeText":"esperando confirm","fill":"width: 60%; background: var(--accent);"},{"label":"Corridas confirmadas","value":"—","badge":"badge badge-info","badgeText":"auditable","fill":"width: 40%; background: var(--info);"},{"label":"Estado del entorno","value":"Sucio (requiere reset)","badge":"badge badge-ok","badgeText":"dirty","fill":"width: 100%; background: var(--ok);"},{"label":"Rechazadas","value":"—","fill":"width: 100%; background: var(--teal);"}]
+
+stdout | src/pages/Inbox/InboxPage.test.tsx > review probe real warm cuarentena
+REVIEW_PROBE [{"label":"Notificaciones pendientes","value":"0","badge":"badge badge-accent","badgeText":"esperando confirm","fill":"width: 60%; background: var(--accent);"},{"label":"Corridas confirmadas","value":"—","badge":"badge badge-info","badgeText":"auditable","fill":"width: 40%; background: var(--info);"},{"label":"Estado del entorno","value":"En cuarentena","badge":"badge badge-ok","badgeText":"cuarentena","fill":"width: 100%; background: var(--ok);"},{"label":"Rechazadas","value":"—","fill":"width: 100%; background: var(--teal);"}]
+
+ ✓ src/pages/Inbox/InboxPage.test.tsx (30 tests | 28 skipped) 474ms
+   ✓ review probe real warm dirty 324ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 28 skipped (30)
+   Start at  18:55:13
+   Duration  1.80s (transform 265ms, setup 173ms, collect 356ms, tests 474ms, environment 401ms, prepare 96ms)
+

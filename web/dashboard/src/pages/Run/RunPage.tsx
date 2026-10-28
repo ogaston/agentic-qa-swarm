@@ -12,7 +12,7 @@ const ID_RUN = /^run-[0-9a-f]{16}$/;
 const INTERVALO_MS = 3000;
 const FASES = [
   { estado: 'confirmed', etiqueta: 'Confirmada' },
-  { estado: 'warm_ready', etiqueta: 'Warm listo' },
+  { estado: 'warm_ready', etiqueta: 'Entorno listo' },
   { estado: 'deploying', etiqueta: 'Desplegando' },
   { estado: 'inferring', etiqueta: 'Infiriendo superficie' },
   { estado: 'rehearsing', etiqueta: 'Ensayando' },
@@ -37,7 +37,7 @@ export function RunPage() {
   const { id = '' } = useParams();
   if (!ID_RUN.test(id)) {
     return (
-      <main className="az-container">
+      <main className="az-container run-page">
         <h1>Corrida</h1>
         <p role="alert" className="alert-box alert-danger">
           Identificador de corrida no válido.
@@ -72,7 +72,7 @@ function VistaCorrida({ id }: { id: string }) {
   const informeListo = data !== null && (data.state === 'done' || (data.state === 'failed' && data.report_uri !== undefined));
 
   return (
-    <main className="az-container">
+    <main className="az-container run-page">
       <div className="az-page-header">
         <div className="az-page-title">
           <div className="run-titulo">
@@ -98,12 +98,6 @@ function VistaCorrida({ id }: { id: string }) {
           <div className="az-meta-item">
             <span className="az-meta-label">Estado de corrida</span>
             <span className="az-meta-value mono">{data !== null ? descripcionEstado(data) : 'Cargando…'}</span>
-          </div>
-          <div className="az-meta-item">
-            <span className="az-meta-label">Sondeo</span>
-            <span className="az-meta-value">
-              {data !== null && esTerminal(data) ? 'terminado' : detenido ? 'detenido' : 'cada 3 s'}
-            </span>
           </div>
         </div>
       </div>
@@ -132,7 +126,7 @@ function VistaCorrida({ id }: { id: string }) {
       <div className="grid-main-side">
         <div className="stack">
           {data !== null && <PostMortem id={id} activo={informeListo} verdict={data.verdict} />}
-          <PlanFlujos id={id} activo={alcanzoEnsayo} />
+          <PlanFlujos id={id} activo={alcanzoEnsayo} encabezado={encabezadoPlan(data?.state)} />
         </div>
 
         <section className="card card-pad" aria-label="Línea de tiempo de fases">
@@ -150,6 +144,13 @@ function VistaCorrida({ id }: { id: string }) {
       </div>
     </main>
   );
+}
+
+/** Encabezado del plan según el estado de la corrida (mockup: inferidos, en ejecución, ejecutados). */
+function encabezadoPlan(estado: string | undefined): string {
+  if (estado === 'done' || estado === 'failed') return 'Flujos ejecutados';
+  if (estado === 'running') return 'Flujos en ejecución';
+  return 'Flujos inferidos';
 }
 
 /** Texto del estado para la franja de metadatos: etiqueta legible y código, sin repetir la fase. */
