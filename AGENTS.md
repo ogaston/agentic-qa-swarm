@@ -52,6 +52,6 @@ Chat replies use caveman mode: `.agents/skills/caveman/SKILL.md`, default level.
 Code, commands, paths, and error text stay exact. Reply in the user's language.
 
 ## Code graph
-This project has a code-review-graph knowledge graph. Query it before Grep: `semantic_search_nodes_tool` or `query_graph_tool` to find symbols, `get_impact_radius_tool` for blast radius, `detect_changes_tool` + `get_review_context_tool` for review. Then read the source; the source wins over the graph. An empty graph result means "not indexed", not "does not exist".
+This project is indexed by the codebase-memory-mcp knowledge graph (project `home-omarjayg-Javeriana-topicos-especiales-agentic-qa-swarm`). Query it before Grep: `search_graph` to find symbols, `query_graph` for multi-hop patterns, `trace_path` for callers/callees and blast radius, `get_code_snippet` for exact source, `get_architecture` for orientation, `detect_changes` for review. Use `check_index_coverage` on every cited path before trusting a negative result. `deploy/`, `.claude/`, `node_modules/` and `web/dashboard/dist` are NOT indexed: read/grep them directly. Then read the source; the source wins over the graph. An empty graph result means "not indexed", not "does not exist".
 
 @RTK.md
