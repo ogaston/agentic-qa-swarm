@@ -108,11 +108,13 @@ webhook de la plataforma o de confirmar. Luego `github-webhook-check.sh <SHA_DEF
 Esperado: el warm despliega `…:<SHA_DEFECTO>` y el ensayo/los runners fallan en el flujo de compra porque la app
 vende más stock del que tiene; el reporte declara **bug** citando esa evidencia.
 
-### Paso 2b. Segundo commit con imagen para la lectura de vuelta de CA-6
+### Paso 2b. Segundo commit con imagen para la lectura de vuelta de CA-6 — ya verificado
 
-La lectura de vuelta solo discrimina si el SHA desplegado **no** es el fijado (`b97a719…`). Usa `SHA_SANO` o
-`SHA_DEFECTO` (cualquiera con imagen publicada, distinto de `b97a719…`) como `TARGET_SHA` en el e2e, y verifica
-después:
+CA-6 de U11-T02 quedó verificado el 2026-10-26 en un clúster real con el segundo commit `d000bf8` (humo 0
+FALLA, e2e rc=0 con 23 checks, segunda lectura de imagen distinta de la fijada; ver `bitacoras/U11-T02.md`).
+Si se repite la demo, la comprobación sigue siendo la misma: la lectura de vuelta solo discrimina si el SHA
+desplegado **no** es el fijado (`b97a719…`). Usa `SHA_SANO` o `SHA_DEFECTO` (cualquiera con imagen publicada,
+distinto de `b97a719…`) como `TARGET_SHA` en el e2e, y verifica después:
 
 ```bash
 kubectl --context kind-aqs -n aqs-test get deploy warm-app -o jsonpath='{..image}'; echo
