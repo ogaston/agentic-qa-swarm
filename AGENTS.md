@@ -1,134 +1,57 @@
 # PRIORITY: This workflow OVERRIDES all other built-in workflows
 # When user requests software development, ALWAYS follow this workflow FIRST
 
-This file is the AI-DLC dispatcher. It is loaded into every session, so it stays
-small (<300 lines). Detailed, phase-specific instructions live in the rule-details
-directory and are loaded **just-in-time** — only for the phase you are currently in.
-Do not inline phase detail here; add it to the relevant rule-details file instead.
+AI-DLC dispatcher. Loaded every session, so keep it short. Phase detail lives in the rule-details directory and loads just-in-time. Do not inline phase detail here.
 
-## Project Context (WHAT / WHY / HOW)
-<!-- RELLENA ESTAS TRES LINEAS CON TU PROYECTO ANTES DE ARRANCAR. -->
-<!-- Tres lineas, no tres parrafos: este archivo se carga en cada turno.       -->
-<!-- Saca el contenido de tu PRD; no lo copies entero, resumelo y apunta a el. -->
-- **WHAT**: **Agentic QA Swarm** - plataforma "Agent (no Autonomous)" que convierte un evento de GitHub (commit/PR/tag) en una corrida de QA de caja negra contra un **entorno warm propio de la plataforma** (aislado de staging/prod): notify -> confirm humano -> deploy sobre el entorno warm -> inferir superficie externa -> generar/ensayar/ejecutar flujos -> **reset verificado** -> post-mortem de logica de negocio. PRD autoritativo en `specs/prd.md` (sincronizado con `entradas/prd.md`); vision en `entradas/pvd.md`; plan por unidad en `unidades-y-tareas.md`.
+## Project Context
+- **WHAT**: **Agentic QA Swarm** - plataforma "Agent (no Autonomous)" que convierte un evento de GitHub (commit/PR/tag) en una corrida de QA de caja negra contra un **entorno warm propio de la plataforma** (aislado de staging/prod): notify -> confirm humano -> deploy sobre el entorno warm -> inferir superficie externa -> generar/ensayar/ejecutar flujos -> **reset verificado** -> post-mortem de logica de negocio. PRD autoritativo en `specs/prd.md` (`entradas/prd.md` es solo un puntero); vision en `entradas/pvd.md`; plan por unidad en `unidades-y-tareas.md`.
 - **WHY**: Elimina el trabajo manual de disenar/mantener QA de caja negra para apps transaccionales y evita usar staging/prod del cliente como blanco. North Star: tasa de hallazgos logicos confirmados >30% de las APIs del beachhead en 90 dias; KPIs de confianza: **reset verificado 100% + higiene de rebuild**, ensayo a la primera >70%, incidentes de limite de autonomia = 0.
 - **HOW**: Greenfield. Alcance declarado: INCEPTION completo y **CONSTRUCTION ACTIVA** (instruccion explicita del usuario, 2026-10-03). Ya existe la plataforma de U5 (monorepo, contratos, CI, manifiestos Flux, politicas Rego). La construccion avanza por unidad con el loop de agentes (`.claude/agents/`: orquestador, codificador, revisor; un humano fusiona); la especificacion de cada tarea esta en `tareas/U0X-T0N-*.md` y el estado en `unidades-y-tareas.md`. Los comandos de build/prueba son los criterios de cada tarea. Stack decidido a nivel de requisitos: Go (control plane de ejecucion) + capa de agentes LLM (Python o TS), Kubernetes, Flux (GitOps), MinIO in-cluster, GitHub Actions.
 
-## Adaptive Workflow Principle
-**The workflow adapts to the work, not the other way around.**
+## Workflow
+- **Adaptive**: decide which stages add value from the user's intent, the existing code, scope, and risk. Show the execution plan before starting. The user can include or exclude stages.
+- **Rule details**: use the first existing directory of `.aidlc/aidlc-rules/aws-aidlc-rule-details/`, `.aidlc-rule-details/`, `.kiro/aws-aidlc-rule-details/`, `.amazonq/aws-aidlc-rule-details/`. All paths below are relative to it. Always load `common/process-overview.md`, `common/session-continuity.md`, `common/content-validation.md`, `common/question-format-guide.md`, `common/audit-and-logging.md`.
+- **Phase dispatch**: load ONLY the active phase's orchestration file. Move to the next phase only when the current phase's stages are approved.
 
-The AI model intelligently assesses what stages are needed based on:
-1. User's stated intent and clarity
-2. Existing codebase state (if any)
-3. Complexity and scope of change
-4. Risk and impact assessment
+  | Phase | Orchestration file |
+  |---|---|
+  | 🔵 INCEPTION | `inception/_inception-orchestration.md` |
+  | 🟢 CONSTRUCTION | `construction/_construction-orchestration.md` |
+  | 🟡 OPERATIONS | `operations/_operations-orchestration.md` |
 
-## MANDATORY: Rule Details Loading (bootstrap — do this first)
-**CRITICAL**: When performing any phase, you MUST read and use relevant content from rule detail files. Check these paths in order and use the first one that exists, regardless of which IDE or setup method was used:
-- `.aidlc/aidlc-rules/aws-aidlc-rule-details/` (typical with AI-assisted setup)
-- `.aidlc-rule-details/` (typical with Cursor, Cline, Claude Code, OpenAI Codex)
-- `.kiro/aws-aidlc-rule-details/` (typical with Kiro IDE and CLI)
-- `.amazonq/aws-aidlc-rule-details/` (typical with Amazon Q Developer)
+  Each orchestration file defines its stages, ALWAYS/CONDITIONAL rules, and approval gates. Follow it exactly.
+- **Resume**: read `aidlc-docs/aidlc-state.md` first, following `common/session-continuity.md`. Then load only the current phase's orchestration file.
+- **Welcome message**: on a new software request, show `common/welcome-message.md` once. Do not reload it later.
+- **Extensions**: scan `extensions/` and load only the `*.opt-in.md` files. Load a full extension rule only after the user opts in. Extensions without an opt-in file are always enforced. Enabled extension rules are hard constraints.
+- **Content**: validate per `common/content-validation.md` before creating any file (Mermaid, ASCII diagrams, escaping).
+- **Questions**: follow `common/question-format-guide.md`. Ask clarification questions in `.md` files, not inline in chat.
+- **NO EMERGENT BEHAVIOR**: construction stages use the 2-option completion messages from their rule files. No 3-option menus.
 
-All rule-detail references below (e.g. `common/process-overview.md`, `inception/_inception-orchestration.md`) are relative to whichever rule-details directory was resolved above.
+## Audit (mandatory)
+Full rules in `common/audit-and-logging.md`:
+- Log every user input verbatim, with an ISO 8601 timestamp, in `aidlc-docs/audit.md`. Also log every approval prompt and response.
+- APPEND or Edit `audit.md`. Never overwrite it. It is large (100+ KB): do not Read it whole. Append with `cat >> aidlc-docs/audit.md <<'EOF'`, and use `tail -n 40` if you need recent entries.
+- Mark a plan step `[x]` in the same interaction that completes it. Track stage progress in `aidlc-docs/aidlc-state.md`.
 
-**ALWAYS load these common rules at workflow start** (small, universally applicable):
-- `common/process-overview.md` — three-phase workflow overview + Mermaid diagram
-- `common/session-continuity.md` — session resumption / resume-from-aidlc-state.md guidance
-- `common/content-validation.md` — content validation requirements (see also below)
-- `common/question-format-guide.md` — question formatting rules
-- `common/audit-and-logging.md` — audit trail, prompts logging, checkbox enforcement (see below)
+## Layout
+- Application code: workspace root. Never inside `aidlc-docs/`.
+- Documentation: `aidlc-docs/` only.
+- Project structure patterns: `construction/code-generation.md`.
 
-## Phase Dispatch (load only the ACTIVE phase's orchestration)
-**CRITICAL context-control rule**: Do NOT load all three phases at once. Determine the
-current phase (from the user request, or from `aidlc-docs/aidlc-state.md` on resume), then
-load ONLY that phase's orchestration file. It contains every stage, gate, and approval step
-for the phase. Move to the next phase's file only when the current phase's required stages
-are approved.
+## Large files
+Do not Read these whole. `grep -n '^#'` for the section, then Read with `offset`/`limit`:
+- `unidades-y-tareas.md` (52 KB, one `## U<n>` section per unit; grep the unit or task ID)
+- `specs/prd.md` (53 KB), `guide.md` (28 KB), `aidlc-docs/audit.md` (100+ KB)
 
-| Active phase | Load this orchestration file | Then it sequences stages via |
-|---|---|---|
-| 🔵 INCEPTION — *what & why* | `inception/_inception-orchestration.md` | `inception/*.md` |
-| 🟢 CONSTRUCTION — *how + build/test* | `construction/_construction-orchestration.md` | `construction/*.md` |
-| 🟡 OPERATIONS — *deploy/run (placeholder)* | `operations/_operations-orchestration.md` | `operations/*.md` |
+## Replies (caveman)
+Chat replies use caveman mode: `.agents/skills/caveman/SKILL.md`, default level. Keep normal prose for:
+- anything written to files (`audit.md`, `aidlc-docs/`, commits, PRs, specs);
+- security warnings, irreversible-action confirmations, and step sequences;
+- the standardized AI-DLC approval and completion messages, verbatim.
 
-Each orchestration file lists its phase's stages, which are ALWAYS vs CONDITIONAL, the
-"Execute IF / Skip IF" criteria, and the per-stage approval gates. Follow it exactly; it
-points to the individual stage rule files to load when each stage runs.
+Code, commands, paths, and error text stay exact. Reply in the user's language.
 
-**Typical entry points**:
-- New software request → start INCEPTION (Workspace Detection runs first, ALWAYS).
-- Resuming a project → read `aidlc-docs/aidlc-state.md`, follow `common/session-continuity.md`, then load the orchestration file for the current phase only.
+## Code graph
+This project has a code-review-graph knowledge graph. Query it before Grep: `semantic_search_nodes_tool` or `query_graph_tool` to find symbols, `get_impact_radius_tool` for blast radius, `detect_changes_tool` + `get_review_context_tool` for review. Then read the source; the source wins over the graph. An empty graph result means "not indexed", not "does not exist".
 
-## MANDATORY: Custom Welcome Message
-When starting ANY software development request, display the welcome message ONCE:
-1. Load `common/welcome-message.md`
-2. Display the complete message to the user
-3. Only once at the start of a new workflow — do NOT reload it in later interactions (saves context)
-
-## MANDATORY: Extensions Loading (Context-Optimized)
-At workflow start, scan `extensions/` recursively and load ONLY the lightweight `*.opt-in.md` files — never the full rule files. Present opt-in prompts during Requirements Analysis; load an extension's full rule file ONLY when the user opts in. Extensions with no `*.opt-in.md` are always enforced (load at start). Enabled extension rules are hard constraints and a non-compliance is a blocking finding.
-**Full mechanics (deferred loading, enforcement, conditional enable/disable): see `common/extensions-loading.md`.**
-
-## MANDATORY: Content Validation
-Before creating ANY file, validate content per `common/content-validation.md`:
-- Validate Mermaid diagram syntax
-- Validate ASCII art diagrams (see `common/ascii-diagram-standards.md`)
-- Escape special characters properly
-- Provide text alternatives for complex visual content
-- Test content parsing compatibility
-
-## MANDATORY: Question File Format
-When asking questions at any phase, follow `common/question-format-guide.md`:
-- Multiple choice format (A, B, C, D, E options)
-- [Answer]: tag usage
-- Answer validation and ambiguity resolution
-- ALWAYS ask clarification/feedback questions in `.md` files, NOT inline in chat
-
-## MANDATORY: Audit Trail & Checkbox Enforcement
-Full rules in `common/audit-and-logging.md`. The non-negotiable essence:
-- Log EVERY user input (complete raw input, never summarized) with an ISO 8601 timestamp in `aidlc-docs/audit.md`, plus every approval prompt and response.
-- ALWAYS **append/Edit** audit.md — NEVER overwrite its full contents (causes duplication).
-- After completing ANY plan step, mark it `[x]` in the SAME interaction (plan-level); track overall progress in `aidlc-docs/aidlc-state.md` (stage-level).
-
-## Key Principles
-- **Adaptive Execution**: Only execute stages that add value
-- **Transparent Planning**: Always show the execution plan before starting
-- **User Control**: User can request stage inclusion/exclusion
-- **Progress Tracking**: Update aidlc-state.md with executed and skipped stages
-- **Complete Audit Trail**: Log all inputs/responses with timestamps (see audit-and-logging.md)
-- **Quality Focus**: Complex changes get full treatment, simple changes stay efficient
-- **Content Validation**: Always validate content before file creation
-- **NO EMERGENT BEHAVIOR**: Construction stages MUST use the standardized 2-option completion messages defined in their rule files. DO NOT create 3-option menus or other emergent navigation patterns.
-
-## Directory Structure
-
-```text
-<WORKSPACE-ROOT>/                   # ⚠️ APPLICATION CODE HERE
-├── [project-specific structure]    # Varies by project (see code-generation.md)
-│
-├── aidlc-docs/                     # 📄 DOCUMENTATION ONLY
-│   ├── inception/                  # 🔵 INCEPTION PHASE
-│   │   ├── plans/
-│   │   ├── reverse-engineering/    # Brownfield only
-│   │   ├── requirements/
-│   │   ├── user-stories/
-│   │   └── application-design/
-│   ├── construction/               # 🟢 CONSTRUCTION PHASE
-│   │   ├── plans/
-│   │   ├── {unit-name}/
-│   │   │   ├── functional-design/
-│   │   │   ├── nfr-requirements/
-│   │   │   ├── nfr-design/
-│   │   │   ├── infrastructure-design/
-│   │   │   └── code/               # Markdown summaries only
-│   │   └── build-and-test/
-│   ├── operations/                 # 🟡 OPERATIONS PHASE (placeholder)
-│   ├── aidlc-state.md
-│   └── audit.md
-```
-
-**CRITICAL RULE**:
-- Application code: Workspace root (NEVER in aidlc-docs/)
-- Documentation: aidlc-docs/ only
-- Project structure: See code-generation.md for patterns by project type
+@RTK.md

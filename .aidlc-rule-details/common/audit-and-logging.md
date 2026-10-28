@@ -40,8 +40,8 @@
 
 ✅ CORRECT:
 
-1. Read the audit.md file
-2. Append/Edit the file to make changes
+1. Do NOT read the whole audit.md file (it is large and grows with every entry). If you need recent context, read only the tail (e.g. `tail -n 40 aidlc-docs/audit.md`)
+2. Append the new entry (e.g. `cat >> aidlc-docs/audit.md <<'EOF'`) or Edit the file at the specific location
 
 ❌ WRONG:
 
