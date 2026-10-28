@@ -1,2 +1,6 @@
 # Estado local de la herramienta Serena (memorias y config por desarrollador)
 .serena/
+# Added by code-review-graph
+.code-review-graph/
+node_modules/
+scripts/test/__pycache__/
