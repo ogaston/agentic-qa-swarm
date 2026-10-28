@@ -1,5 +1,4 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { SelectorTema } from '../theme/SelectorTema';
 import { loginPath } from './next';
 import { NavPrincipal } from './NavPrincipal';
 import { useSession } from './SessionContext';
@@ -23,7 +22,7 @@ export function ProtectedLayout() {
   const { principal_id: principalId, role } = session.principal;
 
   return (
-    <>
+    <div className="ed-root ed-app-layout">
       <header className="az-header">
         <div className="az-header-inner">
           <div className="az-brand">
@@ -32,7 +31,6 @@ export function ProtectedLayout() {
           </div>
           <NavPrincipal />
           <div className="az-header-right">
-            <SelectorTema />
             <div className="az-session-chip">
               <span className="az-avatar" aria-hidden="true">
                 {iniciales(principalId)}
@@ -44,13 +42,16 @@ export function ProtectedLayout() {
                 </span>
               </div>
             </div>
-            <button type="button" className="btn btn-sm" onClick={() => void logout()}>
+            <button type="button" className="btn btn-sm dashboard-logout" data-testid="session-logout-button" onClick={() => void logout()}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                <path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h10" />
+              </svg>
               Salir
             </button>
           </div>
         </div>
       </header>
       <Outlet />
-    </>
+    </div>
   );
 }

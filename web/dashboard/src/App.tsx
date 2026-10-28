@@ -1,5 +1,6 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { InboxPage } from './pages/Inbox/InboxPage';
+import { LandingPage } from './pages/Landing/LandingPage';
 import { LoginPage } from './pages/Login/LoginPage';
 import { RunPage } from './pages/Run/RunPage';
 import { RunsPage } from './pages/Runs/RunsPage';
@@ -15,7 +16,7 @@ export function NotFound() {
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/inbox" replace />} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/inbox" element={<InboxPage />} />

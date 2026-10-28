@@ -75,7 +75,8 @@ describe('RunsPage (Mis corridas)', () => {
   it('lista vacía muestra el mensaje de vacío', async () => {
     server.use(http.get('/api/confirmations', () => HttpResponse.json([])));
     renderMisCorridas();
-    expect(await screen.findByText('Aún no tienes corridas confirmadas.')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Tu primera corrida empieza en el Inbox' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Ir al Inbox' }).getAttribute('href')).toBe('/inbox');
   });
 });
 
@@ -109,7 +110,7 @@ describe('RunsPage (estructura del mockup, U10-T04)', () => {
   it('el vacío muestra el mensaje dentro de la tarjeta', async () => {
     server.use(http.get('/api/confirmations', () => HttpResponse.json([])));
     renderMisCorridas();
-    const mensaje = await screen.findByText('Aún no tienes corridas confirmadas.');
+    const mensaje = await screen.findByRole('heading', { name: 'Tu primera corrida empieza en el Inbox' });
     expect(mensaje.closest('.card')).not.toBeNull();
   });
 

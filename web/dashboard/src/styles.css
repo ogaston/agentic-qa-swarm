@@ -3,6 +3,7 @@
  * las del mockup mockups/swarm-mock.html (U10-T01); src/styles/paridad.test.ts exige que sus
  * medidas y nombres de clase coincidan. */
 @import './styles/tokens.css';
+@import './styles/editorial.css';
 
 *,
 *::before,

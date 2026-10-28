@@ -439,12 +439,12 @@ describe('Inbox estructura del mockup (U10-T02 CA-2)', () => {
     expect(screen.queryByRole('link', { name: /Nueva aplicación/ })).toBeNull();
   });
 
-  it('la cabecera muestra solo datos reales: Entorno y Reset verificado desde /api/warm; sin «Familias activas»', async () => {
+  it('la cabecera muestra solo datos reales: Entorno y Limpieza verificada desde /api/warm; sin «Familias activas»', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmOk()]);
     await screen.findByText('acme/api');
     const meta = document.querySelector('.az-header-meta') as HTMLElement;
     expect(within(meta).getByText('Entorno')).toBeTruthy();
-    expect(within(meta).getByText('Reset verificado')).toBeTruthy();
+    expect(within(meta).getByText('Limpieza verificada')).toBeTruthy();
     expect(screen.queryByText('Familias activas')).toBeNull();
   });
 
@@ -457,7 +457,7 @@ describe('Inbox estructura del mockup (U10-T02 CA-2)', () => {
     ]);
     await screen.findByText('acme/api');
     expect(document.querySelector('.az-header-meta')).toBeNull();
-    expect(screen.queryByText('Reset verificado')).toBeNull();
+    expect(screen.queryByText('Limpieza verificada')).toBeNull();
     expect(await screen.findByText('Sin dato')).toBeTruthy();
   });
 
@@ -530,53 +530,51 @@ describe('Inbox tonos del estado del entorno (U10-T06 F-05)', () => {
     );
   }
 
-  function insigniaEntorno(): HTMLElement {
+  function tarjetaEntorno(): HTMLElement {
     const caja = screen.getByText('Estado del entorno').closest('.kpi-box');
     if (caja === null) throw new Error('sin KPI de entorno');
-    const insignia = caja.querySelector('.badge');
-    if (insignia === null) throw new Error('sin insignia en el KPI de entorno');
-    return insignia as HTMLElement;
+    return caja as HTMLElement;
   }
 
   function metaEntorno(): HTMLElement {
     const meta = document.querySelector('.az-header-meta');
     if (meta === null) throw new Error('sin cabecera meta');
-    return within(meta as HTMLElement).getByText(/\(warm-1\)/);
+    return meta.querySelector('.az-meta-value > span') as HTMLElement;
   }
 
-  it('state=dirty con reset_verified=false: insignia warn y cabecera meta-warn, sin estilo de éxito', async () => {
+  it('state=dirty con reset_verified=false: tarjeta de advertencia y cabecera meta-warn, sin estilo de éxito', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmDe('dirty', false)]);
-    await waitFor(() => expect(insigniaEntorno().className).toContain('badge-warn'));
-    expect(insigniaEntorno().className).not.toContain('badge-ok');
-    expect(insigniaEntorno().textContent).toBe('dirty');
-    expect(screen.getByText('Sucio (requiere reset)')).toBeTruthy();
+    await waitFor(() => expect(tarjetaEntorno().className).toContain('dashboard-tone-warn'));
+    expect(tarjetaEntorno().className).not.toContain('dashboard-tone-ok');
+    expect(tarjetaEntorno().querySelector('.kpi-val')?.textContent).toBe('Requiere limpieza');
+    expect(screen.getAllByText('Requiere limpieza').length).toBe(2);
     expect(metaEntorno().className).toBe('meta-warn');
     expect(metaEntorno().className).not.toBe('meta-ok');
-    expect(metaEntorno().textContent).toBe('Sucio (requiere reset) (warm-1)');
+    expect(metaEntorno().textContent).toBe('Requiere limpieza');
   });
 
-  it('state=cuarentena: insignia warn y cabecera meta-warn, sin estilo de éxito', async () => {
+  it('state=cuarentena: tarjeta de advertencia y cabecera meta-warn, sin estilo de éxito', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmDe('cuarentena', false)]);
-    await waitFor(() => expect(insigniaEntorno().className).toContain('badge-warn'));
-    expect(insigniaEntorno().className).not.toContain('badge-ok');
-    expect(insigniaEntorno().textContent).toBe('cuarentena');
+    await waitFor(() => expect(tarjetaEntorno().className).toContain('dashboard-tone-warn'));
+    expect(tarjetaEntorno().className).not.toContain('dashboard-tone-ok');
+    expect(tarjetaEntorno().querySelector('.kpi-val')?.textContent).toBe('En cuarentena');
     expect(metaEntorno().className).toBe('meta-warn');
-    expect(metaEntorno().textContent).toBe('En cuarentena (warm-1)');
+    expect(metaEntorno().textContent).toBe('En cuarentena');
   });
 
-  it('state=idle-escalado: insignia neutral y cabecera meta-neutral, sin estilo de éxito', async () => {
+  it('state=idle-escalado: tarjeta neutral y cabecera meta-neutral, sin estilo de éxito', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmDe('idle-escalado', false)]);
-    await waitFor(() => expect(insigniaEntorno().className).toContain('badge-neutral'));
-    expect(insigniaEntorno().className).not.toContain('badge-ok');
+    await waitFor(() => expect(tarjetaEntorno().className).toContain('dashboard-tone-neutral'));
+    expect(tarjetaEntorno().className).not.toContain('dashboard-tone-ok');
     expect(metaEntorno().className).toBe('meta-neutral');
-    expect(metaEntorno().textContent).toBe('Inactivo (escalado) (warm-1)');
+    expect(metaEntorno().textContent).toBe('En pausa');
   });
 
-  it('state=ready conserva la insignia ok y la cabecera meta-ok (fidelidad con el mockup)', async () => {
+  it('state=ready conserva la tarjeta verde y la cabecera meta-ok (fidelidad con el mockup)', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmOk()]);
-    await waitFor(() => expect(insigniaEntorno().className).toContain('badge-ok'));
+    await waitFor(() => expect(tarjetaEntorno().className).toContain('dashboard-tone-ok'));
     expect(metaEntorno().className).toBe('meta-ok');
-    expect(metaEntorno().textContent).toBe('Listo (warm-1)');
+    expect(metaEntorno().textContent).toBe('Listo');
   });
 });
 

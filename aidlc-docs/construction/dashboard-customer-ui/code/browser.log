@@ -1,0 +1,48 @@
+{
+  "results": [
+    {
+      "route": "inbox",
+      "width": 1440,
+      "overflow": false,
+      "internalCopy": false,
+      "screenshot": "/tmp/dashboard-inbox-1440.png"
+    },
+    {
+      "route": "runs",
+      "width": 1440,
+      "overflow": false,
+      "internalCopy": false,
+      "screenshot": "/tmp/dashboard-runs-1440.png"
+    },
+    {
+      "route": "warm",
+      "width": 1440,
+      "overflow": false,
+      "internalCopy": false,
+      "screenshot": "/tmp/dashboard-warm-1440.png"
+    },
+    {
+      "route": "inbox",
+      "width": 390,
+      "overflow": false,
+      "internalCopy": false,
+      "screenshot": "/tmp/dashboard-inbox-390.png"
+    },
+    {
+      "route": "runs",
+      "width": 390,
+      "overflow": false,
+      "internalCopy": false,
+      "screenshot": "/tmp/dashboard-runs-390.png"
+    },
+    {
+      "route": "warm",
+      "width": 390,
+      "overflow": false,
+      "internalCopy": false,
+      "screenshot": "/tmp/dashboard-warm-390.png"
+    }
+  ],
+  "errors": [],
+  "verified": "navigation, empty CTA, logout, environment states, reset warning, keyboard focus"
+}

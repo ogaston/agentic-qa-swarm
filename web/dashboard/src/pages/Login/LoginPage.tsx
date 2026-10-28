@@ -1,16 +1,14 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import { ApiErrorNotice, useCountdownUntil } from '../../api/errors';
-import { NavPrincipal } from '../../session/NavPrincipal';
 import { safeNext } from '../../session/next';
 import { useSession } from '../../session/SessionContext';
-import { SelectorTema } from '../../theme/SelectorTema';
 
 const MSG_CREDENCIALES = 'Usuario, contraseña o código incorrectos';
 const MSG_IDENTIDAD = 'Servicio de identidad no disponible';
 
-/** «Iniciar sesión» (`/login`), según el mockup: tarjeta centrada con marca, sin cabecera de sesión. */
+/** «Iniciar sesión» (`/login`): tarjeta centrada con marca, sin menú de sesión ni selector de tema. */
 export function LoginPage() {
   const { login } = useSession();
   const navigate = useNavigate();
@@ -64,17 +62,13 @@ export function LoginPage() {
   }
 
   return (
-    <>
+    <div className="ed-root ed-login-root">
       <header className="az-header">
         <div className="az-header-inner">
-          <div className="az-brand">
+          <Link to="/" className="az-brand" title="Volver al inicio">
             <span className="az-logo">aqs</span>
             <span className="az-brand-sub">Agentic QA Swarm</span>
-          </div>
-          <NavPrincipal />
-          <div className="az-header-right">
-            <SelectorTema />
-          </div>
+          </Link>
         </div>
       </header>
       <main className="az-container">
@@ -82,11 +76,11 @@ export function LoginPage() {
           <div className="card card-pad">
             <div className="login-marca">
               <span className="az-logo">aqs</span>
-              <span className="login-marca-sub">go-identity</span>
+              <span className="login-marca-sub">Agentic QA Swarm</span>
             </div>
             <h1 className="login-titulo">Iniciar sesión</h1>
             <p className="login-texto">
-              Sesión mantenida únicamente en memoria (sin <code>localStorage</code> ni cookies).
+              Introduce tus credenciales para acceder a la plataforma.
             </p>
 
             {bloqueado ? (
@@ -151,6 +145,6 @@ export function LoginPage() {
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }

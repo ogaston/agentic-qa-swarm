@@ -54,12 +54,9 @@ describe('cabecera protegida', () => {
     expect(screen.getByRole('button', { name: 'Salir' })).toBeTruthy();
   });
 
-  it('selector de tema: aria-label y title cambian con el tema, como en el mockup', async () => {
-    const user = await entrarComo('ana');
-    const boton = screen.getByRole('button', { name: 'Cambiar a tema oscuro' });
-    expect(boton.getAttribute('title')).toBe('Cambiar a tema oscuro');
-    await user.click(boton);
-    expect(boton.getAttribute('aria-label')).toBe('Cambiar a tema claro');
-    expect(boton.getAttribute('title')).toBe('Cambiar a tema claro');
+  it('la cabecera protegida no muestra selector de tema', async () => {
+    await entrarComo('ana');
+    expect(screen.queryByRole('button', { name: /Cambiar a tema/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Salir' }).querySelector('svg')).not.toBeNull();
   });
 });

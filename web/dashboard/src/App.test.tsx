@@ -17,19 +17,24 @@ function conSesionValida() {
 }
 
 describe('rutas de la app', () => {
-  it('/ sin sesión termina en /login?next=%2Finbox', async () => {
+  it('/ muestra la landing pública sin sesión', async () => {
     renderApp('/');
-    await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { level: 1, name: /Your releases, tested by a swarm/ }),
+      ).toBeTruthy(),
+    );
+    expect(currentLocation()).toBe('/');
   });
 
-  it('/ con sesión termina en /inbox', async () => {
+  it('/ con sesión y next=/ termina en la landing', async () => {
     conSesionValida();
     const user = userEvent.setup();
     renderApp('/login?next=%2F');
     await user.type(screen.getByLabelText('Usuario'), 'ana');
     await user.type(screen.getByLabelText('Contraseña'), 'clave-larga-1');
     await user.click(screen.getByRole('button', { name: 'Entrar' }));
-    await waitFor(() => expect(currentLocation()).toBe('/inbox'));
+    await waitFor(() => expect(currentLocation()).toBe('/'));
   });
 
   it('una ruta desconocida sigue mostrando «No encontrado»', async () => {

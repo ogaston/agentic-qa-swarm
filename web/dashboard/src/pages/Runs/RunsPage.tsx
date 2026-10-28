@@ -33,29 +33,35 @@ export function RunsPage() {
     <main className="az-container">
       <PageHeader
         titulo="Mis corridas"
-        descripcion={
-          <>
-            Recibos de confirmación auditables (<code>GET /api/confirmations?limit=20</code>), ordenados del más
-            reciente al más antiguo.
-          </>
-        }
+        descripcion="Consulta las pruebas que has autorizado y sigue sus resultados. Las más recientes aparecen primero."
       />
       {error !== null && <ApiErrorNotice error={error} />}
       {error === null && recibos === null && <p>Cargando…</p>}
       {recibos !== null && (
         <div className="card">
           {recibos.length === 0 ? (
-            <p className="empty">Aún no tienes corridas confirmadas.</p>
+            <section className="dashboard-empty" aria-labelledby="runs-empty-title">
+              <div className="dashboard-empty-art" aria-hidden="true">
+                <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="13" y="9" width="38" height="46" rx="5" />
+                  <path d="M23 9v6h18V9M22 27h20M22 34h13M22 41h8" />
+                  <circle cx="48" cy="46" r="12" /><path d="m44 46 3 3 6-7" />
+                </svg>
+              </div>
+              <h2 id="runs-empty-title">Tu primera corrida empieza en el Inbox</h2>
+              <p>Aún no tienes corridas confirmadas. Revisa una notificación y confirma las pruebas que quieres ejecutar. Aquí podrás seguir sus resultados.</p>
+              <Link to="/inbox" className="btn btn-primary" data-testid="runs-empty-inbox-link">Ir al Inbox <span aria-hidden="true">→</span></Link>
+            </section>
           ) : (
             <div className="table-wrap">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th scope="col">
-                      Corrida (<code className="campo-api">run_id</code>)
+                      Corrida
                     </th>
                     <th scope="col">
-                      Notificación (<code className="campo-api">notification_id</code>)
+                      Notificación
                     </th>
                     <th scope="col">Confirmada (hora en UTC)</th>
                     <th scope="col">Confirmada por</th>

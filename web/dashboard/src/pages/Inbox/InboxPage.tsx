@@ -29,9 +29,9 @@ const COLOR_ESTADO: Record<Estado, TonoBadge> = {
 /** Etiquetas del estado del warm (mismas que la vista del entorno). */
 const ETIQUETA_ENTORNO: Record<WarmState['state'], string> = {
   ready: 'Listo',
-  dirty: 'Sucio (requiere reset)',
+  dirty: 'Requiere limpieza',
   cuarentena: 'En cuarentena',
-  'idle-escalado': 'Inactivo (escalado)',
+  'idle-escalado': 'En pausa',
 };
 
 type TonoEntorno = 'ok' | 'warn' | 'neutral';
@@ -42,13 +42,6 @@ const TONO_ENTORNO: Record<WarmState['state'], TonoEntorno> = {
   dirty: 'warn',
   cuarentena: 'warn',
   'idle-escalado': 'neutral',
-};
-
-/** Color de la barra del KPI por tono del estado del warm. */
-const BARRA_ENTORNO: Record<TonoEntorno, string> = {
-  ok: 'var(--ok)',
-  warn: 'var(--warn)',
-  neutral: 'var(--text-muted)',
 };
 
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';
@@ -258,14 +251,14 @@ export function InboxPage() {
   // Cabecera: solo celdas con dato real de la API. «Familias activas» no existe en la API: se omite.
   const meta: ElementoMeta[] = [];
   if (warm !== null) {
-    // U10-T06: el mockup muestra el identificador del entorno (warm_id, dato real) con el tono de su estado.
+    // Presentar el estado sin identificadores internos del entorno.
     const tono = TONO_ENTORNO[warm.state];
     meta.push({
       etiqueta: 'Entorno',
-      valor: <span className={`meta-${tono}`}>{`${ETIQUETA_ENTORNO[warm.state]} (${warm.warm_id})`}</span>,
+      valor: <span className={`meta-${tono}`}>{ETIQUETA_ENTORNO[warm.state]}</span>,
     });
     meta.push({
-      etiqueta: 'Reset verificado',
+      etiqueta: 'Limpieza verificada',
       valor: <span className="mono">{warm.reset_verified ? 'sí' : 'no'}</span>,
     });
   }
@@ -279,7 +272,7 @@ export function InboxPage() {
     <main className="az-container">
       <PageHeader
         titulo="Inbox de notificaciones"
-        descripcion="Eventos recibidos desde GitHub. Cero auto-run: ninguna corrida arranca sin confirmación explícita."
+        descripcion="Revisa los cambios de tu equipo y elige cuáles probar. Cada corrida empieza con tu confirmación."
         meta={meta}
       />
 
@@ -331,30 +324,32 @@ export function InboxPage() {
         <Kpi
           etiqueta="Notificaciones pendientes"
           valor={textoContador('pending')}
-          insignia={{ clase: 'badge-accent', texto: 'esperando confirm' }}
-          barra={60}
-          colorBarra="var(--accent)"
+          tono="warn"
+          descripcion="Cambios por revisar antes de iniciar las pruebas."
+          icono={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16v16H4zM4 13h5l2 3h2l2-3h5M9 8h6" /></svg>}
         />
         <Kpi
           etiqueta="Corridas confirmadas"
           valor={textoContador('confirmed')}
-          insignia={{ clase: 'badge-info', texto: 'auditable' }}
-          barra={40}
-          colorBarra="var(--info)"
+          tono="info"
+          descripcion={conteos.confirmed === undefined ? 'Abre Confirmadas para consultar el total.' : 'Pruebas autorizadas por tu equipo.'}
+          icono={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8" /><path d="m8 12 3 3 5-6" /></svg>}
         />
         <Kpi
           etiqueta="Estado del entorno"
           valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'}
           claseValor="kpi-valor-20"
-          insignia={
-            warm !== null
-              ? { clase: `badge-${TONO_ENTORNO[warm.state]}`, texto: warm.state, punto: true }
-              : undefined
-          }
-          barra={100}
-          colorBarra={warm !== null ? BARRA_ENTORNO[TONO_ENTORNO[warm.state]] : 'var(--ok)'}
+          tono={warm === null ? 'neutral' : warm.state === 'ready' && !warm.reset_verified ? 'warn' : TONO_ENTORNO[warm.state]}
+          descripcion={warm === null ? 'No pudimos consultar su disponibilidad.' : warm.state === 'ready' && warm.reset_verified ? 'Disponible y con limpieza verificada.' : 'Consulta Entorno antes de iniciar otra corrida.'}
+          icono={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M7 10h3l2-3 2 7 2-4h2" /></svg>}
         />
-        <Kpi etiqueta="Rechazadas" valor={textoContador('rejected')} barra={100} colorBarra="var(--teal)" />
+        <Kpi
+          etiqueta="Rechazadas"
+          valor={textoContador('rejected')}
+          tono="danger"
+          descripcion={conteos.rejected === undefined ? 'Abre Rechazadas para consultar el total.' : 'Cambios descartados por tu equipo.'}
+          icono={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><circle cx="12" cy="12" r="8" /><path d="m9 9 6 6m0-6-6 6" /></svg>}
+        />
       </div>
 
       <div id="inbox-lista" role="tabpanel" aria-labelledby={`tab-${estado}`}>
@@ -368,7 +363,7 @@ export function InboxPage() {
             <div className="card-pad listado-cabecera">
               <div className="card-title">Listado de notificaciones</div>
               <div className="card-sub">
-                Eventos recibidos listos para revisión y confirmación previa a la inferencia de flujos sobre el entorno.
+                Revisa cada cambio y confirma las pruebas que quieres ejecutar.
               </div>
             </div>
             <div className="table-wrap">

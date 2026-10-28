@@ -1312,3 +1312,157 @@ Javeriana/topicos-especiales/agentic-qa-swarm →   feat/scripts-demo[?]
 **Context**: Evidencia en aidlc-docs/construction/demo-setup/code/run-d3fdad3c9118b08a-verification.md. Caso sano demostrado en esta revisión; el caso con oversell no se ejecutó por esta solicitud. No se avanza de etapa AI-DLC.
 
 ---
+
+---
+
+## 2026-10-28T11:44:00-05:00 — Solicitud del usuario (textual)
+
+> I want to implement this design system into the app, initially we're going to do a brief landing page. and then we can move to the rest of the pages. we're going prioritize a production ready product, so keep in mind that this is going to be seen by real clients and it must be super and subtle animated to look outstanding
+>
+> https://styles.refero.design/style/12255b63-e506-4bc1-a4cd-d05487de32f3
+
+**Acción**: plan presentado en modo plan y aprobado por el usuario. Sistema editorial
+(Refero «Intercom — warm cream editorial») implementado como capa con alcance propio:
+`web/dashboard/src/styles/editorial.css` (tokens + primitivas `.ed-*`, light-only, fuentes del
+sistema por CSP `default-src 'self'`), landing pública en `/`
+(`web/dashboard/src/pages/Landing/LandingPage.tsx`, copy en inglés), revelado sutil por scroll
+(`web/dashboard/src/hooks/useReveal.ts`, IntersectionObserver + listener para saltos instantáneos,
+respeta prefers-reduced-motion). Ruta `/` deja de redirigir a `/inbox`; `App.test.tsx` actualizado.
+Verificación: typecheck + 233 pruebas + lint + build verdes; capturas Playwright (1440px, 390px,
+reduced-motion) sin errores de consola. Correcciones tras verificación visual: especificidad de
+color en `.ed-btn` frente a `.ed-root a`, y revelado de elementos saltados por scroll instantáneo.
+Páginas internas conservan su tema; su migración al sistema editorial queda como trabajo posterior.
+
+## 2026-10-28 — user input
+> "start the app so I can see it"
+Action: launched vite dev server for web/dashboard (background) so the user can view the new landing page at /.
+
+## 2026-10-28 — user input
+> "can you open the browser and see that there's like a missmatch in the fonts
+> And also I need you to add more graphic elements. also remove the line under the text for the button when hovering"
+Action: inspecting landing in real browser via kimi-webbridge; then fix font mismatch, add graphic elements, remove button hover underline.
+
+## 2026-10-28 — follow-up landing fixes
+User report: font mismatch, wants more graphic elements, button hover underline removal.
+Findings: (1) editorial.css used bare system stacks — Refero names Inter/JetBrains Mono/Newsreader as substitutes for Saans/SaansMono/Serrif; (2) global `a:hover { text-decoration: underline }` in styles.css underlined .ed-btn on hover; (3) global `dl { display: grid }` in styles.css leaked into the new artifact panel.
+Actions: vendored self-hosted OFL fonts into web/dashboard/public/fonts (inter-var, jbmono-var, newsreader-var + OFL texts, CSP 'self' compatible), @font-face + font-feature-settings ss01/tnum in editorial.css; added .ed-root .ed-btn:hover text-decoration:none; added graphic elements: run-manifest artifact panel with corner registration crosses + pulsing verified dot, 6-tile abstract SVG strip (mosaic), staggered reveals; fixed .ed-artifact-rows display:block.
+Verified: typecheck, 233/233 tests, lint, build (fonts in dist/), Playwright screenshots desktop 1440 + mobile 390, btn hover text-decoration none, fonts loaded (document.fonts), no console errors. Dev server still running on 127.0.0.1:5173.
+
+## Landing CTA background — Code Generation
+**Timestamp**: 2026-10-28T19:26:36Z
+**User Input**: "in the landing page, the section Ship without the QA backlog, must have a nice background"
+**AI Response**: "Plan: inspect the existing editorial landing, add a local geometric background to the final CTA, and verify build, existing landing tests, and responsive rendering."
+**Context**: Small visual change within the active CONSTRUCTION stage. Existing workspace changes are preserved. No infrastructure changes.
+
+## Landing CTA background — Continuation
+**Timestamp**: 2026-10-28T19:26:36Z
+**User Input**: "continue"
+**AI Response**: "Continue the announced implementation and verification plan."
+**Context**: User explicitly requested continuation after interruption.
+
+## Landing CTA background — Verification and review
+**Timestamp**: 2026-10-28T19:28:08Z
+**AI Response**: "Implemented a local orbital SVG background and responsive section styles. Build passed, all 3 existing landing tests passed, and visual checks passed at 1440px and 390px. git diff --check passed. Evidence: aidlc-docs/construction/landing-cta-background/code/verification.md."
+**Approval Prompt**: "¿Permites ejecutar la comprobación visual local fuera del sandbox? El sandbox bloqueó el servidor y Chromium necesarios para revisar escritorio y móvil."
+**Approval Result**: The escalation tool allowed the command to execute; no textual user response was supplied to the assistant. The command completed successfully.
+**Review Prompt**: "Request Changes - Ask for modifications to the generated code based on your review. Continue to Next Stage - Approve code generation and proceed to Build & Test."
+**Context**: Focused change complete and ready for review. No overall stage transition or infrastructure mutation performed.
+
+## Frontend local run
+**Timestamp**: 2026-10-28T19:30:09Z
+**User Input**: "run the frontend"
+**AI Response**: "Frontend already running at http://localhost:5173/. Verified the process belongs to web/dashboard and both the landing and new CTA background asset respond successfully."
+**Context**: Reused the existing Vite development server; no duplicate server started or infrastructure changes made.
+
+## Landing preview label removal — Code Generation
+**Timestamp**: 2026-10-28T19:38:52Z
+**User Input**:
+```text
+remove: 100% Reset Parity
+WARM-07
+0 Staging Drift
+ENV: warm-07 · isolated
+```
+**AI Response**: "Remove the two floating label containers and the environment badge from the hero preview, then run the existing landing tests and TypeScript check."
+**Context**: Focused follow-up within active CONSTRUCTION. Direct source inspection used because the graph coverage tool was unavailable under its approval policy in this session. Existing unrelated changes preserved.
+
+## Landing preview labels — Verification
+**Timestamp**: 2026-10-28T19:38:52Z
+**AI Response**: "Removed the two floating label containers and the environment badge. npm run typecheck passed; all 3 existing LandingPage tests passed."
+**Context**: The four requested hero-preview labels are removed. Other walkthrough and terminal copy was preserved.
+
+## Landing container — Clarification
+**Timestamp**: 2026-10-28T19:38:52Z
+**User Input**: "and also remove ed-container"
+**AI Response**: "ed-container wraps seven parts of the landing. Should I remove its width/padding constraints everywhere, or remove one specific section and its contents?"
+**Context**: Clarification requested because removing a reusable layout wrapper and deleting a section have materially different effects. Waiting for scope before making that additional change.
+
+## Landing container — Scope response and implementation
+**Timestamp**: 2026-10-28T19:41:10Z
+**User Input**: "Remove width/padding wrappers everywhere"
+**AI Response**: "Removed all seven ed-container class usages and both CSS rules that imposed its max-width, centered margins, and responsive horizontal padding. Section contents and reveal behavior are preserved."
+**Context**: Explicit response resolves scope. Rechecking build, existing landing tests, and responsive rendering.
+
+## Landing container — Final verification
+**Timestamp**: 2026-10-28T19:42:16Z
+**AI Response**: "Removed all ed-container width/padding constraints across the landing and the four requested hero labels. Adjusted decorative corner marks to prevent mobile overflow. Build, 3 existing landing tests, git diff --check, and browser checks at 1440px and 390px pass."
+**Review Prompt**: "Request Changes - Ask for modifications to the generated code based on your review. Continue to Next Stage - Approve code generation and proceed to Build & Test."
+**Context**: Follow-up complete; updated plan, verification evidence, and project state. No overall stage transition.
+
+## Code Generation — Dashboard customer UI / solicitud y planificación
+**Timestamp**: 2026-10-28T21:30:10Z
+**User Input**:
+<image name=[Image #1] path="/tmp/codex-clipboard-uTj8mZ.png">[Imagen adjunta del Inbox]</image>[Image #1]
+
+I need you to improve this UI a bit.
+
+
+- remove warn-local
+- Improve the Notificaciones pendientes
+2
+esperando confirm
+Corridas confirmadas
+—
+auditable
+Estado del entorno
+Listo
+ready
+Rechazadas
+
+give them some color and better content.
+
+remove the labels (esperando confirm, audiaabl, ready)
+
+- pendiente seems to be missing the left padding
+- remove the button in the left of the name and improve the "salir" button.-
+- the top menu can look better
+- Mis corridas and Entorno has the API route they hit, that's not necessary instead put a text for a customer.
+- add a nicer empty state to "mis corridas"
+- Entorno , remove all the text that are not proper to the customer
+
+**AI Response**: Revisados estado, reglas de CONSTRUCTION, componentes y estilos. Grafo consultado con cobertura para las rutas principales y contraste con fuente. Preparado plan visual concreto; pendiente aprobación antes de generar código. Cambios locales previos preservados.
+**Context**: Plan `construction/plans/dashboard-customer-ui-plan.md`. Interpretación de «warn-local»: identificador visible `warm-local`. El botón junto al nombre es SelectorTema. La primera pestaña tiene una regla heredada `padding-left: 0`.
+
+---
+
+## Code Generation — Dashboard customer UI / solicitud de aprobación
+**Timestamp**: 2026-10-28T21:30:10Z
+**Approval Prompt**: Revisa `aidlc-docs/construction/plans/dashboard-customer-ui-plan.md` y responde la pregunta en `aidlc-docs/construction/dashboard-customer-ui-questions.md`. El paso 7 de la Parte 1 de `.aidlc-rule-details/construction/code-generation.md` exige: «Do not proceed until the user explicitly approves the unit code generation plan».
+**Context**: Pendiente aprobación; no se modificó código de aplicación ni se ejecutaron pruebas de cambios aún no implementados.
+
+---
+
+## Code Generation — Dashboard customer UI / aprobación
+**Timestamp**: 2026-10-28T21:35:00Z
+**User Input**: hazlo ahora!!!!
+**AI Response**: Aprobación explícita del plan completo registrada. Se inicia implementación y verificación local.
+**Context**: `construction/plans/dashboard-customer-ui-plan.md`; no se solicitan más aprobaciones para este alcance.
+
+---
+
+## Code Generation — Dashboard customer UI / implementación y verificación
+**Timestamp**: 2026-10-28T21:35:24Z
+**AI Response**: Implementados los siete pasos del plan aprobado. Tarjetas coloreadas sin etiquetas ni barras fijas, padding de Pendientes corregido, navegación agrupada, selector de tema retirado de la cabecera protegida, Salir mejorado, textos para clientes y nuevo estado vacío de Mis corridas. Entorno sin identificadores ni campos internos. Build, lint y 234 pruebas correctas; revisión visual y funcional local a 1440/390 px con datos simulados, sin desbordamiento de página ni errores JavaScript. Evidencia en `construction/dashboard-customer-ui/code/verification.md`.
+**Context**: Plan completo. Cambios anteriores conservados. No se operó infraestructura ni se avanzó de etapa global. Se presenta el mensaje de finalización con las opciones Request Changes / Continue to Next Stage conforme a la regla de Code Generation; no se solicitan aprobaciones adicionales para completar este ajuste.
+
+---

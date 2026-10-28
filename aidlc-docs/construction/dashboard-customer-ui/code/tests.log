@@ -1,0 +1,120 @@
+
+> @aqs/dashboard@0.0.0 test
+> vitest run
+
+
+ RUN  v2.1.8 /home/omarjayg/Javeriana/topicos-especiales/agentic-qa-swarm/web/dashboard
+
+ ✓ src/styles/paridad.test.ts (3 tests) 8ms
+ ✓ src/proxy/table.test.ts (8 tests) 37ms
+ ✓ src/styles/tokens.test.ts (42 tests) 21ms
+ ✓ src/api/errors.test.tsx (3 tests) 54ms
+ ✓ src/api/client.test.ts (11 tests) 131ms
+ ✓ src/components/Card.test.tsx (4 tests) 30ms
+stderr | src/pages/Warm/WarmPage.test.tsx > WarmPage > oculta identificadores internos y muestra información para el cliente
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/pages/Runs/RunsPage.test.tsx > RunsPage (Mis corridas) > pide /api/confirmations?limit=20
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/components/componentes.test.tsx (4 tests) 128ms
+stderr | src/pages/Run/RunPage.test.tsx > RunPage > cambiar de :id no muestra datos de la corrida anterior ni vuelve a pedirla
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/pages/Run/RunPage.fidelidad.test.tsx > RunPage fidelidad: encabezado y línea de tiempo > encabezado con h1 «Corrida», código del id, trace id y franja de metadatos
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/pages/Run/RunPage.resultados.test.tsx > RunPage: veredicto > los tres veredictos muestran texto distinto
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/theme/tema.test.tsx (4 tests) 201ms
+stderr | src/session/session.test.tsx > sesión > logout borra la sesión aunque el servidor responda 500
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/session/nav.test.tsx > cabecera de navegación protegida > enlaza a Inbox, Mis corridas y Entorno (/warm) con sus href
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/pages/Login/LoginPage.test.tsx > LoginPage > login correcto llama a /auth/session, navega a /inbox y muestra principal_id
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/pages/Inbox/InboxPage.test.tsx > Inbox lista > cada pestaña pide su ?state= y muestra solo lo devuelto
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/hooks/usePolling.test.tsx (10 tests) 282ms
+stderr | src/pages/Landing/LandingPage.test.tsx > LandingPage > muestra el titular del hero y la marca
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/pages/Landing/LandingPage.test.tsx (4 tests) 338ms
+stderr | src/session/cabecera.test.tsx > cabecera protegida > chip de sesión: avatar con iniciales, principal y «Rol: …»
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/App.test.tsx > rutas de la app > / muestra la landing pública sin sesión
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/pages/Runs/RunsPage.test.tsx (9 tests) 518ms
+ ✓ src/session/nav.test.tsx (1 test) 507ms
+   ✓ cabecera de navegación protegida > enlaza a Inbox, Mis corridas y Entorno (/warm) con sus href 500ms
+ ✓ src/App.test.tsx (3 tests) 586ms
+   ✓ rutas de la app > / con sesión y next=/ termina en la landing 314ms
+ ✓ src/pages/Warm/WarmPage.test.tsx (17 tests) 880ms
+ ✓ src/pages/Run/RunPage.fidelidad.test.tsx (12 tests) 853ms
+   ✓ RunPage fidelidad: encabezado y línea de tiempo > encabezado con h1 «Corrida», código del id, trace id y franja de metadatos 319ms
+ ✓ src/pages/Run/RunPage.test.tsx (13 tests) 922ms
+   ✓ RunPage > cambiar de :id no muestra datos de la corrida anterior ni vuelve a pedirla 334ms
+ ✓ src/session/cabecera.test.tsx (4 tests) 970ms
+   ✓ cabecera protegida > chip de sesión: avatar con iniciales, principal y «Rol: …» 467ms
+ ✓ src/pages/Run/RunPage.resultados.test.tsx (21 tests) 1385ms
+   ✓ RunPage: veredicto > los tres veredictos muestran texto distinto 374ms
+ ✓ src/session/session.test.tsx (12 tests) 1623ms
+   ✓ sesión > logout borra la sesión aunque el servidor responda 500 524ms
+ ✓ src/pages/Login/LoginPage.test.tsx (17 tests) 1978ms
+   ✓ LoginPage > login correcto llama a /auth/session, navega a /inbox y muestra principal_id 489ms
+stderr | src/pages/Inbox/InboxPage.test.tsx > Inbox confirma > el cuerpo enviado es {"flows":["happy-path"]}
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/runs/run-0123456789abcdef
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/getting-started/mocks
+
+stderr | src/pages/Inbox/InboxPage.test.tsx > Inbox confirma > doble clic envía un solo POST
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/runs/run-0123456789abcdef
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/getting-started/mocks
+
+stderr | src/pages/Inbox/InboxPage.test.tsx > Inbox confirma > 201 navega a /runs/<run_id>
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/runs/run-0123456789abcdef
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/getting-started/mocks
+
+ ✓ src/pages/Inbox/InboxPage.test.tsx (32 tests) 6970ms
+   ✓ Inbox lista > cada pestaña pide su ?state= y muestra solo lo devuelto 632ms
+   ✓ Inbox lista > sin polling: con temporizadores falsos instalados antes de montar, 6 s no generan peticiones 620ms
+   ✓ Inbox lista > descarta la respuesta vieja de una pestaña anterior 753ms
+   ✓ Inbox confirma > doble clic envía un solo POST 304ms
+   ✓ Inbox confirma > 409 con un POST en vuelo: la pestaña no cambia y la recarga muestra pendientes 463ms
+   ✓ Inbox confirma > un 400 con un POST en vuelo: la pestaña no cambia y el aviso sigue visible 467ms
+
+ Test Files  21 passed (21)
+      Tests  234 passed (234)
+   Start at  16:34:11
+   Duration  8.88s (transform 1.86s, setup 5.35s, collect 5.65s, tests 18.42s, environment 16.67s, prepare 2.49s)
+

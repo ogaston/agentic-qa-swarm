@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ApiError, apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
 import type { components } from '../../api/schema.gen';
+import { Kpi } from '../../components/Kpi';
 import { PageHeader } from '../../components/PageHeader';
 import { usePolling } from '../../hooks/usePolling';
 
@@ -10,7 +11,7 @@ type Warm = components['schemas']['WarmState'];
 const INTERVALO_MS = 10_000;
 
 /** Color de la insignia por estado. El texto de la etiqueta lleva la información; el color, solo apoyo. */
-const COLOR_ESTADO: Record<Warm['state'], 'ok' | 'warn' | 'danger' | 'neutral'> = {
+const COLOR_ESTADO: Record<Warm['state'], 'ok' | 'warn' | 'neutral'> = {
   ready: 'ok',
   dirty: 'warn',
   cuarentena: 'warn',
@@ -19,9 +20,9 @@ const COLOR_ESTADO: Record<Warm['state'], 'ok' | 'warn' | 'danger' | 'neutral'> 
 
 const ETIQUETAS: Record<Warm['state'], string> = {
   ready: 'Listo',
-  dirty: 'Sucio (requiere reset)',
+  dirty: 'Requiere limpieza',
   cuarentena: 'En cuarentena',
-  'idle-escalado': 'Inactivo (escalado)',
+  'idle-escalado': 'En pausa',
 };
 
 /** Trazo del icono por estado (decorativo: el texto de la etiqueta es el significado). */
@@ -71,13 +72,9 @@ export function WarmPage() {
     <main className="az-container warm-page">
       <PageHeader
         titulo="Entorno"
-        descripcion={
-          <>
-            Estado en vivo del entorno (<code>GET /api/warm</code>, sondeo cada 10 s en solo lectura).
-          </>
-        }
+        descripcion="Consulta si tu entorno de pruebas está disponible para la próxima corrida."
         acciones={
-          <button type="button" className="btn btn-primary" onClick={refrescar}>
+          <button type="button" className="btn btn-primary" data-testid="warm-refresh-button" onClick={refrescar}>
             Actualizar
           </button>
         }
@@ -85,7 +82,7 @@ export function WarmPage() {
 
       {warmNoDisponible && (
         <div role="alert" className="alert-box alert-danger">
-          Estado del warm no disponible
+          No pudimos consultar el estado del entorno. Intenta actualizar en unos momentos.
         </div>
       )}
       {error !== null && !warmNoDisponible && <ApiErrorNotice error={error} />}
@@ -98,9 +95,11 @@ export function WarmPage() {
         </p>
       )}
 
+      {data === null && error === null && <p role="status">Consultando tu entorno…</p>}
+
       {data !== null && data.state === 'ready' && !data.reset_verified && (
         <div role="alert" className="alert-box alert-warn">
-          El entorno está listo, pero el reset no está verificado. No confíes en sus resultados hasta verificarlo.
+          La limpieza del entorno aún no está verificada. Espera su verificación antes de confiar en los resultados.
         </div>
       )}
 
@@ -108,49 +107,29 @@ export function WarmPage() {
         <section aria-label="Tarjeta del entorno" className="card card-pad">
           <div className="card-head">
             <div>
-              <h2 className="card-title">
-                Estado operativo de <code>{data.warm_id}</code>
-              </h2>
-              <div className="card-sub">
-                El reset debe estar verificado antes de confiar en los resultados.
-              </div>
+              <h2 className="card-title">Tu entorno de pruebas</h2>
+              <div className="card-sub">Un espacio separado de producción para probar los cambios de tu equipo.</div>
             </div>
             <span className={`badge badge-${COLOR_ESTADO[data.state]}`} data-testid="warm-estado" data-state={data.state}>
               <IconoEstado estado={data.state} />
               {ETIQUETAS[data.state]}
             </span>
           </div>
-          <div className="kpi-strip kpi-sin-margen">
-            <div className="card kpi-box kpi-fondo">
-              <div className="kpi-label">
-                Estado (<code>state</code>)
-              </div>
-              <div className="kpi-row">
-                <span className="kpi-val kpi-valor-20">{ETIQUETAS[data.state]}</span>
-              </div>
-            </div>
-            <div className="card kpi-box kpi-fondo">
-              <div className="kpi-label">
-                Reset verificado (<code>reset_verified</code>)
-              </div>
-              <div className="kpi-row">
-                <span className="kpi-val kpi-valor-20 mono">{data.reset_verified ? 'sí' : 'no'}</span>
-              </div>
-            </div>
-            <div className="card kpi-box kpi-fondo">
-              <div className="kpi-label">
-                Versión base (<code>baseline_version</code>)
-              </div>
-              <div className="kpi-row">
-                <span className="kpi-val kpi-valor-18 mono">{data.baseline_version}</span>
-              </div>
-            </div>
-            <div className="card kpi-box kpi-fondo">
-              <div className="kpi-label">Identificador del entorno</div>
-              <div className="kpi-row">
-                <span className="kpi-val kpi-valor-18 mono">{data.warm_id}</span>
-              </div>
-            </div>
+          <div className="kpi-strip kpi-sin-margen dashboard-environment-grid">
+            <Kpi
+              etiqueta="Disponibilidad"
+              valor={ETIQUETAS[data.state]}
+              tono={data.state === 'ready' && !data.reset_verified ? 'warn' : COLOR_ESTADO[data.state]}
+              claseValor="kpi-valor-20"
+              descripcion={data.state === 'ready' ? 'El entorno está preparado para recibir pruebas.' : data.state === 'dirty' ? 'Necesita una limpieza antes de volver a usarse.' : data.state === 'cuarentena' ? 'Está apartado temporalmente y requiere revisión.' : 'Está en pausa para ahorrar recursos.'}
+            />
+            <Kpi
+              etiqueta="Limpieza verificada"
+              valor={data.reset_verified ? 'Verificada' : 'Pendiente'}
+              tono={data.reset_verified ? 'ok' : 'warn'}
+              claseValor="kpi-valor-20"
+              descripcion={data.reset_verified ? 'Se verificó que no quedan datos de las pruebas anteriores.' : 'Aún no se ha confirmado la limpieza de las pruebas anteriores.'}
+            />
           </div>
         </section>
       )}
