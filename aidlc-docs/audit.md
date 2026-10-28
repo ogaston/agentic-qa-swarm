@@ -1172,3 +1172,17 @@ what's next now?
 ## 2026-10-27T20:07:11-05:00 User input
 do 1,2,3
 
+
+## 2026-10-28T13:12:49Z — Sesión de continuidad
+
+**Entrada del usuario (verbatim)**: «what's next?», «continue», «abre el PR y luego revisa el demo real», «there are conflicts in the PR».
+
+**Acción**: verificación del estado real del repo frente a `aidlc-docs/aidlc-state.md` y apertura del PR #148
+(rama `docs/estado-u10-u11-cierre`) con el cierre formal de U10/U11 y la revisión de `docs/demo-real.md`.
+Al rebasar sobre `origin/main` (PR #147 ya había hecho en paralelo la misma actualización de estado, con más
+detalle y fecha 2026-10-27) los dos commits quedaron vacíos y se descartaron; se conserva de esta sesión solo
+lo que main no tenía: la nota «CA-6 ya verificado» en el Paso 2b de `docs/demo-real.md` y esta entrada de
+auditoría. El PR #148 queda reducido a ese único cambio.
+
+**Decisión registrada**: en los conflictos se prefirió la versión de `origin/main` para `aidlc-state.md`,
+`unidades-y-tareas.md` y `docs/demo-real.md` por ser posterior (2026-10-27) y más completa.
