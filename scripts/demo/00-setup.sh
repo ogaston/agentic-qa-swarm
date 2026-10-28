@@ -8,7 +8,7 @@
 #   4. cloudflared instalado y túnel activo hacia go-intake (port-forward loopback 18622);
 #      si no corre, lo arranca en segundo plano (nohup, log y pid en /tmp) e imprime la URL pública
 #   5. red a ghcr.io: pull anónimo de la imagen del HEAD de main del repo objetivo alcanzable
-#   6. humo: bash scripts/kind/kind-smoke.sh con 0 líneas FALLA
+#   6. humo: bash scripts/kind/kind-smoke.sh --preflight con 0 líneas FALLA (sin confirmar corridas)
 # Cierra con el resumen de lo que el humano hace a mano (webhook en GitHub, clon del repo objetivo)
 # y la URL del dashboard.
 #
@@ -72,6 +72,37 @@ echo "OK cluster-kind-aqs"
 require_kind_context # sale 3 si el contexto actual no es kind-aqs (antes de tocar el clúster)
 echo "OK contexto-$KIND_CONTEXT"
 
+# --- 1b. Nodo arrancado (el contenedor queda Exited tras reiniciar la máquina) -
+ensure_control_plane() {
+  local engine="" c="${KIND_CLUSTER_NAME}-control-plane" i
+  if kubectl --context "$KIND_CONTEXT" --request-timeout=5s get --raw=/healthz >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "la API del clúster no responde; se intenta arrancar el contenedor del nodo" >&2
+  for e in podman docker; do
+    if command -v "$e" >/dev/null 2>&1; then engine=$e; break; fi
+  done
+  if [ -z "$engine" ]; then
+    echo "ni podman ni docker disponibles para arrancar el nodo" >&2
+    return 1
+  fi
+  if ! "$engine" inspect "$c" >/dev/null 2>&1; then
+    echo "el contenedor '$c' no existe; recrea el clúster con: bash scripts/kind/kind-up.sh" >&2
+    return 1
+  fi
+  "$engine" start "$c" >&2 || return 1
+  for i in $(seq 1 12); do
+    if kubectl --context "$KIND_CONTEXT" --request-timeout=5s get --raw=/healthz >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 5
+  done
+  echo "la API sigue sin responder 60 s tras arrancar '$c'" >&2
+  return 1
+}
+check nodo-arrancado ensure_control_plane
+[ "$fail" = 0 ] || { echo "setup: FALLA (el clúster no está operativo; el resto de comprobaciones se salta)"; exit 1; }
+
 # --- lock del clúster (misma pauta que kind-e2e.sh) ----------------------------
 LOCKFILE="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock"
 touch "$LOCKFILE" 2>/dev/null || true
@@ -97,40 +128,90 @@ fi
 # Toda carga de aqs-system y aqs-test disponible (réplicas disponibles >= deseadas) y ningún pod
 # fuera de Running/Succeeded/Completed.
 pods_plataforma_ok() {
-  local ns obj want got objs mal=0
+  local ns obj want got objs namespace field pods bad_pods mal=0 ausente=0
   for ns in "$NS_SYS" "$NS_TEST"; do
-    if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
-      echo "el namespace $ns no existe (¿falta bash scripts/kind/deploy.sh?)"
+    if ! namespace=$(kubectl --context "$KIND_CONTEXT" --request-timeout=5s get namespace "$ns" --ignore-not-found -o name 2>/dev/null); then
+      echo "no se pudo consultar el namespace $ns (API, red o permisos); no se puede determinar si existe"
       mal=1
       continue
     fi
-    objs=$(kubectl get deploy,statefulset -n "$ns" -o name 2>/dev/null)
+    if [ -z "$namespace" ]; then
+      echo "el namespace $ns no existe (¿falta bash scripts/kind/deploy.sh?)"
+      mal=1
+      ausente=1
+      continue
+    fi
+    if ! objs=$(kubectl --context "$KIND_CONTEXT" --request-timeout=5s get deploy,statefulset -n "$ns" -o name 2>/dev/null); then
+      echo "$ns: no se pudieron consultar Deployments y StatefulSets (API, red o permisos)"
+      mal=1
+      continue
+    fi
     if [ -z "$objs" ]; then
       echo "$ns: sin Deployments ni StatefulSets (despliegue ausente)"
       mal=1
+      ausente=1
       continue
     fi
     while IFS= read -r obj; do
       [ -n "$obj" ] || continue
-      want=$(kubectl get "$obj" -n "$ns" -o jsonpath='{.spec.replicas}' 2>/dev/null)
-      got=$(kubectl get "$obj" -n "$ns" -o jsonpath='{.status.availableReplicas}' 2>/dev/null)
+      field=availableReplicas
+      case "$obj" in statefulset.apps/*) field=readyReplicas ;; esac
+      if ! want=$(kubectl --context "$KIND_CONTEXT" --request-timeout=5s get "$obj" -n "$ns" -o jsonpath='{.spec.replicas}' 2>/dev/null) ||
+         ! got=$(kubectl --context "$KIND_CONTEXT" --request-timeout=5s get "$obj" -n "$ns" -o "jsonpath={.status.$field}" 2>/dev/null); then
+        echo "$ns/$obj: no se pudieron consultar las réplicas (API, red o permisos)"
+        mal=1
+        continue
+      fi
       if [ "${got:-0}" -lt "${want:-1}" ]; then
         echo "$ns/$obj: disponibles=${got:-0} deseadas=${want:-1}"
         mal=1
       fi
     done <<<"$objs"
-    kubectl get pods -n "$ns" --no-headers 2>/dev/null \
-      | awk '$3 != "Running" && $3 != "Succeeded" && $3 != "Completed" { print ns"/"$1": "$3; bad=1 } END { exit bad }' ns="$ns" \
-      || mal=1
+    if ! pods=$(kubectl --context "$KIND_CONTEXT" --request-timeout=5s get pods -n "$ns" -o json 2>/dev/null); then
+      echo "$ns: no se pudieron consultar los pods (API, red o permisos)"
+      mal=1
+      continue
+    fi
+    # La fase Pending por sí sola oculta ErrImagePull/ImagePullBackOff y la imagen que falta.
+    if ! bad_pods=$(jq -r --arg ns "$ns" '
+      .items[] | select((.status.phase != "Running" and .status.phase != "Succeeded") or
+        any(((.status.initContainerStatuses // []) + (.status.containerStatuses // []))[];
+          .state.waiting != null)) |
+        "\($ns)/\(.metadata.name): \(.status.phase)" +
+        ([((.status.initContainerStatuses // []) + (.status.containerStatuses // []))[] |
+          select(.state.waiting != null) |
+          "\(.state.waiting.reason): \(.state.waiting.message // "")"] |
+          if length > 0 then " — " + join("; ") else "" end)
+    ' <<<"$pods"); then
+      echo "$ns: no se pudo interpretar el estado de los pods"
+      mal=1
+    elif [ -n "$bad_pods" ]; then
+      echo "$bad_pods"
+      mal=1
+    fi
   done
+  # Sin namespaces o cargas no hay nada que una espera pueda recuperar.
+  [ "$ausente" -eq 0 ] || return 2
   [ "$mal" -eq 0 ] || return 1
 }
 
-if ! pods_plataforma_ok >"$work/pods.out" 2>&1; then
-  if [ "$DEPLOY" -eq 1 ]; then
-    echo "despliegue incompleto; --deploy: se ejecuta scripts/kind/deploy.sh"
-    bash "$root/scripts/kind/deploy.sh"
-  fi
+pods_rc=0
+pods_plataforma_ok >"$work/pods.out" 2>&1 || pods_rc=$?
+if [ "$pods_rc" -eq 1 ]; then
+  # Tras arrancar el nodo los pods tardan en asentarse (imágenes, probes): espera antes de declarar FALLA.
+  echo "despliegue incompleto; se espera a que los pods se asienten (plazo de 180 s; consultas con timeout de 5 s)"
+  pods_deadline=$((SECONDS + 180))
+  for _ in $(seq 1 36); do
+    [ "$SECONDS" -lt "$pods_deadline" ] || break
+    sleep 5
+    pods_rc=0
+    pods_plataforma_ok >"$work/pods.out" 2>&1 || pods_rc=$?
+    [ "$pods_rc" -eq 1 ] || break
+  done
+fi
+if [ "$pods_rc" -ne 0 ] && [ "$DEPLOY" -eq 1 ]; then
+  echo "despliegue incompleto; --deploy: se ejecuta scripts/kind/deploy.sh"
+  bash "$root/scripts/kind/deploy.sh"
 fi
 check despliegue-plataforma pods_plataforma_ok
 [ "$fail" -eq 0 ] || {
@@ -174,24 +255,37 @@ tunnel_activo() {
 }
 
 URL_PUBLICA=""
-url_desde_log() { # imprime la URL https del log del túnel (trycloudflare o hostname configurado)
-  grep -oE 'https://[A-Za-z0-9.-]+\.(trycloudflare\.com|[A-Za-z0-9.-]+)' "$1" 2>/dev/null | head -n1
+url_desde_log() { # imprime la URL pública del túnel desde el log; excluye las URL de los textos de cloudflare
+  local u
+  u=$(grep -oE 'https://[A-Za-z0-9.-]+\.trycloudflare\.com' "$1" 2>/dev/null | head -n1)
+  if [ -z "$u" ]; then
+    u=$(grep -oE 'https://[A-Za-z0-9][A-Za-z0-9.-]*' "$1" 2>/dev/null | grep -v 'cloudflare\.com$' | head -n1)
+  fi
+  printf '%s' "$u"
 }
 
 check cloudflared-instalado command -v cloudflared
 
 if [ "$fail" -eq 0 ]; then
   # Port-forward de go-intake en 127.0.0.1:18622 (paso 1 del doc de operaciones).
-  if ! puerto_escucha "$P_INTAKE"; then
+  pf_intake() {
     nohup kubectl --context "$KIND_CONTEXT" -n "$NS_SYS" port-forward --address 127.0.0.1 \
       "svc/go-intake" "$P_INTAKE:8080" >"$PF_LOG" 2>&1 &
     echo $! >"$PF_PID"
+  }
+  if ! puerto_escucha "$P_INTAKE"; then
+    pf_intake
     echo "port-forward de go-intake arrancado (pid $(cat "$PF_PID"), log $PF_LOG)"
   fi
   intake_local_ok() {
+    # Reintenta 60 s; si el port-forward muere (p. ej. el pod reinicia tras arrancar el
+    # nodo), lo levanta de nuevo y sigue esperando.
     local i
-    for i in $(seq 1 30); do
+    for i in $(seq 1 60); do
       curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$P_INTAKE/healthz" && return 0
+      if ! puerto_escucha "$P_INTAKE"; then
+        pf_intake
+      fi
       sleep 1
     done
     echo "go-intake no responde en 127.0.0.1:$P_INTAKE/healthz (ver $PF_LOG)"
@@ -274,13 +368,13 @@ check red-ghcr ghcr_alcanzable
 # --- 6. Humo --------------------------------------------------------------------
 smoke_out="$work/smoke.out"
 smoke_rc=0
-bash "$root/scripts/kind/kind-smoke.sh" >"$smoke_out" 2>&1 || smoke_rc=$?
+bash "$root/scripts/kind/kind-smoke.sh" --preflight >"$smoke_out" 2>&1 || smoke_rc=$?
 smoke_fallas=$(grep -c '^FALLA' "$smoke_out" || true)
 if [ "$smoke_fallas" -eq 0 ] && [ "$smoke_rc" -eq 0 ]; then
-  echo "OK kind-smoke (0 líneas FALLA)"
+  echo "OK kind-smoke preflight (0 líneas FALLA; ciclo de corrida pendiente de confirmación humana)"
 else
   echo "FALLA kind-smoke ($smoke_fallas líneas FALLA, rc=$smoke_rc; esperado 0 — ver Estado conocido de docs/demo-real.md)"
-  grep '^FALLA' "$smoke_out" | sed 's/^/    /' || true
+  sed 's/^/    /' "$smoke_out"
   fail=1
 fi
 

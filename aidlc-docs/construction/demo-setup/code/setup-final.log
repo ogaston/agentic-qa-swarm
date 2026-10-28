@@ -1,0 +1,29 @@
+OK cluster-kind-aqs
+OK contexto-kind-aqs
+OK nodo-arrancado
+00-setup: AVISO: /run/user/1000/aqs-kind.lock tomado por residuos del bringup (fd heredado a contenedores kind); se continúa sin él
+OK despliegue-plataforma
+OK secrets-generados
+OK cloudflared-instalado
+OK intake-port-forward
+túnel cloudflared ya estaba activo; no se reinicia
+OK tunnel-cloudflared
+OK red-ghcr
+OK kind-smoke preflight (0 líneas FALLA; ciclo de corrida pendiente de confirmación humana)
+
+================ resumen del Paso 0 ================
+URL pública del webhook: https://appear-inns-effects-ver.trycloudflare.com/webhooks/github
+dashboard: http://127.0.0.1:18610 (arráncalo con: bash scripts/kind/dashboard-up.sh)
+
+Lo que queda EN MANOS DEL HUMANO (la plataforma no lo hace):
+  1. Webhook en https://github.com/ogaston/demo-target-app-qa-swarm/settings/hooks :
+       Payload URL   = la URL pública de arriba
+       Content type  = application/json ; eventos = solo push ; Active
+       Secret        = el de go-intake-webhook, SIN imprimirlo:
+         kubectl --context kind-aqs -n aqs-system get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d | wl-copy   # Wayland
+         kubectl --context kind-aqs -n aqs-system get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d | xclip -selection clipboard   # X11
+  2. Clon local del repo objetivo con permiso de push a main:
+       git clone https://github.com/ogaston/demo-target-app-qa-swarm
+  3. Detalle completo: docs/operaciones/webhook-github-cloudflared.md y docs/demo-real.md
+======================================================
+setup: OK (entorno listo para la demo en vivo)
