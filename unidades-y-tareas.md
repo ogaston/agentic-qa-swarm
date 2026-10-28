@@ -285,10 +285,12 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 | U10-T2 | [x] | Inbox: pestañas, KPI, listado en tarjeta, diálogo de confirmación | S5, US-M1 | `tareas/U10-T02-inbox-fiel.md` |
 | U10-T3 | [x] | Corrida: encabezado, post-mortem, plan plegable, línea de tiempo en rejilla | S5, US-M9, US-M4 | `tareas/U10-T03-corrida-fiel.md` |
 | U10-T4 | [x] | Mis corridas, Entorno y Login | S5, US-M10 | `tareas/U10-T04-runs-warm-login-fieles.md` |
-| U10-T5 | [ ] | `e2e:fidelidad`: compara estilos calculados, estructura y píxeles contra el mockup; enganchado al smoke | S5 | `tareas/U10-T05-compuerta-de-fidelidad-visual.md` |
-| U10-T6 | [ ] | Cierra las brechas que mide la compuerta hasta `e2e:fidelidad` en 0 (20 de 20) | S5 | `tareas/U10-T06-cierre-de-brechas-de-fidelidad.md` |
+| U10-T5 | [x] | `e2e:fidelidad`: compara estilos calculados, estructura y píxeles contra el mockup; enganchado al smoke | S5 | `tareas/U10-T05-compuerta-de-fidelidad-visual.md` |
+| U10-T6 | [x] | Cierre de brechas de fidelidad (opción A, F-05: tonos por estado real del warm en Inbox) | S5 | `tareas/U10-T06-cierre-de-brechas-de-fidelidad.md` |
 
 > **Tareas redactadas (2026-10-22)**, a pedido del humano tras comparar el dashboard con el mockup («looks way different»). Causa: U9-T04 portó tokens pero no la estructura ni un criterio comparativo. Olas: **1** = T01; **2** = T02 ∥ T03 ∥ T04 ∥ T05 (máx. 3 en paralelo: T05 va tras la primera que cierre); todas exigen T01. Decisiones al redactar (el humano puede revertirlas): «Warm» → «Entorno» como en el mockup; KPI y metadatos solo con datos reales; el banner «Iniciar ejecución» y el conmutador demo no se portan.
+
+> **Continuidad (2026-10-27)**: U10-T05 fusionada (PR #141, commit `173c245`). U10-T06 se conserva en la rama `tarea/U10-T06`, con opción A implementada en `73b5957`: CA-1..CA-5 pasan, 20/20 combinaciones, control 0%, 226 pruebas. Revisión de ronda 3 NO-VERDE por F-05 (tonos de éxito con estados no saludables de Inbox); ronda 4 autorizada ([Answer]: A) corrigió F-05 en `3ba907e` (tonos de cabecera e insignia derivados del estado real, semántica de Entorno) y la revisión independiente dio VERDE (`31906df`): 230/230 pruebas, fidelidad 20/20 máx. 4,20 %, control 0,00 %, CSP intacta. U10-T06 fusionada (PR #146, merge `ad500d1`); se retiraron todas las capturas de bitácoras a petición del humano. Con T01..T06 fusionadas, la unidad U10 queda cerrada.
 
 
 ## U11 — Demo con repositorio y modelo reales
