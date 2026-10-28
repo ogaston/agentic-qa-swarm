@@ -47,6 +47,10 @@ observarse en esta demo en vivo.
 
 ## Guion
 
+> **Atajo**: los pasos 0–2 tienen scripts asistidos en `scripts/demo/` (`00-setup.sh`,
+> `10-push-commit.sh`, `20-run-and-watch.sh`); ver `scripts/demo/README.md`. El guion manual
+> de abajo sigue siendo la referencia de qué hace cada paso y qué mirar.
+
 ### Paso 0. Comprobar el entorno
 
 ```bash

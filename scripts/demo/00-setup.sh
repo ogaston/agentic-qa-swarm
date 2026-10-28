@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+# 00-setup.sh — «Paso 0 asistido» de la demo en vivo (docs/demo-real.md) con el repo objetivo real
+# ogaston/demo-target-app-qa-swarm. Deja el entorno listo y comprueba las precondiciones:
+#   1. clúster kind `aqs` (contexto kind-aqs) existe
+#   2. despliegue de la plataforma: pods clave Running en aqs-system y aqs-test
+#      (no redespliega por sí solo; con --deploy corre scripts/kind/deploy.sh si falta)
+#   3. Secrets generados (incluido go-intake-webhook)
+#   4. cloudflared instalado y túnel activo hacia go-intake (port-forward loopback 18622);
+#      si no corre, lo arranca en segundo plano (nohup, log y pid en /tmp) e imprime la URL pública
+#   5. red a ghcr.io: pull anónimo de la imagen del HEAD de main del repo objetivo alcanzable
+#   6. humo: bash scripts/kind/kind-smoke.sh con 0 líneas FALLA
+# Cierra con el resumen de lo que el humano hace a mano (webhook en GitHub, clon del repo objetivo)
+# y la URL del dashboard.
+#
+# Uso:  bash scripts/demo/00-setup.sh [--deploy]
+# Códigos de salida: 0 todo OK · 1 alguna comprobación FALLA · 2 lock ocupado por otro test ·
+#   3 contexto de kubectl equivocado · 4 el clúster kind-aqs no existe.
+#
+# Idempotente: no recrea lo que ya está (túnel, port-forward, despliegue, secretos). Nunca imprime
+# valores de Secrets. Las esperas sobre el clúster respetan el lock compartido
+# ${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock con la misma pauta de kind-e2e.sh: toma no bloqueante; si lo
+# tiene otro script de prueba vivo se sale con 2; si lo tienen residuos del bringup, se avisa y sigue.
+set -euo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+cd "$root" || exit 1
+# shellcheck disable=SC1091  # lib.sh se carga por ruta dinámica (relativa a root)
+. "$root/scripts/kind/lib.sh"
+
+DEPLOY=0
+case "${1:-}" in
+  --deploy) DEPLOY=1 ;;
+  "") ;;
+  *) echo "uso: bash scripts/demo/00-setup.sh [--deploy]" >&2; exit 2 ;;
+esac
+
+NS_SYS=aqs-system
+NS_TEST=aqs-test
+P_INTAKE=18622   # loopback de go-intake para el túnel (docs/operaciones/webhook-github-cloudflared.md)
+TUNNEL_NAME=aqs-demo
+CF_LOG=/tmp/aqs-demo-cloudflared.log
+CF_PID=/tmp/aqs-demo-cloudflared.pid
+PF_LOG=/tmp/aqs-demo-pf-intake.log
+PF_PID=/tmp/aqs-demo-pf-intake.pid
+
+fail=0
+work=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/aqs-demo-setup.XXXXXX")
+chmod 700 "$work"
+trap 'rm -rf "$work"' EXIT
+
+# check <nombre> <función...>: imprime OK o FALLA y el detalle indentado (pauta de kind-smoke.sh).
+check() {
+  local name=$1
+  shift
+  if "$@" >"$work/last.out" 2>&1; then
+    echo "OK $name"
+  else
+    echo "FALLA $name"
+    sed 's/^/    /' "$work/last.out"
+    fail=1
+  fi
+}
+
+# --- 1. Clúster ---------------------------------------------------------------
+if ! kind_cluster_exists; then
+  echo "FALLA cluster-kind-aqs"
+  echo "    el clúster '$KIND_CLUSTER_NAME' no existe; créalo con: bash scripts/kind/kind-up.sh"
+  exit 4
+fi
+echo "OK cluster-kind-aqs"
+
+require_kind_context # sale 3 si el contexto actual no es kind-aqs (antes de tocar el clúster)
+echo "OK contexto-$KIND_CONTEXT"
+
+# --- lock del clúster (misma pauta que kind-e2e.sh) ----------------------------
+LOCKFILE="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind.lock"
+touch "$LOCKFILE" 2>/dev/null || true
+exec 9>"$LOCKFILE" || { echo "no se pudo abrir $LOCKFILE" >&2; exit 2; }
+if flock -n 9; then
+  :
+else
+  otros=""
+  for pid in $(pgrep -f 'scripts/(kind|test|demo)/[a-z0-9_.-]+\.sh' 2>/dev/null); do
+    [ "$pid" = "$$" ] && continue
+    case $( { tr '\0' '\n' </proc/"$pid"/cmdline; } 2>/dev/null | sed -n 2p) in
+      */scripts/kind/*.sh|*/scripts/test/*.sh|*/scripts/demo/*.sh|scripts/kind/*.sh|scripts/test/*.sh|scripts/demo/*.sh) otros="$otros $pid" ;;
+    esac
+  done
+  if [ -n "$otros" ]; then
+    echo "otro script de prueba corre ($otros) y el lock aqs-kind no se pudo tomar; se sale (rc=2)" >&2
+    exit 2
+  fi
+  echo "00-setup: AVISO: $LOCKFILE tomado por residuos del bringup (fd heredado a contenedores kind); se continúa sin él" >&2
+fi
+
+# --- 2. Despliegue -------------------------------------------------------------
+# Toda carga de aqs-system y aqs-test disponible (réplicas disponibles >= deseadas) y ningún pod
+# fuera de Running/Succeeded/Completed.
+pods_plataforma_ok() {
+  local ns obj want got objs mal=0
+  for ns in "$NS_SYS" "$NS_TEST"; do
+    if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
+      echo "el namespace $ns no existe (¿falta bash scripts/kind/deploy.sh?)"
+      mal=1
+      continue
+    fi
+    objs=$(kubectl get deploy,statefulset -n "$ns" -o name 2>/dev/null)
+    if [ -z "$objs" ]; then
+      echo "$ns: sin Deployments ni StatefulSets (despliegue ausente)"
+      mal=1
+      continue
+    fi
+    while IFS= read -r obj; do
+      [ -n "$obj" ] || continue
+      want=$(kubectl get "$obj" -n "$ns" -o jsonpath='{.spec.replicas}' 2>/dev/null)
+      got=$(kubectl get "$obj" -n "$ns" -o jsonpath='{.status.availableReplicas}' 2>/dev/null)
+      if [ "${got:-0}" -lt "${want:-1}" ]; then
+        echo "$ns/$obj: disponibles=${got:-0} deseadas=${want:-1}"
+        mal=1
+      fi
+    done <<<"$objs"
+    kubectl get pods -n "$ns" --no-headers 2>/dev/null \
+      | awk '$3 != "Running" && $3 != "Succeeded" && $3 != "Completed" { print ns"/"$1": "$3; bad=1 } END { exit bad }' ns="$ns" \
+      || mal=1
+  done
+  [ "$mal" -eq 0 ] || return 1
+}
+
+if ! pods_plataforma_ok >"$work/pods.out" 2>&1; then
+  if [ "$DEPLOY" -eq 1 ]; then
+    echo "despliegue incompleto; --deploy: se ejecuta scripts/kind/deploy.sh"
+    bash "$root/scripts/kind/deploy.sh"
+  fi
+fi
+check despliegue-plataforma pods_plataforma_ok
+[ "$fail" -eq 0 ] || {
+  echo "    sugerencia: bash scripts/kind/deploy.sh (o repite este script con --deploy)"
+  echo "setup: FALLA (despliegue incompleto; el resto de comprobaciones se salta)"
+  exit 1
+}
+
+# --- 3. Secrets ----------------------------------------------------------------
+# Mismo conjunto que crea scripts/kind/secrets.sh; solo se comprueba existencia, nunca valores.
+secrets_ok() {
+  local par falta=0
+  for par in \
+    "$NS_SYS/minio-root" "$NS_SYS/minio-kms" "$NS_SYS/minio-tls" "$NS_SYS/aqs-evidence-s3" \
+    "$NS_SYS/go-governance-service-token" "$NS_SYS/go-reset-service-token" \
+    "$NS_SYS/go-warm-manager-service-token" "$NS_SYS/go-identity-users" \
+    "$NS_SYS/go-intake-webhook" "$NS_SYS/agents-llm-key" "$NS_SYS/llm-upstream" \
+    "$NS_SYS/target-app-baseline-token" \
+    "$NS_TEST/warm-db-credentials" "$NS_TEST/target-app-baseline-token"; do
+    if ! kubectl get secret "${par#*/}" -n "${par%%/*}" >/dev/null 2>&1; then
+      echo "falta el Secret $par"
+      falta=1
+    fi
+  done
+  [ "$falta" -eq 0 ] || return 1
+}
+check secrets-generados secrets_ok
+[ "$fail" -eq 0 ] || {
+  echo "    sugerencia: bash scripts/kind/secrets.sh"
+  echo "setup: FALLA (faltan Secrets; el resto de comprobaciones se salta)"
+  exit 1
+}
+
+# --- 4. Túnel cloudflared + port-forward de go-intake --------------------------
+puerto_escucha() { # <puerto>: 0 si algo escucha en 127.0.0.1:<puerto>
+  (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
+tunnel_activo() {
+  pgrep -f "cloudflared tunnel.*(run $TUNNEL_NAME|--url http://127.0.0.1:$P_INTAKE)" >/dev/null 2>&1
+}
+
+URL_PUBLICA=""
+url_desde_log() { # imprime la URL https del log del túnel (trycloudflare o hostname configurado)
+  grep -oE 'https://[A-Za-z0-9.-]+\.(trycloudflare\.com|[A-Za-z0-9.-]+)' "$1" 2>/dev/null | head -n1
+}
+
+check cloudflared-instalado command -v cloudflared
+
+if [ "$fail" -eq 0 ]; then
+  # Port-forward de go-intake en 127.0.0.1:18622 (paso 1 del doc de operaciones).
+  if ! puerto_escucha "$P_INTAKE"; then
+    nohup kubectl --context "$KIND_CONTEXT" -n "$NS_SYS" port-forward --address 127.0.0.1 \
+      "svc/go-intake" "$P_INTAKE:8080" >"$PF_LOG" 2>&1 &
+    echo $! >"$PF_PID"
+    echo "port-forward de go-intake arrancado (pid $(cat "$PF_PID"), log $PF_LOG)"
+  fi
+  intake_local_ok() {
+    local i
+    for i in $(seq 1 30); do
+      curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$P_INTAKE/healthz" && return 0
+      sleep 1
+    done
+    echo "go-intake no responde en 127.0.0.1:$P_INTAKE/healthz (ver $PF_LOG)"
+    return 1
+  }
+  check intake-port-forward intake_local_ok
+
+  if [ "$fail" -eq 0 ]; then
+    if ! tunnel_activo; then
+      if cloudflared tunnel list 2>/dev/null | grep -q "$TUNNEL_NAME"; then
+        # Túnel con nombre (URL estable, recomendado por el doc de operaciones).
+        nohup cloudflared tunnel --url "http://127.0.0.1:$P_INTAKE" run "$TUNNEL_NAME" \
+          >"$CF_LOG" 2>&1 &
+      else
+        # Túnel rápido: la URL cambia en cada arranque (rehacer la Payload URL en GitHub).
+        echo "aviso: no existe el túnel con nombre '$TUNNEL_NAME'; se usa túnel rápido (URL efímera)" >&2
+        nohup cloudflared tunnel --url "http://127.0.0.1:$P_INTAKE" >"$CF_LOG" 2>&1 &
+      fi
+      echo $! >"$CF_PID"
+      echo "túnel cloudflared arrancado (pid $(cat "$CF_PID"), log $CF_LOG)"
+      # El túnel tarda unos segundos en publicar la URL.
+      for _ in $(seq 1 30); do
+        URL_PUBLICA=$(url_desde_log "$CF_LOG")
+        [ -n "$URL_PUBLICA" ] && break
+        sleep 1
+      done
+    else
+      echo "túnel cloudflared ya estaba activo; no se reinicia"
+      URL_PUBLICA=$(url_desde_log "$CF_LOG")
+    fi
+
+    # El log de un túnel CON NOMBRE no imprime la URL pública: se deriva del hostname de
+    # ~/.cloudflared/config.yml (la que el humano fijó con `cloudflared tunnel route dns`).
+    if [ -z "$URL_PUBLICA" ] && [ -f "$HOME/.cloudflared/config.yml" ]; then
+      host_cfg=$(awk '/^[[:space:]]*-[[:space:]]*hostname:/ { print $3; exit }' "$HOME/.cloudflared/config.yml")
+      [ -n "$host_cfg" ] && URL_PUBLICA="https://$host_cfg"
+    fi
+
+    # Comprueba que el túnel responde. Con URL conocida: la URL pública debe entregar el /healthz
+    # de go-intake. Con túnel con nombre y hostname no derivable: basta el proceso vivo y el
+    # endpoint local sano (la URL la conoce el humano; se le pide en el resumen).
+    if [ -z "$URL_PUBLICA" ]; then
+      echo "aviso: túnel con nombre activo pero hostname no derivable del log ni de ~/.cloudflared/config.yml;" >&2
+      echo "       la URL pública es la del \`cloudflared tunnel route dns $TUNNEL_NAME <host>\` que configuraste" >&2
+    fi
+    tunnel_responde() {
+      if [ -z "$URL_PUBLICA" ]; then
+        tunnel_activo || { echo "el proceso cloudflared no está vivo (ver $CF_LOG)"; return 1; }
+        curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$P_INTAKE/healthz" || return 1
+        return 0
+      fi
+      local i code
+      for i in $(seq 1 30); do
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$URL_PUBLICA/healthz") || code=000
+        [ "$code" = 200 ] && return 0
+        sleep 2
+      done
+      echo "$URL_PUBLICA/healthz respondió $code (se esperaba 200; ver $CF_LOG)"
+      return 1
+    }
+    check tunnel-cloudflared tunnel_responde
+    # Un túnel con nombre cuya URL no se pudo derivar no es FALLA, pero el resumen la necesita:
+    # la línea de detalle del check (arriba) es el aviso; aquí no se inventa una URL.
+  fi
+fi
+
+# --- 5. Red a ghcr.io (pull anónimo de la imagen del repo objetivo) ------------
+ghcr_alcanzable() {
+  local sha rc=0
+  sha=$(resolve_target_sha) || return 1
+  target_image_exists "$sha" || rc=$?
+  case "$rc" in
+    0) echo "imagen anónima alcanzable: $TARGET_IMAGE_REPO:$sha" ; return 0 ;;
+    1) echo "la imagen $TARGET_IMAGE_REPO:$sha no existe o el paquete no es público (404)" ; return 1 ;;
+    *) echo "no pude comprobar la imagen (token anónimo, red o límite de GHCR)" ; return 1 ;;
+  esac
+}
+check red-ghcr ghcr_alcanzable
+
+# --- 6. Humo --------------------------------------------------------------------
+smoke_out="$work/smoke.out"
+smoke_rc=0
+bash "$root/scripts/kind/kind-smoke.sh" >"$smoke_out" 2>&1 || smoke_rc=$?
+smoke_fallas=$(grep -c '^FALLA' "$smoke_out" || true)
+if [ "$smoke_fallas" -eq 0 ] && [ "$smoke_rc" -eq 0 ]; then
+  echo "OK kind-smoke (0 líneas FALLA)"
+else
+  echo "FALLA kind-smoke ($smoke_fallas líneas FALLA, rc=$smoke_rc; esperado 0 — ver Estado conocido de docs/demo-real.md)"
+  grep '^FALLA' "$smoke_out" | sed 's/^/    /' || true
+  fail=1
+fi
+
+# --- 7. Resumen ------------------------------------------------------------------
+echo
+echo "================ resumen del Paso 0 ================"
+if [ -n "$URL_PUBLICA" ]; then
+  echo "URL pública del webhook: $URL_PUBLICA/webhooks/github"
+else
+  echo "URL pública del webhook: NO DISPONIBLE (revisa el túnel: log $CF_LOG)"
+fi
+echo "dashboard: http://127.0.0.1:18610 (arráncalo con: bash scripts/kind/dashboard-up.sh)"
+echo
+echo "Lo que queda EN MANOS DEL HUMANO (la plataforma no lo hace):"
+echo "  1. Webhook en https://github.com/$TARGET_REPO_FULL/settings/hooks :"
+echo "       Payload URL   = la URL pública de arriba"
+echo "       Content type  = application/json ; eventos = solo push ; Active"
+echo "       Secret        = el de go-intake-webhook, SIN imprimirlo:"
+echo "         kubectl --context $KIND_CONTEXT -n $NS_SYS get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d | wl-copy   # Wayland"
+echo "         kubectl --context $KIND_CONTEXT -n $NS_SYS get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d | xclip -selection clipboard   # X11"
+echo "  2. Clon local del repo objetivo con permiso de push a main:"
+echo "       git clone $TARGET_REPO_URL"
+echo "  3. Detalle completo: docs/operaciones/webhook-github-cloudflared.md y docs/demo-real.md"
+echo "======================================================"
+
+if [ "$fail" -eq 0 ]; then
+  echo "setup: OK (entorno listo para la demo en vivo)"
+  exit 0
+fi
+echo "setup: FALLA (ver las líneas FALLA)"
+exit 1
