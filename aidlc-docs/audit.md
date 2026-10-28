@@ -1186,3 +1186,19 @@ auditoría. El PR #148 queda reducido a ese único cambio.
 
 **Decisión registrada**: en los conflictos se prefirió la versión de `origin/main` para `aidlc-state.md`,
 `unidades-y-tareas.md` y `docs/demo-real.md` por ser posterior (2026-10-27) y más completa.
+
+## 2026-10-28T13:45:00Z — Scripts asistidos de la demo en vivo
+
+**Entrada del usuario (verbatim)**: «create few sub agents to create bash files to make the demo as easy/straightforward as possible».
+
+**Acción**: 3 subagentes codificadores en paralelo crearon `scripts/demo/`:
+`00-setup.sh` (precondiciones del Paso 0: clúster, despliegue, secretos, túnel cloudflared,
+ghcr, humo), `10-push-commit.sh` (edición idempotente del Dockerfile del repo objetivo con
+`ENV TARGET_APP_BUG=oversell`, commit, push a main, espera de la imagen en GHCR con token
+anónimo vía `scripts/kind/lib.sh`) y `20-run-and-watch.sh` (webhook → confirmación humana o
+`--confirm-auto` → vigilancia de fases hasta `done` → resumen con veredicto, hallazgo,
+`reset_verified`; sin aceptar `resetting` ni `done` con `fail_reason` como final feliz, F-01
+de U8-T08). Se añadió `scripts/demo/README.md` con el flujo y un enlace desde
+`docs/demo-real.md`. Verificación: `bash -n` en los tres scripts; pruebas funcionales con
+mocks en 10-push-commit; end-to-end pendiente de la primera corrida real (requiere clúster
+desplegado, túnel y push real del humano).
