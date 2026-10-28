@@ -4,3 +4,4 @@
 .code-review-graph/
 node_modules/
 scripts/test/__pycache__/
+__pycache__/
