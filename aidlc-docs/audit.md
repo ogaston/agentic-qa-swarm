@@ -1029,3 +1029,146 @@ only keep the empty state and the button"
 **Context**: CONSTRUCTION, U10 ola 2
 
 ---
+
+## U10-T06 — retoma del loop con subagentes (orquestador)
+**Timestamp**: 2026-10-27T00:00:00-05:00
+**User Input**: "continue and use sub agents for each role (coding, reviewing and you are the orchestrator"
+**AI Response**: Se retoma U10-T06 en su worktree (agentic-qa-swarm-wt-U10-T06, rama tarea/U10-T06): la tarea estaba en ronda 1, continuación 5, con la compuerta en 10 de 20 y el residuo bloqueado por decisiones de producto/diseño del humano (candidatas 1–4, 6, 10, 11 de la bitácora). Se comete la bitácora pendiente (42f4ec7) y se despacha el revisor como subagente para la ronda 1 formal; luego se arbitra el veredicto.
+**Context**: CONSTRUCTION, U10, U10-T06 ronda 1
+
+---
+
+## Continuidad — U10-T06, retrabajo
+**Timestamp**: 2026-10-27T22:56:32+00:00
+**User Input**: "continue, with what's next"
+**AI Response**: Se revisaron estado, auditoría, unidades, tarea y worktree conservado. El estado de fase está desactualizado: unidades-y-tareas y la auditoría identifican U10-T06 pendiente, con revisión NO-VERDE. Se retoma el retrabajo con codificador y posterior revisor independiente, conservando los cambios locales previos y las tolerancias. Plan en construction/plans/u10-t06-continuity-plan.md.
+**Context**: CONSTRUCTION, U10-T06 ronda 2; sin aprobación de fusión ni cambio de alcance.
+
+---
+
+## U10-T06 — resultado de ronda 2 y decisión pendiente
+**Timestamp**: 2026-10-27T23:06:38+00:00
+**AI Response**: Codificador `b123fd5`; revisión independiente NO-VERDE: CA-1 12/20 (antes 10/20), CA-2..CA-5 pasan, 226 pruebas y control 20/20 con 0% de diferencia. F-02 y F-03 resueltos; F-01 sigue abierto. F-04 AMARILLO: requisito de directorio de salida existente para sonda diagnóstica. Informe persistido íntegro en el worktree. No se suaviza el veredicto ni se fusiona.
+**Approval Prompt** (contenido completo del archivo `construction/u10-reference-questions.md`):
+
+# U10-T06 — Decisión sobre el contenido de referencia
+
+La revisión independiente de la ronda 2 confirma 12/20 comparaciones visuales y 226/226 pruebas. CA-2..CA-5 y control pasan; CA-1 sigue fallando. La rama `tarea/U10-T06` conserva las correcciones. Informe: `../agentic-qa-swarm-wt-U10-T06/revisiones/U10-T06/ronda-2.md`.
+
+## Pregunta 1
+¿Cómo continuar con las diferencias de contenido entre el mockup y los datos disponibles de la aplicación?
+
+A) Autorizar que la preparación del mockup en la prueba use contenido comparable al producto real (recomendado). Se ajustan únicamente los elementos enumerados abajo; siguen intactos comparadores, estilos medidos, tolerancias, umbral de píxeles y las 20 combinaciones. Después se miden otra vez todas las vistas y se corrige el CSS que aún falle.
+
+B) Mantener todo el contenido actual del mockup y especificar tareas separadas para implementar las funcionalidades y los campos que faltan. Requiere ampliar el alcance de producto; no permite inventar datos en la interfaz.
+
+C) Otra alternativa (describir después de [Answer]).
+
+[Answer]:
+
+## Cambios concretos de referencia propuestos para A
+
+| Vista | Preparación de contenido propuesta |
+|---|---|
+| Bandeja | Retirar el enlace sin funcionalidad «Nueva aplicación», los metadatos sin dato real «Familias activas»/«sí (100%)»; usar KPI de rechazos y contadores disponibles, igual que la aplicación. |
+| Corrida | Igualar el subtítulo real, la etiqueta del estado y el contenido del hallazgo como texto plano del contrato; sin interpretar HTML arbitrario. |
+| Entorno | Usar un único identificador real y descripción sin composición ni namespace inventados; conservar los estilos y la estructura de referencia. |
+
+La opción A no modifica `mockups/swarm-mock.html` ni autoriza neutralizaciones adicionales sin documentarlas. No permite copiar estilos de la aplicación al mockup, ocultar regiones completas para evitar errores ni modificar los comparadores. El registro JSON debe enumerar cada preparación adicional por nombre.
+
+## Motivo de la decisión y límite de evidencia
+
+La tarea `tareas/U10-T06-cierre-de-brechas-de-fidelidad.md` prohíbe expresamente «si una diferencia es de datos y no de CSS, se reporta como candidata, no se oculta». Las autorizaciones existentes solo permiten neutralizar demostraciones y desbordamiento. Por eso el cambio de referencia necesita una decisión explícita.
+
+Las sondas de diagnóstico reproducidas por el revisor bajan bandeja móvil de 16,04% a 4,04% y corrida móvil de 14,73% a 0,31% al igualar contenido. No sustituyen la compuerta oficial. Entorno aún requiere medir el efecto de su alineación de contenido; no se promete 20/20 con estos cambios solos. Quedan residuos geométricos menores por investigar.
+
+La tarea sigue NO-VERDE y no se abre como lista para fusión. No se propone relajar la tolerancia.
+
+**Context**: CONSTRUCTION, U10-T06; decisión pendiente. No se interpreta silencio como autorización.
+
+---
+
+## U10-T06 — aprobación explícita de opción A
+**Timestamp**: 2026-10-27T23:43:48+00:00
+**User Input**: "continue. do A"
+**AI Response**: Se registra la aprobación de la opción A en construction/u10-reference-questions.md. Se actualiza la especificación de U10-T06 con la preparación de contenido autorizada, se retoma el codificador y luego se ejecutará revisión independiente de ronda 3. Comparadores, tolerancias, estructura/estilos medidos y 20 combinaciones permanecen intactos.
+**Context**: CONSTRUCTION; autorización de contenido de referencia, no de fusión ni nuevas funcionalidades.
+
+---
+
+## U10-T06 — continuidad del codificador
+**Timestamp**: 2026-10-27T23:48:54+00:00
+**AI Response**: El codificador anterior no respondió al seguimiento ni a solicitudes de estado; se interrumpió. Worktree sin cambios de código pendientes, HEAD 3f0a506. Se despacha reemplazo sobre el mismo worktree y la misma especificación aprobada (hash 71be525cdacbc458f24602252d372f5b72b68d3c), conservando la bitácora y los informes.
+**Context**: Ronda 3; sin cambio de alcance ni nueva ronda.
+
+---
+
+## U10-T06 — opción A implementada, ronda 3 y escalamiento
+**Timestamp**: 2026-10-27T23:57:51+00:00
+**AI Response**: Opción A implementada en 73b5957. Revisión independiente confirmó 20/20, máximo 4,20%, control 0%, 226 pruebas y todos los CA pasan; F-01/F-04 resueltos. Veredicto NO-VERDE por F-05: tonos semánticos de éxito fijos con estados dirty/cuarentena de Inbox. Informe íntegro y evidencia persistidos en f5c0c10. Arbitraje: defecto dentro del propio diff, no se suaviza ni se retira el hallazgo. Se cumple el tope de tres rondas y se escala con arreglo concreto propuesto; sin PR listo ni fusión.
+**Approval Prompt** (archivo completo):
+
+# U10-T06 — Ronda adicional para F-05
+
+La opción A se implementó y verificó independientemente: 20/20 combinaciones, diferencia máxima 4,20%, control 20/20 con 0%, 226 pruebas y CA-1..CA-5 pasan. Código en `tarea/U10-T06`, commit `73b5957`; informe independiente en `../agentic-qa-swarm-wt-U10-T06/revisiones/U10-T06/ronda-3.md` (persistido en `f5c0c10`).
+
+## Motivo del escalamiento
+
+La revisión mantiene NO-VERDE por F-05: la bandeja presenta tonos verdes de éxito con estados reales `dirty` y `cuarentena`. El texto es correcto; la cabecera `meta-ok` y el KPI `badge-ok` están fijos. La vista Entorno ya aplica variantes según el estado. Las barras decorativas no se consideran otro defecto bloqueante.
+
+La tarea establece: «Tope: 3 rondas; si la ronda 3 sale NO-VERDE se escala al humano». Se alcanzó ese límite; no se modifica el veredicto ni se fusiona.
+
+## Pregunta 1
+¿Autorizas una cuarta ronda limitada a corregir y verificar F-05?
+
+A) Sí (recomendado). Derivar los tonos de cabecera e insignia de los cuatro estados reales, siguiendo la semántica de Entorno; añadir prueba de regresión para estados no saludables, repetir CA-1..CA-5 y control, y someter el cambio a revisión independiente. Sin cambios de referencia ni tolerancias.
+
+B) Mantener U10-T06 pendiente y no despachar más trabajo por ahora.
+
+C) Otra alternativa (describir después de [Answer]).
+
+[Answer]:
+
+No se pide aceptar el defecto ni añadir funcionalidades. La opción A autoriza una ronda adicional para el arreglo concreto descrito; no autoriza fusión automática.
+
+**Context**: CONSTRUCTION; cuarta ronda pendiente de autorización explícita.
+
+---
+
+## U10-T06 — ronda 4 autorizada (escalamiento F-05)
+**Timestamp**: 2026-10-27T19:13:44-05:00
+**User Input**: "bien, elige A y usa tus subagentes para resolver"
+**AI Response**: Se marcó [Answer]: A en aidlc-docs/construction/u10-kpi-review-questions.md. Se despacha codificador en agentic-qa-swarm-wt-U10-T06 para corregir F-05 (tonos de cabecera e insignia derivados del estado real del warm, semántica de la vista Entorno), con prueba de regresión y repetición de CA-1..CA-5 y control; después, revisión independiente de ronda 4. Sin fusión automática.
+**Context**: CONSTRUCTION, U10-T06 ronda 4 (autorización humana por escalamiento)
+
+---
+
+## U10-T06 — ronda 4 VERDE (orquestador)
+**Timestamp**: 2026-10-27T19:35:00-05:00
+**User Input**: "(sin entrada del humano; loop de agentes)"
+**AI Response**: Codificador corrigió F-05 en 3ba907e (TONO_ENTORNO/BARRA_ENTORNO en InboxPage.tsx, meta-warn/meta-neutral en styles.css, 4 pruebas de regresión). Revisor independiente VERDE en 31906df: alcance limpio (4 archivos), rojo/verde de la regresión confirmado, 230/230 pruebas, fidelidad 20/20 máx. 4,20 %, control 0,00 %, build y CSP limpios. Sin push ni merge; actualizada la continuidad en unidades-y-tareas.md. Pendiente decisión humana de PR/fusión.
+**Context**: CONSTRUCTION, U10-T06 ronda 4
+
+---
+
+## U10-T06 — PR #146 (orquestador)
+**Timestamp**: 2026-10-27T20:05:00-05:00
+**User Input**: "create the PR then" / "cancelalo y remueve las capturas, no son necesarias" / "pero que son todos esos objetos?" / "te dije que eliminaras todoas las capturas, aunque sean viejas"
+**AI Response**: Push inicial cancelado a petición del humano (subida ~30-50 KiB/s, 576 objetos, 80% capturas PNG). Se retiraron todas las capturas: 119 de U10-T06 (f527081, 77d6596) y 174 históricas de U9-T04 y U10-T03/T04/T05 (20268c3); cero PNG en bitacoras/. Rama tarea/U10-T06 empujada y PR #146 creado (base main). Sin fusión: queda en revisión humana.
+**Context**: CONSTRUCTION, U10-T06 ronda 4
+
+---
+
+## U10-T06 — fusionada (humano)
+**Timestamp**: 2026-10-27T20:10:00-05:00
+**User Input**: "done"
+**AI Response**: PR #146 fusionado por el humano (merge ad500d1, 2026-10-28T00:56:23Z). Marcada U10-T6 [x] en unidades-y-tareas.md y registrado el cierre de la unidad U10 (T01..T06 fusionadas).
+**Context**: CONSTRUCTION, U10 cerrada
+
+---
+## 2026-10-27T20:01:48-05:00 User input
+what's next now?
+
+## 2026-10-27T20:07:11-05:00 User input
+do 1,2,3
+

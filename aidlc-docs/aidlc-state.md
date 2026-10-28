@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Greenfield
 - **Start Date**: 2026-09-12T02:35:55Z
-- **Current Stage**: CONSTRUCTION (Code Generation, por unidad) — activada por instrucción explícita el 2026-10-03. **Terminadas: U5, U1, U4, U2, U3, U6 y U7.** En curso: **U8 — Producto demostrable (ciclo completo en kind)**, con 7 de sus 9 tareas terminadas (T01–T07); pendientes T08 y T09. Estado al día el 2026-10-13. Artefactos de INCEPTION **realineados al modelo warm** el 2026-10-01.
+- **Current Stage**: CONSTRUCTION (Code Generation, por unidad). Unidades U1–U11 cerradas según `unidades-y-tareas.md`; U10-T06 fusionada (PR #146, merge `ad500d1`) tras la ronda 4 VERDE y U11-T01..T06 fusionadas con CA-6 de U11-T02 verificado. Pendiente: ensayo real con webhook de GitHub, túnel y DeepSeek con el humano (`docs/demo-real.md`) y, después, la etapa Build and Test. Actualizado 2026-10-27. Artefactos de INCEPTION realineados al modelo warm el 2026-10-01.
 
 ## Workspace State
 - **Existing Code**: Sí — monorepo en la raíz del workspace (`services/`, `agents/`, `contracts/`, `demo/`, `deploy/flux/<base|dev|prod|kind>`, `scripts/`, `policy/`, `.github/workflows/`), construido por unidades desde el 2026-10-03 y fusionado a `main`
@@ -45,8 +45,11 @@
 - [x] U3 — Agentes LLM
 - [x] U6 — Frontend web (S5, primera unidad post-MVP)
 - [x] U7 — Plataforma en kind local (podman)
-- [ ] U8 — Producto demostrable (ciclo completo en kind): T01–T07 hechas; pendientes T08 (`kind-e2e.sh` de punta a punta) y T09 (LiteLLM + DeepSeek, app definitiva y webhook real de GitHub, con insumos del humano)
-- [ ] Build and Test (etapa de la fase, tras cerrar U8)
+- [x] U8 — Producto demostrable (ciclo completo en kind), cerrada 2026-10-21 según unidades-y-tareas.md.
+- [x] U9 — Resultados visibles en el dashboard, cerrada 2026-10-22.
+- [x] U10 — Fidelidad visual: T01..T06 fusionadas; T06 cerrada en PR #146 (merge `ad500d1`) tras ronda 4 VERDE.
+- [x] U11 — T01..T06 fusionadas; CA-6 de T02 verificado (PR #144). Ensayo con webhook real y humano sigue pendiente según docs/demo-real.md.
+- [ ] Build and Test (etapa de la fase, tras cerrar las unidades activas)
 
 ### 🟡 OPERATIONS PHASE
 - Estado: **PLACEHOLDER** (no iniciado).

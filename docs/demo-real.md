@@ -10,21 +10,15 @@ los flujos, se resetea (reset verificado) y se publica el reporte.
 
 ## Estado conocido (lee esto primero)
 
-Bloqueos pendientes, fuera de esta tarea:
-
-- **U11-T05 — egreso LLM fijado por IP.** El control positivo `llm-egress-acotado` de `kind-smoke.sh` falla porque
-  el proveedor LLM rota su IP y el planner no alcanza el gateway. Mientras U11-T05 no se fusione, el **Paso 0 puede
-  dar `1`** (`FALLA llm-egress-acotado`). Ese único `FALLA` no impide la demo hasta el ensayo, pero el paso de
-  comprobación no sale limpio.
-- **U11-T04 — `flow_id` inválido para el nombre del Job.** El modelo a veces inventa `flow_id` con formas que el
-  runner no admite como nombre de Job (`run_id/flow_id no aptos para un nombre de Job`). Con ids largos o raros la
-  corrida se queda en la fase `runners` (`running`) y no llega a `done`. Mientras U11-T04 no se fusione, **la demo
-  puede bloquearse en `runners`**.
+No quedan bloqueos de plataforma conocidos para esta demo: U11-T04 (`flow_id` apto para Job), U11-T05 (egreso LLM)
+y U11-T06 (cobertura del puerto LLM) ya están fusionadas. El Paso 0 debe salir limpio (`0` líneas `FALLA`); si no,
+trátalo como regresión y no sigas hasta diagnosticarlo.
 
 Lo que **sí se observó** en la corrida real de la ronda 1 de U11-T02 (`kind-e2e.sh --bug off`, commit
 `b97a719…`): port-forwards, login, webhook `202`, inbox, confirmación, deploy sobre el warm (imagen del repo
-objetivo), superficie inferida, ensayo y ensayo-job. **No observado:** el resultado de los runners, el reset, el
-reporte y el veredicto. El comando del e2e falla en `runners` con `rc=1`.
+objetivo), superficie inferida, ensayo y ensayo-job. Aquella corrida se detuvo en `runners` por el defecto ya
+corregido en U11-T04; el resultado de los runners, el reset, el reporte y el veredicto siguen pendientes de
+observarse en esta demo en vivo.
 
 ## Lo que importa saber antes
 
@@ -56,7 +50,7 @@ reporte y el veredicto. El comando del e2e falla en `runners` con `rc=1`.
 ### Paso 0. Comprobar el entorno
 
 ```bash
-bash scripts/kind/kind-smoke.sh 2>&1 | grep -c '^FALLA'      # esperado: 0 (ESPERADO, no observado; hoy puede dar 1, ver Estado conocido)
+bash scripts/kind/kind-smoke.sh 2>&1 | grep -c '^FALLA'      # esperado: 0; si da otro valor, ver Estado conocido
 kubectl --context kind-aqs -n aqs-test get deploy warm-app -o jsonpath='{..image}'; echo
 ```
 
@@ -112,8 +106,7 @@ git rev-parse HEAD            # SHA_DEFECTO (distinto de b97a719 y de SHA_SANO)
 Espera a que la CI publique `ghcr.io/ogaston/demo-target-app-qa-swarm:<SHA_DEFECTO>` **antes** de empujar el
 webhook de la plataforma o de confirmar. Luego `github-webhook-check.sh <SHA_DEFECTO>` y confirma la notificación.
 Esperado: el warm despliega `…:<SHA_DEFECTO>` y el ensayo/los runners fallan en el flujo de compra porque la app
-vende más stock del que tiene; el reporte declara **bug** citando esa evidencia. Hoy el paso puede bloquearse en
-`runners` (U11-T04).
+vende más stock del que tiene; el reporte declara **bug** citando esa evidencia.
 
 ### Paso 2b. Segundo commit con imagen para la lectura de vuelta de CA-6
 
@@ -133,7 +126,7 @@ kubectl --context kind-aqs -n aqs-test get deploy warm-app -o jsonpath='{..image
 | webhook | `github-webhook-check.sh` y, en GitHub, *Recent Deliveries* del repo objetivo | `202`; notificación `pending` |
 | confirmación | dashboard (ui-api) | recibo con `run_id` |
 | imagen desplegada | `kubectl --context kind-aqs -n aqs-test get deploy warm-app -o jsonpath='{..image}'; echo` | la imagen del SHA elegido |
-| estado de la corrida | dashboard, por `run_id` | fases hasta `done` (hoy se detiene en `runners`, U11-T04) |
+| estado de la corrida | dashboard, por `run_id` | fases hasta `done` |
 | reset | dashboard (vista del warm, que lee `GET /warm` de ui-api: `reset_verified`) | `true` tras la corrida |
 | reporte | dashboard, por `run_id` | veredicto (`bug` en el caso con defecto) |
 

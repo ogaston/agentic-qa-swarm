@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "codebase-memory-mcp": {
+      "command": "/home/omarjayg/.local/bin/codebase-memory-mcp",
+      "args": [],
+      "env": {
+        "CBM_MEM_BUDGET_MB": "4096",
+        "CBM_WORKERS": "2",
+        "CBM_MAX_FILE_BYTES": "104857600"
+      }
+    }
+  }
+}
