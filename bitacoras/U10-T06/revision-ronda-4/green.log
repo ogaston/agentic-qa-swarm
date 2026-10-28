@@ -1,0 +1,44 @@
+
+ RUN  v2.1.8 /tmp/u10t06-review-r4-BGdgxmgV/web/dashboard
+
+stderr | src/pages/Inbox/InboxPage.test.tsx > Inbox lista > cada pestaña pide su ?state= y muestra solo lo devuelto
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/pages/Inbox/InboxPage.test.tsx > Inbox confirma > el cuerpo enviado es {"flows":["happy-path"]}
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/runs/run-0123456789abcdef
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/getting-started/mocks
+
+stderr | src/pages/Inbox/InboxPage.test.tsx > Inbox confirma > doble clic envía un solo POST
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/runs/run-0123456789abcdef
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/getting-started/mocks
+
+stderr | src/pages/Inbox/InboxPage.test.tsx > Inbox confirma > 201 navega a /runs/<run_id>
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/runs/run-0123456789abcdef
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/getting-started/mocks
+
+ ✓ src/pages/Inbox/InboxPage.test.tsx (32 tests) 6505ms
+   ✓ Inbox lista > cada pestaña pide su ?state= y muestra solo lo devuelto 362ms
+   ✓ Inbox lista > sin polling: con temporizadores falsos instalados antes de montar, 6 s no generan peticiones 612ms
+   ✓ Inbox lista > descarta la respuesta vieja de una pestaña anterior 742ms
+   ✓ Inbox confirma > doble clic envía un solo POST 301ms
+   ✓ Inbox confirma > 409 con un POST en vuelo: la pestaña no cambia y la recarga muestra pendientes 473ms
+   ✓ Inbox confirma > un 400 con un POST en vuelo: la pestaña no cambia y el aviso sigue visible 449ms
+
+ Test Files  1 passed (1)
+      Tests  32 passed (32)
+   Start at  19:27:26
+   Duration  7.87s (transform 268ms, setup 190ms, collect 344ms, tests 6.50s, environment 399ms, prepare 128ms)
+

@@ -1,0 +1,13 @@
+lint exit=0
+src/pages/Run/RunPage.fidelidad.test.tsx(5,33): error TS2307: Cannot find module '../../../../../contracts/plans/examples/valid/report.dos-hallazgos.json' or its corresponding type declarations.
+src/pages/Run/RunPage.fidelidad.test.tsx(6,33): error TS2307: Cannot find module '../../../../../contracts/plans/examples/valid/report.sin-hallazgos.json' or its corresponding type declarations.
+src/pages/Run/RunPage.fidelidad.test.tsx(7,31): error TS2307: Cannot find module '../../../../../contracts/plans/examples/valid/report.inconcluso.json' or its corresponding type declarations.
+src/pages/Run/RunPage.fidelidad.test.tsx(8,21): error TS2307: Cannot find module '../../../../../contracts/plans/examples/valid/flow-plan.body-y-sondeo.json' or its corresponding type declarations.
+src/pages/Run/RunPage.resultados.test.tsx(5,33): error TS2307: Cannot find module '../../../../../contracts/plans/examples/valid/report.dos-hallazgos.json' or its corresponding type declarations.
+src/pages/Run/RunPage.resultados.test.tsx(6,33): error TS2307: Cannot find module '../../../../../contracts/plans/examples/valid/report.sin-hallazgos.json' or its corresponding type declarations.
+src/pages/Run/RunPage.resultados.test.tsx(7,31): error TS2307: Cannot find module '../../../../../contracts/plans/examples/valid/report.inconcluso.json' or its corresponding type declarations.
+src/pages/Run/RunPage.resultados.test.tsx(8,21): error TS2307: Cannot find module '../../../../../contracts/plans/examples/valid/flow-plan.body-y-sondeo.json' or its corresponding type declarations.
+typecheck exit=2
+✨ openapi-typescript 7.4.4
+🚀 ../../contracts/openapi/control-plane.yaml → .schema.check.ts [67.9ms]
+check:api exit=0
