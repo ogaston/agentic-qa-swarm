@@ -31,6 +31,7 @@ type Config struct {
 	Image           string // tag fijado, nunca latest
 	ServiceAccount  string // explícito; sin token montado
 	DeadlineSeconds int64  // activeDeadlineSeconds = timeout del flujo (de la política)
+	TargetURL       string // opcional: URL del servicio warm
 }
 
 var idRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$`)
@@ -77,6 +78,14 @@ func BuildJob(c Config, runID, flowID string, spec JobSpec, now time.Time) (*bat
 	for _, e := range spec.Env {
 		env = append(env, corev1.EnvVar{Name: e.Name, Value: e.Value})
 	}
+	args := append([]string(nil), spec.Args...)
+	if c.TargetURL != "" {
+		for i := 0; i < len(args); i++ {
+			if args[i] == "--target" && i+1 < len(args) {
+				args[i+1] = c.TargetURL
+			}
+		}
+	}
 	dl := c.DeadlineSeconds
 	f, t, ro := false, true, true
 	var user int64 = 65532
@@ -99,7 +108,7 @@ func BuildJob(c Config, runID, flowID string, spec JobSpec, now time.Time) (*bat
 					SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &t, RunAsUser: &user, RunAsGroup: &user,
 						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 					Containers: []corev1.Container{{
-						Name: "runner", Image: c.Image, Command: spec.Command, Args: spec.Args, Env: env,
+						Name: "runner", Image: c.Image, Command: spec.Command, Args: args, Env: env,
 						SecurityContext: &corev1.SecurityContext{ReadOnlyRootFilesystem: &ro, AllowPrivilegeEscalation: &f,
 							Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}},
 						Resources: corev1.ResourceRequirements{

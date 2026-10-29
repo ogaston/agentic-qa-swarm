@@ -100,6 +100,27 @@ func (l *Launcher) metric(f func(Observer)) {
 	}
 }
 
+func (l *Launcher) kubeFor(run runctl.Run) KubeAPI {
+	ns := l.Cfg.Namespace
+	if run.Warm != nil && run.Warm.Namespace != "" {
+		ns = run.Warm.Namespace
+	}
+	if ns == "" {
+		return l.Kube
+	}
+	type inNamespace interface {
+		InNamespace(string) ClientGo
+	}
+	if in, ok := l.Kube.(inNamespace); ok {
+		return in.InNamespace(ns)
+	}
+	if cg, ok := l.Kube.(ClientGo); ok {
+		cg.NS = ns
+		return cg
+	}
+	return l.Kube
+}
+
 func selector(runID string) string {
 	return fmt.Sprintf("%s=%s,%s=%s", LabelRun, runID, LabelPhase, PhaseValue)
 }
@@ -176,7 +197,8 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 	if max < 1 {
 		max = 3
 	}
-	jobs, err := l.Kube.ListJobs(ctx, selector(run.ID))
+	k := l.kubeFor(run)
+	jobs, err := k.ListJobs(ctx, selector(run.ID))
 	if err != nil {
 		return runctl.RunOutcome{}, fmt.Errorf("listando Jobs runner: %w", err)
 	}
@@ -232,10 +254,10 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 		case passed:
 			status = ResPassed
 		}
-		logs, lerr := l.Kube.JobLogs(ctx, j.Name) // sin logs legibles: el resultado se guarda igual, marcado
+		logs, lerr := k.JobLogs(ctx, j.Name) // sin logs legibles: el resultado se guarda igual, marcado
 		ok := l.settle(ctx, run, f.FlowID, status, logs, lerr != nil, resolved, failed)
 		if expired && ok { // nunca queda un Job colgado, pero no se borra hasta que su flujo esté resuelto
-			if err := l.Kube.DeleteJob(ctx, j.Name); err != nil {
+			if err := k.DeleteJob(ctx, j.Name); err != nil {
 				return runctl.RunOutcome{}, fmt.Errorf("eliminando el Job vencido: %w", err)
 			}
 		}
@@ -244,6 +266,10 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 	if len(pending) > 0 && active < max {
 		cfg := l.Cfg
 		cfg.DeadlineSeconds = int64(lim.FlowTimeout / time.Second)
+		if run.Warm != nil && run.Warm.Namespace != "" {
+			cfg.Namespace = run.Warm.Namespace
+			cfg.TargetURL = runctl.WarmTargetURL(run.Warm.Namespace)
+		}
 		// Toda la ola se construye y valida (funciones puras) ANTES de crear ningún Job.
 		var wave []*batchv1.Job
 		for _, f := range pending[:min(len(pending), max-active)] {
@@ -268,10 +294,10 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 		}
 		var created []string
 		for _, job := range wave {
-			err := l.Kube.CreateJob(ctx, job)
+			err := k.CreateJob(ctx, job)
 			if err != nil && !apierrors.IsAlreadyExists(err) {
 				for _, name := range created { // sin lanzamientos parciales (best-effort)
-					_ = l.Kube.DeleteJob(ctx, name)
+					_ = k.DeleteJob(ctx, name)
 				}
 				return runctl.RunOutcome{}, fmt.Errorf("creando el Job runner: %w", err)
 			}
@@ -300,7 +326,11 @@ func (l *Launcher) step(ctx context.Context, run runctl.Run) (runctl.RunOutcome,
 }
 
 func (l *Launcher) authorize(ctx context.Context, run runctl.Run, workflow string) error {
-	req := runctl.GateRequest{RunID: run.ID, From: runctl.Rehearsing, To: runctl.Running, TargetNamespace: l.Cfg.Namespace,
+	targetNS := l.Cfg.Namespace
+	if run.Warm != nil && run.Warm.Namespace != "" {
+		targetNS = run.Warm.Namespace
+	}
+	req := runctl.GateRequest{RunID: run.ID, From: runctl.Rehearsing, To: runctl.Running, TargetNamespace: targetNS,
 		Workflow: workflow, TraceID: run.TraceID, Confirmed: runctl.Unknown, ResetVerified: runctl.Unknown,
 		EnsayoPassed: run.EnsayoPassed, WorkflowAllowed: runctl.True}
 	if run.ConfirmedBy != "" {

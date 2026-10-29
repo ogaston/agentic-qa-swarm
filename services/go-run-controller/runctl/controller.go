@@ -87,7 +87,8 @@ func (k *Controller) Apply(ctx context.Context, ev Event) error {
 			return nil
 		}
 		return k.save(Run{ID: ev.RunID, State: Confirmed, TraceID: ev.TraceID,
-			ConfirmedBy: ev.ConfirmedBy, Flows: ev.Flows, Seen: []string{ev.EventID}, Artifact: copyArtifact(ev.Artifact)})
+			ConfirmedBy: ev.ConfirmedBy, Flows: ev.Flows, Seen: []string{ev.EventID},
+			Artifact: copyArtifact(ev.Artifact), Warm: copyWarm(ev.Warm)})
 	case EvRehearsalPassed, EvRehearsalFailed:
 		r, ok := k.c.Store.Get(ev.RunID)
 		if !ok {
@@ -130,8 +131,9 @@ func markSeen(r Run, eventID string) Run {
 
 // request arma el GateRequest con los hechos que el controlador conoce; el resto va unknown.
 func (k *Controller) request(ctx context.Context, r Run, to State) GateRequest {
+	targetNS := r.TargetNamespace(k.c.Namespace)
 	req := GateRequest{
-		RunID: r.ID, From: r.State, To: to, TargetNamespace: k.c.Namespace, Workflow: r.Workflow,
+		RunID: r.ID, From: r.State, To: to, TargetNamespace: targetNS, Workflow: r.Workflow,
 		TraceID: r.TraceID, Confirmed: Unknown, ResetVerified: Unknown, EnsayoPassed: Unknown, WorkflowAllowed: Unknown,
 	}
 	if r.ConfirmedBy != "" { // run.confirmed trae quién confirmó: solo entonces se sabe

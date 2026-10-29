@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
 )
 
 // Regla de imágenes permitidas para el deploy (U11-T03). Es copia de services/go-warm-manager/types.go
@@ -98,4 +100,63 @@ func ValidateImage(kind, ref string, prefixes []string) error {
 		}
 	}
 	return fmt.Errorf("%w: %q", ErrImageNotAllowed, repo)
+}
+
+// ExtractImagePrefix extrae la parte de repositorio de una referencia de imagen (sin tag ni digest).
+func ExtractImagePrefix(ref string) string {
+	if i := strings.IndexAny(ref, ":@"); i >= 0 {
+		return ref[:i]
+	}
+	return ref
+}
+
+// Slug genera un slug seguro para nombres de Kubernetes a partir de un nombre de repositorio.
+func Slug(repo string) string {
+	r := strings.ToLower(strings.TrimSpace(repo))
+	var sb strings.Builder
+	lastHyphen := false
+	for _, ch := range r {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+			sb.WriteRune(ch)
+			lastHyphen = false
+		} else {
+			if !lastHyphen && sb.Len() > 0 {
+				sb.WriteByte('-')
+				lastHyphen = true
+			}
+		}
+	}
+	s := strings.Trim(sb.String(), "-")
+	if len(s) > 40 {
+		s = strings.TrimRight(s[:40], "-")
+	}
+	return s
+}
+
+// AllowedPrefixesForRun combina los prefijos semilla de WARM_ALLOWED_IMAGE_PREFIXES con el
+// prefijo de imagen específico del repositorio si está presente en el artefacto o metadatos de la corrida.
+func AllowedPrefixesForRun(run runctl.Run, seedPrefixes []string, ref string) []string {
+	prefixes := append([]string(nil), seedPrefixes...)
+	if run.Artifact != nil && run.Artifact.ImagePrefix != "" {
+		prefixes = append(prefixes, run.Artifact.ImagePrefix)
+	}
+	if run.Metadata != nil {
+		if p := run.Metadata["image_prefix"]; p != "" {
+			prefixes = append(prefixes, p)
+		}
+		if p := run.Metadata["image_repo"]; p != "" {
+			prefixes = append(prefixes, p)
+		}
+	}
+	if run.Warm != nil && strings.HasPrefix(run.Warm.Namespace, "aqs-w-") {
+		prefix := ExtractImagePrefix(ref)
+		if strings.HasPrefix(prefix, WarmAllowedRegistry+"/") {
+			repoPart := strings.TrimPrefix(prefix, WarmAllowedRegistry+"/")
+			targetSlug := strings.TrimPrefix(run.Warm.Namespace, "aqs-w-")
+			if Slug(repoPart) == targetSlug || strings.HasSuffix(targetSlug, Slug(repoPart)) || strings.HasSuffix(Slug(repoPart), targetSlug) {
+				prefixes = append(prefixes, prefix)
+			}
+		}
+	}
+	return prefixes
 }

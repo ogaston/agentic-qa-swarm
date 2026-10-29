@@ -303,3 +303,37 @@ func TestRunConfirmedSinArtifactDejaNil(t *testing.T) {
 		t.Fatalf("sin artefacto en el evento, la corrida no debe tenerlo: %+v", run.Artifact)
 	}
 }
+
+// Con warm destino en el evento (U12), la corrida guarda warm y emite el gate hacia ese namespace.
+func TestRunConfirmedConWarmTargetEmiteGateAlNamespace(t *testing.T) {
+	r := newRig(t, AllowAll())
+	ev := confirmedEv()
+	ev.Warm = &WarmTarget{WarmID: "w-demo", Namespace: "aqs-w-demo"}
+	if err := r.k.Apply(t.Context(), ev); err != nil {
+		t.Fatal(err)
+	}
+	run, ok := r.store.Get("r-1")
+	if !ok || run.Warm == nil || run.Warm.Namespace != "aqs-w-demo" || run.Warm.WarmID != "w-demo" {
+		t.Fatalf("la corrida no guardó el warm: %+v", run.Warm)
+	}
+	if err := r.k.Transition(t.Context(), "r-1", WarmReady); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.gate.Calls) != 1 || r.gate.Calls[0].TargetNamespace != "aqs-w-demo" {
+		t.Fatalf("GateRequest esperaba TargetNamespace aqs-w-demo, obtuve: %+v", r.gate.Calls)
+	}
+}
+
+// Sin warm destino en el evento, el gate usa DefaultNamespace (aqs-test).
+func TestRunConfirmedSinWarmUsaDefaultNamespace(t *testing.T) {
+	r := newRig(t, AllowAll())
+	if err := r.k.Apply(t.Context(), confirmedEv()); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.k.Transition(t.Context(), "r-1", WarmReady); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.gate.Calls) != 1 || r.gate.Calls[0].TargetNamespace != DefaultNamespace {
+		t.Fatalf("GateRequest esperaba TargetNamespace %s, obtuve: %+v", DefaultNamespace, r.gate.Calls)
+	}
+}

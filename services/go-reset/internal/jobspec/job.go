@@ -31,8 +31,16 @@ const (
 
 var runIDRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$`)
 
-// Build devuelve el Job reset-{run}. Rechaza run_id no DNS-seguros e imágenes sin tag fijado.
+// Build devuelve el Job reset-{run} en el namespace por defecto (aqs-test).
 func Build(runID, image string) (*batchv1.Job, error) {
+	return BuildInNamespace(runID, image, Namespace)
+}
+
+// BuildInNamespace devuelve el Job reset-{run} en el namespace indicado. Rechaza run_id no DNS-seguros e imágenes sin tag fijado.
+func BuildInNamespace(runID, image, namespace string) (*batchv1.Job, error) {
+	if namespace == "" {
+		namespace = Namespace
+	}
 	if !runIDRe.MatchString(runID) {
 		return nil, fmt.Errorf("run_id %q inválido (minúsculas, dígitos y '-', hasta 40)", runID)
 	}
@@ -47,7 +55,7 @@ func Build(runID, image string) (*batchv1.Job, error) {
 	uid, back, ttl, deadline := jobUID, int32(0), jobTTLSeconds, jobDeadlineSeconds // backoffLimit 0: el reintento lo decide go-reset
 	return &batchv1.Job{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "batch/v1", Kind: "Job"},
-		ObjectMeta: metav1.ObjectMeta{Name: "reset-" + runID, Namespace: Namespace, Labels: map[string]string{"app.kubernetes.io/name": "reset", "aqs/run-id": runID}},
+		ObjectMeta: metav1.ObjectMeta{Name: "reset-" + runID, Namespace: namespace, Labels: map[string]string{"app.kubernetes.io/name": "reset", "aqs/run-id": runID}},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &back, TTLSecondsAfterFinished: &ttl, ActiveDeadlineSeconds: &deadline,
 			Template: corev1.PodTemplateSpec{

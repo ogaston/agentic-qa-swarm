@@ -862,3 +862,41 @@ func TestFlowIDPatternParityRunnerWithContract(t *testing.T) {
 		t.Fatalf("runner %q != contrato %q", got, doc.Properties.Flows.Items.Properties.FlowID.Pattern)
 	}
 }
+
+func TestRunnerLauncherWarmTargetNamespaceAndURL(t *testing.T) {
+	r := newRig("login")
+	r.l.Exec = HTTPStepsExecutor{Target: "http://warm-app.aqs-test.svc:8080"}
+	run := passedRun("r-warm")
+	run.Warm = &runctl.WarmTarget{WarmID: "w-warm", Namespace: "aqs-w-warm"}
+
+	if _, err := r.l.Launch(context.Background(), runctl.PhaseRun, run); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	jobs, err := r.cs.BatchV1().Jobs("aqs-w-warm").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("ListJobs in aqs-w-warm: %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("esperaba 1 Job en aqs-w-warm, obtuve %d", len(jobs.Items))
+	}
+	j := jobs.Items[0]
+	if j.Namespace != "aqs-w-warm" {
+		t.Errorf("Namespace = %q, want aqs-w-warm", j.Namespace)
+	}
+	foundTarget := false
+	args := j.Spec.Template.Spec.Containers[0].Args
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--target" && i+1 < len(args) {
+			if args[i+1] != "http://warm-app.aqs-w-warm.svc:8080" {
+				t.Errorf("Target = %q, want http://warm-app.aqs-w-warm.svc:8080", args[i+1])
+			}
+			foundTarget = true
+		}
+	}
+	if !foundTarget {
+		t.Errorf("no se encontró --target en los args: %v", args)
+	}
+	if len(r.gt.Calls) != 1 || r.gt.Calls[0].TargetNamespace != "aqs-w-warm" {
+		t.Errorf("GateRequest TargetNamespace = %q, want aqs-w-warm", r.gt.Calls[0].TargetNamespace)
+	}
+}

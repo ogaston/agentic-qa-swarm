@@ -76,7 +76,7 @@ type Event struct {
 
 // Puertos.
 type (
-	// KubeAPI opera solo sobre el namespace aqs-test.
+	// KubeAPI opera sobre el namespace configurado (aqs-test o aqs-w-*).
 	KubeAPI interface {
 		Replicas(ctx context.Context) (int32, error)
 		RestartApp(ctx context.Context) error

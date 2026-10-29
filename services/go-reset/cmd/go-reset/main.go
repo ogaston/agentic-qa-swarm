@@ -60,10 +60,15 @@ func run(args []string) error {
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		runID := fs.String("run", "", "run_id")
 		image := fs.String("image", os.Getenv("RESET_JOB_IMAGE"), "imagen con tag fijado (por defecto RESET_JOB_IMAGE)")
+		ns := fs.String("namespace", os.Getenv("RESET_NAMESPACE"), "namespace destino (por defecto RESET_NAMESPACE o aqs-test)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		j, err := jobspec.Build(*runID, *image)
+		targetNS := *ns
+		if targetNS == "" {
+			targetNS = jobspec.Namespace
+		}
+		j, err := jobspec.BuildInNamespace(*runID, *image, targetNS)
 		if err != nil {
 			return err
 		}
