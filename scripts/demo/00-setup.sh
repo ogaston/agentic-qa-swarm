@@ -112,7 +112,14 @@ if flock -n 9; then
 else
   otros=""
   for pid in $(pgrep -f 'scripts/(kind|test|demo)/[a-z0-9_.-]+\.sh' 2>/dev/null); do
-    [ "$pid" = "$$" ] && continue
+    # The interactive launcher is an ancestor, not a competing test.
+    ancestor=$$
+    while [ "$ancestor" != 0 ] && [ -r "/proc/$ancestor/status" ]; do
+      [ "$pid" = "$ancestor" ] && break
+      ancestor=$(awk '/^PPid:/ {print $2}' "/proc/$ancestor/status")
+      ancestor=${ancestor:-0}
+    done
+    [ "$pid" = "$ancestor" ] && continue
     case $( { tr '\0' '\n' </proc/"$pid"/cmdline; } 2>/dev/null | sed -n 2p) in
       */scripts/kind/*.sh|*/scripts/test/*.sh|*/scripts/demo/*.sh|scripts/kind/*.sh|scripts/test/*.sh|scripts/demo/*.sh) otros="$otros $pid" ;;
     esac
@@ -294,7 +301,10 @@ if [ "$fail" -eq 0 ]; then
   check intake-port-forward intake_local_ok
 
   if [ "$fail" -eq 0 ]; then
-    if ! tunnel_activo; then
+    if [ -n "${AQS_DEMO_PUBLIC_URL:-}" ]; then
+      URL_PUBLICA=${AQS_DEMO_PUBLIC_URL%/}
+      echo "usando túnel externo: $URL_PUBLICA (inicia el conector cloudflared si es necesario)"
+    elif ! tunnel_activo; then
       if cloudflared tunnel list 2>/dev/null | grep -q "$TUNNEL_NAME"; then
         # Túnel con nombre (URL estable, recomendado por el doc de operaciones).
         nohup cloudflared tunnel --url "http://127.0.0.1:$P_INTAKE" run "$TUNNEL_NAME" \
@@ -343,7 +353,7 @@ if [ "$fail" -eq 0 ]; then
         [ "$code" = 200 ] && return 0
         sleep 2
       done
-      echo "$URL_PUBLICA/healthz respondió $code (se esperaba 200; ver $CF_LOG)"
+      echo "$URL_PUBLICA/healthz respondió $code (se esperaba 200; comprueba el conector cloudflared y su configuración)"
       return 1
     }
     check tunnel-cloudflared tunnel_responde
@@ -364,6 +374,39 @@ ghcr_alcanzable() {
   esac
 }
 check red-ghcr ghcr_alcanzable
+
+# Wake the already verified warm environment before the preflight. Never reset it here.
+wake_warm_if_idle() (
+  local pf pid port token code state i
+  pf="$work/warm-pf.log"
+  kubectl --context "$KIND_CONTEXT" -n "$NS_SYS" port-forward --address 127.0.0.1 \
+    svc/go-warm-manager :8080 >"$pf" 2>&1 &
+  pid=$!
+  trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+  port=""
+  for i in $(seq 1 30); do
+    port=$(sed -n 's/^Forwarding from 127\.0\.0\.1:\([0-9]*\) -> 8080$/\1/p' "$pf" | head -n 1)
+    [ -n "$port" ] && break
+    kill -0 "$pid" 2>/dev/null || { echo "falló el port-forward de warm-manager"; return 1; }
+    sleep 1
+  done
+  [ -n "$port" ] || { echo "timeout iniciando port-forward de warm-manager"; return 1; }
+  token=$(kubectl --context "$KIND_CONTEXT" -n "$NS_SYS" get secret go-warm-manager-service-token -o jsonpath='{.data.token}' | base64 -d) || return 1
+  [ -n "$token" ] || { echo "token de warm-manager no disponible"; return 1; }
+  printf 'Authorization: Bearer %s\n' "$token" >"$work/warm-auth"
+  unset token
+  code=$(curl -sS --max-time 10 -o "$work/warm-state" -w '%{http_code}' -H @"$work/warm-auth" "http://127.0.0.1:$port/warm") || return 1
+  [ "$code" = 200 ] || { echo "GET /warm respondió $code"; return 1; }
+  state=$(jq -r '.state // empty' "$work/warm-state") || return 1
+  if [ "$state" = idle-escalado ]; then
+    code=$(curl -sS --max-time 150 -o "$work/warm-state" -w '%{http_code}' -X POST -H @"$work/warm-auth" "http://127.0.0.1:$port/warm/ensure") || return 1
+    [ "$code" = 200 ] || { echo "POST /warm/ensure respondió $code"; return 1; }
+    jq -e '.state == "ready" and .reset_verified == true' "$work/warm-state" >/dev/null || return 1
+  fi
+)
+if [ "$fail" -eq 0 ]; then
+  check warm-despertar wake_warm_if_idle
+fi
 
 # --- 6. Humo --------------------------------------------------------------------
 smoke_out="$work/smoke.out"

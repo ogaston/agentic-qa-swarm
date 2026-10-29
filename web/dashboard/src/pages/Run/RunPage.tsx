@@ -1,10 +1,9 @@
 import { useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { ApiError, apiFetch } from '../../api/client';
-import { ApiErrorNotice } from '../../api/errors';
 import type { components } from '../../api/schema.gen';
 import { usePolling } from '../../hooks/usePolling';
-import { PlanFlujos, PostMortem, Veredicto } from './Resultados';
+import { PlanFlujos, PostMortem, Veredicto, RunErrorNotice } from './Resultados';
 
 type Run = components['schemas']['Run'];
 
@@ -13,11 +12,11 @@ const INTERVALO_MS = 3000;
 const FASES = [
   { estado: 'confirmed', etiqueta: 'Confirmada' },
   { estado: 'warm_ready', etiqueta: 'Entorno listo' },
-  { estado: 'deploying', etiqueta: 'Desplegando' },
-  { estado: 'inferring', etiqueta: 'Infiriendo superficie' },
-  { estado: 'rehearsing', etiqueta: 'Ensayando' },
-  { estado: 'running', etiqueta: 'Ejecutando' },
-  { estado: 'resetting', etiqueta: 'Reseteando' },
+  { estado: 'deploying', etiqueta: 'Preparando la versión' },
+  { estado: 'inferring', etiqueta: 'Analizando tu aplicación' },
+  { estado: 'rehearsing', etiqueta: 'Validando las pruebas' },
+  { estado: 'running', etiqueta: 'Ejecutando pruebas' },
+  { estado: 'resetting', etiqueta: 'Restaurando el entorno' },
   { estado: 'reporting', etiqueta: 'Generando informe' },
   { estado: 'done', etiqueta: 'Completada' },
 ] as const;
@@ -50,12 +49,19 @@ export function RunPage() {
 }
 
 function VistaCorrida({ id }: { id: string }) {
+  // El recibo de confirmación puede llegar antes de que el controlador consuma run.confirmed.
+  // Hasta la primera lectura correcta, un 404 usa el presupuesto acotado de reintentos.
+  const corridaVista = useRef(false);
   const { data, error, agotado, detenido, refrescar } = usePolling<Run>(
-    () => apiFetch<Run>(`/api/runs/${id}`),
+    async () => {
+      const run = await apiFetch<Run>(`/api/runs/${id}`);
+      corridaVista.current = true;
+      return run;
+    },
     INTERVALO_MS,
     {
       isTerminal: esTerminal,
-      isFatal: (e) => e instanceof ApiError && e.status === 404,
+      isFatal: (e) => corridaVista.current && e instanceof ApiError && e.status === 404,
     },
   );
 
@@ -63,13 +69,25 @@ function VistaCorrida({ id }: { id: string }) {
   const ultimaFase = useRef<string | null>(null);
   if (data !== null && data.state !== 'failed') ultimaFase.current = data.state;
 
-  const noEncontrada = error instanceof ApiError && error.status === 404;
+  const es404 = error instanceof ApiError && error.status === 404;
+  const esperandoCorrida = es404 && data === null && !agotado;
+  const noEncontrada = es404 && !esperandoCorrida;
+  const estadoConsulta = noEncontrada
+    ? 'No encontrada'
+    : data !== null
+      ? descripcionEstado(data)
+      : esperandoCorrida
+        ? 'Esperando corrida'
+        : agotado ? 'Consulta detenida' : 'Cargando…';
   // El plan existe desde que la corrida llega a «rehearsing». En `failed` se pide siempre: si no hay
   // plan, la API responde plan_not_ready y la vista lo dice. No depende de la última fase vista.
   const alcanzoEnsayo =
     data !== null && (data.state === 'failed' || indiceFase(data.state) >= INDICE_ENSAYO);
   // El informe existe al terminar («done») o, si falla, cuando el controlador ya guardó su report_uri.
   const informeListo = data !== null && (data.state === 'done' || (data.state === 'failed' && data.report_uri !== undefined));
+  const enCurso = data !== null && !esTerminal(data);
+  const plan = <PlanFlujos key="plan" id={id} activo={alcanzoEnsayo} automatico={enCurso} enEjecucion={data?.state === 'running'} encabezado={encabezadoPlan(data?.state)} />;
+  const informe = data !== null ? <PostMortem key="informe" id={id} activo={informeListo} verdict={data.verdict} /> : null;
 
   return (
     <main className="az-container run-page">
@@ -77,27 +95,19 @@ function VistaCorrida({ id }: { id: string }) {
         <div className="az-page-title">
           <div className="run-titulo">
             <h1>
-              Corrida <code className="mono run-id">{id}</code>
+              Resumen de la corrida
             </h1>
             {data !== null && <EstadoCorrida run={data} ultimaFase={ultimaFase.current} />}
             {data?.verdict !== undefined && <Veredicto verdict={data.verdict} />}
           </div>
-          <p>
-            {data?.trace_id !== undefined && (
-              <>
-                Trace: <code className="mono">{data.trace_id}</code>
-                {' · '}
-              </>
-            )}
-            Sondeo automático cada 3 s hasta estado terminal (<span className="mono">done</span> /{' '}
-            <span className="mono">failed</span>).
-          </p>
+          <p>Resultados y progreso de las pruebas de tu aplicación.</p>
+          <p className="run-reference">Referencia: <code>{id}</code></p>
         </div>
 
         <div className="az-header-meta">
           <div className="az-meta-item">
             <span className="az-meta-label">Estado de corrida</span>
-            <span className="az-meta-value mono">{data !== null ? descripcionEstado(data) : 'Cargando…'}</span>
+            <span className="az-meta-value">{estadoConsulta}</span>
           </div>
         </div>
       </div>
@@ -108,11 +118,17 @@ function VistaCorrida({ id }: { id: string }) {
         </p>
       )}
 
-      {!noEncontrada && error !== null && <ApiErrorNotice error={error} />}
+      {esperandoCorrida && (
+        <p role="status" className="notice">
+          Esperando a que la corrida esté disponible. Reintentando automáticamente cada 3 s…
+        </p>
+      )}
+
+      {!es404 && error !== null && <RunErrorNotice error={error} />}
       {!noEncontrada && error !== null && data !== null && <p className="notice">Mostrando la última lectura correcta.</p>}
       {agotado && (
         <p>
-          <button type="button" className="btn btn-secondary" onClick={refrescar}>
+          <button type="button" className="btn btn-secondary" data-testid="run-retry-button" onClick={refrescar}>
             Reintentar
           </button>
         </p>
@@ -121,12 +137,11 @@ function VistaCorrida({ id }: { id: string }) {
       {data !== null && <Aviso run={data} ultimaFase={ultimaFase.current} />}
 
       {data === null && !noEncontrada && error === null && <p>Cargando corrida…</p>}
-      {detenido && data !== null && !esTerminal(data) && <p>Sondeo detenido.</p>}
+      {detenido && data !== null && !esTerminal(data) && <p>Actualización automática pausada.</p>}
 
       <div className="grid-main-side">
         <div className="stack">
-          {data !== null && <PostMortem id={id} activo={informeListo} verdict={data.verdict} />}
-          <PlanFlujos id={id} activo={alcanzoEnsayo} encabezado={encabezadoPlan(data?.state)} />
+          {enCurso ? [plan, informe] : [informe, plan]}
         </div>
 
         <section className="card card-pad" aria-label="Línea de tiempo de fases">
@@ -134,7 +149,7 @@ function VistaCorrida({ id }: { id: string }) {
             <div>
               <h2 className="card-title">Línea de tiempo de la corrida</h2>
               <div className="card-sub">
-                9 fases del contrato (<code>go-run-controller</code>)
+                {data !== null && esTerminal(data) ? 'Resumen de las etapas de tu prueba' : 'El progreso se actualiza automáticamente'}
               </div>
             </div>
             {data !== null && <ResumenFases run={data} ultimaFase={ultimaFase.current} />}
@@ -150,26 +165,26 @@ function VistaCorrida({ id }: { id: string }) {
 function encabezadoPlan(estado: string | undefined): string {
   if (estado === 'done' || estado === 'failed') return 'Flujos ejecutados';
   if (estado === 'running') return 'Flujos en ejecución';
-  return 'Flujos inferidos';
+  return 'Flujos de prueba';
 }
 
 /** Texto del estado para la franja de metadatos: etiqueta legible y código, sin repetir la fase. */
 function descripcionEstado(run: Run): string {
-  if (run.state === 'failed') return 'Corrida fallida (failed)';
-  if (run.state === 'done') return 'Completada (done)';
+  if (run.state === 'failed') return 'Corrida fallida';
+  if (run.state === 'done') return 'Completada';
   const indice = indiceFase(run.state);
-  return indice >= 0 ? `${FASES[indice]?.etiqueta ?? run.state} (${run.state})` : run.state;
+  return FASES[indice]?.etiqueta ?? 'En curso';
 }
 
 /** Insignia de estado del encabezado: texto, no solo color. El veredicto va aparte (Veredicto). */
-function EstadoCorrida({ run, ultimaFase }: { run: Run; ultimaFase: string | null }) {
+function EstadoCorrida({ run }: { run: Run; ultimaFase: string | null }) {
   if (run.state === 'failed') {
     return <span className="badge badge-danger">Corrida fallida</span>;
   }
   if (run.state === 'done') return null;
   const indice = indiceFase(run.state);
   if (indice < 0) {
-    return <span className="badge badge-neutral">Sin fase conocida{ultimaFase !== null ? ` (${ultimaFase})` : ''}</span>;
+    return <span className="badge badge-neutral">En curso</span>;
   }
   return (
     <span className="badge badge-accent">
@@ -182,7 +197,7 @@ function EstadoCorrida({ run, ultimaFase }: { run: Run; ultimaFase: string | nul
 function Aviso({ run, ultimaFase }: { run: Run; ultimaFase: string | null }) {
   if (run.state !== 'failed') return null;
   const conocida = FASES.some((f) => f.estado === ultimaFase);
-  const texto = conocida ? `Fallida · última fase alcanzada: ${ultimaFase}` : 'Fallida';
+  const texto = conocida ? `Fallida · última fase alcanzada: ${FASES.find((f) => f.estado === ultimaFase)?.etiqueta}` : 'Fallida';
   return (
     <div role="status" data-estado="failed" className="alert-box alert-danger status-failed">
       {texto}
@@ -246,10 +261,14 @@ function Fases({ actual, hechasHasta }: { actual: number; hechasHasta: number })
               </span>
               <div>
                 <div className="phase-name">{fase.etiqueta}</div>
-                <code className="mono phase-code">{fase.estado}</code>
               </div>
             </div>
-            <span className={`badge ${CLASE_ESTADO[estado]}`}>{ETIQUETA_ESTADO[estado]}</span>
+            <span className={`badge ${CLASE_ESTADO[estado]}`}>
+              {esActual ? <>
+                <span className="phase-spinner" aria-hidden="true" />
+                <span className="sr-only">En curso</span>
+              </> : ETIQUETA_ESTADO[estado]}
+            </span>
           </li>
         );
       })}

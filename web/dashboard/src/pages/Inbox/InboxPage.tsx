@@ -1,22 +1,40 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { components } from '../../api/schema.gen';
 import { ApiError, apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
 import { FLOW_FAMILIES, type FlowFamily } from '../../inbox/flows';
 import { Badge, type TonoBadge } from '../../components/Badge';
 import { Kpi } from '../../components/Kpi';
-import { PageHeader, type ElementoMeta } from '../../components/PageHeader';
+import { PageHeader } from '../../components/PageHeader';
 
 type Notification = components['schemas']['Notification'];
 type ConfirmationReceipt = components['schemas']['ConfirmationReceipt'];
 type WarmState = components['schemas']['WarmState'];
 type Estado = Notification['state'];
 
-const PESTANAS: { estado: Estado; etiqueta: string; vacio: string }[] = [
-  { estado: 'pending', etiqueta: 'Pendientes', vacio: 'No hay notificaciones pendientes' },
-  { estado: 'confirmed', etiqueta: 'Confirmadas', vacio: 'No hay notificaciones confirmadas' },
-  { estado: 'rejected', etiqueta: 'Rechazadas', vacio: 'No hay notificaciones rechazadas' },
+const PESTANAS: { estado: Estado; etiqueta: string; vacio: string; vacioDescripcion: string }[] = [
+  {
+    estado: 'pending',
+    etiqueta: 'Pendientes',
+    vacio: 'No hay notificaciones pendientes',
+    vacioDescripcion:
+      'Cuando tu equipo publique un cambio, aparecerá aquí para que decidas si quieres probarlo. Nada se ejecuta sin tu confirmación.',
+  },
+  {
+    estado: 'confirmed',
+    etiqueta: 'Confirmadas',
+    vacio: 'No hay notificaciones confirmadas',
+    vacioDescripcion:
+      'Las notificaciones que confirmes aparecerán aquí con su corrida asociada, para que vuelvas a ellas cuando lo necesites.',
+  },
+  {
+    estado: 'rejected',
+    etiqueta: 'Rechazadas',
+    vacio: 'No hay notificaciones rechazadas',
+    vacioDescripcion:
+      'Las notificaciones que descartes quedarán aquí como historial de los cambios que decidiste no probar.',
+  },
 ];
 
 /** Color de la insignia por estado de la notificación; la etiqueta de texto es la que informa. */
@@ -62,7 +80,7 @@ export function InboxPage() {
   const [errorLista, setErrorLista] = useState<unknown>(null);
   // Contadores de las pestañas: solo de las pestañas ya cargadas (no se piden listas extra).
   const [conteos, setConteos] = useState<Partial<Record<Estado, number>>>({});
-  // Estado del warm para la cabecera y el KPI. null = no disponible o aún no leído.
+  // Estado del warm para el KPI. null = no disponible o aún no leído.
   const [warm, setWarm] = useState<WarmState | null>(null);
   const [seleccionadaId, setSeleccionadaId] = useState<string | null>(null);
   const [panelAbierto, setPanelAbierto] = useState(false);
@@ -74,10 +92,11 @@ export function InboxPage() {
   const peticion = useRef(0);
   // Pestaña vigente, para que una recarga tras una acción use siempre la pestaña actual.
   const estadoRef = useRef<Estado>('pending');
-  const tituloPanel = useRef<HTMLHeadingElement | null>(null);
+  // Modal de dos pasos: abierto mientras hay selección; panelAbierto = paso 2 (confirmación).
+  const tituloModal = useRef<HTMLHeadingElement | null>(null);
   const dialogoRef = useRef<HTMLDivElement | null>(null);
-  const disparadorRef = useRef<HTMLButtonElement | null>(null);
-  const panelAntes = useRef(false);
+  const disparadorModalRef = useRef<HTMLButtonElement | null>(null);
+  const modalAntes = useRef(false);
 
   // Carga la pestaña indicada. Una respuesta vieja (otra pestaña o recarga posterior) se descarta.
   const cargar = useCallback(async (porEstado: Estado) => {
@@ -119,6 +138,7 @@ export function InboxPage() {
   }, [estado, cargar]);
 
   const seleccionada = lista?.find((n) => n.id === seleccionadaId) ?? null;
+  const modalAbierto = seleccionada !== null;
 
   function elegirPestana(nueva: Estado) {
     if (enCurso.current) return; // sin cambiar de pestaña con un POST en vuelo
@@ -144,29 +164,31 @@ export function InboxPage() {
     document.getElementById(`tab-${nueva}`)?.focus();
   }
 
-  function abrirPanel() {
-    setFamilias([...FLOW_FAMILIES]);
+  function abrirDetalle(id: string, disparador: HTMLButtonElement) {
+    disparadorModalRef.current = disparador;
+    setSeleccionadaId(id);
+    setPanelAbierto(false);
     setErrorAccion(null);
     setMensajeAccion(null);
-    setPanelAbierto(true);
   }
 
-  // Foco inicial en el título del panel; al cerrarlo, el foco vuelve al disparador.
-  useEffect(() => {
-    if (panelAbierto) tituloPanel.current?.focus();
-    else if (panelAntes.current) disparadorRef.current?.focus();
-    panelAntes.current = panelAbierto;
-  }, [panelAbierto]);
-
-  function cerrarPanel() {
-    if (enCurso.current) return;
+  function cerrarModal() {
+    if (enCurso.current) return; // sin cerrar con un POST en vuelo
     setPanelAbierto(false);
+    setSeleccionadaId(null);
   }
 
-  /** Esc cierra; Tab y Mayús+Tab cicla el foco dentro del diálogo (foco atrapado). */
-  function alPulsarTeclaPanel(evento: KeyboardEvent<HTMLDivElement>) {
+  // Foco inicial en el título del modal y al cambiar de paso; al cerrarlo, vuelve al botón de la fila.
+  useEffect(() => {
+    if (modalAbierto) tituloModal.current?.focus();
+    else if (modalAntes.current) disparadorModalRef.current?.focus();
+    modalAntes.current = modalAbierto;
+  }, [modalAbierto, panelAbierto]);
+
+  /** Esc cierra el modal; Tab y Mayús+Tab ciclan el foco dentro del diálogo (foco atrapado). */
+  function alPulsarTeclaModal(evento: KeyboardEvent<HTMLDivElement>) {
     if (evento.key === 'Escape') {
-      cerrarPanel();
+      cerrarModal();
       return;
     }
     if (evento.key !== 'Tab') return;
@@ -182,13 +204,26 @@ export function InboxPage() {
       return;
     }
     const activo = document.activeElement;
-    if (evento.shiftKey && (activo === primero || activo === tituloPanel.current)) {
+    if (evento.shiftKey && (activo === primero || activo === tituloModal.current)) {
       evento.preventDefault();
       ultimo.focus();
     } else if (!evento.shiftKey && activo === ultimo) {
       evento.preventDefault();
       primero.focus();
     }
+  }
+
+  function abrirPanel() {
+    setFamilias([...FLOW_FAMILIES]);
+    setErrorAccion(null);
+    setMensajeAccion(null);
+    setPanelAbierto(true);
+  }
+
+  /** Paso 2 → paso 1: conserva la selección y las familias marcadas. */
+  function volverAlDetalle() {
+    if (enCurso.current) return;
+    setPanelAbierto(false);
   }
 
   function alternarFamilia(familia: FlowFamily) {
@@ -246,22 +281,8 @@ export function InboxPage() {
     void cargarWarm();
   }
 
-  const textoVacio = PESTANAS.find((p) => p.estado === estado)?.vacio ?? '';
-
-  // Cabecera: solo celdas con dato real de la API. «Familias activas» no existe en la API: se omite.
-  const meta: ElementoMeta[] = [];
-  if (warm !== null) {
-    // Presentar el estado sin identificadores internos del entorno.
-    const tono = TONO_ENTORNO[warm.state];
-    meta.push({
-      etiqueta: 'Entorno',
-      valor: <span className={`meta-${tono}`}>{ETIQUETA_ENTORNO[warm.state]}</span>,
-    });
-    meta.push({
-      etiqueta: 'Limpieza verificada',
-      valor: <span className="mono">{warm.reset_verified ? 'sí' : 'no'}</span>,
-    });
-  }
+  const pestanaVacia = PESTANAS.find((p) => p.estado === estado);
+  const textoVacio = pestanaVacia?.vacio ?? '';
 
   const textoContador = (estadoPestana: Estado) => {
     const n = conteos[estadoPestana];
@@ -273,7 +294,6 @@ export function InboxPage() {
       <PageHeader
         titulo="Inbox de notificaciones"
         descripcion="Revisa los cambios de tu equipo y elige cuáles probar. Cada corrida empieza con tu confirmación."
-        meta={meta}
       />
 
       <div className="az-subbar">
@@ -356,7 +376,25 @@ export function InboxPage() {
         {lista === null && errorLista === null ? <p>Cargando notificaciones…</p> : null}
         {errorLista !== null ? <ApiErrorNotice error={errorLista} /> : null}
         {lista !== null && errorLista === null && lista.length === 0 ? (
-          <p className="empty">{textoVacio}</p>
+          <div className="card">
+            <section className="dashboard-empty" aria-labelledby="inbox-empty-title">
+              <div className="dashboard-empty-art" aria-hidden="true">
+                <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 18h40l-4 30a4 4 0 0 1-4 3H20a4 4 0 0 1-4-3l-4-30z" />
+                  <path d="M12 18l9-10h22l9 10" />
+                  <path d="M12 18h13l4 6h6l4-6h13" />
+                  <path d="M24 38h16" />
+                </svg>
+              </div>
+              <h2 id="inbox-empty-title">{textoVacio}</h2>
+              <p>{pestanaVacia?.vacioDescripcion ?? ''}</p>
+              {estado === 'pending' ? (
+                <Link to="/runs" className="btn btn-primary" data-testid="inbox-empty-runs-link">
+                  Ver mis corridas <span aria-hidden="true">→</span>
+                </Link>
+              ) : null}
+            </section>
+          </div>
         ) : null}
         {lista !== null && errorLista === null && lista.length > 0 ? (
           <div className="card">
@@ -398,7 +436,7 @@ export function InboxPage() {
                         </span>
                       </td>
                       <td data-label="Estado">
-                        <Badge tono={COLOR_ESTADO[n.state]} punto>
+                        <Badge tono={COLOR_ESTADO[n.state]} punto plano>
                           {n.state}
                         </Badge>
                       </td>
@@ -407,14 +445,9 @@ export function InboxPage() {
                           type="button"
                           className="btn btn-primary btn-sm"
                           disabled={enVuelo}
-                          onClick={() => {
-                            setSeleccionadaId(n.id);
-                            setPanelAbierto(false);
-                            setErrorAccion(null);
-                            setMensajeAccion(null);
-                          }}
+                          onClick={(evento) => abrirDetalle(n.id, evento.currentTarget)}
                         >
-                          Revisar y confirmar →
+                          Revisar
                         </button>
                       </td>
                     </tr>
@@ -429,92 +462,150 @@ export function InboxPage() {
       {mensajeAccion !== null ? <p role="alert" className="notice notice-danger">{mensajeAccion}</p> : null}
 
       {seleccionada !== null ? (
-        <section aria-label="Detalle de la notificación" className="card card-pad detail">
-          <h2>Detalle</h2>
-          <div className="stack">
-          <dl className="kv-list">
-            <dt>Repositorio</dt>
-            <dd>{seleccionada.repo}</dd>
-            <dt>Evento</dt>
-            <dd>{seleccionada.github_event}</dd>
-            <dt>SHA</dt>
-            <dd>
-              <code>{seleccionada.sha}</code>
-            </dd>
-            <dt>Artefacto</dt>
-            <dd>
-              {seleccionada.artifact
-                ? textoArtefacto(seleccionada.artifact)
-                : 'Sin artefacto'}
-            </dd>
-            <dt>Estado</dt>
-            <dd>{seleccionada.state}</dd>
-          </dl>
-          {seleccionada.state === 'pending' ? (
-            <div>
-              <button ref={disparadorRef} type="button" className="btn btn-primary" onClick={abrirPanel}>
-                Revisar y confirmar
-              </button>
-            </div>
-          ) : null}
-          </div>
-        </section>
-      ) : null}
-
-      {panelAbierto && seleccionada !== null ? (
         <div className="modal-backdrop open">
           <div
             ref={dialogoRef}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="confirm-titulo"
-            className="modal-dialog"
-            onKeyDown={alPulsarTeclaPanel}
+            aria-labelledby="modal-titulo"
+            aria-describedby="modal-paso"
+            className="modal-dialog modal-lg"
+            onKeyDown={alPulsarTeclaModal}
           >
-            <h2 id="confirm-titulo" tabIndex={-1} ref={tituloPanel}>
-              Confirmar corrida
-            </h2>
-            <dl className="kv-list">
-              <dt>Repositorio</dt>
-              <dd>{seleccionada.repo}</dd>
-              <dt>SHA</dt>
-              <dd>
-                <code>{seleccionada.sha}</code>
-              </dd>
-              <dt>Artefacto</dt>
-              <dd>
-                {seleccionada.artifact
-                  ? textoArtefacto(seleccionada.artifact)
-                  : 'Sin artefacto'}
-              </dd>
-            </dl>
-            <fieldset className="fieldset">
-              <legend>Familias de flujos</legend>
-              {FLOW_FAMILIES.map((f) => (
-                <label key={f} className="check">
-                  <input
-                    type="checkbox"
-                    name="familias"
-                    value={f}
-                    checked={familias.includes(f)}
-                    onChange={() => alternarFamilia(f)}
-                  />{' '}
-                  {f}
-                </label>
-              ))}
-            </fieldset>
-            {errorAccion !== null ? <ApiErrorNotice error={errorAccion} /> : null}
-            <button type="button" className="btn btn-secondary" onClick={cerrarPanel} disabled={enVuelo}>
-              Cancelar
-            </button>{' '}
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void confirmar()}
-              disabled={familias.length === 0 || enVuelo}
-            >
-              Confirmar corrida
-            </button>
+            <header className="modal-header">
+              <div className="modal-heading">
+                <p className="modal-eyebrow">Cambio recibido</p>
+                <h2 id="modal-titulo" tabIndex={-1} ref={tituloModal}>
+                  Revisar notificación
+                </h2>
+                <p className="modal-paso" id="modal-paso">
+                  {panelAbierto ? 'Paso 2 de 2 · Confirmar corrida' : 'Paso 1 de 2 · Detalle'}
+                </p>
+              </div>
+              <Badge tono={COLOR_ESTADO[seleccionada.state]} punto>
+                {seleccionada.state}
+              </Badge>
+            </header>
+            <div className="modal-progress" aria-hidden="true">
+              <span className="modal-progress-step active" />
+              <span className={`modal-progress-step${panelAbierto ? ' active' : ''}`} />
+            </div>
+            {!panelAbierto ? (
+              <>
+                <div className="modal-body">
+                  <section className="modal-section" aria-labelledby="modal-detalle-titulo">
+                    <div className="modal-section-heading">
+                      <h3 id="modal-detalle-titulo">Detalles del cambio</h3>
+                      <p>Comprueba el origen y el artefacto antes de continuar.</p>
+                    </div>
+                    <dl className="kv-list modal-details">
+                      <div className="modal-detail">
+                        <dt>Repositorio</dt>
+                        <dd>{seleccionada.repo}</dd>
+                      </div>
+                      <div className="modal-detail">
+                        <dt>Evento</dt>
+                        <dd><span className="mono">{seleccionada.github_event}</span></dd>
+                      </div>
+                      <div className="modal-detail">
+                        <dt>SHA</dt>
+                        <dd><code>{seleccionada.sha}</code></dd>
+                      </div>
+                      <div className="modal-detail">
+                        <dt>Artefacto</dt>
+                        <dd>
+                          {seleccionada.artifact
+                            ? textoArtefacto(seleccionada.artifact)
+                            : 'Sin artefacto'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+                </div>
+                <div className="modal-footer">
+                  <p className="modal-footer-note">Nada se ejecuta sin tu confirmación.</p>
+                  <div className="modal-footer-actions">
+                    <button type="button" className="btn btn-secondary" onClick={cerrarModal} disabled={enVuelo}>
+                      Cerrar
+                    </button>
+                    {seleccionada.state === 'pending' ? (
+                      <button type="button" className="btn btn-primary" onClick={abrirPanel}>
+                        Ver detalle →
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="modal-body">
+                  <section className="modal-section" aria-labelledby="modal-resumen-titulo">
+                    <div className="modal-section-heading">
+                      <h3 id="modal-resumen-titulo">Resumen del cambio</h3>
+                      <p>Esta será la versión que se probará en el entorno.</p>
+                    </div>
+                    <dl className="kv-list modal-details">
+                      <div className="modal-detail">
+                        <dt>Repositorio</dt>
+                        <dd>{seleccionada.repo}</dd>
+                      </div>
+                      <div className="modal-detail">
+                        <dt>SHA</dt>
+                        <dd><code>{seleccionada.sha}</code></dd>
+                      </div>
+                      <div className="modal-detail">
+                        <dt>Artefacto</dt>
+                        <dd>
+                          {seleccionada.artifact
+                            ? textoArtefacto(seleccionada.artifact)
+                            : 'Sin artefacto'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+                  <fieldset className="fieldset modal-flows" aria-describedby="modal-flows-hint">
+                    <legend>Familias de flujos</legend>
+                    <p className="modal-flows-hint" id="modal-flows-hint">
+                      Elige qué pruebas quieres incluir en esta corrida.
+                    </p>
+                    <div className="modal-flow-options">
+                      {FLOW_FAMILIES.map((f) => (
+                        <label
+                          key={f}
+                          className={`check modal-flow-option${familias.includes(f) ? ' selected' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            name="familias"
+                            value={f}
+                            checked={familias.includes(f)}
+                            onChange={() => alternarFamilia(f)}
+                          />
+                          <span className="mono">{f}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  {errorAccion !== null ? <ApiErrorNotice error={errorAccion} /> : null}
+                </div>
+                <div className="modal-footer">
+                  <p className="modal-footer-note">La corrida empezará solo después de confirmar.</p>
+                  <div className="modal-footer-actions">
+                    <button type="button" className="btn btn-secondary" onClick={volverAlDetalle} disabled={enVuelo}>
+                      Atrás
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void confirmar()}
+                      disabled={familias.length === 0 || enVuelo}
+                    >
+                      Confirmar corrida
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}

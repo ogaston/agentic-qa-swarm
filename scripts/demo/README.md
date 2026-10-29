@@ -44,3 +44,15 @@ En `20-run-and-watch.sh` la confirmación la hace el humano en el dashboard por 
   (cautela F-01 de U8-T08).
 - La CA-6 (lectura de vuelta con un segundo SHA) ya quedó verificada el 2026-10-26; si se
   repite, basta correr el paso 1 tras el paso 2 y comparar la imagen desplegada.
+
+## Lanzador interactivo
+
+```bash
+bash scripts/demo/demo.sh
+```
+
+El lanzador prepara el entorno, inicia el dashboard y muestra su URL, la URL del webhook y las credenciales locales del usuario `demo`. Configura el webhook de GitHub como se indica arriba. Después puedes usar un SHA existente o crear y empujar un commit sano o con `oversell`; confirma la notificación en el dashboard. La contraseña se muestra en la terminal: evita compartir su salida.
+
+Si otro script ocupa el lock, detén ese proceso y acepta reiniciar la preparación cuando el lanzador lo pregunte. No se borra el clúster.
+
+El lanzador usa `https://aqs.ogaston.com` como túnel fijo y comprueba su `/healthz`. El conector Cloudflare debe estar activo y apuntar a `http://localhost:18622`. Se puede cambiar el hostname con `AQS_DEMO_PUBLIC_URL`.

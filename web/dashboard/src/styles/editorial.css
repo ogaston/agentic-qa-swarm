@@ -1685,6 +1685,12 @@
   color: var(--ed-graphite);
 }
 
+.ed-root .badge.badge-plano {
+  background: transparent;
+  border-color: transparent;
+  padding: 0;
+}
+
 .ed-root .alert-box {
   border-radius: 4px;
   border: 1px solid var(--ed-hairline);
@@ -1783,6 +1789,65 @@
   border: 1px solid var(--ed-hairline);
   border-radius: 4px;
   box-shadow: 0 16px 40px rgba(17, 17, 17, 0.12);
+}
+
+.ed-root .modal-eyebrow,
+.ed-root .modal-paso {
+  font-family: var(--ed-font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+
+.ed-root .modal-header h2 {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: -0.64px;
+}
+
+.ed-root .modal-progress-step {
+  background: var(--ed-linen);
+}
+
+.ed-root .modal-progress-step.active {
+  background: var(--ed-violet);
+}
+
+.ed-root .modal-section-heading h3,
+.ed-root .modal-flows legend {
+  font-weight: 500;
+}
+
+.ed-root dl.kv-list .modal-detail dt {
+  font-family: var(--ed-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.ed-root dl.kv-list .modal-detail dd {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.ed-root .modal-detail,
+.ed-root dl.kv-list.modal-details,
+.ed-root .modal-flow-option {
+  border-color: var(--ed-hairline);
+}
+
+.ed-root .modal-flow-option:hover,
+.ed-root .modal-flow-option.selected {
+  background: var(--ed-linen);
+}
+
+.ed-root .modal-flow-option.selected {
+  border-color: var(--ed-violet);
+}
+
+.ed-root .modal-footer {
+  border-color: var(--ed-hairline);
+  background: var(--ed-linen);
 }
 
 /* Reducción de movimiento adicional */
@@ -2131,4 +2196,136 @@
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
+}
+
+/* Detalle de corrida: resultados protagonistas y progreso secundario. */
+.ed-root .run-page .az-page-header {
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.ed-root .run-page .run-reference {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.ed-root .run-page .grid-main-side {
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 350px);
+  gap: 24px;
+}
+.ed-root .run-page .stack,
+.ed-root .run-page .card { min-width: 0; }
+.ed-root .run-page .card-head { flex-wrap: wrap; gap: 12px; }
+.ed-root .run-page .report-summary {
+  padding: 18px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.ed-root .run-page .phase-timeline li { padding: 14px 0; gap: 8px; }
+.ed-root .run-page .phase-name { font-size: 13px; }
+.ed-root .run-page .phase-timeline .badge { font-size: 10px; white-space: nowrap; }
+.ed-root .run-page .phase-idx { width: 26px; height: 26px; }
+.run-page .phase-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: run-phase-spin 0.8s linear infinite;
+}
+@keyframes run-phase-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .run-page .phase-spinner { animation: none; }
+}
+.ed-root .run-page .flow-list { gap: 12px; }
+.ed-root .run-page .flow-block + .flow-block { margin-top: 0; }
+.ed-root .run-page .flow-details summary { padding: 18px; flex-wrap: wrap; }
+.ed-root .run-page .flow-title { min-width: 0; overflow-wrap: anywhere; }
+.ed-root .run-page .finding-item { padding: 20px; }
+.ed-root .run-page .report-summary,
+.ed-root .run-page .kv-list dd { overflow-wrap: anywhere; }
+.ed-root .run-page summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 960px) {
+  .ed-root .run-page .grid-main-side { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .ed-root .run-page .az-page-header { flex-direction: column; gap: 16px; }
+  .ed-root .run-page .finding-item { padding: 14px; }
+  .ed-root .run-page .flow-details summary { padding: 14px; }
+}
+.ed-root .run-page .report-summary,
+.ed-root .run-page .flow-details[open] summary {
+  background: var(--ed-linen);
+  border-color: var(--ed-hairline);
+}
+.ed-root .run-page .finding-item,
+.ed-root .run-page .flow-block { border-color: var(--ed-hairline); }
+.ed-root .run-page .finding-item { border-left-color: var(--danger); }
+.ed-root .run-page .phase-timeline li { border-color: var(--ed-hairline); }
+@media (max-width: 600px) {
+  .ed-root .run-page .flow-content .data-table,
+  .ed-root .run-page .flow-content tbody,
+  .ed-root .run-page .flow-content tr,
+  .ed-root .run-page .flow-content td { display: block; width: 100%; }
+  .ed-root .run-page .flow-content thead { display: none; }
+  .ed-root .run-page .flow-content td { padding: 10px 12px; }
+  .ed-root .run-page .flow-content td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: var(--ed-graphite);
+  }
+  .ed-root .run-page .flow-content .json-body { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+}
+
+/* Pasos de cada flujo: tabla abierta, sin una segunda caja dentro de la tarjeta. */
+.ed-root .run-page .flow-content > p {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ed-root .run-page .flow-content .table-wrap {
+  border: 0;
+  border-radius: 0;
+}
+.ed-root .run-page .flow-content .data-table { background: transparent; }
+.ed-root .run-page .flow-content .data-table th {
+  padding: 0 12px 10px;
+  background: transparent;
+  font-family: var(--ed-font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ed-root .run-page .flow-content .data-table td {
+  padding: 14px 12px;
+  border-bottom-color: var(--ed-hairline);
+}
+.ed-root .run-page .flow-content .data-table tbody tr:hover td { background: transparent; }
+.ed-root .run-page .flow-content .data-table code {
+  padding: 0;
+  background: transparent;
+  font-size: 12px;
+}
+.ed-root .run-page .flow-content .data-table .badge {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  letter-spacing: 0;
+  font-size: 12px;
+}
+.ed-root .run-page .flow-content .json-body {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+@media (max-width: 600px) {
+  .ed-root .run-page .flow-content .data-table td { padding: 8px 0; border: 0; }
+  .ed-root .run-page .flow-content .data-table tr + tr {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ed-hairline);
+  }
 }

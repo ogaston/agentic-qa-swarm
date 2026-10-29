@@ -70,7 +70,14 @@ exec 9>"$LOCKFILE" || { echo "no se pudo abrir $LOCKFILE" >&2; exit 2; }
 if ! flock -n 9; then
   otros=""
   for pid in $(pgrep -f 'scripts/(kind|test|demo)/[a-z0-9_.-]+\.sh' 2>/dev/null); do
-    [ "$pid" = "$$" ] && continue
+    # The interactive launcher is an ancestor, not a competing test.
+    ancestor=$$
+    while [ "$ancestor" != 0 ] && [ -r "/proc/$ancestor/status" ]; do
+      [ "$pid" = "$ancestor" ] && break
+      ancestor=$(awk '/^PPid:/ {print $2}' "/proc/$ancestor/status")
+      ancestor=${ancestor:-0}
+    done
+    [ "$pid" = "$ancestor" ] && continue
     case $( { tr '\0' '\n' </proc/"$pid"/cmdline; } 2>/dev/null | sed -n 2p) in
       */scripts/kind/*.sh|*/scripts/test/*.sh|*/scripts/demo/*.sh|scripts/kind/*.sh|scripts/test/*.sh|scripts/demo/*.sh)
         otros="$otros $pid" ;;

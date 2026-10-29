@@ -718,6 +718,12 @@ main.page-narrow {
   border: 1px solid var(--border-subtle);
 }
 
+.badge.badge-plano {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
 
 /* ---------- Botones y formularios ---------- */
 
@@ -1047,10 +1053,6 @@ dl.kv-list dd {
   word-break: break-all;
 }
 
-.detail {
-  margin-top: 16px;
-}
-
 /* ---------- Diálogo de confirmación ---------- */
 
 .modal {
@@ -1084,11 +1086,204 @@ dl.kv-list dd {
 .modal-dialog {
   width: 100%;
   max-width: 480px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 22px 24px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+/* Modal de dos pasos del inbox: más ancho que el diálogo base. */
+.modal-lg {
+  max-width: 640px;
+  padding: 0;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 24px 18px;
+}
+
+.modal-heading {
+  min-width: 0;
+}
+
+.modal-eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1.25;
+  outline: none;
+}
+
+.modal-paso {
+  margin: 7px 0 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.modal-progress {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 24px;
+}
+
+.modal-progress-step {
+  height: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+}
+
+.modal-progress-step.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.modal-body {
+  padding: 22px 24px 24px;
+}
+
+.modal-section-heading {
+  margin-bottom: 12px;
+}
+
+.modal-section-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.modal-section-heading p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+dl.kv-list.modal-details {
+  display: block;
+  margin: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.modal-detail {
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+dl.kv-list .modal-detail dt {
+  padding: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+dl.kv-list .modal-detail dd {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.modal-flows {
+  margin: 22px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.modal-flows legend {
+  padding: 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.modal-flows-hint {
+  margin: 4px 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.modal-flow-options {
+  display: grid;
+  gap: 8px;
+}
+
+.modal-flow-option {
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.modal-flow-option:hover {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.modal-flow-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.modal-flow-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* Pie del modal: contexto a la izquierda y acciones a la derecha. */
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+}
+
+.modal-footer-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.modal-footer-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
 }
 
 /* ---------- Vista de corrida (U10-T03): cabecera, banner, post-mortem, plan y fases ---------- */
@@ -1432,6 +1627,53 @@ pre.json-body {
   dl.kv-list {
     grid-template-columns: 1fr;
     row-gap: 4px;
+  }
+
+  .modal-backdrop {
+    padding: 12px;
+  }
+
+  .modal-dialog {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .modal-header {
+    gap: 12px;
+    padding: 20px 18px 16px;
+  }
+
+  .modal-header h2 {
+    font-size: 22px;
+  }
+
+  .modal-progress {
+    padding: 0 18px;
+  }
+
+  .modal-body {
+    padding: 20px 18px;
+  }
+
+  .modal-detail {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .modal-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 18px 18px;
+  }
+
+  .modal-footer-actions {
+    width: 100%;
+  }
+
+  .modal-footer-actions .btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
   }
 
   .card-vista {

@@ -31,6 +31,17 @@ describe('componentes base del mockup', () => {
     expect(container.querySelector('.badge-dot')).not.toBeNull();
   });
 
+  it('Badge: variante plana conserva el punto y el texto coloreado sin fondo ni borde', () => {
+    const { container } = render(
+      <Badge tono="warn" punto plano>
+        pending
+      </Badge>,
+    );
+    const insignia = screen.getByText('pending');
+    expect(insignia.className).toBe('badge badge-warn badge-plano');
+    expect(container.querySelector('.badge-dot')).not.toBeNull();
+  });
+
   it('Card: relleno del mockup por defecto y sin relleno si pad es false', () => {
     const { container, rerender } = render(<Card>contenido</Card>);
     expect(container.firstElementChild?.className).toBe('card card-pad');

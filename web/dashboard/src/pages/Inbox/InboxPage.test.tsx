@@ -115,8 +115,8 @@ function filaDe(repo: string): HTMLElement {
 /** Selecciona la notificación pendiente del repo indicado y abre el panel de confirmación. */
 async function abrirPanel(user: ReturnType<typeof userEvent.setup>, repo: string) {
   await screen.findByText(repo);
-  await user.click(within(filaDe(repo)).getByRole('button', { name: 'Revisar y confirmar →' }));
-  await user.click(screen.getByRole('button', { name: 'Revisar y confirmar' }));
+  await user.click(within(filaDe(repo)).getByRole('button', { name: 'Revisar' }));
+  await user.click(screen.getByRole('button', { name: 'Ver detalle →' }));
   return screen.getByRole('dialog');
 }
 
@@ -143,6 +143,10 @@ describe('Inbox lista', () => {
   it('una lista vacía muestra el mensaje de vacío', async () => {
     await abrirInbox([listaPorEstado({ pending: [] }, nuevoRegistro())]);
     expect(await screen.findByText('No hay notificaciones pendientes')).toBeTruthy();
+    expect(
+      screen.getByText(/Cuando tu equipo publique un cambio, aparecerá aquí/),
+    ).toBeTruthy();
+    expect(screen.getByTestId('inbox-empty-runs-link').getAttribute('href')).toBe('/runs');
   });
 
   it('un 503 muestra el aviso de servicio no disponible', async () => {
@@ -158,6 +162,15 @@ describe('Inbox lista', () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro())]);
     expect(await screen.findByText('abcdef1')).toBeTruthy();
     expect(screen.queryByText('abcdef1234567890')).toBeNull();
+  });
+
+  it('el estado en la tabla se muestra con texto coloreado, punto y clase plana', async () => {
+    await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro())]);
+    await screen.findByText('acme/api');
+    const badge = screen.getByText('pending', { selector: 'span.badge' });
+    expect(badge.className).toContain('badge-plano');
+    expect(badge.className).toContain('badge-warn');
+    expect(badge.querySelector('.badge-dot')).not.toBeNull();
   });
 
   it('Actualizar hace exactamente una petición nueva y no hay polling (2 s con temporizador falso)', async () => {
@@ -378,16 +391,18 @@ describe('Inbox confirma', () => {
     ]);
     await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
     await screen.findByText('acme/confirmado');
-    await user.click(within(filaDe('acme/confirmado')).getByRole('button', { name: 'Revisar y confirmar →' }));
-    expect(screen.queryByRole('button', { name: 'Revisar y confirmar' })).toBeNull();
+    await user.click(within(filaDe('acme/confirmado')).getByRole('button', { name: 'Revisar' }));
+    expect(screen.getByRole('dialog', { name: 'Revisar notificación' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ver detalle →' })).toBeNull();
 
     await user.click(screen.getByRole('tab', { name: /^Rechazadas/ }));
     await screen.findByText('acme/rechazado');
-    await user.click(within(filaDe('acme/rechazado')).getByRole('button', { name: 'Revisar y confirmar →' }));
-    expect(screen.queryByRole('button', { name: 'Revisar y confirmar' })).toBeNull();
+    await user.click(within(filaDe('acme/rechazado')).getByRole('button', { name: 'Revisar' }));
+    expect(screen.getByRole('dialog', { name: 'Revisar notificación' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ver detalle →' })).toBeNull();
   });
 
-  it('Escape cierra el panel sin enviar', async () => {
+  it('Escape cierra el modal sin enviar', async () => {
     const reg = nuevoRegistro();
     const user = await abrirInbox([
       listaPorEstado({ pending: [pendienteA] }, reg),
@@ -439,16 +454,14 @@ describe('Inbox estructura del mockup (U10-T02 CA-2)', () => {
     expect(screen.queryByRole('link', { name: /Nueva aplicación/ })).toBeNull();
   });
 
-  it('la cabecera muestra solo datos reales: Entorno y Limpieza verificada desde /api/warm; sin «Familias activas»', async () => {
+  it('la cabecera no muestra celdas de entorno: el estado del warm vive solo en el KPI; sin «Familias activas»', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmOk()]);
     await screen.findByText('acme/api');
-    const meta = document.querySelector('.az-header-meta') as HTMLElement;
-    expect(within(meta).getByText('Entorno')).toBeTruthy();
-    expect(within(meta).getByText('Limpieza verificada')).toBeTruthy();
+    expect(document.querySelector('.az-header-meta')).toBeNull();
     expect(screen.queryByText('Familias activas')).toBeNull();
   });
 
-  it('con el warm no disponible se omiten las celdas de la cabecera y el KPI de entorno no inventa valor', async () => {
+  it('con el warm no disponible el KPI de entorno no inventa valor', async () => {
     await abrirInbox([
       listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
       http.get('/api/warm', () =>
@@ -506,8 +519,12 @@ describe('Inbox diálogo modal (U10-T02 CA-2)', () => {
     ]);
     const dialogo = await abrirPanel(user, 'acme/api');
     expect(dialogo.className).toContain('modal-dialog');
+    expect(dialogo.className).toContain('modal-lg');
     expect(dialogo.parentElement?.className).toContain('modal-backdrop');
     expect(dialogo.parentElement?.className).toContain('open');
+    // Título del modal e indicador de paso.
+    expect(within(dialogo).getByRole('heading', { name: 'Revisar notificación' })).toBeTruthy();
+    expect(within(dialogo).getByText('Paso 2 de 2 · Confirmar corrida')).toBeTruthy();
 
     const casilla = within(dialogo).getByRole('checkbox', { name: 'happy-path' });
     const confirmar = within(dialogo).getByRole('button', { name: 'Confirmar corrida' });
@@ -519,7 +536,21 @@ describe('Inbox diálogo modal (U10-T02 CA-2)', () => {
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Revisar y confirmar' }));
+    expect(document.activeElement).toBe(
+      within(filaDe('acme/api')).getByRole('button', { name: 'Revisar' }),
+    );
+  });
+
+  it('«Atrás» vuelve al paso 1 sin cerrar el modal y conserva la selección', async () => {
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
+      warmOk(),
+    ]);
+    const dialogo = await abrirPanel(user, 'acme/api');
+    await user.click(within(dialogo).getByRole('button', { name: 'Atrás' }));
+    expect(screen.getByRole('dialog', { name: 'Revisar notificación' })).toBeTruthy();
+    expect(within(screen.getByRole('dialog')).getByText('Paso 1 de 2 · Detalle')).toBeTruthy();
+    expect(within(screen.getByRole('dialog')).getByText('acme/api')).toBeTruthy();
   });
 });
 
@@ -536,45 +567,31 @@ describe('Inbox tonos del estado del entorno (U10-T06 F-05)', () => {
     return caja as HTMLElement;
   }
 
-  function metaEntorno(): HTMLElement {
-    const meta = document.querySelector('.az-header-meta');
-    if (meta === null) throw new Error('sin cabecera meta');
-    return meta.querySelector('.az-meta-value > span') as HTMLElement;
-  }
-
-  it('state=dirty con reset_verified=false: tarjeta de advertencia y cabecera meta-warn, sin estilo de éxito', async () => {
+  it('state=dirty con reset_verified=false: tarjeta de advertencia, sin estilo de éxito', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmDe('dirty', false)]);
     await waitFor(() => expect(tarjetaEntorno().className).toContain('dashboard-tone-warn'));
     expect(tarjetaEntorno().className).not.toContain('dashboard-tone-ok');
     expect(tarjetaEntorno().querySelector('.kpi-val')?.textContent).toBe('Requiere limpieza');
-    expect(screen.getAllByText('Requiere limpieza').length).toBe(2);
-    expect(metaEntorno().className).toBe('meta-warn');
-    expect(metaEntorno().className).not.toBe('meta-ok');
-    expect(metaEntorno().textContent).toBe('Requiere limpieza');
   });
 
-  it('state=cuarentena: tarjeta de advertencia y cabecera meta-warn, sin estilo de éxito', async () => {
+  it('state=cuarentena: tarjeta de advertencia, sin estilo de éxito', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmDe('cuarentena', false)]);
     await waitFor(() => expect(tarjetaEntorno().className).toContain('dashboard-tone-warn'));
     expect(tarjetaEntorno().className).not.toContain('dashboard-tone-ok');
     expect(tarjetaEntorno().querySelector('.kpi-val')?.textContent).toBe('En cuarentena');
-    expect(metaEntorno().className).toBe('meta-warn');
-    expect(metaEntorno().textContent).toBe('En cuarentena');
   });
 
-  it('state=idle-escalado: tarjeta neutral y cabecera meta-neutral, sin estilo de éxito', async () => {
+  it('state=idle-escalado: tarjeta neutral, sin estilo de éxito', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmDe('idle-escalado', false)]);
     await waitFor(() => expect(tarjetaEntorno().className).toContain('dashboard-tone-neutral'));
     expect(tarjetaEntorno().className).not.toContain('dashboard-tone-ok');
-    expect(metaEntorno().className).toBe('meta-neutral');
-    expect(metaEntorno().textContent).toBe('En pausa');
+    expect(tarjetaEntorno().querySelector('.kpi-val')?.textContent).toBe('En pausa');
   });
 
-  it('state=ready conserva la tarjeta verde y la cabecera meta-ok (fidelidad con el mockup)', async () => {
+  it('state=ready conserva la tarjeta verde (fidelidad con el mockup)', async () => {
     await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()), warmOk()]);
     await waitFor(() => expect(tarjetaEntorno().className).toContain('dashboard-tone-ok'));
-    expect(metaEntorno().className).toBe('meta-ok');
-    expect(metaEntorno().textContent).toBe('Listo');
+    expect(tarjetaEntorno().querySelector('.kpi-val')?.textContent).toBe('Listo');
   });
 });
 
