@@ -152,8 +152,15 @@ go-warm-manager,aqs-test,list,secrets,no
 go-warm-manager,aqs-system,list,secrets,no
 go-warm-manager,aqs-test,watch,secrets,no
 go-warm-manager,aqs-system,watch,secrets,no
-go-warm-manager,aqs-test,create,secrets,yes
-go-warm-manager,aqs-system,create,secrets,yes
+go-warm-manager,aqs-test,create,secrets,no
+go-warm-manager,aqs-system,create,secrets,no
+go-warm-manager,aqs-system,get,cronjobs,yes
+go-warm-manager,aqs-system,list,cronjobs,yes
+go-warm-manager,aqs-system,watch,cronjobs,yes
+go-warm-manager,aqs-system,create,cronjobs,yes
+go-warm-manager,aqs-system,update,cronjobs,yes
+go-warm-manager,aqs-system,patch,cronjobs,yes
+go-warm-manager,aqs-system,delete,cronjobs,yes
 go-warm-manager,aqs-test,deletecollection,jobs,no
 go-warm-manager,aqs-test,create,pods/exec,no
 go-warm-manager,aqs-test,create,rolebindings,no

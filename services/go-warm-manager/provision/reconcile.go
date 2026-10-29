@@ -167,14 +167,9 @@ func (r *Reconciler) ensureConfigMap(ctx context.Context, cm *corev1.ConfigMap) 
 }
 
 func (r *Reconciler) ensureSecret(ctx context.Context, sec *corev1.Secret) error {
-	_, err := r.Kube.CoreV1().Secrets(sec.Namespace).Get(ctx, sec.Name, metav1.GetOptions{})
-	if err == nil {
-		return nil
-	}
-	if !apierrors.IsNotFound(err) {
-		return fmt.Errorf("obteniendo Secret %s/%s: %w", sec.Namespace, sec.Name, err)
-	}
-	_, err = r.Kube.CoreV1().Secrets(sec.Namespace).Create(ctx, sec, metav1.CreateOptions{})
+	// go-warm-manager solo tiene permiso CREATE en secrets (no get/list por principio de mínimo privilegio).
+	// La idempotencia se garantiza intentando directamente Create e ignorando AlreadyExists.
+	_, err := r.Kube.CoreV1().Secrets(sec.Namespace).Create(ctx, sec, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("creando Secret %s/%s: %w", sec.Namespace, sec.Name, err)
 	}

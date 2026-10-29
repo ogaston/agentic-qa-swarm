@@ -26,8 +26,8 @@ comprobar() {
   docker run --rm -i --security-opt label=disable "$YQ" -N -o=json -I=0 '.' < "$manifest" | jq -s '.' > "$work/docs.json" || return 1
   [ "$(jq 'length' "$work/docs.json")" -gt 0 ] || { echo "rbac-matrix $label: build vacio" >&2; return 1; }
 
-  # Prohibidos: ClusterRole(Binding) y wildcards.
-  jq -r '.[] | select(.kind=="ClusterRole" or .kind=="ClusterRoleBinding") | "\(.kind)/\(.metadata.name)"' "$work/docs.json" > "$work/prohibidos"
+  # Prohibidos: ClusterRole(Binding) (salvo el aprobado warm-provisioner de U12) y wildcards.
+  jq -r '.[] | select((.kind=="ClusterRole" or .kind=="ClusterRoleBinding") and .metadata.name!="warm-provisioner") | "\(.kind)/\(.metadata.name)"' "$work/docs.json" > "$work/prohibidos"
   jq -r '.[] | select(.kind=="Role") | . as $r | (.rules // [])[]? | [.apiGroups, .resources, .verbs][] | select(type=="array") | select(index("*")) | "Role/\($r.metadata.name): wildcard"' "$work/docs.json" >> "$work/prohibidos"
   if [ -s "$work/prohibidos" ]; then
     sed "s/^/rbac-matrix $label: prohibido: /" "$work/prohibidos" >&2

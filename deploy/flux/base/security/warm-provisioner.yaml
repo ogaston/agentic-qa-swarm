@@ -72,8 +72,8 @@ spec:
     - name: is-go-warm-manager
       expression: "request.userInfo.username == 'system:serviceaccount:aqs-system:go-warm-manager'"
   validations:
-    - expression: "request.userInfo.username != 'system:serviceaccount:aqs-system:go-warm-manager' || (request.resource.resource == 'namespaces' && request.name.startsWith('aqs-w-')) || request.namespace.startsWith('aqs-w-') || (request.namespace == 'aqs-system' && request.resource.group == 'batch' && request.resource.resource == 'cronjobs')"
-      message: "go-warm-manager is only allowed to manage namespaces named aqs-w-* and resources in aqs-w-* (or cronjobs in aqs-system)"
+    - expression: "request.userInfo.username != 'system:serviceaccount:aqs-system:go-warm-manager' || (request.resource.resource == 'namespaces' && request.name.startsWith('aqs-w-')) || request.namespace == 'aqs-test' || request.namespace.startsWith('aqs-w-') || (request.namespace == 'aqs-system' && request.resource.group == 'batch' && request.resource.resource == 'cronjobs')"
+      message: "go-warm-manager is only allowed to manage namespaces named aqs-w-* and resources in aqs-w-* or aqs-test (or cronjobs in aqs-system)"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

@@ -153,7 +153,7 @@ func AllowedPrefixesForRun(run runctl.Run, seedPrefixes []string, ref string) []
 		if strings.HasPrefix(prefix, WarmAllowedRegistry+"/") {
 			repoPart := strings.TrimPrefix(prefix, WarmAllowedRegistry+"/")
 			targetSlug := strings.TrimPrefix(run.Warm.Namespace, "aqs-w-")
-			if Slug(repoPart) == targetSlug || strings.HasSuffix(targetSlug, Slug(repoPart)) || strings.HasSuffix(Slug(repoPart), targetSlug) {
+			if Slug(repoPart) == targetSlug {
 				prefixes = append(prefixes, prefix)
 			}
 		}

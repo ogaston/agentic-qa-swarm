@@ -317,3 +317,24 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 > **U11-T5 cerrada por decisión del humano (2026-10-26), sin VERDE del revisor** (ronda 3: NARANJA de cobertura en la prueba del ayudante de puerto; el control funciona en un clúster real, reproducido por el revisor). Se fusiona «tal cual» y los hallazgos F-05..F-07 pasan a **U11-T06**, con sus 3 rondas. Marcar `[x]` U11-T5 al fusionar su PR.
 
 > **U11-T5 (PR #139) y U11-T6 (PR #142) fusionadas (2026-10-26)**; U11-T06 cerró con VERDE en la ronda 2 (la ronda 1 fue NO-VERDE por F-01 y F-02, corregidos). **Siguiente**: CA-6 de U11-T2 (humo y e2e en un clúster real con un segundo commit distinto de `b97a719`) y el ensayo real con el humano (webhook de GitHub, túnel y DeepSeek; ver `docs/demo-real.md`).
+
+
+## U12 — Autoservicio de Repositorios y Entornos Warm
+
+- **Responsabilidad**: permitir el autoservicio completo de repositorios desde la interfaz de usuario (`/repositories`), con registro en el plano de gobernanza, aprovisionamiento y aislamiento dinámico en tiempo de ejecución de entornos warm (`aqs-w-<slug>`) acotados por cuotas y admisiones estrictas, y búsqueda dinámica de repositorios en el webhook intake.
+- **Bounded context**: transversal (gobernanza, ingesta, control de ejecución, warm manager, seguridad, interfaz de usuario).
+- **Historias**: US-SS1 (Onboarding de repositorio desde UI), US-SS2 (Aprovisionamiento y ciclo de vida de entorno warm dinámico), US-SS3 (Enrutamiento dinámico de corridas y aislamiento RBAC/NetworkPolicy).
+- **Límites**: Worktree dedicado `feat/self-service-repos`; secreto compartido de webhook de plataforma (`GITHUB_WEBHOOK_SECRET`) entregado por el operador; `aqs-test` preservado como semilla/fallback; tope de entornos concurrentes configurado por `WARM_MAX_ENVIRONMENTS` (por defecto 3); permisos mínimos create-only de secretos en `go-warm-manager` confinados a `aqs-w-*`.
+- **Predecesoras**: U10 y U11 cerradas.
+- **Salida**: Flujo completo de autoservicio verificado en clúster kind (`scripts/test/u12-self-service-kind.sh`), matriz RBAC verificada (`scripts/ci/rbac-matrix.sh`), smoke test en verde (`scripts/kind/kind-smoke.sh`), contratos validados (`contracts/validate.sh`), 242 pruebas del dashboard en verde con build Vite exitoso, y suite de pruebas unitarias al 100% en los 6 servicios Go.
+
+| # | Hecho | Tarea | Historias | Comando de verificación |
+|---|---|---|---|---|
+| U12-T1 | [x] | Contratos OpenAPI, eventos y biblioteca compartida `warmtarget` (golden vectors en `contracts/examples/slugs.json`) | US-SS1, US-SS2 | `bash contracts/validate.sh && (cd services/go-warm-manager/warmtarget && go test ./...)` |
+| U12-T2 | [x] | Almacén y API REST de repositorios en `go-governance` con auditoría append-only, ownership y control de duplicados/límites (409/429); lookup dinámico en `go-intake` con caché de 15s y fail-closed | US-SS1, US-SS3 | `(cd services/go-governance && go test ./...) && (cd services/go-intake && go test ./...)` |
+| U12-T3 | [x] | Parametrización multientorno y aprovisionador dinámico en tiempo de ejecución (`provision/reconcile.go`) en `go-warm-manager` con paridad declarativa | US-SS2 | `(cd services/go-warm-manager && go test ./...)` |
+| U12-T4 | [x] | Enrutamiento dinámico por namespace/target en `go-run-controller` (ensayo, runners y deploy) y validación de namespace en `go-reset` | US-SS3 | `(cd services/go-run-controller && go test ./...) && (cd services/go-reset && go test ./...)` |
+| U12-T5 | [x] | Seguridad y confinamiento: ClusterRole `warm-provisioner` (create-only en secrets), ValidatingAdmissionPolicy `warm-provisioner-confinement`, matriz RBAC y políticas Rego adaptadas | US-SS2, US-SS3 | `bash scripts/ci/rbac-matrix.sh && bash scripts/test/u12-self-service-kind.sh` |
+| U12-T6 | [x] | Interfaz de autoservicio en `web/dashboard`: vista `/repositories`, modal de configuración, comprobación de contratos, proxy en `ui-api` y suite de 242 pruebas de frontend | US-SS1 | `(cd web/dashboard && npm test -- --run && npm run build) && (cd services/ui-api && go test ./...)` |
+
+> **Implementación y Verificación (2026-10-28/29)**: Desarrollada en arquitectura de 5 carriles paralelos (A: Gobernanza/Intake, B: Warm Manager, C: Run Controller/Reset, D: Seguridad/RBAC, E: UI-API/Dashboard) sobre la rama `feat/self-service-repos`. Revisión de código independiente abordada con 4 hallazgos corregidos (RBAC matriz y live smoke cluster, reconciliación idempotente de secretos sin lectura get, reenvío de target en WarmClient, prefijos exactos de imagen por slug). Verificada de punta a punta en `kind-aqs` con `scripts/test/u12-self-service-kind.sh` y `scripts/kind/kind-smoke.sh` en verde (0 fallas).

@@ -167,8 +167,13 @@ func (w *WarmClient) ResetVerified(ctx context.Context) (runctl.Fact, error) {
 }
 
 // Ensure exige 200 (409, 5xx, cuerpo inválido o warm no ready+verificado son error).
-func (w *WarmClient) Ensure(ctx context.Context) error {
-	b, _, err := w.s.callStatusT(ctx, w.EnsureTimeout, http.MethodPost, "/warm/ensure", nil, 200)
+// Opcionalmente acepta un target (namespace o warm_id) para entornos warm específicos.
+func (w *WarmClient) Ensure(ctx context.Context, target ...string) error {
+	p := "/warm/ensure"
+	if len(target) > 0 && target[0] != "" {
+		p += "?namespace=" + url.QueryEscape(target[0])
+	}
+	b, _, err := w.s.callStatusT(ctx, w.EnsureTimeout, http.MethodPost, p, nil, 200)
 	if err != nil {
 		return err
 	}
@@ -206,7 +211,8 @@ func (w *WarmClient) deployState(ctx context.Context, runID string, codes ...int
 
 // Deploy es idempotente por corrida: si el deploy ya existe lo adopta (no vuelve a pedir ensure ni
 // a crearlo); si no, ensure + POST /deploys; luego espera done. failed, timeout o cualquier error: fallo.
-func (w *WarmClient) Deploy(ctx context.Context, runID, kind, ref string) error {
+// Opcionalmente acepta target (namespace o warm_id) para entornos warm específicos.
+func (w *WarmClient) Deploy(ctx context.Context, runID, kind, ref string, target ...string) error {
 	if !runIDRe.MatchString(runID) {
 		return errors.New("run_id inválido")
 	}
@@ -215,11 +221,17 @@ func (w *WarmClient) Deploy(ctx context.Context, runID, kind, ref string) error 
 		return err
 	}
 	if !found {
-		if err := w.Ensure(ctx); err != nil {
+		if err := w.Ensure(ctx, target...); err != nil {
 			return err
 		}
-		b, err := w.s.call(ctx, http.MethodPost, "/deploys", map[string]any{"run_id": runID,
-			"artifact": map[string]string{"kind": kind, "ref": ref}}, 202)
+		reqBody := map[string]any{
+			"run_id":   runID,
+			"artifact": map[string]string{"kind": kind, "ref": ref},
+		}
+		if len(target) > 0 && target[0] != "" {
+			reqBody["target"] = target[0]
+		}
+		b, err := w.s.call(ctx, http.MethodPost, "/deploys", reqBody, 202)
 		if err != nil {
 			return err
 		}
@@ -265,10 +277,19 @@ func (w *WarmClient) deployStateOrMissing(ctx context.Context, runID string) (de
 
 // Surface pide POST /surface; solo 200 con un SurfaceArtifact válido (de la misma corrida) es éxito.
 func (w *WarmClient) Surface(ctx context.Context, runID string) (plan.SurfaceArtifact, error) {
+	return w.SurfaceForTarget(ctx, runID, "")
+}
+
+// SurfaceForTarget pide POST /surface especificando opcionalmente el namespace/repo target.
+func (w *WarmClient) SurfaceForTarget(ctx context.Context, runID, target string) (plan.SurfaceArtifact, error) {
 	if !runIDRe.MatchString(runID) {
 		return plan.SurfaceArtifact{}, errors.New("run_id inválido")
 	}
-	b, err := w.s.call(ctx, http.MethodPost, "/surface", map[string]string{"run_id": runID}, 200)
+	reqBody := map[string]string{"run_id": runID}
+	if target != "" {
+		reqBody["target"] = target
+	}
+	b, err := w.s.call(ctx, http.MethodPost, "/surface", reqBody, 200)
 	if err != nil {
 		return plan.SurfaceArtifact{}, err
 	}
@@ -362,9 +383,11 @@ func (p *RealPhases) Launch(ctx context.Context, phase string, run runctl.Run) (
 		if err := ValidateImage(kind, ref, prefixes); err != nil {
 			return nil, fmt.Errorf("deploy no pedido: %w", err)
 		}
-		return nil, p.Warm.Deploy(ctx, run.ID, kind, ref)
+		target := run.TargetNamespace("")
+		return nil, p.Warm.Deploy(ctx, run.ID, kind, ref, target)
 	case runctl.PhaseInfer:
-		_, err := p.Warm.Surface(ctx, run.ID)
+		target := run.TargetNamespace("")
+		_, err := p.Warm.SurfaceForTarget(ctx, run.ID, target)
 		return nil, err
 	case runctl.PhaseRehearse:
 		if p.Rehearse == nil {

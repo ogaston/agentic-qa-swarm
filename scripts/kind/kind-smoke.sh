@@ -169,6 +169,11 @@ rbac_test_ns_only() {
     got=$(kubectl auth can-i --as="system:serviceaccount:$NS_SYS:$subj" "$verb" "$res" -n "$ns" 2>/dev/null) || true
     want=no
     [ "$exp" = yes ] && want=yes
+    # U12: go-warm-manager tiene el ClusterRole warm-provisioner (create secrets cluster-wide acotado por ValidatingAdmissionPolicy a aqs-w-*).
+    # auth can-i evalua RBAC puro (no admission plugins), por lo que reporta 'yes'.
+    if [ "$subj" = "go-warm-manager" ] && [ "$res" = "secrets" ] && [ "$verb" = "create" ]; then
+      want=yes
+    fi
     if [ "$got" != "$want" ]; then
       echo "difiere $subj $ns $verb $res: esperado=$want obtenido=${got:-vacio}"
       bad=$((bad + 1))
