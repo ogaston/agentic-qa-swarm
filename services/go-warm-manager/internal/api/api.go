@@ -74,7 +74,20 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.Handle("GET /metrics", promhttp.HandlerFor(s.Registry, promhttp.HandlerOpts{}))
 	mux.HandleFunc("GET /warm", s.auth(func(w http.ResponseWriter, r *http.Request) {
-		st, err := s.Svc.GetWarm(r.Context())
+		repo := r.URL.Query().Get("repo")
+		if repo == "" {
+			repo = r.URL.Query().Get("warm_id")
+		}
+		if repo == "" {
+			repo = r.URL.Query().Get("namespace")
+		}
+		var st wm.WarmState
+		var err error
+		if repo != "" {
+			st, err = s.Svc.GetWarm(r.Context(), repo)
+		} else {
+			st, err = s.Svc.GetWarm(r.Context())
+		}
 		if err != nil {
 			writeJSON(w, 503, map[string]string{"error": "state_unavailable"})
 			return
@@ -87,7 +100,21 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		tr := trace(r)
-		st, ok, err := s.Svc.EnsureWarmReady(r.Context(), tr)
+		repo := r.URL.Query().Get("repo")
+		if repo == "" {
+			repo = r.URL.Query().Get("warm_id")
+		}
+		if repo == "" {
+			repo = r.URL.Query().Get("namespace")
+		}
+		var st wm.WarmState
+		var ok bool
+		var err error
+		if repo != "" {
+			st, ok, err = s.Svc.EnsureWarmReady(r.Context(), tr, repo)
+		} else {
+			st, ok, err = s.Svc.EnsureWarmReady(r.Context(), tr)
+		}
 		switch {
 		case errors.Is(err, wm.ErrWarmTimeout):
 			s.Log.Warn("ensure: el warm no llego a Ready a tiempo", "trace_id", tr, "state", st.State)
@@ -105,13 +132,29 @@ func (s *Server) Handler() http.Handler {
 		var req struct {
 			RunID    string      `json:"run_id"`
 			Artifact wm.Artifact `json:"artifact"`
+			Repo     string      `json:"repo,omitempty"`
+			Target   string      `json:"target,omitempty"`
 		}
 		if err := decode(r, &req); err != nil {
 			writeJSON(w, 400, map[string]string{"error": "invalid_body"})
 			return
 		}
 		tr := trace(r)
-		st, warm, err := s.Svc.StartDeploy(r.Context(), req.RunID, req.Artifact, tr)
+		repo := req.Repo
+		if repo == "" {
+			repo = req.Target
+		}
+		if repo == "" {
+			repo = r.URL.Query().Get("repo")
+		}
+		var st wm.DeployStatus
+		var warm wm.WarmState
+		var err error
+		if repo != "" {
+			st, warm, err = s.Svc.StartDeploy(r.Context(), req.RunID, req.Artifact, tr, repo)
+		} else {
+			st, warm, err = s.Svc.StartDeploy(r.Context(), req.RunID, req.Artifact, tr)
+		}
 		switch {
 		case errors.Is(err, wm.ErrNotReady):
 			s.Log.Warn("deploy rechazado: el warm no esta listo", "run_id", req.RunID, "trace_id", tr, "state", warm.State)
@@ -150,14 +193,29 @@ func (s *Server) Handler() http.Handler {
 	}))
 	mux.HandleFunc("POST /surface", s.auth(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			RunID string `json:"run_id"`
+			RunID  string `json:"run_id"`
+			Repo   string `json:"repo,omitempty"`
+			Target string `json:"target,omitempty"`
 		}
 		if err := decode(r, &req); err != nil || wm.ValidateRunID(req.RunID) != nil {
 			writeJSON(w, 400, map[string]string{"error": "invalid_body"})
 			return
 		}
 		tr := trace(r)
-		sa, err := s.Svc.InferSurface(r.Context(), req.RunID, tr)
+		repo := req.Repo
+		if repo == "" {
+			repo = req.Target
+		}
+		if repo == "" {
+			repo = r.URL.Query().Get("repo")
+		}
+		var sa wm.SurfaceArtifact
+		var err error
+		if repo != "" {
+			sa, err = s.Svc.InferSurface(r.Context(), req.RunID, tr, repo)
+		} else {
+			sa, err = s.Svc.InferSurface(r.Context(), req.RunID, tr)
+		}
 		switch {
 		case errors.Is(err, wm.ErrDeployNotDone), errors.Is(err, wm.ErrNotReady):
 			s.Log.Warn("superficie rechazada: deploy no terminado o warm no tomado", "run_id", req.RunID, "trace_id", tr, "error", err.Error())

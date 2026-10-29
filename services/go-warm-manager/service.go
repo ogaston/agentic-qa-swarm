@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/warmtarget"
 )
 
 // DefaultWarmReadyTimeout es la espera maxima por defecto a que el warm llegue a Ready.
@@ -46,11 +48,15 @@ type Service struct {
 	Clock    Clock
 	Observer Observer
 
-	takeMu  sync.Mutex // serializa ready->dirty
-	wakeMu  sync.Mutex // serializa idle-escalado->ready
-	Log     *slog.Logger
-	mu      sync.Mutex
-	deploys map[string]*DeployStatus
+	takeMu        sync.Mutex // serializa ready->dirty
+	wakeMu        sync.Mutex // serializa idle-escalado->ready
+	warmMus       map[string]*sync.Mutex
+	Log           *slog.Logger
+	mu            sync.Mutex
+	deploys       map[string]*DeployStatus
+	deployTargets map[string]warmtarget.WarmTarget
+	targets       map[string]warmtarget.WarmTarget
+	repoImages    map[string]string
 }
 
 // Observer recibe contadores (métricas); opcional.
@@ -88,9 +94,192 @@ func (s *Service) pollInterval() time.Duration {
 	return 2 * time.Second
 }
 
+func (s *Service) getWarmMus(warmID string) (take, wake *sync.Mutex) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if warmID == "" || warmID == warmtarget.LegacyWarmID {
+		return &s.takeMu, &s.wakeMu
+	}
+	if s.warmMus == nil {
+		s.warmMus = make(map[string]*sync.Mutex)
+	}
+	take, ok := s.warmMus[warmID+":take"]
+	if !ok {
+		take = &sync.Mutex{}
+		s.warmMus[warmID+":take"] = take
+	}
+	wake, ok = s.warmMus[warmID+":wake"]
+	if !ok {
+		wake = &sync.Mutex{}
+		s.warmMus[warmID+":wake"] = wake
+	}
+	return take, wake
+}
+
+func (s *Service) resolveTarget(targetOrRepo ...any) warmtarget.WarmTarget {
+	if len(targetOrRepo) == 0 || targetOrRepo[0] == nil {
+		return warmtarget.LegacyTarget()
+	}
+	switch v := targetOrRepo[0].(type) {
+	case warmtarget.WarmTarget:
+		if v.Namespace == "" && v.Repo != "" {
+			return warmtarget.TargetForRepo(v.Repo)
+		}
+		if v.Namespace == "" {
+			return warmtarget.LegacyTarget()
+		}
+		return v
+	case string:
+		str := strings.TrimSpace(v)
+		if str == "" || str == LegacyNamespace || str == warmtarget.LegacyWarmID {
+			return warmtarget.LegacyTarget()
+		}
+		s.mu.Lock()
+		if s.targets != nil {
+			if t, ok := s.targets[str]; ok {
+				s.mu.Unlock()
+				return t
+			}
+		}
+		s.mu.Unlock()
+		if warmtarget.ValidWarmNamespace(str) && strings.HasPrefix(str, "aqs-w-") {
+			slug := strings.TrimPrefix(str, "aqs-w-")
+			return warmtarget.WarmTarget{
+				Namespace: str,
+				WarmID:    "w-" + slug,
+				AppURL:    fmt.Sprintf("http://warm-app.%s.svc:8080", str),
+			}
+		}
+		if strings.HasPrefix(str, "w-") {
+			slug := strings.TrimPrefix(str, "w-")
+			ns := "aqs-w-" + slug
+			return warmtarget.WarmTarget{
+				Namespace: ns,
+				WarmID:    str,
+				AppURL:    fmt.Sprintf("http://warm-app.%s.svc:8080", ns),
+			}
+		}
+		return warmtarget.TargetForRepo(str)
+	default:
+		return warmtarget.LegacyTarget()
+	}
+}
+
+// RegisterTarget registra un WarmTarget en memoria para resolución por repo, warm_id o namespace.
+func (s *Service) RegisterTarget(target warmtarget.WarmTarget) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.targets == nil {
+		s.targets = make(map[string]warmtarget.WarmTarget)
+	}
+	if target.Repo != "" {
+		s.targets[target.Repo] = target
+	}
+	if target.WarmID != "" {
+		s.targets[target.WarmID] = target
+	}
+	if target.Namespace != "" {
+		s.targets[target.Namespace] = target
+	}
+}
+
+// SetRepoImage registra el image_repo configurado para un repositorio.
+func (s *Service) SetRepoImage(repo, imageRepo string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.repoImages == nil {
+		s.repoImages = make(map[string]string)
+	}
+	s.repoImages[strings.ToLower(strings.TrimSpace(repo))] = strings.TrimSpace(imageRepo)
+}
+
+func (s *Service) allowedPrefixesForTarget(target warmtarget.WarmTarget) []string {
+	if target.ImageRepo != "" {
+		return []string{target.ImageRepo}
+	}
+	s.mu.Lock()
+	if s.repoImages != nil && target.Repo != "" {
+		if img, ok := s.repoImages[target.Repo]; ok && img != "" {
+			s.mu.Unlock()
+			return []string{img}
+		}
+	}
+	if s.targets != nil {
+		if t, ok := s.targets[target.Repo]; ok && t.ImageRepo != "" {
+			s.mu.Unlock()
+			return []string{t.ImageRepo}
+		}
+	}
+	s.mu.Unlock()
+	return s.Cfg.AllowedImagePrefixes
+}
+
+func (s *Service) getState(ctx context.Context, target warmtarget.WarmTarget) (WarmState, error) {
+	if ts, ok := s.State.(TargetStateStore); ok && target.Namespace != LegacyNamespace && target.Namespace != "" {
+		w, err := ts.GetForTarget(ctx, target)
+		if err == nil {
+			if w.Namespace == "" {
+				w.Namespace = target.Namespace
+			}
+			if w.Repo == "" {
+				w.Repo = target.Repo
+			}
+		}
+		return w, err
+	}
+	return s.State.Get(ctx)
+}
+
+func (s *Service) casState(ctx context.Context, target warmtarget.WarmTarget, expect, next WarmState) error {
+	if ts, ok := s.State.(TargetStateStore); ok && target.Namespace != LegacyNamespace && target.Namespace != "" {
+		return ts.CompareAndSwapForTarget(ctx, target, expect, next)
+	}
+	return s.State.CompareAndSwap(ctx, expect, next)
+}
+
+func (s *Service) checkProbe(ctx context.Context, target warmtarget.WarmTarget) error {
+	if hp, ok := s.Probe.(TargetHealthProbe); ok && target.Namespace != LegacyNamespace && target.Namespace != "" {
+		return hp.CheckInNamespace(ctx, target.Namespace)
+	}
+	return s.Probe.Check(ctx)
+}
+
+func (s *Service) scaleUp(ctx context.Context, target warmtarget.WarmTarget) error {
+	if wr, ok := s.Runtime.(TargetWarmRuntime); ok && target.Namespace != LegacyNamespace && target.Namespace != "" {
+		return wr.ScaleUpInNamespace(ctx, target.Namespace)
+	}
+	return s.Runtime.ScaleUp(ctx)
+}
+
+func (s *Service) setImage(ctx context.Context, target warmtarget.WarmTarget, ref string) error {
+	if d, ok := s.Deployer.(TargetDeployer); ok && target.Namespace != LegacyNamespace && target.Namespace != "" {
+		return d.SetImageInNamespace(ctx, target.Namespace, ref)
+	}
+	return s.Deployer.SetImage(ctx, ref)
+}
+
+func (s *Service) rolloutComplete(ctx context.Context, target warmtarget.WarmTarget, ref string) (bool, error) {
+	if d, ok := s.Deployer.(TargetDeployer); ok && target.Namespace != LegacyNamespace && target.Namespace != "" {
+		return d.RolloutCompleteInNamespace(ctx, target.Namespace, ref)
+	}
+	return s.Deployer.RolloutComplete(ctx, ref)
+}
+
+func (s *Service) probeSurface(ctx context.Context, target warmtarget.WarmTarget, path string) (int, []byte, error) {
+	baseURL := s.Surface.BaseURL()
+	if target.Namespace != "" && target.Namespace != LegacyNamespace && target.AppURL != "" {
+		baseURL = target.AppURL
+	}
+	if p, ok := s.Surface.(TargetSurfaceProber); ok && baseURL != "" {
+		return p.GetWithBaseURL(ctx, baseURL, path)
+	}
+	return s.Surface.Get(ctx, path)
+}
+
 // GetWarm devuelve el WarmState actual.
-func (s *Service) GetWarm(ctx context.Context) (WarmState, error) {
-	w, err := s.State.Get(ctx)
+func (s *Service) GetWarm(ctx context.Context, targetOrRepo ...any) (WarmState, error) {
+	target := s.resolveTarget(targetOrRepo...)
+	w, err := s.getState(ctx, target)
 	if err == nil {
 		s.obs().WarmState(w.State)
 	}
@@ -100,20 +289,21 @@ func (s *Service) GetWarm(ctx context.Context) (WarmState, error) {
 // EnsureWarmReady devuelve el estado y si el warm está listo (ready + reset_verified + sondas verdes).
 // Si está idle-escalado lo escala y espera Ready. dirty/cuarentena: no hace reset (es de go-reset).
 // Publica warm.ready solo cuando todo está verde.
-func (s *Service) EnsureWarmReady(ctx context.Context, trace string) (WarmState, bool, error) {
-	w, err := s.GetWarm(ctx)
+func (s *Service) EnsureWarmReady(ctx context.Context, trace string, targetOrRepo ...any) (WarmState, bool, error) {
+	target := s.resolveTarget(targetOrRepo...)
+	w, err := s.GetWarm(ctx, target)
 	if err != nil {
 		return WarmState{}, false, err
 	}
 	if w.State == StateIdleEscalado {
-		if w, err = s.wakeWarm(ctx, w); err != nil {
+		if w, err = s.wakeWarm(ctx, w, target); err != nil {
 			return w, false, err
 		}
 	}
 	if w.State != StateReady || !w.ResetVerified {
 		return w, false, nil
 	}
-	if err := s.Probe.Check(ctx); err != nil {
+	if err := s.checkProbe(ctx, target); err != nil {
 		s.logger().Warn("ensure: sonda del warm caida", "trace_id", trace, "warm_id", w.WarmID, "error", err.Error())
 		return w, false, nil
 	}
@@ -126,19 +316,19 @@ func (s *Service) EnsureWarmReady(ctx context.Context, trace string) (WarmState,
 	return w, true, nil
 }
 
-// wakeWarm saca al warm de idle-escalado. Serializado (un solo ScaleUp efectivo con N ensures
-// concurrentes) y tolerante a otras instancias: ante ErrStateConflict relee y sigue evaluando.
-func (s *Service) wakeWarm(ctx context.Context, w WarmState) (WarmState, error) {
-	s.wakeMu.Lock()
-	defer s.wakeMu.Unlock()
-	cur, err := s.State.Get(ctx) // otro ensure pudo haberlo despertado mientras esperabamos el cerrojo
+// wakeWarm saca al warm de idle-escalado.
+func (s *Service) wakeWarm(ctx context.Context, w WarmState, target warmtarget.WarmTarget) (WarmState, error) {
+	_, wakeMu := s.getWarmMus(target.WarmID)
+	wakeMu.Lock()
+	defer wakeMu.Unlock()
+	cur, err := s.getState(ctx, target)
 	if err != nil {
 		return w, err
 	}
 	if cur.State != StateIdleEscalado {
 		return cur, nil
 	}
-	if err := s.Runtime.ScaleUp(ctx); err != nil {
+	if err := s.scaleUp(ctx, target); err != nil {
 		s.logger().Error("ensure: ScaleUp fallo", "warm_id", cur.WarmID, "error", err.Error())
 		return cur, err
 	}
@@ -147,7 +337,7 @@ func (s *Service) wakeWarm(ctx context.Context, w WarmState) (WarmState, error) 
 		timeout = DefaultWarmReadyTimeout
 	}
 	deadline := s.Clock.Now().Add(timeout)
-	for s.Probe.Check(ctx) != nil {
+	for s.checkProbe(ctx, target) != nil {
 		if !s.Clock.Now().Before(deadline) {
 			return cur, ErrWarmTimeout
 		}
@@ -159,9 +349,9 @@ func (s *Service) wakeWarm(ctx context.Context, w WarmState) (WarmState, error) 
 	if err != nil {
 		return cur, err
 	}
-	if err := s.State.CompareAndSwap(ctx, cur, nw); err != nil {
-		if errors.Is(err, ErrStateConflict) { // otra instancia lo cambio: se relee y se evalua lo que haya
-			re, gerr := s.State.Get(ctx)
+	if err := s.casState(ctx, target, cur, nw); err != nil {
+		if errors.Is(err, ErrStateConflict) {
+			re, gerr := s.getState(ctx, target)
 			if gerr != nil {
 				return cur, gerr
 			}
@@ -175,11 +365,13 @@ func (s *Service) wakeWarm(ctx context.Context, w WarmState) (WarmState, error) 
 
 // StartDeploy valida y, si el warm esta listo, lanza el deploy en segundo plano (idempotente por run_id).
 // Si el warm no esta listo devuelve ErrNotReady junto con el WarmState y NO crea estado pending.
-func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, trace string) (DeployStatus, WarmState, error) {
+func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, trace string, targetOrRepo ...any) (DeployStatus, WarmState, error) {
+	target := s.resolveTarget(targetOrRepo...)
 	if err := ValidateRunID(runID); err != nil {
 		return DeployStatus{}, WarmState{}, err
 	}
-	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries, s.Cfg.AllowedImagePrefixes); err != nil {
+	prefixes := s.allowedPrefixesForTarget(target)
+	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries, prefixes); err != nil {
 		return DeployStatus{}, WarmState{}, err
 	}
 	if a.Kind == KindBuildFromRepo {
@@ -192,7 +384,7 @@ func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, tra
 		return out, WarmState{}, nil
 	}
 	s.mu.Unlock()
-	w, err := s.State.Get(ctx)
+	w, err := s.getState(ctx, target)
 	if err != nil {
 		return DeployStatus{}, WarmState{}, err
 	}
@@ -208,13 +400,17 @@ func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, tra
 	if s.deploys == nil {
 		s.deploys = map[string]*DeployStatus{}
 	}
+	if s.deployTargets == nil {
+		s.deployTargets = map[string]warmtarget.WarmTarget{}
+	}
+	s.deployTargets[runID] = target
 	d := &DeployStatus{RunID: runID, State: "pending"}
 	s.deploys[runID] = d
 	out := *d
 	s.mu.Unlock()
 	go func() {
 		// Deploy ya deja el estado failed, el evento y el log; aqui solo se registra el cierre.
-		if err := s.Deploy(context.Background(), runID, a, trace); err != nil {
+		if err := s.Deploy(context.Background(), runID, a, trace, target); err != nil {
 			s.logger().Error("deploy termino con error", "run_id", runID, "trace_id", trace, "error", err.Error())
 		}
 	}()
@@ -290,20 +486,20 @@ func (s *Service) closeFailed(ctx context.Context, runID, warmID string, a Artif
 const StatusReadRetries = 5
 
 // Deploy ejecuta el deploy de forma sincrona: toma el warm (ready->dirty atomico ANTES de parchear),
-// parchea la imagen de warm-app y espera el rollout completo. Si el intento falla (parche
-// rechazado, rollout que no completa, lectura imposible) reintenta hasta MaxRetries veces; agotados:
-// deploy.failed + handoff. Un timeout del rollout NUNCA es exito.
-func (s *Service) Deploy(ctx context.Context, runID string, a Artifact, trace string) error {
+// parchea la imagen de warm-app y espera el rollout completo.
+func (s *Service) Deploy(ctx context.Context, runID string, a Artifact, trace string, targetOrRepo ...any) error {
+	target := s.resolveTarget(targetOrRepo...)
 	if err := ValidateRunID(runID); err != nil {
 		return err
 	}
-	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries, s.Cfg.AllowedImagePrefixes); err != nil {
+	prefixes := s.allowedPrefixesForTarget(target)
+	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries, prefixes); err != nil {
 		return err
 	}
 	if a.Kind == KindBuildFromRepo {
 		return ErrBuildNotSupported
 	}
-	dirty, w, err := s.takeWarm(ctx)
+	dirty, w, err := s.takeWarm(ctx, target)
 	if err != nil {
 		reason := "no se pudo tomar el warm: " + err.Error()
 		return errors.Join(err, s.fail(ctx, runID, w.WarmID, a, trace, 0, reason, false))
@@ -316,12 +512,12 @@ func (s *Service) Deploy(ctx context.Context, runID string, a Artifact, trace st
 	for n := 0; n <= MaxRetries; n++ {
 		attempts = n + 1
 		s.track(runID, "pending", attempts, "")
-		if err := s.Deployer.SetImage(ctx, a.Ref); err != nil {
+		if err := s.setImage(ctx, target, a.Ref); err != nil {
 			s.obs().DeployAttempt("failure")
 			reason = "no se pudo parchear la imagen de warm-app: " + err.Error()
 			continue
 		}
-		ok, why := s.waitRollout(ctx, a.Ref)
+		ok, why := s.waitRollout(ctx, target, a.Ref)
 		if !ok {
 			s.obs().DeployAttempt("failure")
 			reason = why
@@ -340,12 +536,12 @@ func (s *Service) Deploy(ctx context.Context, runID string, a Artifact, trace st
 	return s.fail(ctx, runID, dirty.WarmID, a, trace, attempts, reason, true)
 }
 
-// takeWarm hace ready->dirty de forma atomica (mutex del servicio y compare-and-swap del almacen).
-// Devuelve el estado previo en w cuando falla.
-func (s *Service) takeWarm(ctx context.Context) (dirty, w WarmState, err error) {
-	s.takeMu.Lock()
-	defer s.takeMu.Unlock()
-	w, err = s.State.Get(ctx)
+// takeWarm hace ready->dirty de forma atomica.
+func (s *Service) takeWarm(ctx context.Context, target warmtarget.WarmTarget) (dirty, w WarmState, err error) {
+	takeMu, _ := s.getWarmMus(target.WarmID)
+	takeMu.Lock()
+	defer takeMu.Unlock()
+	w, err = s.getState(ctx, target)
 	if err != nil {
 		return WarmState{}, w, err
 	}
@@ -356,7 +552,7 @@ func (s *Service) takeWarm(ctx context.Context) (dirty, w WarmState, err error) 
 	if err != nil {
 		return WarmState{}, w, err
 	}
-	if err := s.State.CompareAndSwap(ctx, w, dirty); err != nil {
+	if err := s.casState(ctx, target, w, dirty); err != nil {
 		if errors.Is(err, ErrStateConflict) {
 			return WarmState{}, w, fmt.Errorf("%w: %v", ErrNotReady, err)
 		}
@@ -373,9 +569,8 @@ func deployData(warmID, runID string, a Artifact, reason string) map[string]any 
 	return d
 }
 
-// waitRollout espera el rollout completo de ref hasta DeployTimeout. Devuelve (false, razon) ante
-// timeout, cancelacion o lecturas fallidas seguidas: solo un rollout completo devuelve true.
-func (s *Service) waitRollout(ctx context.Context, ref string) (bool, string) {
+// waitRollout espera el rollout completo de ref hasta DeployTimeout.
+func (s *Service) waitRollout(ctx context.Context, target warmtarget.WarmTarget, ref string) (bool, string) {
 	timeout := s.Cfg.DeployTimeout
 	if timeout <= 0 {
 		timeout = DefaultDeployTimeout
@@ -383,7 +578,7 @@ func (s *Service) waitRollout(ctx context.Context, ref string) (bool, string) {
 	deadline := s.Clock.Now().Add(timeout)
 	readFails := 0
 	for {
-		done, err := s.Deployer.RolloutComplete(ctx, ref)
+		done, err := s.rolloutComplete(ctx, target, ref)
 		switch {
 		case err != nil:
 			if readFails++; readFails >= StatusReadRetries {
@@ -429,14 +624,24 @@ var (
 	ErrNoSurface          = errors.New("no se encontro ningun endpoint")
 )
 
-// InferSurface infiere la superficie consultando solo el exterior del Service del warm. Falla
-// cerrado: exige el deploy de la corrida terminado y el warm tomado (dirty); si ningun sondeo
-// responde o no hay endpoints, error (nunca surface.ready con 0 endpoints); valida el artefacto
-// contra el esquema en tiempo de ejecucion antes de guardar o publicar.
-func (s *Service) InferSurface(ctx context.Context, runID, trace string) (SurfaceArtifact, error) {
+// InferSurface infiere la superficie consultando solo el exterior del Service del warm.
+func (s *Service) InferSurface(ctx context.Context, runID, trace string, targetOrRepo ...any) (SurfaceArtifact, error) {
 	if err := ValidateRunID(runID); err != nil {
 		return SurfaceArtifact{}, err
 	}
+	var target warmtarget.WarmTarget
+	if len(targetOrRepo) > 0 && targetOrRepo[0] != nil {
+		target = s.resolveTarget(targetOrRepo...)
+	} else {
+		s.mu.Lock()
+		if t, ok := s.deployTargets[runID]; ok {
+			target = t
+		} else {
+			target = warmtarget.LegacyTarget()
+		}
+		s.mu.Unlock()
+	}
+
 	d, ok, err := s.DeployState(ctx, runID)
 	if err != nil {
 		return SurfaceArtifact{}, err
@@ -444,7 +649,7 @@ func (s *Service) InferSurface(ctx context.Context, runID, trace string) (Surfac
 	if !ok || d.State != "done" {
 		return SurfaceArtifact{}, fmt.Errorf("%w: run %s", ErrDeployNotDone, runID)
 	}
-	w, err := s.State.Get(ctx)
+	w, err := s.getState(ctx, target)
 	if err != nil {
 		return SurfaceArtifact{}, err
 	}
@@ -452,10 +657,14 @@ func (s *Service) InferSurface(ctx context.Context, runID, trace string) (Surfac
 	if w.State != StateDirty {
 		return SurfaceArtifact{}, fmt.Errorf("%w: el warm esta %s", ErrNotReady, w.State)
 	}
-	sa := SurfaceArtifact{RunID: runID, BaseURL: s.Surface.BaseURL(), Endpoints: []Endpoint{}, Source: "probe"}
+	baseURL := s.Surface.BaseURL()
+	if target.Namespace != "" && target.Namespace != LegacyNamespace && target.AppURL != "" {
+		baseURL = target.AppURL
+	}
+	sa := SurfaceArtifact{RunID: runID, BaseURL: baseURL, Endpoints: []Endpoint{}, Source: "probe"}
 	answered := 0
 	probe := func(p string) (int, []byte, bool) {
-		st, body, err := s.Surface.Get(ctx, p)
+		st, body, err := s.probeSurface(ctx, target, p)
 		if err != nil {
 			s.logger().Warn("sondeo de superficie fallo", "run_id", runID, "trace_id", trace, "path", p, "error", err.Error())
 			return 0, nil, false
