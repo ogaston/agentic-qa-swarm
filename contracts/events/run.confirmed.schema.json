@@ -67,6 +67,25 @@
             "ref"
           ],
           "additionalProperties": false
+        },
+        "warm": {
+          "type": "object",
+          "description": "Destino del entorno warm para la corrida (opcional; si se omite, el controlador usa aqs-test).",
+          "properties": {
+            "warm_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "namespace": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "warm_id",
+            "namespace"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

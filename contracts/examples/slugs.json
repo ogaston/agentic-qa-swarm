@@ -1,0 +1,32 @@
+[
+  {
+    "repo": "acme/shop",
+    "slug": "acme-shop",
+    "namespace": "aqs-w-acme-shop",
+    "warm_id": "w-acme-shop"
+  },
+  {
+    "repo": "ogaston/demo-target-app-qa-swarm",
+    "slug": "ogaston-demo-target-app-qa-swarm",
+    "namespace": "aqs-w-ogaston-demo-target-app-qa-swarm",
+    "warm_id": "w-ogaston-demo-target-app-qa-swarm"
+  },
+  {
+    "repo": "my-org/service.v2",
+    "slug": "my-org-service-v2",
+    "namespace": "aqs-w-my-org-service-v2",
+    "warm_id": "w-my-org-service-v2"
+  },
+  {
+    "repo": "Acme/Shop",
+    "slug": "acme-shop",
+    "namespace": "aqs-w-acme-shop",
+    "warm_id": "w-acme-shop"
+  },
+  {
+    "repo": "organization-with-a-very-long-name/super-califragilistic-expialidocious-api",
+    "slug": "organization-with-a-very-long-name-super",
+    "namespace": "aqs-w-organization-with-a-very-long-name-super",
+    "warm_id": "w-organization-with-a-very-long-name-super"
+  }
+]

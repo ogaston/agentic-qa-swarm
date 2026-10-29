@@ -32,6 +32,8 @@ const ETIQUETA_ENTORNO: Record<WarmState['state'], string> = {
   dirty: 'Requiere limpieza',
   cuarentena: 'En cuarentena',
   'idle-escalado': 'En pausa',
+  provisioning: 'Aprovisionando',
+  deleting: 'Eliminando',
 };
 
 type TonoEntorno = 'ok' | 'warn' | 'neutral';
@@ -42,6 +44,8 @@ const TONO_ENTORNO: Record<WarmState['state'], TonoEntorno> = {
   dirty: 'warn',
   cuarentena: 'warn',
   'idle-escalado': 'neutral',
+  provisioning: 'neutral',
+  deleting: 'warn',
 };
 
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';

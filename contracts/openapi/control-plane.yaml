@@ -85,13 +85,22 @@ paths:
   /warm:
     get:
       operationId: getWarmState
-      summary: Estado del warm (solo lectura). ui-api lo lee con el token de servicio; el token de la persona no sale de ui-api.
+      summary: Estado del warm (solo lectura). Con ?repo= devuelve el estado del warm específico; sin parámetro devuelve la lista de entornos (o el warm principal).
+      parameters:
+        - name: repo
+          in: query
+          required: false
+          schema: {type: string}
       responses:
         '200':
-          description: Estado del warm.
+          description: Estado del warm o lista de entornos warm.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/WarmState'}
+              schema:
+                oneOf:
+                  - {$ref: '#/components/schemas/WarmState'}
+                  - type: array
+                    items: {$ref: '#/components/schemas/WarmEnvironment'}
         '401': {$ref: '#/components/responses/Error'}
         '503':
           description: Warm no disponible (sin configurar, respuesta invalida, caido, 401/5xx del warm o circuito abierto). Incluye Retry-After.
@@ -101,6 +110,114 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Error'}
+  /repositories:
+    get:
+      operationId: listRepositories
+      summary: Lista los repositorios registrados (cualquier usuario autenticado).
+      responses:
+        '200':
+          description: Lista de repositorios.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Repository'}
+        '401': {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createRepository
+      summary: Registra un repositorio y solicita el aprovisionamiento de su entorno warm (cualquier usuario autenticado).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RepositoryInput'}
+      responses:
+        '201':
+          description: Repositorio registrado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Repository'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '409':
+          description: Repositorio ya registrado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '422':
+          description: Nombre de repositorio o imagen inválido.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '429':
+          description: Límite de entornos warm alcanzado (WARM_MAX_ENVIRONMENTS).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /repositories/{owner}/{repo}:
+    get:
+      operationId: getRepository
+      summary: Detalle de un repositorio registrado.
+      parameters:
+        - {name: owner, in: path, required: true, schema: {type: string}}
+        - {name: repo, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Detalle del repositorio.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Repository'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      operationId: patchRepository
+      summary: Actualiza un repositorio (owner o admin).
+      parameters:
+        - {name: owner, in: path, required: true, schema: {type: string}}
+        - {name: repo, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RepositoryPatch'}
+      responses:
+        '200':
+          description: Repositorio actualizado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Repository'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteRepository
+      summary: Elimina un repositorio y su entorno warm (owner o admin).
+      parameters:
+        - {name: owner, in: path, required: true, schema: {type: string}}
+        - {name: repo, in: path, required: true, schema: {type: string}}
+      responses:
+        '204':
+          description: Repositorio y entorno eliminados.
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /repositories/{owner}/{repo}/activity:
+    get:
+      operationId: getRepositoryActivity
+      summary: Actividad reciente de webhooks para el repositorio.
+      parameters:
+        - {name: owner, in: path, required: true, schema: {type: string}}
+        - {name: repo, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Actividad reciente.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RepositoryActivity'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
   /confirmations:
     get:
       operationId: listConfirmations
@@ -441,9 +558,71 @@ components:
       additionalProperties: false
       properties:
         warm_id: {type: string, minLength: 1}
-        state: {type: string, enum: [ready, dirty, cuarentena, idle-escalado]}
+        state: {type: string, enum: [ready, dirty, cuarentena, idle-escalado, provisioning, deleting]}
         reset_verified: {type: boolean}
         baseline_version: {type: string, minLength: 1}
+        namespace: {type: string}
+        repo: {type: string}
+    WarmEnvironment:
+      type: object
+      required: [namespace, warm_id, state]
+      additionalProperties: false
+      properties:
+        repo: {type: string}
+        namespace: {type: string}
+        warm_id: {type: string}
+        state: {type: string, enum: [ready, dirty, cuarentena, idle-escalado, provisioning, deleting]}
+        reset_verified: {type: boolean}
+        baseline_version: {type: string}
+    Repository:
+      type: object
+      required: [repo, image_repo, enabled, owner, warm]
+      additionalProperties: false
+      properties:
+        repo: {type: string, description: "owner/repo en minúsculas"}
+        image_repo: {type: string, description: "Prefijo de imagen en GHCR"}
+        enabled: {type: boolean}
+        owner: {type: string, description: "principal_id del creador"}
+        created_at: {type: string, format: date-time}
+        warm:
+          type: object
+          required: [namespace, warm_id, state]
+          additionalProperties: false
+          properties:
+            repo: {type: string}
+            namespace: {type: string}
+            warm_id: {type: string}
+            state: {type: string, enum: [ready, dirty, cuarentena, idle-escalado, provisioning, deleting]}
+            reset_verified: {type: boolean}
+            baseline_version: {type: string}
+    RepositoryInput:
+      type: object
+      required: [repo]
+      additionalProperties: false
+      properties:
+        repo:
+          type: string
+          pattern: '^[a-z0-9-]+/[a-z0-9._-]+$'
+          description: "owner/repo en minúsculas"
+        image_repo:
+          type: string
+          description: "Prefijo de imagen en GHCR (opcional, default ghcr.io/<repo>)"
+    RepositoryPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled: {type: boolean}
+        image_repo: {type: string}
+    RepositoryActivity:
+      type: object
+      required: [repo, has_webhook]
+      additionalProperties: false
+      properties:
+        repo: {type: string}
+        has_webhook: {type: boolean}
+        last_event: {type: string}
+        last_sha: {type: string}
+        last_seen_at: {type: string, format: date-time}
     ConfirmationReceipt:
       type: object
       required: [run_id, notification_id, confirmed_by, confirmed_at]

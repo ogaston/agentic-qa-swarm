@@ -62,8 +62,62 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Estado del warm (solo lectura). ui-api lo lee con el token de servicio; el token de la persona no sale de ui-api. */
+        /** Estado del warm (solo lectura). Con ?repo= devuelve el estado del warm específico; sin parámetro devuelve la lista de entornos (o el warm principal). */
         get: operations["getWarmState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista los repositorios registrados (cualquier usuario autenticado). */
+        get: operations["listRepositories"];
+        put?: never;
+        /** Registra un repositorio y solicita el aprovisionamiento de su entorno warm (cualquier usuario autenticado). */
+        post: operations["createRepository"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repositories/{owner}/{repo}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de un repositorio registrado. */
+        get: operations["getRepository"];
+        put?: never;
+        post?: never;
+        /** Elimina un repositorio y su entorno warm (owner o admin). */
+        delete: operations["deleteRepository"];
+        options?: never;
+        head?: never;
+        /** Actualiza un repositorio (owner o admin). */
+        patch: operations["patchRepository"];
+        trace?: never;
+    };
+    "/repositories/{owner}/{repo}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Actividad reciente de webhooks para el repositorio. */
+        get: operations["getRepositoryActivity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -335,9 +389,58 @@ export interface components {
         WarmState: {
             warm_id: string;
             /** @enum {string} */
-            state: "ready" | "dirty" | "cuarentena" | "idle-escalado";
+            state: "ready" | "dirty" | "cuarentena" | "idle-escalado" | "provisioning" | "deleting";
             reset_verified: boolean;
             baseline_version: string;
+            namespace?: string;
+            repo?: string;
+        };
+        WarmEnvironment: {
+            repo?: string;
+            namespace: string;
+            warm_id: string;
+            /** @enum {string} */
+            state: "ready" | "dirty" | "cuarentena" | "idle-escalado" | "provisioning" | "deleting";
+            reset_verified?: boolean;
+            baseline_version?: string;
+        };
+        Repository: {
+            /** @description owner/repo en minúsculas */
+            repo: string;
+            /** @description Prefijo de imagen en GHCR */
+            image_repo: string;
+            enabled: boolean;
+            /** @description principal_id del creador */
+            owner: string;
+            /** Format: date-time */
+            created_at?: string;
+            warm: {
+                repo?: string;
+                namespace: string;
+                warm_id: string;
+                /** @enum {string} */
+                state: "ready" | "dirty" | "cuarentena" | "idle-escalado" | "provisioning" | "deleting";
+                reset_verified?: boolean;
+                baseline_version?: string;
+            };
+        };
+        RepositoryInput: {
+            /** @description owner/repo en minúsculas */
+            repo: string;
+            /** @description Prefijo de imagen en GHCR (opcional, default ghcr.io/<repo>) */
+            image_repo?: string;
+        };
+        RepositoryPatch: {
+            enabled?: boolean;
+            image_repo?: string;
+        };
+        RepositoryActivity: {
+            repo: string;
+            has_webhook: boolean;
+            last_event?: string;
+            last_sha?: string;
+            /** Format: date-time */
+            last_seen_at?: string;
         };
         ConfirmationReceipt: {
             run_id: string;
@@ -520,20 +623,22 @@ export interface operations {
     };
     getWarmState: {
         parameters: {
-            query?: never;
+            query?: {
+                repo?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Estado del warm. */
+            /** @description Estado del warm o lista de entornos warm. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WarmState"];
+                    "application/json": components["schemas"]["WarmState"] | components["schemas"]["WarmEnvironment"][];
                 };
             };
             401: components["responses"]["Error"];
@@ -547,6 +652,186 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listRepositories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lista de repositorios. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Repository"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    createRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepositoryInput"];
+            };
+        };
+        responses: {
+            /** @description Repositorio registrado. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Repository"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            /** @description Repositorio ya registrado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Nombre de repositorio o imagen inválido. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Límite de entornos warm alcanzado (WARM_MAX_ENVIRONMENTS). */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                owner: string;
+                repo: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Detalle del repositorio. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Repository"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                owner: string;
+                repo: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repositorio y entorno eliminados. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    patchRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                owner: string;
+                repo: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepositoryPatch"];
+            };
+        };
+        responses: {
+            /** @description Repositorio actualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Repository"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getRepositoryActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                owner: string;
+                repo: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Actividad reciente. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryActivity"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listConfirmations: {
