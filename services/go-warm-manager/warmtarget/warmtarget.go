@@ -20,6 +20,7 @@ type WarmTarget struct {
 	Namespace string `json:"namespace"`
 	WarmID    string `json:"warm_id"`
 	AppURL    string `json:"app_url"`
+	ImageRepo string `json:"image_repo,omitempty"`
 }
 
 // TargetForRepo calcula el WarmTarget a partir de un repo.
@@ -33,6 +34,13 @@ func TargetForRepo(repo string) WarmTarget {
 		WarmID:    wid,
 		AppURL:    fmt.Sprintf("http://warm-app.%s.svc:8080", ns),
 	}
+}
+
+// TargetForRepoWithImage calcula el WarmTarget a partir de un repo y su prefijo de imagen.
+func TargetForRepoWithImage(repo, imageRepo string) WarmTarget {
+	t := TargetForRepo(repo)
+	t.ImageRepo = strings.TrimSpace(imageRepo)
+	return t
 }
 
 // LegacyTarget devuelve el target para el entorno legacy aqs-test.
