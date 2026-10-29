@@ -13,6 +13,7 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/authz"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/audit"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/policy"
+	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/repos"
 )
 
 var errBoom = errors.New("boom")
@@ -308,5 +309,118 @@ func TestConcurrentSetPolicyConsecutiveVersions(t *testing.T) {
 	}
 	if _, err := audit.VerifyFile(e.log.Path()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestServiceRepositories(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+
+	// 1. Crear repositorios hasta el límite (default 3)
+	r1, err := e.svc.CreateRepository(ctx, "u-alice", repos.RepositoryInput{Repo: "acme/shop"})
+	if err != nil {
+		t.Fatalf("CreateRepository 1: %v", err)
+	}
+	if r1.Owner != "u-alice" || r1.ImageRepo != "ghcr.io/acme/shop" || r1.Warm.Namespace != "aqs-w-acme-shop" {
+		t.Fatalf("r1 inesperado: %+v", r1)
+	}
+
+	// Duplicado -> 409 ErrAlreadyExists
+	if _, err := e.svc.CreateRepository(ctx, "u-bob", repos.RepositoryInput{Repo: "acme/shop"}); !errors.Is(err, repos.ErrAlreadyExists) {
+		t.Fatalf("esperado ErrAlreadyExists, obtenido: %v", err)
+	}
+
+	// Repo inválido -> 422 ErrInvalid
+	if _, err := e.svc.CreateRepository(ctx, "u-alice", repos.RepositoryInput{Repo: "INVALID REPO"}); !errors.Is(err, repos.ErrInvalid) {
+		t.Fatalf("esperado ErrInvalid para repo con mayúsculas/espacios, obtenido: %v", err)
+	}
+
+	// Image repo inválida -> 422 ErrInvalid
+	if _, err := e.svc.CreateRepository(ctx, "u-alice", repos.RepositoryInput{Repo: "acme/other", ImageRepo: "docker.io/acme/other"}); !errors.Is(err, repos.ErrInvalid) {
+		t.Fatalf("esperado ErrInvalid para imagen fuera de ghcr, obtenido: %v", err)
+	}
+
+	// Crear repo 2 y 3
+	_, err = e.svc.CreateRepository(ctx, "u-bob", repos.RepositoryInput{Repo: "acme/blog"})
+	if err != nil {
+		t.Fatalf("CreateRepository 2: %v", err)
+	}
+	_, err = e.svc.CreateRepository(ctx, "u-carol", repos.RepositoryInput{Repo: "acme/docs"})
+	if err != nil {
+		t.Fatalf("CreateRepository 3: %v", err)
+	}
+
+	// Crear repo 4 debe fallar por límite WARM_MAX_ENVIRONMENTS (3) -> 429
+	if _, err := e.svc.CreateRepository(ctx, "u-alice", repos.RepositoryInput{Repo: "acme/extra"}); !errors.Is(err, repos.ErrWarmCapExceeded) {
+		t.Fatalf("esperado ErrWarmCapExceeded en repo 4, obtenido: %v", err)
+	}
+
+	// 2. List y Get
+	list, err := e.svc.ListRepositories(ctx)
+	if err != nil || len(list) != 3 {
+		t.Fatalf("ListRepositories: len=%d, err=%v", len(list), err)
+	}
+	got, found, err := e.svc.GetRepository(ctx, "acme/shop")
+	if err != nil || !found || got.Repo != "acme/shop" {
+		t.Fatalf("GetRepository: found=%v, err=%v", found, err)
+	}
+
+	// Virtual policy get para repositories
+	pol, found, err := e.svc.GetPolicy(ctx, "repositories")
+	if err != nil || !found {
+		t.Fatalf("GetPolicy(repositories): found=%v, err=%v", found, err)
+	}
+	var polVal struct {
+		Repositories []repos.Repository `json:"repositories"`
+	}
+	if err := json.Unmarshal(pol.Value, &polVal); err != nil || len(polVal.Repositories) != 3 {
+		t.Fatalf("GetPolicy Value inválido: len=%d, err=%v", len(polVal.Repositories), err)
+	}
+
+	// 3. Patch
+	// Bob no es owner de acme/shop y no es admin -> 403 ErrForbidden
+	dis := false
+	if _, err := e.svc.PatchRepository(ctx, "u-bob", authz.RoleUser, "acme/shop", repos.RepositoryPatch{Enabled: &dis}); !errors.Is(err, repos.ErrForbidden) {
+		t.Fatalf("esperado ErrForbidden cuando un no-owner intenta parchear, obtenido: %v", err)
+	}
+
+	// Alice (owner) sí puede
+	patched, err := e.svc.PatchRepository(ctx, "u-alice", authz.RoleUser, "acme/shop", repos.RepositoryPatch{Enabled: &dis})
+	if err != nil || patched.Enabled != false {
+		t.Fatalf("PatchRepository owner falló: %v", err)
+	}
+
+	// Admin también puede
+	en := true
+	patchedAdmin, err := e.svc.PatchRepository(ctx, "u-admin", authz.RoleAdmin, "acme/shop", repos.RepositoryPatch{Enabled: &en})
+	if err != nil || patchedAdmin.Enabled != true {
+		t.Fatalf("PatchRepository admin falló: %v", err)
+	}
+
+	// 4. Delete
+	// Bob no es owner ni admin -> 403 ErrForbidden
+	if err := e.svc.DeleteRepository(ctx, "u-bob", authz.RoleUser, "acme/shop"); !errors.Is(err, repos.ErrForbidden) {
+		t.Fatalf("esperado ErrForbidden en delete por no-owner, obtenido: %v", err)
+	}
+
+	// Alice (owner) elimina acme/shop
+	if err := e.svc.DeleteRepository(ctx, "u-alice", authz.RoleUser, "acme/shop"); err != nil {
+		t.Fatalf("DeleteRepository owner: %v", err)
+	}
+
+	// Ya no existe -> 404
+	if _, found, _ := e.svc.GetRepository(ctx, "acme/shop"); found {
+		t.Fatal("acme/shop no debería existir tras delete")
+	}
+
+	// Ahora que hay 2, se puede crear uno nuevo sin exceder el cap
+	_, err = e.svc.CreateRepository(ctx, "u-alice", repos.RepositoryInput{Repo: "acme/extra"})
+	if err != nil {
+		t.Fatalf("CreateRepository tras liberar cupo falló: %v", err)
+	}
+
+	// Verificar integridad de la cadena de auditoría
+	if _, err := audit.VerifyFile(e.log.Path()); err != nil {
+		t.Fatalf("auditoría rota tras operaciones de repositorio: %v", err)
 	}
 }

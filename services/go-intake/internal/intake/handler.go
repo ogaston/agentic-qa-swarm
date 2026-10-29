@@ -34,7 +34,9 @@ type Deps struct {
 	Resolver  ArtifactResolver
 	// AllowedRepos es la lista de repositorios owner/repo permitidos (INTAKE_ALLOWED_REPOS).
 	// Vacía = fail-closed: todo evento se rechaza con 422 repo_not_allowed.
+	// Si RepoLookup es nil, se envuelve automáticamente en un StaticRepoLookup.
 	AllowedRepos []string
+	RepoLookup   RepoLookup
 	Now          func() time.Time
 	// Log y Metrics son opcionales (nil = sin log / sin métricas de dominio).
 	Log     *slog.Logger
@@ -43,9 +45,9 @@ type Deps struct {
 
 // Handler sirve POST /webhooks/github.
 type Handler struct {
-	d       Deps
-	allowed map[string]struct{} // AllowedRepos en minúsculas (comparación exacta sin distinguir mayúsculas)
-	mu      sync.Mutex          // serializa persistir+publicar para que una entrega no se duplique
+	d      Deps
+	lookup RepoLookup
+	mu     sync.Mutex // serializa persistir+publicar para que una entrega no se duplique
 }
 
 // ParseAllowedRepos interpreta INTAKE_ALLOWED_REPOS: lista separada por comas de owner/repo.
@@ -74,10 +76,15 @@ func NewHandler(d Deps) (http.Handler, error) {
 	if d.Log == nil {
 		d.Log = slog.New(slog.DiscardHandler)
 	}
-	h := &Handler{d: d, allowed: map[string]struct{}{}}
-	for _, r := range d.AllowedRepos {
-		h.allowed[strings.ToLower(strings.TrimSpace(r))] = struct{}{}
+	var lookup RepoLookup
+	if d.RepoLookup != nil {
+		lookup = d.RepoLookup
+	} else if len(d.AllowedRepos) > 0 {
+		lookup = NewStaticRepoLookup(d.AllowedRepos)
+	} else {
+		lookup = NewStaticRepoLookup(nil)
 	}
+	h := &Handler{d: d, lookup: lookup}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /webhooks/github", h.webhook)
 	return mux, nil
@@ -170,7 +177,7 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5. Repositorio permitido: fail-closed (lista vacía = nada permitido).
-	if _, ok := h.allowed[strings.ToLower(c.Repo)]; !ok {
+	if !h.lookup.Allowed(r.Context(), c.Repo) {
 		reject(http.StatusUnprocessableEntity, "repo_not_allowed", "el repositorio no está en la lista permitida")
 		return
 	}

@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/authz"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/audit"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/policy"
+	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/repos"
 )
 
 // AuditLog es el puerto de auditoría (lo implementa *audit.Log).
@@ -48,12 +50,14 @@ var (
 
 // Service es el núcleo de go-governance.
 type Service struct {
-	mu       sync.Mutex // serializa decisión+auditoría (cuotas exactas) y PUT de políticas
-	policies policy.Store
-	audit    AuditLog
-	testNS   string
-	now      func() time.Time
-	obs      Observer
+	mu          sync.Mutex // serializa decisión+auditoría (cuotas exactas) y PUT de políticas
+	policies    policy.Store
+	audit       AuditLog
+	testNS      string
+	now         func() time.Time
+	obs         Observer
+	repos       repos.Store
+	warmMaxEnvs int
 }
 
 // Config son las dependencias del Service.
@@ -63,6 +67,8 @@ type Config struct {
 	TestNamespace string
 	Now           func() time.Time
 	Observer      Observer
+	Repos         repos.Store
+	WarmMaxEnvs   int
 }
 
 // New construye el servicio.
@@ -73,7 +79,21 @@ func New(c Config) *Service {
 	if c.Observer == nil {
 		c.Observer = noopObserver{}
 	}
-	return &Service{policies: c.Policies, audit: c.Audit, testNS: c.TestNamespace, now: c.Now, obs: c.Observer}
+	if c.Repos == nil {
+		c.Repos = repos.NewMemoryStore()
+	}
+	if c.WarmMaxEnvs <= 0 {
+		c.WarmMaxEnvs = 3
+	}
+	return &Service{
+		policies:    c.Policies,
+		audit:       c.Audit,
+		testNS:      c.TestNamespace,
+		now:         c.Now,
+		obs:         c.Observer,
+		repos:       c.Repos,
+		warmMaxEnvs: c.WarmMaxEnvs,
+	}
 }
 
 // workflowSource lee la política `workflows` y registra la versión usada.
@@ -167,6 +187,14 @@ func (s *Service) Authorize(ctx context.Context, actor string, in authz.GateInpu
 
 // GetPolicy devuelve la última versión de la política.
 func (s *Service) GetPolicy(ctx context.Context, name string) (policy.Version, bool, error) {
+	if name == "repositories" && s.repos != nil {
+		list, err := s.repos.List(ctx)
+		if err != nil {
+			return policy.Version{}, false, err
+		}
+		val, _ := json.Marshal(map[string]any{"repositories": list})
+		return policy.Version{Name: "repositories", Version: 1, Value: val}, true, nil
+	}
 	if !policy.Known(name) {
 		return policy.Version{}, false, ErrUnknownPolicy
 	}
@@ -232,3 +260,173 @@ func (s *Service) reject(actor, name, reason string) error {
 
 // Query consulta la auditoría.
 func (s *Service) Query(run string, limit int) []audit.Entry { return s.audit.Query(run, limit) }
+
+// ListRepositories lista todos los repositorios registrados.
+func (s *Service) ListRepositories(ctx context.Context) ([]repos.Repository, error) {
+	if s.repos == nil {
+		return []repos.Repository{}, nil
+	}
+	return s.repos.List(ctx)
+}
+
+// GetRepository devuelve el repositorio especificado.
+func (s *Service) GetRepository(ctx context.Context, repo string) (repos.Repository, bool, error) {
+	if s.repos == nil {
+		return repos.Repository{}, false, nil
+	}
+	return s.repos.Get(ctx, repo)
+}
+
+// CreateRepository valida, audita y registra un repositorio si no se excede el límite WARM_MAX_ENVIRONMENTS.
+func (s *Service) CreateRepository(ctx context.Context, actor string, in repos.RepositoryInput) (repos.Repository, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	repo := strings.ToLower(strings.TrimSpace(in.Repo))
+	if err := repos.ValidateRepoName(repo); err != nil {
+		return repos.Repository{}, err
+	}
+
+	imageRepo := strings.TrimSpace(in.ImageRepo)
+	if imageRepo == "" {
+		imageRepo = "ghcr.io/" + repo
+	} else if err := repos.ValidateImageRepo(repo, imageRepo); err != nil {
+		return repos.Repository{}, err
+	}
+
+	// Verificar si ya existe (409)
+	if _, found, _ := s.repos.Get(ctx, repo); found {
+		return repos.Repository{}, repos.ErrAlreadyExists
+	}
+
+	// Verificar límite WARM_MAX_ENVIRONMENTS (429)
+	existing, err := s.repos.List(ctx)
+	if err != nil {
+		return repos.Repository{}, err
+	}
+	if len(existing) >= s.warmMaxEnvs {
+		return repos.Repository{}, repos.ErrWarmCapExceeded
+	}
+
+	now := s.now().UTC()
+	entry := repos.Repository{
+		Repo:      repo,
+		ImageRepo: imageRepo,
+		Enabled:   true,
+		Owner:     actor,
+		CreatedAt: now,
+		Warm: repos.WarmEnvironment{
+			Repo:            repo,
+			Namespace:       repos.NamespaceForRepo(repo),
+			WarmID:          repos.WarmIDForRepo(repo),
+			State:           "provisioning",
+			ResetVerified:   false,
+			BaselineVersion: "v1",
+		},
+	}
+
+	if s.audit != nil {
+		if _, err := s.audit.Append(audit.Entry{
+			Actor:  actor,
+			Action: "repo.created:" + repo,
+			Detail: map[string]string{
+				"repo":      repo,
+				"owner":     actor,
+				"namespace": entry.Warm.Namespace,
+			},
+		}); err != nil {
+			return repos.Repository{}, fmt.Errorf("%w: %v", ErrAuditFailed, err)
+		}
+	}
+
+	if err := s.repos.Create(ctx, entry); err != nil {
+		return repos.Repository{}, err
+	}
+	return entry, nil
+}
+
+// PatchRepository actualiza un repositorio si el actor es el owner o admin.
+func (s *Service) PatchRepository(ctx context.Context, actor string, role authz.Role, repo string, patch repos.RepositoryPatch) (repos.Repository, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	repo = strings.ToLower(strings.TrimSpace(repo))
+	entry, found, err := s.repos.Get(ctx, repo)
+	if err != nil {
+		return repos.Repository{}, err
+	}
+	if !found {
+		return repos.Repository{}, repos.ErrNotFound
+	}
+
+	// Control de acceso: solo owner o admin
+	if role != authz.RoleAdmin && entry.Owner != actor {
+		return repos.Repository{}, repos.ErrForbidden
+	}
+
+	if patch.ImageRepo != nil {
+		im := strings.TrimSpace(*patch.ImageRepo)
+		if err := repos.ValidateImageRepo(repo, im); err != nil {
+			return repos.Repository{}, err
+		}
+		entry.ImageRepo = im
+	}
+
+	if patch.Enabled != nil {
+		entry.Enabled = *patch.Enabled
+	}
+
+	if s.audit != nil {
+		if _, err := s.audit.Append(audit.Entry{
+			Actor:  actor,
+			Action: "repo.patched:" + repo,
+			Detail: map[string]string{
+				"repo":  repo,
+				"actor": actor,
+			},
+		}); err != nil {
+			return repos.Repository{}, fmt.Errorf("%w: %v", ErrAuditFailed, err)
+		}
+	}
+
+	if err := s.repos.Update(ctx, entry); err != nil {
+		return repos.Repository{}, err
+	}
+	return entry, nil
+}
+
+// DeleteRepository elimina un repositorio si el actor es el owner o admin.
+func (s *Service) DeleteRepository(ctx context.Context, actor string, role authz.Role, repo string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	repo = strings.ToLower(strings.TrimSpace(repo))
+	entry, found, err := s.repos.Get(ctx, repo)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return repos.ErrNotFound
+	}
+
+	// Control de acceso: solo owner o admin
+	if role != authz.RoleAdmin && entry.Owner != actor {
+		return repos.ErrForbidden
+	}
+
+	if s.audit != nil {
+		if _, err := s.audit.Append(audit.Entry{
+			Actor:  actor,
+			Action: "repo.deleted:" + repo,
+			Detail: map[string]string{
+				"repo":  repo,
+				"actor": actor,
+			},
+		}); err != nil {
+			return fmt.Errorf("%w: %v", ErrAuditFailed, err)
+		}
+	}
+
+	_, err = s.repos.Delete(ctx, repo)
+	return err
+}

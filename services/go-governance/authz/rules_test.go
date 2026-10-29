@@ -183,6 +183,32 @@ func TestNamespaceExact(t *testing.T) {
 	}
 }
 
+func TestValidWarmNamespace(t *testing.T) {
+	valids := []string{"aqs-w-acme-shop", "aqs-w-ogaston-demo-target-app-qa-swarm", "aqs-w-app-1", "aqs-w-a"}
+	for _, ns := range valids {
+		if !ValidWarmNamespace(ns) {
+			t.Errorf("ValidWarmNamespace(%q) debería ser true", ns)
+		}
+	}
+
+	invalids := []string{"", "aqs-test", "default", "kube-system", "aqs-system", "aqs-w-", "aqs-w-App", "aqs-w-a-", "aqs-w-" + strings.Repeat("a", 50)}
+	for _, ns := range invalids {
+		if ValidWarmNamespace(ns) {
+			t.Errorf("ValidWarmNamespace(%q) debería ser false", ns)
+		}
+	}
+
+	// RuleEvaluator permite DefaultTestNamespace y cualquier ValidWarmNamespace
+	ev := &RuleEvaluator{}
+	for _, ns := range valids {
+		in := allTrue(StateInferring, StateRehearsing)
+		in.TargetNamespace = ns
+		if d := authorize(t, ev, in); !d.Allow {
+			t.Errorf("namespace warm válido %q debería ser permitido por RuleEvaluator", ns)
+		}
+	}
+}
+
 func TestInvalidInputsDeny(t *testing.T) {
 	ev := &RuleEvaluator{}
 	for name, in := range map[string]GateInput{

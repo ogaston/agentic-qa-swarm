@@ -297,3 +297,113 @@ func TestSecretsNeverInLogsOrErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestRepositoriesEndpoints(t *testing.T) {
+	v := auth.FakeTokenVerifier{Tokens: map[string]authz.Principal{
+		"tok-admin": {ID: "admin-1", Role: authz.RoleAdmin},
+		"tok-user":  {ID: "alice", Role: authz.RoleUser},
+		"tok-bob":   {ID: "bob", Role: authz.RoleUser},
+	}}
+	f := newFix(t, v)
+
+	// 1. GET sin auth -> 401
+	if c, _ := f.do("GET", "/v1/repositories", "", ""); c != 401 {
+		t.Fatalf("GET /v1/repositories sin token: %d, esperado 401", c)
+	}
+
+	// 2. GET vacío con token de usuario -> 200 []
+	if c, b := f.do("GET", "/v1/repositories", "tok-user", ""); c != 200 || strings.TrimSpace(b) != "[]" {
+		t.Fatalf("GET /v1/repositories inicial: %d %s", c, b)
+	}
+
+	// 3. GET /repositories (sin /v1/) con token de servicio -> 200 []
+	if c, b := f.do("GET", "/repositories", svcTok, ""); c != 200 || strings.TrimSpace(b) != "[]" {
+		t.Fatalf("GET /repositories con service token: %d %s", c, b)
+	}
+
+	// 4. POST /v1/repositories
+	// JSON inválido -> 400
+	if c, _ := f.do("POST", "/v1/repositories", "tok-user", "{roto"); c != 400 {
+		t.Fatalf("POST cuerpo roto: %d, esperado 400", c)
+	}
+	// Repo inválido -> 422
+	if c, _ := f.do("POST", "/v1/repositories", "tok-user", `{"repo":"Invalid Repo"}`); c != 422 {
+		t.Fatalf("POST repo inválido: %d, esperado 422", c)
+	}
+	// Image inválida -> 422
+	if c, _ := f.do("POST", "/v1/repositories", "tok-user", `{"repo":"acme/shop","image_repo":"docker.io/acme/shop"}`); c != 422 {
+		t.Fatalf("POST image_repo inválida: %d, esperado 422", c)
+	}
+
+	// Crear repo 1 (acme/shop) -> 201
+	c, b := f.do("POST", "/v1/repositories", "tok-user", `{"repo":"acme/shop"}`)
+	if c != 201 {
+		t.Fatalf("POST repo 1: %d %s", c, b)
+	}
+	if !strings.Contains(b, `"repo":"acme/shop"`) || !strings.Contains(b, `"owner":"alice"`) ||
+		!strings.Contains(b, `"namespace":"aqs-w-acme-shop"`) || !strings.Contains(b, `"warm_id":"w-acme-shop"`) {
+		t.Fatalf("respuesta de creación inválida: %s", b)
+	}
+
+	// Duplicado -> 409
+	if c, _ := f.do("POST", "/v1/repositories", "tok-bob", `{"repo":"acme/shop"}`); c != 409 {
+		t.Fatalf("POST duplicado: %d, esperado 409", c)
+	}
+
+	// Crear repo 2 y 3
+	if c, _ := f.do("POST", "/repositories", "tok-bob", `{"repo":"acme/blog"}`); c != 201 {
+		t.Fatalf("POST repo 2: %d", c)
+	}
+	if c, _ := f.do("POST", "/v1/repositories", "tok-admin", `{"repo":"acme/docs"}`); c != 201 {
+		t.Fatalf("POST repo 3: %d", c)
+	}
+
+	// Crear repo 4 -> 429 Límite alcanzado
+	if c, _ := f.do("POST", "/v1/repositories", "tok-user", `{"repo":"acme/extra"}`); c != 429 {
+		t.Fatalf("POST repo 4 superando cap: %d, esperado 429", c)
+	}
+
+	// 5. GET detalle /repositories/{owner}/{repo}
+	// No existente -> 404
+	if c, _ := f.do("GET", "/v1/repositories/acme/inexistente", "tok-user", ""); c != 404 {
+		t.Fatalf("GET no existente: %d, esperado 404", c)
+	}
+	// Service token lookup de repo existente -> 200
+	if c, b := f.do("GET", "/repositories/acme/shop", svcTok, ""); c != 200 || !strings.Contains(b, `"acme/shop"`) {
+		t.Fatalf("GET /repositories/acme/shop con svcTok: %d %s", c, b)
+	}
+
+	// 6. PATCH /repositories/{owner}/{repo}
+	// Bob intenta actualizar el repo de Alice -> 403 Forbidden
+	if c, _ := f.do("PATCH", "/v1/repositories/acme/shop", "tok-bob", `{"enabled":false}`); c != 403 {
+		t.Fatalf("PATCH por no-owner: %d, esperado 403", c)
+	}
+	// Alice (owner) actualiza enabled -> 200
+	if c, b := f.do("PATCH", "/v1/repositories/acme/shop", "tok-user", `{"enabled":false}`); c != 200 || !strings.Contains(b, `"enabled":false`) {
+		t.Fatalf("PATCH por owner: %d %s", c, b)
+	}
+	// Admin actualiza image_repo -> 200
+	if c, b := f.do("PATCH", "/repositories/acme/shop", "tok-admin", `{"image_repo":"ghcr.io/acme/shop/v2"}`); c != 200 || !strings.Contains(b, `"ghcr.io/acme/shop/v2"`) {
+		t.Fatalf("PATCH por admin: %d %s", c, b)
+	}
+
+	// 7. DELETE /repositories/{owner}/{repo}
+	// Bob intenta borrar -> 403
+	if c, _ := f.do("DELETE", "/v1/repositories/acme/shop", "tok-bob", ""); c != 403 {
+		t.Fatalf("DELETE por no-owner: %d, esperado 403", c)
+	}
+	// Alice (owner) borra -> 204
+	if c, _ := f.do("DELETE", "/v1/repositories/acme/shop", "tok-user", ""); c != 204 {
+		t.Fatalf("DELETE por owner: %d, esperado 204", c)
+	}
+
+	// Ahora ya no existe -> 404
+	if c, _ := f.do("GET", "/v1/repositories/acme/shop", "tok-user", ""); c != 404 {
+		t.Fatalf("GET tras DELETE: %d, esperado 404", c)
+	}
+
+	// Al haber 2 repositorios, ahora sí se puede crear acme/extra -> 201
+	if c, _ := f.do("POST", "/v1/repositories", "tok-user", `{"repo":"acme/extra"}`); c != 201 {
+		t.Fatalf("POST tras liberar cupo: %d, esperado 201", c)
+	}
+}
