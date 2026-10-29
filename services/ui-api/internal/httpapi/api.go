@@ -49,6 +49,10 @@ type Config struct {
 	ReporterURL string
 	// UpstreamTimeout es el plazo de las llamadas de /reports; 0 = 2 s.
 	UpstreamTimeout time.Duration
+	// GovernanceURL es la base de go-governance (/repositories); vacía = /repositories responde 503.
+	GovernanceURL string
+	// GovernanceTimeout es el plazo de las llamadas a go-governance; 0 = 2 s.
+	GovernanceTimeout time.Duration
 }
 
 // IdentityRetryAfter es el Retry-After (segundos) del 503 identity_unavailable.
@@ -63,6 +67,7 @@ type Handler struct {
 	warmc   *warmClient     // nil = sin WARM_URL
 	runc    *upstreamClient // nil = sin RUN_CONTROLLER_URL
 	repc    *upstreamClient // nil = sin REPORTER_URL
+	govc    *upstreamClient // nil = sin GOVERNANCE_URL
 }
 
 // New construye el handler con toda la cadena de middleware.
@@ -110,16 +115,26 @@ func New(cfg Config) (http.Handler, error) {
 		}
 		h.repc = c
 	}
+	if cfg.GovernanceURL != "" {
+		c, err := newUpstreamClient(cfg.GovernanceURL, cfg.GovernanceTimeout, cfg.Now, "GOVERNANCE_URL")
+		if err != nil {
+			return nil, err
+		}
+		h.govc = c
+	}
 	return h, nil
 }
 
 // Patrones de ruta de ui-api (etiqueta route de las métricas).
 const (
-	RouteList          = "/notifications"
-	RouteConfirm       = "/notifications/{id}/confirm"
-	RouteWarm          = "/warm"
-	RouteConfirmations = "/confirmations"
-	RouteReport        = "/reports/{run}"
+	RouteList               = "/notifications"
+	RouteConfirm            = "/notifications/{id}/confirm"
+	RouteWarm               = "/warm"
+	RouteConfirmations      = "/confirmations"
+	RouteReport             = "/reports/{run}"
+	RouteRepositories       = "/repositories"
+	RouteRepositoryItem     = "/repositories/{owner}/{repo}"
+	RouteRepositoryActivity = "/repositories/{owner}/{repo}/activity"
 )
 
 // RoutePattern devuelve el PATRÓN de ruta de la petición ("unmatched" si no hay), nunca la ruta cruda.
@@ -133,6 +148,8 @@ func RoutePattern(r *http.Request) string {
 		return RouteWarm
 	case p == RouteConfirmations:
 		return RouteConfirmations
+	case p == RouteRepositories:
+		return RouteRepositories
 	case strings.HasPrefix(p, "/notifications/") && strings.HasSuffix(p, "/confirm"):
 		id := strings.TrimSuffix(strings.TrimPrefix(p, "/notifications/"), "/confirm")
 		if id != "" && !strings.Contains(id, "/") {
@@ -141,6 +158,14 @@ func RoutePattern(r *http.Request) string {
 	case strings.HasPrefix(p, "/reports/"):
 		if id := strings.TrimPrefix(p, "/reports/"); id != "" && !strings.Contains(id, "/") {
 			return RouteReport
+		}
+	case strings.HasPrefix(p, "/repositories/"):
+		parts := strings.Split(strings.Trim(p, "/"), "/")
+		if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
+			return RouteRepositoryItem
+		}
+		if len(parts) == 4 && parts[1] != "" && parts[2] != "" && parts[3] == "activity" {
+			return RouteRepositoryActivity
 		}
 	}
 	return "unmatched"
@@ -199,7 +224,7 @@ func (h *Handler) cors(w http.ResponseWriter, r *http.Request) bool {
 	}
 	if r.Method == http.MethodOptions {
 		if allowed {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 			w.Header().Set("Access-Control-Max-Age", "600")
 		}
@@ -227,6 +252,39 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request) {
 		if pr, ok := h.authenticate(w, r); ok {
 			h.confirmations(w, r, pr)
 		}
+	case p == RouteRepositories:
+		if r.Method != http.MethodGet && r.Method != http.MethodPost {
+			methodNotAllowed(w, "GET, POST")
+			return
+		}
+		if pr, ok := h.authenticate(w, r); ok {
+			h.proxyRepositories(w, r, pr)
+		}
+	case strings.HasPrefix(p, "/repositories/"):
+		parts := strings.Split(strings.Trim(p, "/"), "/")
+		if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
+			owner, repo := parts[1], parts[2]
+			if r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+				methodNotAllowed(w, "GET, PATCH, DELETE")
+				return
+			}
+			if pr, ok := h.authenticate(w, r); ok {
+				h.proxyRepositoryItem(w, r, pr, owner, repo)
+			}
+			return
+		}
+		if len(parts) == 4 && parts[1] != "" && parts[2] != "" && parts[3] == "activity" {
+			owner, repo := parts[1], parts[2]
+			if r.Method != http.MethodGet {
+				methodNotAllowed(w, "GET")
+				return
+			}
+			if pr, ok := h.authenticate(w, r); ok {
+				h.repositoryActivity(w, r, pr, owner, repo)
+			}
+			return
+		}
+		writeError(w, http.StatusNotFound, "not_found", "ruta inexistente")
 	case p == "/notifications":
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w, "GET")
