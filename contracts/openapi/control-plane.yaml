@@ -149,6 +149,46 @@ paths:
         '401': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '500': {$ref: '#/components/responses/Error'}
+  /run-evidence/{run}/{flow}/{name}:
+    get:
+      operationId: getRunEvidence
+      summary: Descarga un artefacto de un flujo de la corrida autorizada.
+      parameters:
+        - {name: run, in: path, required: true, schema: {type: string}}
+        - {name: flow, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string, enum: [result.json, logs.txt]}}
+      responses:
+        '200':
+          description: Contenido del artefacto.
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '502': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /report-evidence/{run}/{finding}/{evidence}:
+    get:
+      operationId: getReportEvidence
+      summary: Descarga una evidencia S3 incluida en el informe de una corrida autorizada.
+      parameters:
+        - {name: run, in: path, required: true, schema: {type: string}}
+        - {name: finding, in: path, required: true, schema: {type: integer, minimum: 0}}
+        - {name: evidence, in: path, required: true, schema: {type: integer, minimum: 0}}
+      responses:
+        '200':
+          description: Contenido de la evidencia.
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '502': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   /reports/{run}:
     get:
       operationId: getReport
@@ -424,6 +464,7 @@ components:
       required: [id, github_event, repo, sha, state]
       properties:
         id: {type: string}
+        created_at: {type: string, format: date-time, description: "Notification creation time from notify.created occurred_at."}
         github_event: {type: string, enum: [commit, pull_request, tag]}
         repo: {type: string}
         sha: {type: string}

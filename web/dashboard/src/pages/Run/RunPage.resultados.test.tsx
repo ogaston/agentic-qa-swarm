@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -83,7 +83,8 @@ describe('RunPage: veredicto', () => {
       const { unmount } = renderRun();
       await vaciar();
       const insignia = document.querySelector(`[data-veredicto="${verdict}"]`);
-      expect(insignia?.textContent).toBeTruthy();
+      if (verdict === 'sin-hallazgos') expect(insignia).toBeNull();
+      else expect(insignia?.textContent).toBeTruthy();
       textos.push(insignia?.textContent ?? '');
       unmount();
     }
@@ -127,8 +128,8 @@ describe('RunPage: post-mortem', () => {
     expect(pm.queryByText('s3://aqs-evidence/runs/run-1/flow-1/result.json')).toBeNull();
     expect(pm.queryByText('s3://aqs-evidence/runs/run-1/flow-1/logs.txt')).toBeNull();
     expect(pm.queryByText('https://evidence.example/run-1/flow-2/result.json')).toBeNull();
-    expect(pm.queryByRole('link')).toBeNull();
-    expect(pm.getAllByTestId('run-evidence-copy-button')).toHaveLength(3);
+    expect(pm.getByRole('link', { name: /Abrir evidencia/ })).toBeTruthy();
+    expect(pm.getAllByRole('link', { name: /Descargar evidencia/ })).toHaveLength(2);
   });
 
   it('findings vacío muestra un mensaje sin hallazgos', async () => {
@@ -137,7 +138,7 @@ describe('RunPage: post-mortem', () => {
     ruta(`/api/reports/${ID}`, [{ json: { ...informeSinHallazgos, run_id: ID } }]);
     renderRun();
     await vaciar();
-    expect(screen.getByText('No se encontraron hallazgos en esta corrida.')).toBeTruthy();
+    expect(screen.queryByText('No se encontraron hallazgos en esta corrida.')).toBeNull();
   });
 
   it('404 report_not_ready muestra el aviso y «Reintentar» hace una petición más', async () => {
@@ -211,7 +212,34 @@ describe('RunPage: post-mortem', () => {
 });
 
 describe('RunPage: plan de flujos', () => {
-  it('running muestra inmediatamente los pasos abiertos antes del informe pendiente', async () => {
+  it('muestra el resultado real de cada flujo y permite descargar evidencia', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('done')]);
+    ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    server.use(http.get('/api/run-evidence/:run/:flow/result.json', ({ params }) =>
+      HttpResponse.json({ status: params.flow === planCon.flows[0]?.flow_id ? 'passed' : 'failed' }),
+    ));
+    renderRun();
+    await vaciar();
+    await vaciar();
+    expect(screen.getByRole('heading', { name: 'Flujos principales' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Reglas de negocio' })).toBeTruthy();
+    expect(screen.getByText('Aprobada')).toBeTruthy();
+    expect(screen.getByText('Fallida')).toBeTruthy();
+    const firstFlow = planCon.flows[0];
+    if (!firstFlow) throw new Error('Missing flow fixture');
+    const flow = screen.getByText(firstFlow.name).closest('details');
+    if (!flow) throw new Error('Missing flow details');
+    const summary = flow.querySelector('summary');
+    if (!summary) throw new Error('Missing flow summary');
+    expect(flow.open).toBe(false);
+    expect(within(flow).getByRole('button', { name: 'Descargar resultados', hidden: true })).toBeTruthy();
+    expect(within(flow).getByRole('button', { name: 'Descargar registros', hidden: true })).toBeTruthy();
+    fireEvent.click(summary);
+    expect(flow.open).toBe(true);
+    fireEvent.click(summary);
+    expect(flow.open).toBe(false);
+  });
+  it('running mantiene los flujos cerrados hasta que se abran', async () => {
     ruta(`/api/runs/${ID}`, [corrida('running')]);
     const plan = ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
     renderRun();
@@ -219,8 +247,7 @@ describe('RunPage: plan de flujos', () => {
     const region = screen.getByRole('region', { name: 'Plan de flujos' });
     const flujos = region.querySelectorAll<HTMLDetailsElement>('.flow-details');
     expect(flujos.length).toBe(2);
-    flujos.forEach((flujo) => expect(flujo.open).toBe(true));
-    expect(within(region).getAllByRole('columnheader', { name: 'Paso' })).toHaveLength(2);
+    flujos.forEach((flujo) => expect(flujo.open).toBe(false));
     expect(region.parentElement?.firstElementChild).toBe(region);
     // El sondeo de la corrida no vuelve a abrir lo que el usuario cierra.
     await act(async () => { if (flujos[0]) flujos[0].open = false; });
@@ -229,14 +256,14 @@ describe('RunPage: plan de flujos', () => {
     expect(plan.n).toBe(1);
   });
 
-  it('al pasar de rehearsing a running abre los flujos sin volver a pedir el plan', async () => {
+  it('al pasar de rehearsing a running mantiene los flujos cerrados sin volver a pedir el plan', async () => {
     ruta(`/api/runs/${ID}`, [corrida('rehearsing'), corrida('running')]);
     const plan = ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
     renderRun();
     await vaciar();
     expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(false);
     await avanzar(3000);
-    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(true);
+    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(false);
     expect(plan.n).toBe(1);
   });
 
@@ -248,7 +275,7 @@ describe('RunPage: plan de flujos', () => {
     expect(plan.n).toBe(1);
     await avanzar(3000);
     expect(plan.n).toBe(2);
-    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(true);
+    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(false);
     await avanzar(30_000);
     expect(plan.n).toBe(2);
   });
@@ -283,7 +310,7 @@ describe('RunPage: plan de flujos', () => {
     expect(plan.n).toBe(5);
     await avanzar(3000);
     expect(plan.n).toBe(6);
-    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(true);
+    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(false);
   });
 
   it('desmontar cancela el reintento pendiente del plan', async () => {
@@ -335,7 +362,7 @@ describe('RunPage: plan de flujos', () => {
     await avanzar(10_000);
     expect(plan.n).toBe(1);
     expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
-    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
     const pre = document.querySelector('pre');
     expect(pre?.textContent).toBe(JSON.stringify({ product_id: 1, qty: 11 }, null, 2));
   });
@@ -356,7 +383,7 @@ describe('RunPage: plan de flujos', () => {
     await avanzar(10_000);
     expect(plan.n).toBe(1);
     expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
-    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
   });
 
   it('failed llegando desde rehearsing pide el plan y lo muestra', async () => {
@@ -367,7 +394,7 @@ describe('RunPage: plan de flujos', () => {
     await avanzar(3000);
     expect(plan.n).toBe(1);
     expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
-    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
   });
 
   it('failed sin plan muestra «Plan aún no disponible»', async () => {

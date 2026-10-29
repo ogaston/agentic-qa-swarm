@@ -116,6 +116,30 @@ def make_run_handler(identity_url):
             if self.path == "/healthz":
                 return self.send_json(200, {"status": "ok"})
             path, _, query = self.path.partition("?")
+            if path == "/v1/report-evidence":
+                params = urllib.parse.parse_qs(query)
+                run_id = params.get("run", [""])[0]
+                uri = params.get("uri", [""])[0]
+                if not re.fullmatch(r"run-[0-9a-f]{16}", run_id) or uri != "s3://aqs-evidence/%s/req-2.har" % run_id:
+                    return self.send_json(404, {"code": "not_found", "message": "evidencia no disponible"})
+                return self.send_json(200, {"demo": True, "message": "Evidencia de demostración"})
+            if path == "/v1/evidence":  # evidencia ficticia para comprobar el resumen local
+                params = urllib.parse.parse_qs(query)
+                run_id = params.get("run", [""])[0]
+                flow_id = params.get("flow", [""])[0]
+                name = params.get("name", [""])[0]
+                with lock:
+                    executions = counts.get(run_id, 0)
+                if not re.fullmatch(r"run-[0-9a-f]{16}", run_id) or flow_id not in ("f-happy", "f-double") or name not in ("result.json", "logs.txt") or executions < 6:
+                    return self.send_json(404, {"code": "not_found", "message": "evidencia no disponible"})
+                if name == "result.json":
+                    return self.send_json(200, {"flow_id": flow_id, "status": "passed" if flow_id == "f-happy" else "failed"})
+                body = b"Evidencia de demostracion\n"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                return self.wfile.write(body)
             if path == "/v1/reports":  # simula agent-reporter: el reporte validado de la corrida
                 m = re.search(r"run-[0-9a-f]{16}", urllib.parse.unquote(query))
                 if not m:

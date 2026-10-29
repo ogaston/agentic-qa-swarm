@@ -31,11 +31,26 @@ export class ApiError extends Error {
 }
 
 // Token en memoria del módulo. Se inyecta desde fuera (U6-T03 lo guarda en
-// memoria de la pestaña); este módulo nunca lo persiste.
+// el contexto de sesión); este módulo nunca lo persiste.
 let authToken: string | null = null;
 
 export function setAuthToken(token: string | null): void {
   authToken = token;
+}
+
+/** Downloads an authenticated artifact without putting the bearer token in a URL. */
+export async function downloadEvidence(path: string, filename: string): Promise<void> {
+  const headers = new Headers();
+  if (authToken !== null) headers.set('Authorization', `Bearer ${authToken}`);
+  const response = await fetch(path, { headers });
+  if (response.status === 401 && authToken !== null) unauthorizedHandler?.();
+  if (!response.ok) throw new Error('No se pudo descargar la evidencia');
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // Manejador global de 401: la sesión lo registra para borrar el estado y redirigir.
