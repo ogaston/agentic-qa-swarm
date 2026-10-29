@@ -360,3 +360,42 @@ func TestWarmCircuitoMedioAbiertoConRelojInyectable(t *testing.T) {
 		t.Fatalf("circuito cerrado: %d", w.Code)
 	}
 }
+
+func TestWarmConParametroRepo(t *testing.T) {
+	arrayBody := `[
+		{"repo":"acme/shop","namespace":"aqs-warm-shop","warm_id":"w1","state":"ready","reset_verified":true,"baseline_version":"b1"},
+		{"repo":"acme/pay","namespace":"aqs-warm-pay","warm_id":"w2","state":"provisioning","reset_verified":false,"baseline_version":"b2"}
+	]`
+	f := newWarmFake(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(arrayBody))
+	})
+	e := warmEnv(t, f, nil)
+
+	// 1. Sin parámetro repo: devuelve el array completo
+	w := e.do(http.MethodGet, "/warm", warmPersonTok, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /warm: status=%d cuerpo=%s", w.Code, w.Body.String())
+	}
+	var arr []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &arr); err != nil || len(arr) != 2 {
+		t.Fatalf("esperaba array de 2 elementos, obtuve: %s", w.Body.String())
+	}
+
+	// 2. Con ?repo=acme/shop: filtra y devuelve el objeto específico
+	w = e.do(http.MethodGet, "/warm?repo=acme/shop", warmPersonTok, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /warm?repo=acme/shop: status=%d cuerpo=%s", w.Code, w.Body.String())
+	}
+	var item map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &item); err != nil || item["repo"] != "acme/shop" || item["state"] != "ready" {
+		t.Fatalf("esperaba objeto filtrado para acme/shop, obtuve: %s", w.Body.String())
+	}
+
+	// 3. Con ?repo=inexistente: devuelve 404
+	w = e.do(http.MethodGet, "/warm?repo=acme/inexistente", warmPersonTok, "")
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("GET /warm?repo=acme/inexistente: status=%d cuerpo=%s", w.Code, w.Body.String())
+	}
+}

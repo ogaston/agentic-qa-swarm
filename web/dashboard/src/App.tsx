@@ -5,6 +5,7 @@ import { LoginPage } from './pages/Login/LoginPage';
 import { RunPage } from './pages/Run/RunPage';
 import { RunsPage } from './pages/Runs/RunsPage';
 import { WarmPage } from './pages/Warm/WarmPage';
+import { RepositoriesPage } from './pages/Repositories/RepositoriesPage';
 import { ProtectedLayout } from './session/ProtectedLayout';
 import { SessionProvider } from './session/SessionContext';
 
@@ -23,6 +24,7 @@ export function AppRoutes() {
         <Route path="/runs" element={<RunsPage />} />
         <Route path="/runs/:id" element={<RunPage />} />
         <Route path="/warm" element={<WarmPage />} />
+        <Route path="/repositories" element={<RepositoriesPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

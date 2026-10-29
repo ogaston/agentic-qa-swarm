@@ -161,3 +161,52 @@ func TestApplySinArtefactoNoPanica(t *testing.T) {
 		t.Fatalf("no debe quedar entrada: %+v", n)
 	}
 }
+
+func TestStoreActivity(t *testing.T) {
+	st := open(t, t.TempDir())
+	t0 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+
+	// Sin notificaciones para el repo
+	hasWebhook, _, _, _ := st.Activity("acme/shop")
+	if hasWebhook {
+		t.Fatal("esperaba hasWebhook = false para repo sin actividad")
+	}
+
+	// Agregamos notificación 1
+	e1 := ev("n1", t0)
+	e1.Data.Repo = "acme/shop"
+	e1.Data.GithubEvent = "push"
+	e1.Data.SHA = "sha-111"
+	st.Apply(e1)
+
+	hasWebhook, lastEvent, lastSHA, lastSeenAt := st.Activity("acme/shop")
+	if !hasWebhook || lastEvent != "push" || lastSHA != "sha-111" || !lastSeenAt.Equal(t0) {
+		t.Fatalf("actividad inesperada: hasWebhook=%v event=%s sha=%s at=%v", hasWebhook, lastEvent, lastSHA, lastSeenAt)
+	}
+
+	// Notificación para otro repo no interfiere
+	eOther := ev("n-other", t0.Add(time.Hour))
+	eOther.Data.Repo = "other/service"
+	eOther.Data.GithubEvent = "tag"
+	eOther.Data.SHA = "sha-other"
+	st.Apply(eOther)
+
+	// Agregamos notificación 2 más reciente para acme/shop
+	t2 := t0.Add(2 * time.Hour)
+	e2 := ev("n2", t2)
+	e2.Data.Repo = "acme/shop"
+	e2.Data.GithubEvent = "pull_request"
+	e2.Data.SHA = "sha-222"
+	st.Apply(e2)
+
+	hasWebhook, lastEvent, lastSHA, lastSeenAt = st.Activity("acme/shop")
+	if !hasWebhook || lastEvent != "pull_request" || lastSHA != "sha-222" || !lastSeenAt.Equal(t2) {
+		t.Fatalf("actividad esperada n2 más reciente: hasWebhook=%v event=%s sha=%s at=%v", hasWebhook, lastEvent, lastSHA, lastSeenAt)
+	}
+
+	// Comprobación de insensibilidad a mayúsculas
+	hasWebhook, _, _, _ = st.Activity("ACME/SHOP")
+	if !hasWebhook {
+		t.Fatal("esperaba hasWebhook = true para ACME/SHOP (case-insensitive)")
+	}
+}
