@@ -354,3 +354,41 @@ func TestBuildJobPropagaCuerpoEInvariantProbe(t *testing.T) {
 		t.Fatalf("REHEARSAL_STEPS no lleva el cuerpo del paso: %s", env["REHEARSAL_STEPS"])
 	}
 }
+
+func TestRehearsalLauncherWarmTargetNamespaceAndURL(t *testing.T) {
+	cs := fake.NewSimpleClientset()
+	l := &Launcher{
+		Kube:  ClientGo{CS: cs, NS: "aqs-test"},
+		Cfg:   Config{Namespace: "aqs-test", Image: "ghcr.io/ogaston/aqs-rehearsal:0.1.0", ServiceAccount: "aqs-runner", TargetURL: "http://warm-app.aqs-test.svc:8080"},
+		Plans: planSrc{p: plan.FlowPlan{RunID: "r-custom", Workflow: "w", Flows: []plan.Flow{{FlowID: "login", Name: "login", Invariant: "inv", Steps: []plan.Step{{Method: "GET", Path: "/h", ExpectStatus: 200}}}}}},
+	}
+	run := runctl.Run{
+		ID:    "r-custom",
+		State: runctl.Rehearsing,
+		Warm:  &runctl.WarmTarget{WarmID: "w-custom", Namespace: "aqs-w-custom"},
+	}
+	_, err := l.Launch(context.Background(), runctl.PhaseRehearse, run)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	j, err := cs.BatchV1().Jobs("aqs-w-custom").Get(context.Background(), "rehearsal-r-custom-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Job no encontrado en aqs-w-custom: %v", err)
+	}
+	if j.Namespace != "aqs-w-custom" {
+		t.Errorf("Namespace = %q, want aqs-w-custom", j.Namespace)
+	}
+	foundTarget := false
+	args := j.Spec.Template.Spec.Containers[0].Args
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--target" && i+1 < len(args) {
+			if args[i+1] != "http://warm-app.aqs-w-custom.svc:8080" {
+				t.Errorf("Target = %q, want http://warm-app.aqs-w-custom.svc:8080", args[i+1])
+			}
+			foundTarget = true
+		}
+	}
+	if !foundTarget {
+		t.Errorf("no se encontró --target en los args: %v", args)
+	}
+}

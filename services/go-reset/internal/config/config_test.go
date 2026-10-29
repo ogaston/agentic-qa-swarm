@@ -37,19 +37,38 @@ func TestConfigValid(t *testing.T) {
 	}
 }
 
+func TestConfigWarmNamespaceValid(t *testing.T) {
+	for _, ns := range []string{"aqs-w-demo", "aqs-w-repo-1", "aqs-w-a", "aqs-w-a-b-c"} {
+		t.Run(ns, func(t *testing.T) {
+			set(t, with(map[string]string{
+				"RESET_NAMESPACE": ns,
+				"RESET_WARM_ID":    "w-" + ns[6:],
+			}))
+			c, err := config.Load(true)
+			if err != nil || c.Namespace != ns || c.WarmID != "w-"+ns[6:] {
+				t.Fatalf("esperaba namespace %s y warm_id w-%s, obtuve: %+v %v", ns, ns[6:], c, err)
+			}
+		})
+	}
+}
+
 func TestConfigFailClosed(t *testing.T) {
 	cases := map[string]map[string]string{
-		"ns ajeno":       with(map[string]string{"RESET_NAMESPACE": "aqs-prod"}),
-		"sin token":      with(map[string]string{"RESET_SERVICE_TOKEN": ""}),
-		"grace inválido": with(map[string]string{"HOUSEKEEPING_GRACE": "abc"}),
-		"grace negativo": with(map[string]string{"HOUSEKEEPING_GRACE": "-1h"}),
-		"sin outbox":     with(map[string]string{"RESET_OUTBOX_FILE": ""}),
-		"sin script":     with(map[string]string{"RESET_BASELINE_SCRIPT": ""}),
-		"sin warm id":    with(map[string]string{"RESET_WARM_ID": ""}),
-		"sin redis":      with(map[string]string{"RESET_REDIS_ADDR": ""}),
-		"timeout malo":   with(map[string]string{"RESET_READY_TIMEOUT": "0s"}),
-		"backend raro":   with(map[string]string{"RESET_BACKEND": "otro"}),
-		"vacío":          {},
+		"ns ajeno":          with(map[string]string{"RESET_NAMESPACE": "aqs-prod"}),
+		"ns warm vacio":     with(map[string]string{"RESET_NAMESPACE": "aqs-w-"}),
+		"ns warm mayus":     with(map[string]string{"RESET_NAMESPACE": "aqs-w-DEMO"}),
+		"ns warm subrayado": with(map[string]string{"RESET_NAMESPACE": "aqs-w-repo_1"}),
+		"ns warm guion fin": with(map[string]string{"RESET_NAMESPACE": "aqs-w-repo-"}),
+		"sin token":         with(map[string]string{"RESET_SERVICE_TOKEN": ""}),
+		"grace inválido":    with(map[string]string{"HOUSEKEEPING_GRACE": "abc"}),
+		"grace negativo":    with(map[string]string{"HOUSEKEEPING_GRACE": "-1h"}),
+		"sin outbox":        with(map[string]string{"RESET_OUTBOX_FILE": ""}),
+		"sin script":        with(map[string]string{"RESET_BASELINE_SCRIPT": ""}),
+		"sin warm id":       with(map[string]string{"RESET_WARM_ID": ""}),
+		"sin redis":         with(map[string]string{"RESET_REDIS_ADDR": ""}),
+		"timeout malo":      with(map[string]string{"RESET_READY_TIMEOUT": "0s"}),
+		"backend raro":      with(map[string]string{"RESET_BACKEND": "otro"}),
+		"vacío":             {},
 	}
 	for name, env := range cases {
 		t.Run(name, func(t *testing.T) {

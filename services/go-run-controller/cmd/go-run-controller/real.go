@@ -92,16 +92,20 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 	}
 	// Ensayo y runners leen el mismo FlowPlan guardado en la corrida (U9-T02); el planner se llama una vez.
 	plans := runctl.StoredPlans{Store: store, Next: flows}
+	rehearsalTarget := c.rehearsalTarget
+	if rehearsalTarget == "" {
+		rehearsalTarget = TargetURL(c.namespace)
+	}
 	l := &rehearsal.Launcher{Kube: rehearsal.ClientGo{CS: cs, NS: c.namespace}, Plans: plans,
-		Cfg: rehearsal.Config{Namespace: c.namespace, Image: c.rehearsalImage, ServiceAccount: c.rehearsalSA, TargetURL: c.rehearsalTarget}}
+		Cfg: rehearsal.Config{Namespace: c.namespace, Image: c.rehearsalImage, ServiceAccount: c.rehearsalSA, TargetURL: rehearsalTarget}}
 	ev, err := runner.NewS3(c.evEndpoint, c.evBucket, c.evAccessFile, c.evSecretFile)
 	if err != nil {
 		return base, err
 	}
-	rl := &runner.Launcher{Kube: runner.ClientGo{CS: cs, NS: c.namespace}, Plans: plans, Exec: runner.HTTPStepsExecutor{Target: c.rehearsalTarget},
+	rl := &runner.Launcher{Kube: runner.ClientGo{CS: cs, NS: c.namespace}, Plans: plans, Exec: runner.HTTPStepsExecutor{Target: rehearsalTarget},
 		Evidence: ev, Gate: gate, Policy: runner.StaticPolicy{L: runner.Limits{FlowTimeout: c.flowTimeout, RunTimeout: c.runTimeout}},
 		MaxParallel: c.maxParallel, Obs: rm, Log: log,
-		Cfg: runner.Config{Namespace: c.namespace, Image: c.runnerImage, ServiceAccount: c.runnerSA}}
+		Cfg: runner.Config{Namespace: c.namespace, Image: c.runnerImage, ServiceAccount: c.runnerSA, TargetURL: rehearsalTarget}}
 	ref := c.artifactRef
 	// U11-T01: el deploy despliega el artefacto del evento (guardado en la corrida); RUN_ARTIFACT_REF
 	// es solo el respaldo para corridas cuyo run.confirmed no lo trajo (p. ej. kind-e2e.sh).
@@ -134,6 +138,12 @@ func buildConfig(c config, cs kubernetes.Interface, gate runctl.GateClient, stor
 	return base, nil
 }
 
+// TargetURL devuelve la URL base del warm para un namespace dado.
+// Si namespace es vacío, usa aqs-test como respaldo.
+func TargetURL(namespace string) string {
+	return runctl.WarmTargetURL(namespace)
+}
+
 // renderRehearsalJob imprime el Job de ensayo como YAML sin tocar un clúster.
 func renderRehearsalJob(w io.Writer, args []string, env func(string) string) error {
 	var runID, flow string
@@ -150,13 +160,14 @@ func renderRehearsalJob(w io.Writer, args []string, env func(string) string) err
 	if runID == "" || flow == "" || len(args)%2 != 0 {
 		return errors.New("uso: render-rehearsal-job --run <id> --flow <id>")
 	}
+	targetURL := env("REHEARSAL_TARGET_URL")
+	if targetURL == "" {
+		targetURL = TargetURL(runctl.DefaultNamespace)
+	}
 	cfg := rehearsal.Config{Namespace: runctl.DefaultNamespace, ServiceAccount: "aqs-runner",
-		Image: env("REHEARSAL_IMAGE"), TargetURL: env("REHEARSAL_TARGET_URL")}
+		Image: env("REHEARSAL_IMAGE"), TargetURL: targetURL}
 	if cfg.Image == "" {
 		cfg.Image = "ghcr.io/ogaston/aqs-rehearsal:0.1.0"
-	}
-	if cfg.TargetURL == "" {
-		cfg.TargetURL = "http://warm-app.aqs-test.svc:8080"
 	}
 	j, err := rehearsal.BuildJob(cfg, runID, plan.Flow{FlowID: flow, Name: flow, Invariant: "el flujo responde con los estados esperados",
 		Steps: []plan.Step{{Method: "GET", Path: "/health", ExpectStatus: 200}}}, 1)
@@ -193,8 +204,9 @@ func renderRunnerJob(w io.Writer, args []string, env func(string) string) error 
 	}
 	target := env("REHEARSAL_TARGET_URL")
 	if target == "" {
-		target = "http://warm-app.aqs-test.svc:8080"
+		target = TargetURL(runctl.DefaultNamespace)
 	}
+	cfg.TargetURL = target
 	f := plan.Flow{FlowID: flow, Name: flow, Invariant: "el flujo responde con los estados esperados",
 		Steps: []plan.Step{{Method: "GET", Path: "/health", ExpectStatus: 200}}}
 	spec, err := runner.HTTPStepsExecutor{Target: target}.Plan(f)

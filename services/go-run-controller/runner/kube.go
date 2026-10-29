@@ -28,9 +28,19 @@ type ClientGo struct {
 	NS string
 }
 
+// InNamespace devuelve una copia de ClientGo apuntando al namespace dado.
+func (c ClientGo) InNamespace(ns string) ClientGo {
+	c.NS = ns
+	return c
+}
+
 // CreateJob implementa KubeAPI.
 func (c ClientGo) CreateJob(ctx context.Context, j *batchv1.Job) error {
-	_, err := c.CS.BatchV1().Jobs(c.NS).Create(ctx, j, metav1.CreateOptions{})
+	ns := c.NS
+	if j != nil && j.Namespace != "" {
+		ns = j.Namespace
+	}
+	_, err := c.CS.BatchV1().Jobs(ns).Create(ctx, j, metav1.CreateOptions{})
 	return err
 }
 

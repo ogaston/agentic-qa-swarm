@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -16,8 +17,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// Namespace es el único namespace permitido.
+// Namespace es el namespace por defecto legacy.
 const Namespace = "aqs-test"
+
+var warmNamespaceRegex = regexp.MustCompile(`^aqs-w-[a-z0-9]([a-z0-9-]{0,44}[a-z0-9])?$`)
+
+// ValidNamespace verifica si un namespace es válido para un entorno warm (aqs-test o aqs-w-*).
+func ValidNamespace(ns string) bool {
+	if ns == Namespace {
+		return true
+	}
+	return warmNamespaceRegex.MatchString(ns)
+}
 
 const (
 	appName       = "warm-app"
@@ -35,10 +46,10 @@ type Client struct {
 	now func() time.Time
 }
 
-// New rechaza cualquier namespace distinto de aqs-test.
+// New valida que el namespace sea aqs-test o coincida con aqs-w-*.
 func New(cs kubernetes.Interface, ns string, now func() time.Time) (*Client, error) {
-	if ns != Namespace {
-		return nil, fmt.Errorf("namespace %q no permitido: solo %s", ns, Namespace)
+	if !ValidNamespace(ns) {
+		return nil, fmt.Errorf("namespace %q no permitido", ns)
 	}
 	if now == nil {
 		now = time.Now

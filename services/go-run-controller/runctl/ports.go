@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 )
 
 // Fact es un hecho tri-estado hacia el gate. El valor cero es Unknown: lo que el controlador
@@ -51,34 +52,62 @@ type GateClient interface {
 	Authorize(ctx context.Context, req GateRequest) (GateDecision, error)
 }
 
+// WarmTarget identifica el destino del entorno warm para la corrida (U12).
+type WarmTarget struct {
+	WarmID    string `json:"warm_id"`
+	Namespace string `json:"namespace"`
+}
+
+// WarmTargetURL devuelve la URL base del servicio warm para el namespace dado.
+func WarmTargetURL(namespace string) string {
+	if namespace == "" {
+		namespace = DefaultNamespace
+	}
+	return fmt.Sprintf("http://warm-app.%s.svc:8080", namespace)
+}
+
 // Artifact es el artefacto a desplegar de una corrida ({kind, ref} del contrato de run.confirmed).
 type Artifact struct {
-	Kind string `json:"kind"`
-	Ref  string `json:"ref"`
+	Kind        string `json:"kind"`
+	Ref         string `json:"ref"`
+	ImagePrefix string `json:"image_prefix,omitempty"`
 }
 
 // Run es la corrida persistida.
 type Run struct {
-	ID           string          `json:"id"`
-	State        State           `json:"state"`
-	TraceID      string          `json:"trace_id,omitempty"`
-	ConfirmedBy  string          `json:"confirmed_by,omitempty"`
-	Flows        []string        `json:"flows,omitempty"`
-	Workflow     string          `json:"workflow,omitempty"`
-	EnsayoPassed Fact            `json:"ensayo_passed,omitempty"` // de rehearsal.passed / rehearsal.failed
-	Attempts     map[string]int  `json:"attempts,omitempty"`      // fallos por fase (V8)
-	FailReason   string          `json:"fail_reason,omitempty"`   // si está, la corrida termina en failed tras el reset
-	Halted       bool            `json:"halted,omitempty"`        // sin salida segura: el controlador no la toca más
-	Evidence     []string        `json:"evidence_uris,omitempty"`
-	Verdict      string          `json:"verdict,omitempty"`    // veredicto del reporter (fase report)
-	ReportURI    string          `json:"report_uri,omitempty"` // URI del reporte guardado (fase report, E-1)
-	DonePublish  bool            `json:"done_published,omitempty"`
-	Seen         []string        `json:"seen_events,omitempty"` // event_id ya aplicados (idempotencia ante el replay del archivo)
-	Started      map[string]int  `json:"started,omitempty"`     // lanzamientos iniciados por fase (se persiste ANTES de lanzar; tope 3)
-	HandedOff    map[string]bool `json:"handed_off,omitempty"`  // fases cuyo handoff ya se emitió (a lo sumo uno)
-	Launched     map[string]bool `json:"launched,omitempty"`    // fase ya lanzada con éxito en el estado actual
-	Plan         json.RawMessage `json:"plan,omitempty"`        // FlowPlan validado de la corrida (ver StoredPlans)
-	Artifact     *Artifact       `json:"artifact,omitempty"`    // artefacto del evento run.confirmed (U11-T01); nil = respaldo RUN_ARTIFACT_REF
+	ID           string            `json:"id"`
+	State        State             `json:"state"`
+	TraceID      string            `json:"trace_id,omitempty"`
+	ConfirmedBy  string            `json:"confirmed_by,omitempty"`
+	Flows        []string          `json:"flows,omitempty"`
+	Workflow     string            `json:"workflow,omitempty"`
+	EnsayoPassed Fact              `json:"ensayo_passed,omitempty"` // de rehearsal.passed / rehearsal.failed
+	Attempts     map[string]int    `json:"attempts,omitempty"`      // fallos por fase (V8)
+	FailReason   string            `json:"fail_reason,omitempty"`   // si está, la corrida termina en failed tras el reset
+	Halted       bool              `json:"halted,omitempty"`        // sin salida segura: el controlador no la toca más
+	Evidence     []string          `json:"evidence_uris,omitempty"`
+	Verdict      string            `json:"verdict,omitempty"`    // veredicto del reporter (fase report)
+	ReportURI    string            `json:"report_uri,omitempty"` // URI del reporte guardado (fase report, E-1)
+	DonePublish  bool              `json:"done_published,omitempty"`
+	Seen         []string          `json:"seen_events,omitempty"` // event_id ya aplicados (idempotencia ante el replay del archivo)
+	Started      map[string]int    `json:"started,omitempty"`     // lanzamientos iniciados por fase (se persiste ANTES de lanzar; tope 3)
+	HandedOff    map[string]bool   `json:"handed_off,omitempty"`  // fases cuyo handoff ya se emitió (a lo sumo uno)
+	Launched     map[string]bool   `json:"launched,omitempty"`    // fase ya lanzada con éxito en el estado actual
+	Plan         json.RawMessage   `json:"plan,omitempty"`        // FlowPlan validado de la corrida (ver StoredPlans)
+	Artifact     *Artifact         `json:"artifact,omitempty"`    // artefacto del evento run.confirmed (U11-T01); nil = respaldo RUN_ARTIFACT_REF
+	Warm         *WarmTarget       `json:"warm,omitempty"`        // destino warm opcional (U12); nil = DefaultNamespace
+	Metadata     map[string]string `json:"metadata,omitempty"`    // metadatos de la corrida (U12)
+}
+
+// TargetNamespace devuelve el namespace asignado a la corrida, o el fallback si no tiene warm asignado.
+func (r Run) TargetNamespace(fallback ...string) string {
+	if r.Warm != nil && r.Warm.Namespace != "" {
+		return r.Warm.Namespace
+	}
+	if len(fallback) > 0 && fallback[0] != "" {
+		return fallback[0]
+	}
+	return DefaultNamespace
 }
 
 func (r Run) clone() Run {
@@ -92,7 +121,17 @@ func (r Run) clone() Run {
 	c.HandedOff = copyMap(r.HandedOff)
 	c.Plan = append(json.RawMessage(nil), r.Plan...)
 	c.Artifact = copyArtifact(r.Artifact)
+	c.Warm = copyWarm(r.Warm)
+	c.Metadata = copyMap(r.Metadata)
 	return c
+}
+
+func copyWarm(w *WarmTarget) *WarmTarget {
+	if w == nil {
+		return nil
+	}
+	c := *w
+	return &c
 }
 
 func copyMap[V any](m map[string]V) map[string]V {
@@ -121,8 +160,9 @@ type Event struct {
 	RunID       string
 	ConfirmedBy string
 	Flows       []string
-	Artifact    *Artifact // run.confirmed: artefacto de la notificación (opcional)
-	Pos         int64     // posición opaca en la fuente (fin de la línea); la usa EventSource.Ack
+	Artifact    *Artifact   // run.confirmed: artefacto de la notificación (opcional)
+	Warm        *WarmTarget // run.confirmed: destino warm (opcional, U12)
+	Pos         int64       // posición opaca en la fuente (fin de la línea); la usa EventSource.Ack
 }
 
 // Tipos de evento que consume el controlador.

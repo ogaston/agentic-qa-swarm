@@ -357,8 +357,9 @@ func (p *RealPhases) Launch(ctx context.Context, phase string, run runctl.Run) (
 		if err != nil {
 			return nil, err
 		}
+		prefixes := AllowedPrefixesForRun(run, p.ImagePrefixes, ref)
 		// U11-T03: falla cerrada ANTES de go-warm-manager; el error nombra la imagen rechazada.
-		if err := ValidateImage(kind, ref, p.ImagePrefixes); err != nil {
+		if err := ValidateImage(kind, ref, prefixes); err != nil {
 			return nil, fmt.Errorf("deploy no pedido: %w", err)
 		}
 		return nil, p.Warm.Deploy(ctx, run.ID, kind, ref)

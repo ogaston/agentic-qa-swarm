@@ -5,9 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
+
+var warmNamespaceRegex = regexp.MustCompile(`^aqs-w-[a-z0-9]([a-z0-9-]{0,44}[a-z0-9])?$`)
+
+// ValidNamespace verifica si un namespace es válido para un entorno warm (aqs-test o aqs-w-*).
+func ValidNamespace(ns string) bool {
+	if ns == "aqs-test" {
+		return true
+	}
+	return warmNamespaceRegex.MatchString(ns)
+}
 
 type Config struct {
 	Namespace, Token, OutboxFile, DataDir, BaselineScript, Listen, RedisAddr, Backend string
@@ -62,8 +73,8 @@ func Load(needToken bool) (Config, error) {
 		WarmID: os.Getenv("RESET_WARM_ID"), BaselineVersion: os.Getenv("RESET_BASELINE_VERSION"),
 		JobImage: os.Getenv("RESET_JOB_IMAGE"),
 	}
-	if c.Namespace != "aqs-test" {
-		return c, fmt.Errorf("RESET_NAMESPACE debe ser aqs-test")
+	if !ValidNamespace(c.Namespace) {
+		return c, fmt.Errorf("RESET_NAMESPACE debe ser aqs-test o coincidir con ^aqs-w-[a-z0-9]([a-z0-9-]{0,44}[a-z0-9])?$")
 	}
 	if needToken && c.Token == "" {
 		return c, errors.New("RESET_SERVICE_TOKEN vacío")
