@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Funciones comunes de scripts/kind/ (U7-T01). Se carga con `source`; no ejecuta nada al cargarse.
 # Nombre del clúster efímero y contexto de kubectl que le corresponde.
-KIND_CLUSTER_NAME=aqs
-KIND_CONTEXT=kind-aqs
+KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-aqs}"
+KIND_CONTEXT="${KIND_CONTEXT:-kind-${KIND_CLUSTER_NAME}}"
 export KIND_EXPERIMENTAL_PROVIDER=podman
 
 # Guarda: todo script que hable con el clúster la llama antes de cualquier kubectl.
@@ -219,8 +219,20 @@ pod_down() {
 # --- U9-T05 (C-127): insumos persistentes fuera de tmpfs -----------------------------------------
 # Insumos del humano y credenciales demo: AQS_KIND_STATE_DIR (fuera del repo, sobrevive al reinicio).
 # Efímeros (pids, trabajo temporal, venvs) y los locks se quedan en AQS_KIND_RUNTIME_DIR / XDG_RUNTIME_DIR.
-AQS_KIND_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind"
-AQS_KIND_STATE_DIR="${AQS_KIND_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/aqs-kind}"
+if [ -z "${AQS_KIND_RUNTIME_DIR:-}" ]; then
+  if [ "$KIND_CLUSTER_NAME" = "aqs" ]; then
+    AQS_KIND_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind"
+  else
+    AQS_KIND_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-kind-$KIND_CLUSTER_NAME"
+  fi
+fi
+if [ -z "${AQS_KIND_STATE_DIR:-}" ]; then
+  if [ "$KIND_CLUSTER_NAME" = "aqs" ]; then
+    AQS_KIND_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aqs-kind"
+  else
+    AQS_KIND_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aqs-kind-$KIND_CLUSTER_NAME"
+  fi
+fi
 AQS_KIND_INSUMOS="litellm.env deepseek.key demo.txt admin.txt admin-mfa-secret.txt"
 
 # Crea el directorio de insumos con modo 700 (idempotente).

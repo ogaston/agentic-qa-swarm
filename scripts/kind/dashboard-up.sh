@@ -15,11 +15,12 @@ cd "$root" || exit 1
 require_kind_context # sale 3 si el contexto no es kind-aqs (antes de arrancar nada)
 
 NS_SYS=aqs-system
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-dashboard"
-P_IDENTITY=18600
-P_UI=18601
-P_RUN=18603
-P_WEB=18610
+PORT_OFFSET="${AQS_PORT_OFFSET:-0}"
+STATE_DIR="${STATE_DIR:-${XDG_RUNTIME_DIR:-/tmp}/aqs-dashboard${PORT_OFFSET:+-offset-$PORT_OFFSET}}"
+P_IDENTITY=$((18600 + PORT_OFFSET))
+P_UI=$((18601 + PORT_OFFSET))
+P_RUN=$((18603 + PORT_OFFSET))
+P_WEB=$((18610 + PORT_OFFSET))
 
 fail() {
   echo "dashboard-up: $*" >&2
@@ -43,7 +44,7 @@ done
 
 # 2. Port-forwards en loopback, uno por servicio, con su pid.
 pf() { # <servicio> <puerto local>
-  kubectl port-forward --address 127.0.0.1 -n "$NS_SYS" "svc/$1" "$2:8080" \
+  nohup kubectl port-forward --address 127.0.0.1 -n "$NS_SYS" "svc/$1" "$2:8080" \
     >"$STATE_DIR/pf-$1.log" 2>&1 &
   echo $! >"$STATE_DIR/pf-$1.pid"
 }
@@ -69,7 +70,7 @@ wait_url "http://127.0.0.1:$P_RUN/healthz" || fail "port-forward a go-run-contro
   export AQS_IDENTITY_URL="http://127.0.0.1:$P_IDENTITY"
   export AQS_RUN_CONTROLLER_URL="http://127.0.0.1:$P_RUN"
   export AQS_UI_API_URL="http://127.0.0.1:$P_UI"
-  exec ./node_modules/.bin/vite preview --host 127.0.0.1 --port "$P_WEB" --strictPort
+  exec nohup ./node_modules/.bin/vite preview --host 127.0.0.1 --port "$P_WEB" --strictPort
 ) >"$STATE_DIR/web.log" 2>&1 &
 echo $! >"$STATE_DIR/web.pid"
 

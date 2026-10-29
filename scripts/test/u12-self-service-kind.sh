@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-KIND_CONTEXT="kind-aqs"
+KIND_CONTEXT="${KIND_CONTEXT:-kind-${KIND_CLUSTER_NAME:-aqs}}"
 SA="system:serviceaccount:aqs-system:go-warm-manager"
 
 require_kind_context() {
