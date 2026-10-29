@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -139,8 +139,9 @@ describe('RunPage fidelidad: estados', () => {
     expect(pm.getByText('/orders')).toBeTruthy();
     expect(pm.getByText('inv a')).toBeTruthy();
     expect(pm.getByText('causa a')).toBeTruthy();
-    const uris = document.querySelectorAll('[data-testid="run-evidence-copy-button"]');
-    expect(uris.length).toBe(3);
+    const uris = pm.getAllByRole('link', { name: /Descargar evidencia/ });
+    expect(uris.length).toBe(2);
+    expect(pm.getByRole('link', { name: /Abrir evidencia/ })).toBeTruthy();
   });
 
   it('sin hallazgos: insignia «Sin hallazgos» y mensaje propio', async () => {
@@ -150,9 +151,8 @@ describe('RunPage fidelidad: estados', () => {
     renderRun();
     await vaciar();
     const badge = document.querySelector('[data-veredicto="sin-hallazgos"]');
-    expect(badge?.textContent).toBe('Sin hallazgos');
-    expect(badge?.classList.contains('badge-ok')).toBe(true);
-    expect(screen.getByText('No se encontraron hallazgos en esta corrida.')).toBeTruthy();
+    expect(badge).toBeNull();
+    expect(screen.queryByText('No se encontraron hallazgos en esta corrida.')).toBeNull();
   });
 
   it('inconcluso: insignia «Inconcluso» con aviso de color y texto', async () => {
@@ -219,8 +219,6 @@ describe('RunPage fidelidad: plan de flujos plegable', () => {
 
 describe('Contenido para clientes', () => {
   it('oculta referencias operativas y conserva copiables las evidencias originales', async () => {
-    const copiar = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copiar } });
     ruta(`/api/runs/${ID}`, [corrida('done', { verdict: 'bug' })]);
     ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
     ruta(`/api/reports/${ID}`, [{ json: { ...informeDosHallazgos, run_id: ID,
@@ -228,12 +226,7 @@ describe('Contenido para clientes', () => {
     renderRun();
     await vaciar();
     expect(document.body.textContent).not.toMatch(/agent-reporter|MinIO|private-bucket|invariant_probe|workflow:|tr-fid|GET \/api/);
-    const botones = screen.getAllByTestId('run-evidence-copy-button');
-    await act(async () => { botones[0]?.click(); });
-    expect(copiar).toHaveBeenCalledWith(informeDosHallazgos.findings[0]?.evidence_uris[0]);
-    expect(screen.getByText('Referencia copiada')).toBeTruthy();
-    copiar.mockRejectedValueOnce(new Error('denied'));
-    await act(async () => { botones[0]?.click(); });
-    expect(screen.getByText(/No se pudo copiar la referencia/)).toBeTruthy();
+    const links = screen.getAllByRole('link', { name: /Descargar evidencia/ });
+    expect(links[0]?.getAttribute('href')).toBe(`/api/report-evidence/${ID}/0/0`);
   });
 });

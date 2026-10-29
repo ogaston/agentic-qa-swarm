@@ -123,6 +123,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/run-evidence/{run}/{flow}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Descarga un artefacto de un flujo de la corrida autorizada. */
+        get: operations["getRunEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/report-evidence/{run}/{finding}/{evidence}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Descarga una evidencia S3 incluida en el informe de una corrida autorizada. */
+        get: operations["getReportEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports/{run}": {
         parameters: {
             query?: never;
@@ -320,6 +354,11 @@ export interface components {
         };
         Notification: {
             id: string;
+            /**
+             * Format: date-time
+             * @description Notification creation time from notify.created occurred_at.
+             */
+            created_at?: string;
             /** @enum {string} */
             github_event: "commit" | "pull_request" | "tag";
             repo: string;
@@ -620,6 +659,66 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             500: components["responses"]["Error"];
+        };
+    };
+    getRunEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run: string;
+                flow: string;
+                name: "result.json" | "logs.txt";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Contenido del artefacto. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getReportEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run: string;
+                finding: number;
+                evidence: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Contenido de la evidencia. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     getReport: {

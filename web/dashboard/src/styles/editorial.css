@@ -2224,6 +2224,16 @@
 .ed-root .run-page .phase-name { font-size: 13px; }
 .ed-root .run-page .phase-timeline .badge { font-size: 10px; white-space: nowrap; }
 .ed-root .run-page .phase-idx { width: 26px; height: 26px; }
+.ed-root .run-page .run-waiting-notice { padding: 14px 16px; margin-bottom: 24px; }
+.run-page .flow-group + .flow-group { margin-top: 20px; }
+.run-page .flow-group-title { margin: 0 0 12px; font-size: 14px; font-weight: 700; color: var(--text-muted); }
+.run-page .flow-group-list { display: grid; gap: 12px; }
+.run-page .flow-item { border: 1px solid var(--ed-hairline); border-radius: 4px; overflow: hidden; }
+.ed-root .run-page .flow-item .flow-block { border: 0; border-radius: 0; }
+.run-page .flow-status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.run-page .flow-evidence { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 18px; border-top: 1px solid var(--ed-hairline); background: var(--ed-linen); }
+.run-page .flow-evidence .btn { font-size: 12px; padding: 6px 10px; }
+.run-page .flow-evidence [role="status"]:not(:empty) { font-size: 12px; color: var(--danger); }
 .run-page .phase-spinner {
   display: inline-block;
   width: 12px;

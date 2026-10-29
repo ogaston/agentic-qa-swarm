@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ApiError, apiFetch } from '../../api/client';
+import { ApiError, apiFetch, downloadEvidence } from '../../api/client';
 import type { components } from '../../api/schema.gen';
 import { useUnaVez } from '../../hooks/useUnaVez';
 
@@ -165,11 +165,9 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
   return (
     <TarjetaPostMortem id={id} verdict={data.verdict} hallazgos={data.findings.length}>
       <p className="report-summary">{textoCliente(data.summary)}</p>
-      {data.findings.length === 0 ? (
-        <p className="empty">No se encontraron hallazgos en esta corrida.</p>
-      ) : (
+      {data.findings.length > 0 && (
         <div className="findings-list">
-          {data.findings.map((f) => (
+          {data.findings.map((f, findingIndex) => (
             <div key={f.finding_id} className="finding-item">
               <div className="finding-head">
                 <div className="finding-route">
@@ -188,7 +186,7 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
                   <ul className="evidence-list">
                     {f.evidence_uris.map((uri, i) => (
                       <li key={`${i}-${uri}`}>
-                        <ReferenciaEvidencia uri={uri} indice={i} />
+                        <ReferenciaEvidencia uri={uri} indice={i} runId={id} findingIndex={findingIndex} />
                       </li>
                     ))}
                   </ul>
@@ -219,6 +217,27 @@ export function PlanFlujos({ id, activo, encabezado, automatico = false, enEjecu
     activo,
   );
   const planPendiente = error instanceof ApiError && error.status === 404 && error.code === 'plan_not_ready';
+  const [resultados, setResultados] = useState<Record<string, 'passed' | 'failed' | 'timeout'>>({});
+  useEffect(() => {
+    if (!activo || data === null) return;
+    let vigente = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const consultar = async () => {
+      const respuestas = await Promise.all(data.flows.map(async (flow) => {
+        try {
+          const resultado = await apiFetch<{ status?: string }>(`/api/run-evidence/${encodeURIComponent(id)}/${encodeURIComponent(flow.flow_id)}/result.json`);
+          return [flow.flow_id, resultado.status] as const;
+        } catch { return [flow.flow_id, undefined] as const; }
+      }));
+      if (!vigente) return;
+      const disponibles: Record<string, 'passed' | 'failed' | 'timeout'> = {};
+      for (const [flow, status] of respuestas) if (status === 'passed' || status === 'failed' || status === 'timeout') disponibles[flow] = status;
+      setResultados(disponibles);
+      if (automatico) timer = setTimeout(consultar, 3000);
+    };
+    void consultar();
+    return () => { vigente = false; if (timer !== undefined) clearTimeout(timer); };
+  }, [activo, automatico, data, id]);
   const estabaEjecutando = useRef(false);
   useEffect(() => {
     const iniciaEjecucion = enEjecucion && !estabaEjecutando.current;
@@ -267,20 +286,29 @@ export function PlanFlujos({ id, activo, encabezado, automatico = false, enEjecu
   } else if (data !== null) {
     contenido = (
       <div className="flow-list">
-        {data.flows.map((flow, indice) => (
-          <details key={flow.flow_id} className="flow-block flow-details" open={enEjecucion}>
+        {[
+          { title: 'Flujos principales', flows: data.flows.filter((flow) => !flow.invariant_probe) },
+          { title: 'Reglas de negocio', flows: data.flows.filter((flow) => flow.invariant_probe) },
+        ].filter((group) => group.flows.length > 0).map((group) => (
+          <section className="flow-group" key={group.title} aria-label={group.title}>
+            <h3 className="flow-group-title">{group.title}</h3>
+            <div className="flow-group-list">
+              {group.flows.map((flow) => (
+          <div className="flow-item" key={flow.flow_id}>
+          <details className="flow-block flow-details">
             <summary>
               <span className="flow-title">
                 <svg className="chevron-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <strong>
-                  {indice + 1}. {textoCliente(flow.name)}
+                  {textoCliente(flow.name)}
                 </strong>
               </span>
-              {/* Insignia como en el mockup: tipo y el campo real invariant_probe del plan (sin comillas de markdown). */}
-              <span className={`badge ${flow.invariant_probe ? 'badge-accent' : 'badge-ok'}`}>
-                {flow.invariant_probe ? 'Regla de negocio' : 'Flujo principal'}
+              <span className={`badge flow-status ${resultados[flow.flow_id] === 'passed' ? 'badge-ok' : resultados[flow.flow_id] === 'failed' ? 'badge-danger' : resultados[flow.flow_id] === 'timeout' ? 'badge-warn' : 'badge-neutral'}`}>
+                {resultados[flow.flow_id] === 'passed' && <span aria-hidden="true">✓</span>}
+                {resultados[flow.flow_id] === 'failed' && <span aria-hidden="true">✕</span>}
+                {resultados[flow.flow_id] === 'passed' ? 'Aprobada' : resultados[flow.flow_id] === 'failed' ? 'Fallida' : resultados[flow.flow_id] === 'timeout' ? 'Tiempo agotado' : 'Sin resultado'}
               </span>
             </summary>
             <div className="flow-content">
@@ -326,7 +354,15 @@ export function PlanFlujos({ id, activo, encabezado, automatico = false, enEjecu
                 </table>
               </div>
             </div>
+          {resultados[flow.flow_id] && <div className="flow-evidence">
+            <ReferenciaEvidencia uri={`s3://evidence/runs/${id}/${flow.flow_id}/result.json`} indice={0} runId={id} />
+            <ReferenciaEvidencia uri={`s3://evidence/runs/${id}/${flow.flow_id}/logs.txt`} indice={1} runId={id} />
+          </div>}
           </details>
+          </div>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
     );
@@ -368,8 +404,25 @@ export function RunErrorNotice({ error }: { error: unknown }) {
 }
 
 /** Mantiene copiable la referencia original sin exponer la ubicación de almacenamiento en pantalla. */
-function ReferenciaEvidencia({ uri, indice }: { uri: string; indice: number }) {
+function ReferenciaEvidencia({ uri, indice, runId, findingIndex }: { uri: string; indice: number; runId: string; findingIndex?: number }) {
   const [estado, setEstado] = useState('');
+  if (findingIndex !== undefined && uri.startsWith('s3://')) {
+    const path = `/api/report-evidence/${encodeURIComponent(runId)}/${findingIndex}/${indice}`;
+    return <><a href={path} onClick={async (event) => {
+      event.preventDefault();
+      try { await downloadEvidence(path, uri.split('/').pop() || 'evidencia'); setEstado(''); }
+      catch { setEstado('No se pudo descargar la evidencia.'); }
+    }}>Descargar evidencia {indice + 1}</a><span role="status">{estado}</span></>;
+  }
+  const match = uri.match(/^s3:\/\/[^/]+\/runs\/([^/]+)\/([^/]+)\/(result\.json|logs\.txt)$/);
+  if (match && match[1] === runId) {
+    const name = match[3] ?? '';
+    return <><button type="button" className="btn btn-secondary" onClick={async () => {
+      try { await downloadEvidence(`/api/run-evidence/${encodeURIComponent(runId)}/${encodeURIComponent(match[2] ?? '')}/${name}`, name); setEstado(''); }
+      catch { setEstado('No se pudo descargar la evidencia.'); }
+    }}>{name === 'result.json' ? 'Descargar resultados' : 'Descargar registros'}</button><span role="status">{estado}</span></>;
+  }
+  if (/^https?:\/\//i.test(uri)) return <a href={uri} target="_blank" rel="noreferrer">Abrir evidencia {indice + 1}</a>;
   return <>
     <button type="button" className="btn btn-secondary" data-testid="run-evidence-copy-button" onClick={async () => {
       try {

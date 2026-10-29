@@ -98,7 +98,7 @@ function VistaCorrida({ id }: { id: string }) {
               Resumen de la corrida
             </h1>
             {data !== null && <EstadoCorrida run={data} ultimaFase={ultimaFase.current} />}
-            {data?.verdict !== undefined && <Veredicto verdict={data.verdict} />}
+            {data?.verdict !== undefined && data.verdict !== 'sin-hallazgos' && <Veredicto verdict={data.verdict} />}
           </div>
           <p>Resultados y progreso de las pruebas de tu aplicación.</p>
           <p className="run-reference">Referencia: <code>{id}</code></p>
@@ -119,7 +119,7 @@ function VistaCorrida({ id }: { id: string }) {
       )}
 
       {esperandoCorrida && (
-        <p role="status" className="notice">
+        <p role="status" className="notice run-waiting-notice">
           Esperando a que la corrida esté disponible. Reintentando automáticamente cada 3 s…
         </p>
       )}
@@ -188,7 +188,7 @@ function EstadoCorrida({ run }: { run: Run; ultimaFase: string | null }) {
   }
   return (
     <span className="badge badge-accent">
-      Fase {indice + 1} de 9: {FASES[indice]?.etiqueta}
+      {FASES[indice]?.etiqueta}
     </span>
   );
 }
@@ -233,8 +233,7 @@ function Linea({ run, ultimaFase }: { run: Run; ultimaFase: string | null }) {
   return <Fases actual={indice} hechasHasta={indice} />;
 }
 
-const ETIQUETA_ESTADO = { hecha: 'hecha', actual: 'actual', pendiente: 'pendiente' } as const;
-const CLASE_ESTADO = { hecha: 'badge-ok', actual: 'badge-accent', pendiente: 'badge-neutral' } as const;
+const ETIQUETA_ESTADO = { hecha: 'hecha', actual: 'En curso', pendiente: 'pendiente' } as const;
 
 /**
  * Línea de tiempo. Las fases con índice menor que `hechasHasta` están hechas; la de
@@ -257,18 +256,13 @@ function Fases({ actual, hechasHasta }: { actual: number; hechasHasta: number })
           >
             <div className="phase-left">
               <span className="phase-idx" aria-hidden="true">
-                {icono}
+                {esActual ? <span className="phase-spinner" aria-hidden="true" /> : icono}
               </span>
               <div>
                 <div className="phase-name">{fase.etiqueta}</div>
               </div>
             </div>
-            <span className={`badge ${CLASE_ESTADO[estado]}`}>
-              {esActual ? <>
-                <span className="phase-spinner" aria-hidden="true" />
-                <span className="sr-only">En curso</span>
-              </> : ETIQUETA_ESTADO[estado]}
-            </span>
+            <span className="sr-only">{ETIQUETA_ESTADO[estado]}</span>
           </li>
         );
       })}

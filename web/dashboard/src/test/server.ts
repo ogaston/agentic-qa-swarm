@@ -18,4 +18,7 @@ export const server = setupServer(
   http.get('/api/runs/:id/plan', () =>
     HttpResponse.json({ code: 'plan_not_ready', message: 'plan aún no disponible' }, { status: 404 }),
   ),
+  http.get('/api/run-evidence/:run/:flow/:name', () =>
+    HttpResponse.json({ code: 'not_ready', message: 'evidencia aún no disponible' }, { status: 404 }),
+  ),
 );
