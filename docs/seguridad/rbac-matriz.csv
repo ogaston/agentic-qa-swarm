@@ -152,8 +152,8 @@ go-warm-manager,aqs-test,list,secrets,no
 go-warm-manager,aqs-system,list,secrets,no
 go-warm-manager,aqs-test,watch,secrets,no
 go-warm-manager,aqs-system,watch,secrets,no
-go-warm-manager,aqs-test,create,secrets,no
-go-warm-manager,aqs-system,create,secrets,no
+go-warm-manager,aqs-test,create,secrets,yes
+go-warm-manager,aqs-system,create,secrets,yes
 go-warm-manager,aqs-test,deletecollection,jobs,no
 go-warm-manager,aqs-test,create,pods/exec,no
 go-warm-manager,aqs-test,create,rolebindings,no
