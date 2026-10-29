@@ -1,0 +1,84 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: warm-provisioner
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["create", "delete", "get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "resourcequotas", "limitranges"]
+    verbs: ["create", "delete", "get", "list", "watch", "update", "patch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create", "delete", "get", "list", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: warm-provisioner
+  namespace: aqs-system
+rules:
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["create", "delete", "get", "list", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: warm-provisioner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: warm-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: go-warm-manager
+    namespace: aqs-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: warm-provisioner
+  namespace: aqs-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: warm-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: go-warm-manager
+    namespace: aqs-system
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: warm-provisioner-confinement
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["*"]
+  matchConditions:
+    - name: is-go-warm-manager
+      expression: "request.userInfo.username == 'system:serviceaccount:aqs-system:go-warm-manager'"
+  validations:
+    - expression: "request.userInfo.username != 'system:serviceaccount:aqs-system:go-warm-manager' || (request.resource.resource == 'namespaces' && request.name.startsWith('aqs-w-')) || request.namespace.startsWith('aqs-w-') || (request.namespace == 'aqs-system' && request.resource.group == 'batch' && request.resource.resource == 'cronjobs')"
+      message: "go-warm-manager is only allowed to manage namespaces named aqs-w-* and resources in aqs-w-* (or cronjobs in aqs-system)"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: warm-provisioner-confinement
+spec:
+  policyName: warm-provisioner-confinement
+  validationActions: [Deny]

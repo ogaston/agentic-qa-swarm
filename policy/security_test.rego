@@ -15,6 +15,14 @@ test_clusterrole_denied if {
 	count(deny) > 0 with input as {"kind": "ClusterRole", "metadata": {"name": "x"}}
 }
 
+test_clusterrole_warm_provisioner_allowed if {
+	count(deny) == 0 with input as {"kind": "ClusterRole", "metadata": {"name": "warm-provisioner"}}
+}
+
+test_clusterrolebinding_warm_provisioner_allowed if {
+	count(deny) == 0 with input as {"kind": "ClusterRoleBinding", "metadata": {"name": "warm-provisioner"}}
+}
+
 test_role_allowed if {
 	count(deny) == 0 with input as {"kind": "Role", "metadata": {"name": "r", "namespace": "aqs-test"}}
 }
@@ -90,8 +98,22 @@ test_default_deny_only_egress_denied if {
 	count(deny) > 0 with input as [{"path": "x", "contents": object.union(dd, {"spec": {"policyTypes": ["Egress"]}})}]
 }
 
+dd_ingress := {"kind": "NetworkPolicy", "metadata": {"name": "default-deny-ingress", "namespace": "aqs-system"}, "spec": {"podSelector": {}, "policyTypes": ["Ingress"]}}
+
 test_default_deny_present_allowed if {
-	count(deny) == 0 with input as [{"path": "x", "contents": dd}, {"path": "y", "contents": {"kind": "NetworkPolicy", "metadata": {"name": "default-deny-ingress", "namespace": "aqs-system"}, "spec": {"podSelector": {}, "policyTypes": ["Ingress"]}}}]
+	count(deny) == 0 with input as [{"path": "x", "contents": dd}, {"path": "y", "contents": dd_ingress}]
+}
+
+dd_w := {"kind": "NetworkPolicy", "metadata": {"name": "default-deny", "namespace": "aqs-w-demo"}, "spec": {"podSelector": {}, "policyTypes": ["Ingress", "Egress"]}}
+
+test_default_deny_aqs_w_present_allowed if {
+	count(deny) == 0 with input as [{"path": "x", "contents": dd_w}, {"path": "y", "contents": dd_ingress}]
+}
+
+dd_plane := {"kind": "NetworkPolicy", "metadata": {"name": "default-deny", "namespace": "custom-ns", "labels": {"aqs.io/plane": "warm"}}, "spec": {"podSelector": {}, "policyTypes": ["Ingress", "Egress"]}}
+
+test_default_deny_plane_warm_present_allowed if {
+	count(deny) == 0 with input as [{"path": "x", "contents": dd_plane}, {"path": "y", "contents": dd_ingress}]
 }
 
 # U5-T12: ipBlock no se desactiva con null ni con valores raros

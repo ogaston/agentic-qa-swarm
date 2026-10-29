@@ -9,7 +9,7 @@ import rego.v1
 deny contains msg if {
 	is_array(input)
 	not has_default_deny
-	msg := "aqs-test: falta NetworkPolicy default-deny (podSelector {} con Ingress y Egress)"
+	msg := "falta NetworkPolicy default-deny en namespace warm (podSelector {} con Ingress y Egress)"
 }
 
 has_default_deny if {
@@ -17,7 +17,7 @@ has_default_deny if {
 	o := d.contents
 	o.kind == "NetworkPolicy"
 	o.metadata.name == "default-deny"
-	o.metadata.namespace == "aqs-test"
+	es_warm(o)
 	count(o.spec.podSelector) == 0
 	"Ingress" in o.spec.policyTypes
 	"Egress" in o.spec.policyTypes

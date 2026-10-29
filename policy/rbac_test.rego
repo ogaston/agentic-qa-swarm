@@ -65,3 +65,67 @@ test_binding_ajeno_sa_local_sin_namespace_allowed if {
 test_binding_ajeno_sa_control_plane_allowed if {
 	count(deny) == 0 with input as rbg("default", {"kind": "ServiceAccount", "name": "go-reset", "namespace": "aqs-system"})
 }
+
+# U12: excepcion de warm-provisioner sobre secrets
+test_warm_provisioner_secrets_create_allowed if {
+	count(deny) == 0 with input as {
+		"kind": "ClusterRole",
+		"metadata": {"name": "warm-provisioner"},
+		"rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["create"]}],
+	}
+}
+
+test_warm_provisioner_secrets_get_denied if {
+	count(deny) > 0 with input as {
+		"kind": "ClusterRole",
+		"metadata": {"name": "warm-provisioner"},
+		"rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["get"]}],
+	}
+}
+
+test_warm_provisioner_secrets_list_denied if {
+	count(deny) > 0 with input as {
+		"kind": "ClusterRole",
+		"metadata": {"name": "warm-provisioner"},
+		"rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["list"]}],
+	}
+}
+
+test_warm_provisioner_secrets_create_and_get_denied if {
+	count(deny) > 0 with input as {
+		"kind": "ClusterRole",
+		"metadata": {"name": "warm-provisioner"},
+		"rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["create", "get"]}],
+	}
+}
+
+test_other_role_secrets_create_denied if {
+	count(deny) > 0 with input as {
+		"kind": "Role",
+		"metadata": {"name": "other-role", "namespace": "aqs-test"},
+		"rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["create"]}],
+	}
+	count(deny) > 0 with input as {
+		"kind": "Role",
+		"metadata": {"name": "warm-provisioner", "namespace": "aqs-test"},
+		"rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["create"]}],
+	}
+	count(deny) > 0 with input as {
+		"kind": "ClusterRole",
+		"metadata": {"name": "other-role"},
+		"rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["create"]}],
+	}
+}
+
+# U12: RoleBinding fuera de warm denegado para sujetos de aqs-w-*
+test_binding_ajeno_sa_aqs_w_denied if {
+	count(deny) > 0 with input as rbg("aqs-system", {"kind": "ServiceAccount", "name": "app", "namespace": "aqs-w-demo"})
+}
+
+test_binding_ajeno_user_sintetico_aqs_w_denied if {
+	count(deny) > 0 with input as rbg("default", {"kind": "User", "name": "system:serviceaccount:aqs-w-demo:app"})
+}
+
+test_binding_ajeno_group_aqs_w_denied if {
+	count(deny) > 0 with input as rbg("default", {"kind": "Group", "name": "system:serviceaccounts:aqs-w-demo"})
+}

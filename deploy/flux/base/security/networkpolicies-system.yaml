@@ -67,7 +67,7 @@ spec:
       ports:
         - {protocol: TCP, port: 8080}
 ---
-# U9-T01: ui-api solo habla con DNS, NATS, go-identity, go-warm-manager, go-run-controller y agent-reporter.
+# U9-T01: ui-api solo habla con DNS, NATS, go-identity, go-warm-manager, go-run-controller, agent-reporter y go-governance.
 # Al seleccionar el pod, cualquier otro egreso queda denegado: si ui-api necesita otro destino, añádelo aquí.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -106,5 +106,8 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: agent-reporter
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: go-governance
       ports:
         - {protocol: TCP, port: 8080}

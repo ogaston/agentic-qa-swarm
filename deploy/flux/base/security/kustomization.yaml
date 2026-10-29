@@ -5,3 +5,4 @@ resources:
   - rbac.yaml
   - networkpolicies.yaml
   - networkpolicies-system.yaml
+  - warm-provisioner.yaml
