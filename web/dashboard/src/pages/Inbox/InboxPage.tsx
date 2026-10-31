@@ -63,6 +63,23 @@ const TONO_ENTORNO: Record<WarmState['state'], TonoEntorno> = {
   'idle-escalado': 'neutral',
 };
 
+/** Filas por página del listado. La paginación es local: la API devuelve la lista completa. */
+const PAGE_SIZE = 10;
+
+/** Números de página visibles: primera, última y vecinas de la actual; `null` marca un salto (…). */
+function pageNumbers(current: number, total: number): (number | null)[] {
+  const keep = new Set([1, total, current - 1, current, current + 1]);
+  const items: (number | null)[] = [];
+  let previous = 0;
+  for (let n = 1; n <= total; n++) {
+    if (!keep.has(n)) continue;
+    if (n - previous > 1) items.push(null);
+    items.push(n);
+    previous = n;
+  }
+  return items;
+}
+
 const MSG_YA_NO_PENDIENTE = 'Esta notificación ya no está pendiente';
 const MSG_NO_EXISTE = 'La notificación ya no existe';
 const RUN_ID = /^run-[0-9a-f]{16}$/;
@@ -79,6 +96,13 @@ export function InboxPage() {
   const [estado, setEstado] = useState<Estado>('pending');
   const [notificaciones, setNotificaciones] = useState<Notification[] | null>(null);
   const lista = notificaciones?.filter((n) => n.state === estado) ?? null;
+  const [page, setPage] = useState(1);
+  const totalPages = lista === null ? 0 : Math.ceil(lista.length / PAGE_SIZE);
+  // Si la lista se encoge (p. ej. tras una recarga), la página se ajusta a la última válida.
+  const currentPage = Math.min(page, Math.max(totalPages, 1));
+  const pageItems = lista?.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE) ?? [];
+  const pageStart = lista === null || lista.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(currentPage * PAGE_SIZE, lista?.length ?? 0);
   const [ahora, setAhora] = useState(Date.now);
   const [errorLista, setErrorLista] = useState<unknown>(null);
   // Los totales siempre se calculan sobre el conjunto completo, independientemente de la pestaña.
@@ -145,6 +169,7 @@ export function InboxPage() {
     setErrorAccion(null);
     setSeleccionadaId(null);
     setPanelAbierto(false);
+    setPage(1);
     setEstado(nueva);
   }
 
@@ -422,7 +447,7 @@ export function InboxPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lista.map((n) => (
+                    {pageItems.map((n) => (
                       <tr key={n.id}>
                         <td data-label="Repositorio">
                           <strong>{n.repo}</strong>
@@ -460,6 +485,48 @@ export function InboxPage() {
                   </tbody>
                 </table>
               </div>
+              {totalPages > 1 ? (
+                <nav className="inbox-pagination" aria-label="Paginación de notificaciones">
+                  <span className="inbox-pagination-range">{`${pageStart}–${pageEnd} de ${lista.length}`}</span>
+                  <div className="inbox-pagination-controls">
+                    <button
+                      type="button"
+                      className="inbox-page-btn"
+                      aria-label="Anterior"
+                      disabled={currentPage === 1 || enVuelo}
+                      onClick={() => setPage(currentPage - 1)}
+                    >
+                      <span aria-hidden="true">‹</span>
+                    </button>
+                    {pageNumbers(currentPage, totalPages).map((item, index) =>
+                      item === null ? (
+                        <span key={`gap-${index}`} className="inbox-page-gap" aria-hidden="true">…</span>
+                      ) : (
+                        <button
+                          key={item}
+                          type="button"
+                          className="inbox-page-btn"
+                          aria-label={`Página ${item}`}
+                          aria-current={item === currentPage ? 'page' : undefined}
+                          disabled={enVuelo}
+                          onClick={() => setPage(item)}
+                        >
+                          {item}
+                        </button>
+                      ),
+                    )}
+                    <button
+                      type="button"
+                      className="inbox-page-btn"
+                      aria-label="Siguiente"
+                      disabled={currentPage === totalPages || enVuelo}
+                      onClick={() => setPage(currentPage + 1)}
+                    >
+                      <span aria-hidden="true">›</span>
+                    </button>
+                  </div>
+                </nav>
+              ) : null}
             </div>
           ) : null}
         </div>

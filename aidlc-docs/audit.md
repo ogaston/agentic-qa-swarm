@@ -1880,3 +1880,20 @@ Okay, but the button should be in Spanish. And what about the evidence S3 link? 
 ### User input — 2026-10-29T08:24:07-05:00
 
 commit and open the PR
+
+## Construction — U12 control humano de la ejecución (redacción y despacho)
+**Timestamp**: 2026-10-31T16:30:00Z
+**User Input**: "there are few changes I need: - before \"Ejecutar Pruebas\" we need to have a primary button at the right top to confirm the run - [Image 1] here, we can only show the Family of flows. we can also set others (disabled for now) like loading tests, sec tests. - when the run is completed I dont see the new status on each test [Image 2] - also evidences are not accesible yet"
+**User Input (respuestas)**: Punto 1 = "Run page: gate antes de ejecutar"; Punto 2 = "Sí, solo familias"; luego "go ahead".
+**AI Response**: Diagnóstico: ui-api del clúster (imagen 2026-10-26) es anterior a /run-evidence (f5a2682); 404 unmatched explica "Sin resultado" y evidencias inaccesibles; requiere rebuild/load por el humano. Unidad U12 redactada: U12-T01 (modal familias) y U12-T02 (aprobación de ejecución). Candidata C-134. Despacho ola 1 (T01 ∥ T02).
+**Context**: CONSTRUCTION, loop de agentes.
+
+---
+
+## Construction — U12 ola 1 (resultados)
+**Timestamp**: 2026-10-31T18:00:00Z
+**User Input**: "the codificador has to use deepseek free isntead" / "si, ponlo fijo" / "now, update the reviewer to be claude sonnet from claude agent"
+**AI Response**: .opencode/agents/codificador.md -> opencode/deepseek-v4.1-flash-free; .opencode/agents/revisor.md -> claude-agent/sonnet. U12-T01 VERDE ronda 1 (PR #154; arbitraje CA-4, candidata C-135). U12-T02 VERDE ronda 1 (PR #155; candidata C-136). Ambos esperan revisión humana.
+**Context**: CONSTRUCTION, loop de agentes.
+
+---

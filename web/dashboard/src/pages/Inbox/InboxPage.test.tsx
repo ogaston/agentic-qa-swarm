@@ -226,6 +226,71 @@ describe('Inbox lista', () => {
 
 });
 
+function makeNotifications(count: number, state: Estado = 'pending'): Notification[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `${state}-${index + 1}`,
+    github_event: 'commit',
+    repo: `acme/repo-${String(index + 1).padStart(2, '0')}`,
+    sha: 'abcdef1234567890',
+    state,
+  }));
+}
+
+describe('Inbox paginación', () => {
+  it('muestra 10 filas por página con el rango y los controles', async () => {
+    await abrirInbox([listaPorEstado({ pending: makeNotifications(12) }, nuevoRegistro())]);
+    await screen.findByText('acme/repo-01');
+    expect(screen.getAllByRole('button', { name: 'Revisar' })).toHaveLength(10);
+    expect(screen.queryByText('acme/repo-11')).toBeNull();
+
+    const pagination = screen.getByRole('navigation', { name: 'Paginación de notificaciones' });
+    expect(within(pagination).getByText('1–10 de 12')).toBeTruthy();
+    expect(within(pagination).getByRole('button', { name: 'Página 1' }).getAttribute('aria-current')).toBe('page');
+    expect(within(pagination).getByRole('button', { name: 'Anterior' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('Siguiente y Anterior cambian de página', async () => {
+    const user = await abrirInbox([listaPorEstado({ pending: makeNotifications(12) }, nuevoRegistro())]);
+    await screen.findByText('acme/repo-01');
+    const pagination = screen.getByRole('navigation', { name: 'Paginación de notificaciones' });
+
+    await user.click(within(pagination).getByRole('button', { name: 'Siguiente' }));
+    await screen.findByText('acme/repo-11');
+    expect(screen.queryByText('acme/repo-01')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Revisar' })).toHaveLength(2);
+    expect(within(pagination).getByText('11–12 de 12')).toBeTruthy();
+    expect(within(pagination).getByRole('button', { name: 'Siguiente' }).hasAttribute('disabled')).toBe(true);
+
+    await user.click(within(pagination).getByRole('button', { name: 'Anterior' }));
+    await screen.findByText('acme/repo-01');
+    expect(within(pagination).getByRole('button', { name: 'Página 1' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('no muestra controles cuando cabe en una página', async () => {
+    await abrirInbox([listaPorEstado({ pending: makeNotifications(10) }, nuevoRegistro())]);
+    await screen.findByText('acme/repo-10');
+    expect(screen.queryByRole('navigation', { name: 'Paginación de notificaciones' })).toBeNull();
+  });
+
+  it('cambiar de pestaña vuelve a la primera página', async () => {
+    const user = await abrirInbox([
+      listaPorEstado(
+        { pending: makeNotifications(12), confirmed: makeNotifications(12, 'confirmed') },
+        nuevoRegistro(),
+      ),
+    ]);
+    await screen.findByText('acme/repo-01');
+    await user.click(
+      within(screen.getByRole('navigation', { name: 'Paginación de notificaciones' })).getByRole('button', { name: 'Siguiente' }),
+    );
+    await screen.findByText('acme/repo-11');
+
+    await user.click(screen.getByRole('tab', { name: /^Confirmadas/ }));
+    await screen.findByText('acme/repo-01');
+    expect(screen.getAllByRole('button', { name: 'Revisar' })).toHaveLength(10);
+  });
+});
+
 describe('Inbox confirma', () => {
   it('abrir el panel no envía ninguna petición POST', async () => {
     const reg = nuevoRegistro();
