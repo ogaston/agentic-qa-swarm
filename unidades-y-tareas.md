@@ -330,5 +330,6 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 |---|---|---|---|---|
 | U12-T1 | [ ] | Paso 2 del modal: solo familias de flujos; carga y seguridad visibles y deshabilitadas («Próximamente») | US-M2, S5 | `tareas/U12-T01-familias-de-flujos-en-el-modal.md` |
 | U12-T2 | [ ] | La corrida espera tras el ensayo; «Ejecutar pruebas» en `/runs/:id` la lleva a `running` (dueño o admin; caduca a los 30 min) | US-M2, US-M5, S5 | `tareas/U12-T02-confirmacion-antes-de-ejecutar.md` |
+| U12-T3 | [ ] | `up.sh` reconstruye, carga y reinicia las imágenes de la plataforma también sobre un clúster existente, con lectura de vuelta del `startTime` de los pods | S5 | `tareas/U12-T03-imagenes-frescas-en-cluster-existente.md` |
 
 > **Tareas redactadas (2026-10-31)**, a pedido del humano. Olas: **1** = T01 ∥ T02 (unidades de archivos disjuntas). Diagnóstico adjunto: «Sin resultado» y evidencias inaccesibles en `/runs/:id` no son un defecto de código: la imagen `ui-api` del clúster (importada el 2026-10-26) es anterior a la ruta `/run-evidence` (`f5a2682`, 2026-10-29) y responde `404 route=unmatched`. Se resuelve reconstruyendo y cargando las imágenes (acción del humano). Candidata nueva C-134: el humo del dashboard debe comprobar `/api/run-evidence`.
