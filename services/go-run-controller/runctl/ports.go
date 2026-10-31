@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 // Fact es un hecho tri-estado hacia el gate. El valor cero es Unknown: lo que el controlador
@@ -79,6 +80,9 @@ type Run struct {
 	Launched     map[string]bool `json:"launched,omitempty"`    // fase ya lanzada con éxito en el estado actual
 	Plan         json.RawMessage `json:"plan,omitempty"`        // FlowPlan validado de la corrida (ver StoredPlans)
 	Artifact     *Artifact       `json:"artifact,omitempty"`    // artefacto del evento run.confirmed (U11-T01); nil = respaldo RUN_ARTIFACT_REF
+	// U12-T02: tras el ensayo aprobado la corrida espera confirmación humana para ejecutar.
+	ExecutionApprovedBy string    `json:"execution_approved_by,omitempty"` // principal que aprobó la ejecución ("" = pendiente)
+	AwaitingSince       time.Time `json:"awaiting_since,omitzero"`         // desde cuándo espera la aprobación
 }
 
 func (r Run) clone() Run {
@@ -252,4 +256,7 @@ var (
 	ErrDenied   = errors.New("gate denegó la transición")
 	ErrGate     = errors.New("gate no disponible o respuesta inválida")
 	ErrPersist  = errors.New("no se pudo persistir")
+	// U12-T02: aprobación de la ejecución.
+	ErrForbidden   = errors.New("sin permiso para aprobar la ejecución")
+	ErrNotAwaiting = errors.New("la corrida no está esperando aprobación de ejecución")
 )

@@ -15,7 +15,17 @@ import (
 
 type verifierFunc func() error
 
-func (f verifierFunc) Verify(context.Context, string) error { return f() }
+func (f verifierFunc) Verify(context.Context, string) (Principal, error) {
+	if err := f(); err != nil {
+		return Principal{}, err
+	}
+	return Principal{ID: "u-1"}, nil
+}
+
+// noExec es el aprobador no-op de las pruebas que no ejercitan POST /runs/{id}/execute.
+type noExec struct{}
+
+func (noExec) ApproveExecution(context.Context, string, string, bool) error { return nil }
 
 func TestRunsEndpoint(t *testing.T) {
 	st := runctl.NewMemStore()
@@ -32,7 +42,7 @@ func TestRunsEndpoint(t *testing.T) {
 		{"identidad caída", "/runs/r-1", "Bearer x", ErrUnavailable, 503},
 	}
 	for _, c := range cases {
-		h := New(st, verifierFunc(func() error { return c.verr }))
+		h := New(st, noExec{}, verifierFunc(func() error { return c.verr }))
 		req := httptest.NewRequest("GET", c.path, nil)
 		if c.auth != "" {
 			req.Header.Set("Authorization", c.auth)
@@ -51,7 +61,7 @@ func TestRunsEndpoint(t *testing.T) {
 func TestIdentityVerifierMapsStatuses(t *testing.T) {
 	for code, want := range map[int]error{401: ErrUnauthenticated, 500: ErrUnavailable} {
 		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code) }))
-		if err := NewIdentityVerifier(s.URL).Verify(t.Context(), "x"); err != want {
+		if _, err := NewIdentityVerifier(s.URL).Verify(t.Context(), "x"); err != want {
 			t.Errorf("%d: %v", code, err)
 		}
 		s.Close()
@@ -60,7 +70,7 @@ func TestIdentityVerifierMapsStatuses(t *testing.T) {
 		_, _ = w.Write([]byte(`{"principal_id":"p","role":"root","session_id":"s","expires_at":"2026-01-01T00:00:00Z"}`))
 	}))
 	defer s.Close()
-	if err := NewIdentityVerifier(s.URL).Verify(t.Context(), "x"); err != ErrUnavailable {
+	if _, err := NewIdentityVerifier(s.URL).Verify(t.Context(), "x"); err != ErrUnavailable {
 		t.Error("rol desconocido debía ser indisponible")
 	}
 }
@@ -91,7 +101,7 @@ func TestRunViewValidatesAgainstOpenAPISchema(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/runs/r-1", nil)
 	req.Header.Set("Authorization", "Bearer x")
-	New(st, verifierFunc(func() error { return nil })).ServeHTTP(w, req)
+	New(st, noExec{}, verifierFunc(func() error { return nil })).ServeHTTP(w, req)
 	var body any
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
 	if err := sch.Validate(body); err != nil {

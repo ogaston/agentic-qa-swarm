@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ApiError, apiFetch } from '../../api/client';
 import type { components } from '../../api/schema.gen';
@@ -65,6 +65,25 @@ function VistaCorrida({ id }: { id: string }) {
     },
   );
 
+  // U12-T02: confirmación humana de la ejecución. Mientras la petición está en vuelo el botón
+  // queda deshabilitado; al terminar se refresca el sondeo (que no se detiene: no es terminal).
+  const [aprobando, setAprobando] = useState(false);
+  const [errorEjecucion, setErrorEjecucion] = useState<unknown>(null);
+  const ejecutarPruebas = async () => {
+    setAprobando(true);
+    setErrorEjecucion(null);
+    try {
+      await apiFetch<Run>(`/api/runs/${id}/execute`, { method: 'POST' });
+      refrescar();
+    } catch (e) {
+      // 409: otra pestaña ya aprobó; para esta vista es un éxito silencioso.
+      if (e instanceof ApiError && e.status === 409) refrescar();
+      else setErrorEjecucion(e);
+    } finally {
+      setAprobando(false);
+    }
+  };
+
   // Última fase no fallida vista en el sondeo: sirve de «última fase alcanzada» si falla.
   const ultimaFase = useRef<string | null>(null);
   if (data !== null && data.state !== 'failed') ultimaFase.current = data.state;
@@ -109,8 +128,29 @@ function VistaCorrida({ id }: { id: string }) {
             <span className="az-meta-label">Estado de corrida</span>
             <span className="az-meta-value">{estadoConsulta}</span>
           </div>
+          {data?.awaiting_execution === true && (
+            <div className="az-meta-item">
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="run-execute-button"
+                disabled={aprobando}
+                onClick={() => void ejecutarPruebas()}
+              >
+                Ejecutar pruebas
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {data?.awaiting_execution === true && (
+        <p role="status" className="notice run-awaiting-notice">
+          Las pruebas están listas. Revisa los flujos y pulsa «Ejecutar pruebas» para empezar.
+        </p>
+      )}
+
+      {errorEjecucion !== null && <RunErrorNotice error={errorEjecucion} />}
 
       {noEncontrada && (
         <p role="alert" className="alert-box alert-danger">
@@ -172,6 +212,7 @@ function encabezadoPlan(estado: string | undefined): string {
 function descripcionEstado(run: Run): string {
   if (run.state === 'failed') return 'Corrida fallida';
   if (run.state === 'done') return 'Completada';
+  if (run.awaiting_execution) return 'Esperando tu confirmación';
   const indice = indiceFase(run.state);
   return FASES[indice]?.etiqueta ?? 'En curso';
 }
@@ -182,6 +223,9 @@ function EstadoCorrida({ run }: { run: Run; ultimaFase: string | null }) {
     return <span className="badge badge-danger">Corrida fallida</span>;
   }
   if (run.state === 'done') return null;
+  if (run.awaiting_execution) {
+    return <span className="badge badge-accent">Esperando tu confirmación</span>;
+  }
   const indice = indiceFase(run.state);
   if (indice < 0) {
     return <span className="badge badge-neutral">En curso</span>;
@@ -230,7 +274,7 @@ function Linea({ run, ultimaFase }: { run: Run; ultimaFase: string | null }) {
     return <Fases actual={-1} hechasHasta={FASES.length} />;
   }
   const indice = FASES.findIndex((f) => f.estado === run.state);
-  return <Fases actual={indice} hechasHasta={indice} />;
+  return <Fases actual={indice} hechasHasta={indice} awaiting={run.awaiting_execution === true} />;
 }
 
 const ETIQUETA_ESTADO = { hecha: 'hecha', actual: 'En curso', pendiente: 'pendiente' } as const;
@@ -239,14 +283,16 @@ const ETIQUETA_ESTADO = { hecha: 'hecha', actual: 'En curso', pendiente: 'pendie
  * Línea de tiempo. Las fases con índice menor que `hechasHasta` están hechas; la de
  * índice `actual` es la fase en curso (`aria-current`); el resto, pendientes. Cada fila
  * lleva icono y el estado escrito: el color nunca es lo único que la distingue.
+ * Con `awaiting`, la fase de ensayo en curso se rotula «Esperando tu confirmación» (U12-T02).
  */
-function Fases({ actual, hechasHasta }: { actual: number; hechasHasta: number }) {
+function Fases({ actual, hechasHasta, awaiting = false }: { actual: number; hechasHasta: number; awaiting?: boolean }) {
   return (
     <ol aria-label="Fases de la corrida" className="phase-timeline">
       {FASES.map((fase, i) => {
         const esActual = i === actual;
         const estado = esActual ? 'actual' : i < hechasHasta ? 'hecha' : 'pendiente';
         const icono = estado === 'hecha' ? '✓' : String(i + 1);
+        const etiqueta = esActual && awaiting ? 'Esperando tu confirmación' : fase.etiqueta;
         return (
           <li
             key={fase.estado}
@@ -259,7 +305,7 @@ function Fases({ actual, hechasHasta }: { actual: number; hechasHasta: number })
                 {esActual ? <span className="phase-spinner" aria-hidden="true" /> : icono}
               </span>
               <div>
-                <div className="phase-name">{fase.etiqueta}</div>
+                <div className="phase-name">{etiqueta}</div>
               </div>
             </div>
             <span className="sr-only">{ETIQUETA_ESTADO[estado]}</span>

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"time"
 )
 
 // DefaultNamespace es el único namespace donde el controlador emite transiciones.
@@ -14,6 +15,10 @@ const DefaultNamespace = "aqs-test"
 
 // MaxRetries es el tope de reintentos por fase (V8): a la tercera falla, handoff.
 const MaxRetries = 2
+
+// DefaultExecutionApprovalTTL es cuánto espera una corrida ensayada la confirmación humana
+// antes de salir por la ruta de fallo normal (U12-T02).
+const DefaultExecutionApprovalTTL = 30 * time.Minute
 
 // Config agrupa los puertos del controlador. Todos salvo Observer y Log son obligatorios.
 type Config struct {
@@ -28,6 +33,9 @@ type Config struct {
 	Runners   RunnerResults    // opcional: avance de la fase run (runners, evidencia, run.done al terminar)
 	Observer  Observer
 	Log       *slog.Logger
+	Now       func() time.Time // reloj (nil: time.Now); inyectable en pruebas
+	// ExecutionApprovalTTL es el plazo para aprobar la ejecución tras el ensayo (<=0: 30 min).
+	ExecutionApprovalTTL time.Duration
 }
 
 // Controller es el controlador de corridas. Serializa todas sus operaciones.
@@ -61,7 +69,57 @@ func New(c Config) (*Controller, error) {
 	if c.Log == nil {
 		c.Log = slog.New(slog.DiscardHandler)
 	}
+	if c.Now == nil {
+		c.Now = time.Now
+	}
+	if c.ExecutionApprovalTTL <= 0 {
+		c.ExecutionApprovalTTL = DefaultExecutionApprovalTTL
+	}
 	return &Controller{c: c}, nil
+}
+
+// now lee el reloj configurado (New siempre lo deja no nulo).
+func (k *Controller) now() time.Time {
+	if k.c.Now != nil {
+		return k.c.Now()
+	}
+	return time.Now()
+}
+
+// AwaitingExecution indica si la corrida espera la confirmación humana para ejecutar.
+func AwaitingExecution(r Run) bool {
+	return r.State == Rehearsing && r.EnsayoPassed == True && r.ExecutionApprovedBy == ""
+}
+
+// ApproveExecution registra la aprobación humana de la ejecución (U12-T02). Serializada con k.mu:
+// ErrNotFound si no existe; ErrForbidden si no es admin ni el dueño; ErrNotAwaiting si la corrida
+// no espera aprobación o ya la aprobó otra persona. Repetirla con el mismo principal es idempotente.
+func (k *Controller) ApproveExecution(ctx context.Context, id, principalID string, admin bool) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	r, ok := k.c.Store.Get(id)
+	if !ok {
+		return ErrNotFound
+	}
+	ctx = withTrace(ctx, r.TraceID)
+	if !admin && principalID != r.ConfirmedBy {
+		return ErrForbidden
+	}
+	if r.ExecutionApprovedBy != "" {
+		if r.ExecutionApprovedBy == principalID {
+			return nil // idempotente: el mismo principal puede repetir la aprobación
+		}
+		return ErrNotAwaiting // ya la aprobó otra persona
+	}
+	if !AwaitingExecution(r) {
+		return ErrNotAwaiting
+	}
+	r.ExecutionApprovedBy = principalID
+	if err := k.save(r); err != nil {
+		return err
+	}
+	k.c.Log.InfoContext(ctx, "ejecución aprobada por el humano", "run_id", id, "principal_id", principalID, "admin", admin)
+	return nil
 }
 
 // Namespace devuelve el namespace fijo de las transiciones.
@@ -171,10 +229,17 @@ func (k *Controller) transition(ctx context.Context, id string, to State) error 
 		k.obsTransition(from, to, ResIllegal)
 		return fmt.Errorf("%w: %s -> %s", ErrIllegal, from, to)
 	}
-	if from == Rehearsing && to == Running && r.EnsayoPassed != True {
+	if from == Rehearsing && to == Running {
 		// Gate duro y no omitible: sin ensayo_passed=true registrado en el almacén no hay runner.
-		k.obsTransition(from, to, ResIllegal)
-		return fmt.Errorf("%w: %s -> %s sin ensayo_passed registrado", ErrIllegal, from, to)
+		if r.EnsayoPassed != True {
+			k.obsTransition(from, to, ResIllegal)
+			return fmt.Errorf("%w: %s -> %s sin ensayo_passed registrado", ErrIllegal, from, to)
+		}
+		// U12-T02: tampoco hay runner sin la confirmación humana de la ejecución.
+		if r.ExecutionApprovedBy == "" {
+			k.obsTransition(from, to, ResIllegal)
+			return fmt.Errorf("%w: %s -> %s sin aprobación de ejecución", ErrIllegal, from, to)
+		}
 	}
 	dec, err := k.c.Gate.Authorize(ctx, k.request(ctx, r, to))
 	switch {
@@ -424,6 +489,20 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 		case False:
 			return k.phaseFailed(ctx, r, phase, "rehearsal.failed")
 		case True:
+			// U12-T02: el ensayo aprobado no ejecuta nada por sí solo. La corrida espera a que su
+			// dueño (o un admin) confirme la ejecución; sin confirmación en el TTL sale por fallo.
+			if r.ExecutionApprovedBy == "" {
+				now := k.now()
+				if r.AwaitingSince.IsZero() {
+					r.AwaitingSince = now
+					if err := k.save(r); err != nil {
+						return err
+					}
+				} else if now.Sub(r.AwaitingSince) > k.c.ExecutionApprovalTTL {
+					return k.failRun(ctx, id, "ejecución no aprobada a tiempo")
+				}
+				return nil
+			}
 		default:
 			return nil // esperando rehearsal.passed: no hay nada que preguntar al gate todavía
 		}

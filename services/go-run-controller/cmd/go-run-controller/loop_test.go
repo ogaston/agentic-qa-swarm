@@ -87,7 +87,7 @@ func TestEventRedeliveredOnPersistErrorRehearsalPassed(t *testing.T) {
 	st.down.Store(false)
 	ticks(ctl, src, 30)
 	r, _ := st.Get("r-1")
-	if r.EnsayoPassed != runctl.True || r.State == runctl.Rehearsing {
+	if r.EnsayoPassed != runctl.True || !runctl.AwaitingExecution(r) {
 		t.Fatalf("la corrida sigue esperando el ensayo: %+v", r)
 	}
 }

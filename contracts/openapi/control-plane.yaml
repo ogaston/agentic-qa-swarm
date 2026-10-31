@@ -134,6 +134,23 @@ paths:
               schema: {$ref: '#/components/schemas/Run'}
         '401': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /runs/{id}/execute:
+    post:
+      operationId: executeRun
+      summary: El humano confirma la ejecución tras el ensayo aprobado (U12-T02).
+      description: Solo el dueño de la corrida (o un admin) puede aprobarla. Sin aprobación en 30 minutos la corrida sale por la ruta de fallo normal.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '202':
+          description: Aprobación registrada; devuelve la corrida actualizada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Run'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
   /runs/{id}/plan:
     get:
       operationId: getRunPlan
@@ -495,12 +512,15 @@ components:
         confirmed_at: {type: string, format: date-time}
     Run:
       type: object
-      required: [id, state]
+      required: [id, state, awaiting_execution]
       properties:
         id: {type: string}
         state:
           type: string
           enum: [confirmed, warm_ready, deploying, inferring, rehearsing, running, resetting, reporting, done, failed]
+        awaiting_execution:
+          type: boolean
+          description: true mientras la corrida espera la confirmación humana para ejecutar (U12-T02).
         trace_id: {type: string}
         verdict:
           type: string

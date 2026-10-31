@@ -72,7 +72,7 @@ func newRig(flows ...string) *rig {
 }
 
 func passedRun(id string) runctl.Run {
-	return runctl.Run{ID: id, State: runctl.Running, EnsayoPassed: runctl.True, ConfirmedBy: "u", TraceID: "t-" + id}
+	return runctl.Run{ID: id, State: runctl.Running, EnsayoPassed: runctl.True, ExecutionApprovedBy: "u", ConfirmedBy: "u", TraceID: "t-" + id}
 }
 
 func (r *rig) jobs(t testing.TB) []batchv1.Job {

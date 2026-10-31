@@ -65,6 +65,16 @@ func newEnv(t tb, src FlowSource, other *runctl.FakePhases) *env {
 
 func (e *env) state() runctl.State { r, _ := e.store.Get("r-1"); return r.State }
 
+// approveIfAwaiting confirma la ejecución como el dueño ("u") cuando el ensayo ya pasó (U12-T02).
+func (e *env) approveIfAwaiting(t tb) {
+	t.Helper()
+	if cur, ok := e.store.Get("r-1"); ok && runctl.AwaitingExecution(cur) {
+		if err := e.k.ApproveExecution(context.Background(), "r-1", "u", false); err != nil {
+			t.Fatalf("aprobar la ejecución: %v", err)
+		}
+	}
+}
+
 // step da un paso al controlador, resuelve los Jobs vivos con ok() y recuerda el estado visto.
 func (e *env) step(t tb, ok func(name string) bool) {
 	t.Helper()
@@ -122,6 +132,7 @@ func TestRehearsalNeverSkippedRunnerOnlyAfterPassed(t *testing.T) {
 	// Falla el primero, pasa el segundo (1 reintento).
 	for i := 0; i < 60 && e.state() != runctl.Done; i++ {
 		e.step(t, func(n string) bool { return n == "rehearsal-r-1-2" })
+		e.approveIfAwaiting(t)
 	}
 	js := jobs(t, e.cs)
 	if e.state() != runctl.Done || count(js, "rehearsal-r-1-") != 2 || count(js, "runner-") != 1 || len(e.m.bad) != 0 {
@@ -148,6 +159,8 @@ func TestFlowToRehearsal(t *testing.T) {
 		t.Fatal("ensayo_passed sin Job succeeded")
 	}
 	finish(t, e.cs, "rehearsal-r-1-1", true)
+	e.k.DriveAll(context.Background())
+	e.approveIfAwaiting(t)
 	e.k.DriveAll(context.Background())
 	if e.state() != runctl.Running {
 		t.Fatalf("estado %s", e.state())
@@ -191,6 +204,7 @@ func TestPropertyRehearsalCapAndNoRunnerWithoutPass(t *testing.T) {
 				}
 				return ok
 			})
+			e.approveIfAwaiting(rt)
 			js := jobs(rt, e.cs)
 			if c := count(js, "rehearsal-r-1-"); c > 3 {
 				rt.Fatalf("%d Jobs de ensayo", c)

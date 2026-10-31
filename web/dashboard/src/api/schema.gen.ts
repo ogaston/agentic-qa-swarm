@@ -106,6 +106,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * El humano confirma la ejecución tras el ensayo aprobado (U12-T02).
+         * @description Solo el dueño de la corrida (o un admin) puede aprobarla. Sin aprobación en 30 minutos la corrida sale por la ruta de fallo normal.
+         */
+        post: operations["executeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/plan": {
         parameters: {
             query?: never;
@@ -389,6 +409,8 @@ export interface components {
             id: string;
             /** @enum {string} */
             state: "confirmed" | "warm_ready" | "deploying" | "inferring" | "rehearsing" | "running" | "resetting" | "reporting" | "done" | "failed";
+            /** @description true mientras la corrida espera la confirmación humana para ejecutar (U12-T02). */
+            awaiting_execution: boolean;
             trace_id?: string;
             /**
              * @description Veredicto del reporter (fase report); ausente hasta que el reporte validado llega.
@@ -634,6 +656,32 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    executeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aprobación registrada; devuelve la corrida actualizada. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     getRunPlan: {
