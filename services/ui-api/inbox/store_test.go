@@ -161,3 +161,30 @@ func TestApplySinArtefactoNoPanica(t *testing.T) {
 		t.Fatalf("no debe quedar entrada: %+v", n)
 	}
 }
+
+// El tiempo REST es el del evento original, incluso tras confirmar o volver a aplicarlo.
+func TestNotificationCreatedAtSurvivesConfirmationAndReplay(t *testing.T) {
+	original := time.Date(2026, 10, 28, 12, 30, 0, 123000000, time.UTC)
+	event := ev("timestamp", original)
+	dir := t.TempDir()
+	s := open(t, dir)
+	s.Apply(event)
+	check := func(store *Store) {
+		t.Helper()
+		notifications := store.List("")
+		if len(notifications) != 1 || !notifications[0].CreatedAt.Equal(original) {
+			t.Fatalf("created_at: %+v, want %v", notifications, original)
+		}
+	}
+	check(s)
+	if _, err := s.Confirm("timestamp", "user", []string{"happy-path"}); err != nil {
+		t.Fatal(err)
+	}
+	check(s)
+	replay := open(t, dir)
+	replay.Apply(event)
+	check(replay)
+	if replay.List("")[0].State != StateConfirmed {
+		t.Fatal("confirmation lost on replay")
+	}
+}

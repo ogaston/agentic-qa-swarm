@@ -134,7 +134,7 @@ func (s *Store) Apply(ev NotifyCreated) bool {
 	s.items[id] = &entry{
 		n: Notification{
 			ID: id, GithubEvent: ev.Data.GithubEvent, Repo: ev.Data.Repo, SHA: ev.Data.SHA,
-			Artifact: &a, State: StatePending,
+			Artifact: &a, State: StatePending, CreatedAt: ev.OccurredAt,
 		},
 		at: ev.OccurredAt, seq: s.seq,
 	}

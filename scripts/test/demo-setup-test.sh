@@ -6,7 +6,7 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/demo-setup-test.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/repo/scripts/demo" "$work/repo/scripts/kind" "$work/bin" "$work/runtime"
-cp "$root/scripts/demo/00-setup.sh" "$work/repo/scripts/demo/"
+cp "$root/scripts/kind/demo-preflight.sh" "$work/repo/scripts/kind/"
 cp "$root/scripts/kind/lib.sh" "$work/repo/scripts/kind/"
 cat >"$work/repo/scripts/kind/deploy.sh" <<'MOCK'
 #!/usr/bin/env bash
@@ -72,7 +72,7 @@ run_case() {
   shift 2
   : >"$work/calls"
   env PATH="$work/bin:$PATH" XDG_RUNTIME_DIR="$work/runtime" MOCK_LOG="$work/calls" MOCK_CASE="$scenario" \
-    bash "$work/repo/scripts/demo/00-setup.sh" "$@" >"$work/out" 2>&1 || rc=$?
+    bash "$work/repo/scripts/kind/demo-preflight.sh" "$@" >"$work/out" 2>&1 || rc=$?
   if [ "$rc" -ne "$expected" ]; then
     echo "FALLA $scenario: rc=$rc, esperado=$expected"
     cat "$work/out"

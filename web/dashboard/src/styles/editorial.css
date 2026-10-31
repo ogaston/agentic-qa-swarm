@@ -2339,3 +2339,14 @@
     border-top: 1px solid var(--ed-hairline);
   }
 }
+
+/* Inbox controls belong to the table; KPIs retain their global context. */
+.inbox-table-header { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; }
+.inbox-table-controls { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; margin-left: auto; }
+.inbox-table-controls .az-tablist { flex-wrap: wrap; }
+.notification-external-link { display: inline-flex; align-items: baseline; gap: .35rem; max-width: 100%; overflow-wrap: anywhere; }
+.notification-external-link svg { width: 1em; height: 1em; flex-shrink: 0; align-self: center; }
+.artifact-tooltip { position: relative; display: inline-block; cursor: help; }
+.artifact-tooltip-content { position: fixed; z-index: 1000; width: max-content; max-width: min(28rem, 65vw); padding: .6rem .75rem; border: 1px solid var(--ed-hairline, #dedbd6); border-radius: 4px; background: var(--ed-white, #fff); color: var(--ed-ink, #161616); box-shadow: 0 4px 16px #0002; overflow-wrap: anywhere; white-space: normal; }
+.artifact-tooltip:focus-visible, .notification-external-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+@media (max-width: 600px) { .inbox-table-controls { width: 100%; gap: .75rem; } .inbox-table-controls .az-tablist { width: 100%; justify-content: flex-end; } }

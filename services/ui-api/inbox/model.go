@@ -26,6 +26,7 @@ type Artifact struct {
 
 // Notification es la forma REST del OpenAPI (components.schemas.Notification).
 type Notification struct {
+	CreatedAt   time.Time `json:"created_at"`
 	ID          string    `json:"id"`
 	GithubEvent string    `json:"github_event"`
 	Repo        string    `json:"repo"`
