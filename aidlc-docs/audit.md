@@ -1769,3 +1769,114 @@ in this view: runs/run-7e56e11a98a8bce7 and want:
 **Timestamp**: 2026-10-29T03:08:00Z
 **AI Response**: Approved plan complete. Added accessible current-phase spinner, expanded running test steps before the pending report, and bounded plan readiness retries with immediate recovery on execution transition. All 250 tests, lint, build and source whitespace checks passed. Fixture-backed browser verification at 1440/390/375px passed with zero overflow or page errors; reduced motion and user collapse verified. Evidence: aidlc-docs/construction/run-live-tests/code/verification.md. No live deployment or phase transition.
 **Context**: Code Generation complete; ready for human code review. Completion options: Request Changes, or Continue to Next Stage (Build & Test). Approval response “go ahead” was recorded at 2026-10-29T03:03:23Z; its preceding 03:05:00Z timestamp was approximate.
+
+## CONSTRUCTION — U12 Self-Service Repositories and Warm Environments
+**Timestamp**: 2026-10-29T03:14:30Z
+**User Input**: "continue"
+**AI Response**: Verified and closed all 4 code review findings in `feat/self-service-repos` worktree:
+1. Updated `scripts/ci/rbac-matrix.sh` and `docs/seguridad/rbac-matriz.csv` to exempt `ClusterRole/warm-provisioner` and allow cronjobs in `aqs-system`. Adjusted `scripts/kind/kind-smoke.sh` live-cluster RBAC probe to reflect cluster-wide secret creation authorization.
+2. In `services/go-warm-manager/provision/reconcile.go`, ensured idempotent secret creation via direct `Create` ignoring `AlreadyExists`, complying with create-only least-privilege permissions.
+3. In `services/go-run-controller/adapters/phases.go`, updated `WarmClient.Ensure`, `Deploy`, and `SurfaceForTarget` to forward target namespace/repo.
+4. In `services/go-run-controller/adapters/imagen.go`, tightened image prefix matching to strict slug equality.
+5. In `deploy/flux/base/security/warm-provisioner.yaml`, allowed `go-warm-manager` updates in `aqs-test` within `ValidatingAdmissionPolicy warm-provisioner-confinement`.
+All checks verified: `contracts/validate.sh` (100%), 6 Go services unit tests (100%), dashboard 242 tests + Vite build (100%), `scripts/ci/rbac-matrix.sh` (dev/prod OK), `scripts/test/u12-self-service-kind.sh` (OK), and `scripts/kind/kind-smoke.sh` (0 FALLA).
+**Context**: Unit U12 completed in dedicated worktree `agentic-qa-swarm-self-service` on branch `feat/self-service-repos`.
+
+## CONSTRUCTION — Login and Inbox update request
+**Timestamp**: 2026-10-29T03:20:00Z
+**User Input**:
+```text
+I need to update few things about the app: 
+
+- login must work and store the session in localStorage. 
+- Tabs (pendientes, confirmadas, rechazadas) must be in the right corner of the table. so the square with the stats must be unfiltered always.
+- the table must have relative time too (for example: 5 mins ago)
+- artefact must show only the last chars (for example: image: 3ndedh7), and when hover we can show a tooltip with the entire text. 
+- in the modal: repository and commit must be a link (add a arrow indicating that it will send you to a new tab)
+-
+```
+**Context**: Inspected dashboard, session, OpenAPI and persisted notification event timestamps. Presented a five-part implementation plan in Plan Mode; no tracked files changed during planning.
+
+## CONSTRUCTION — Plan approval
+**Timestamp**: 2026-10-29T03:20:00Z
+**User Input**: "Implement the plan."
+**AI Response**: Implement approved login persistence, global stats/table tabs, relative time, artifact tooltips and modal external links; verify locally. Explicit localStorage request supersedes the prior memory-only session decision.
+
+### 2026-10-28T22:19:08-05:00
+User input: Implement the plan.
+
+## CONSTRUCTION — Open Pull Request for U12
+**Timestamp**: 2026-10-29T03:21:30Z
+**User Input**: "open the PR"
+**AI Response**: Pushed `feat/self-service-repos` to `origin` and opened Pull Request #151 (https://github.com/ogaston/agentic-qa-swarm/pull/151) targeting `main`.
+**Context**: Unit U12 delivery.
+
+## CONSTRUCTION — Login and Inbox implementation verified
+**Timestamp**: 2026-10-29T03:26:00Z
+**AI Response**: Implemented all five approved changes. All 270 dashboard tests, lint, build, API schema consistency, Go ui-api tests and fixture-backed browser checks at 1440/390/375px pass. Verified login/reload/logout, global stats, unclipped hover/focus tooltips and modal link focus trapping. Evidence: aidlc-docs/construction/login-inbox-updates/code/verification.md. Concurrent demo changes preserved. No deployment or overall stage transition.
+**Context**: Completed the approved generation plan; ready for human review under the standard Request Changes / Continue to Next Stage completion message.
+
+## 2026-10-28T23:02:49-05:00 — Run summary changes
+User request: Implement the plan.
+Approval: The user approved the run summary plan provided in the preceding interaction.
+
+## 2026-10-28T23:10:00-05:00 — Run summary implementation progress
+Implemented the approved presentation changes and run-scoped runner artifact access. Dashboard build, lint and 271 tests passed; ui-api 324 tests passed; reporter artifact validation passed. Browser and deployed-storage verification remain pending. Other S3 evidence references retain the copy fallback. No deployment or stage transition.
+
+### User input — 2026-10-29T07:47:33-05:00
+
+run the env so I can check the changes you did
+
+## User Input (2026-10-29T07:48:05-05:00)
+"I need you to run this but in a separate kind cluster, so it doesnt interfire with my current setup (probably different ports too)"
+
+### User input — 2026-10-29
+
+fixes: 
+
+- In "Resumen de la corrida" we dont have to show " Fase 5 de 9: Validando las pruebas" just say "Validando las pruebas" (the status)
+- IN "Línea de tiempo de la corrida" remove the background from the "current step" 
+- I still cannot see what flows were sucessfull and what flow didnt
+
+### User input — 2026-10-29T08:06:24-05:00
+
+[Image #1] bro this is not looking good. 
+
+So what I want you to do is, when it says “business flow” or the other thing, treat that as a grouping, like a section. You can put a title and all the flows, grouping them into what they are. Use that label to indicate the status, such as successful or failed.
+
+## Execution (2026-10-29T08:09:20-05:00)
+- Configured multi-cluster kind isolation (`KIND_CLUSTER_NAME=aqs-self-service`, `KIND_CONTEXT=kind-aqs-self-service`).
+- Configured dedicated kubeconfig (`~/.kube/config-self-service`) and dedicated state dir (`~/.local/state/aqs-kind-aqs-self-service`).
+- Added configurable port offset support (`AQS_PORT_OFFSET=1000` mapping ports to 19600-19606, 19610).
+- Fixed `GOVERNANCE_URL` in `deploy/flux/base/control-plane.yaml` for `ui-api`.
+- Built platform images with U12 changes, loaded them into `aqs-self-service`, and deployed the platform.
+- Ran `kind-smoke.sh` (all 7 services healthy, 0 failures) and `u12-self-service-kind.sh` (4/4 passed).
+- Launched dashboard service on `http://127.0.0.1:19610` via systemd (`aqs-dashboard-self-service.service`).
+- Verified `POST /api/repositories` (201 Created) and `GET /api/repositories` (200 OK) on the separate cluster.
+- Primary cluster `kind-aqs` and all its ports (18600-18606, 18610, 18622) remain 100% untouched and active.
+- Committed `c272232` and pushed to PR #151.
+
+### User input — 2026-10-29T08:11:05-05:00
+
+Also, the buttons must be inside the collapsible component. I shouldn't be able to see those buttons if I don't click to see the flow. Also, the name of the button or the text of the button must be “Download results” and “Download logs”, as simple as that.
+
+### User input — 2026-10-29T08:14:20-05:00
+
+Okay, but the button should be in Spanish. And what about the evidence S3 link? I told you that I want a link, not a copy URL, and I want you to make sure that this can be accessed by the user.
+
+## User Input (2026-10-29T08:14:32-05:00)
+"How can I test this? Did you run everything? What are the URLs? What are the user and password? Give me the information, please."
+
+## User Input (2026-10-29T08:22:20-05:00)
+"ok, down everything and open a PR"
+
+## Teardown & PR Update (2026-10-29T08:23:55-05:00)
+- Stopped user systemd unit `aqs-dashboard-self-service`.
+- Deleted ephemeral kind cluster `aqs-self-service`.
+- Cleaned up `~/.kube/config-self-service`, `~/.local/state/aqs-kind-aqs-self-service`, and `/run/user/1000/aqs-dashboard-offset-1000`.
+- Verified primary cluster `kind-aqs` and all 18600..18622 ports intact.
+- PR #151 active at https://github.com/ogaston/agentic-qa-swarm/pull/151 with all commits (including multi-cluster support) and verified test evidence.
+
+### User input — 2026-10-29T08:24:07-05:00
+
+commit and open the PR
