@@ -68,6 +68,11 @@ if [ "$fresh" -eq 1 ]; then
   bash "$root/scripts/kind/load-images.sh"
 fi
 bash "$root/scripts/kind/demo-preflight.sh" --deploy
+# Un clúster existente conserva las imágenes viejas con el tag fijo: se reconstruyen, cargan y
+# reinician sus deployments, con lectura de vuelta del startTime. Si falla, up.sh se corta aquí.
+if [ "$fresh" -eq 0 ]; then
+  bash "$root/scripts/kind/refresh-images.sh"
+fi
 bash "$root/scripts/kind/dashboard-up.sh"
 mkdir -p "$state"
 chmod 700 "$state"
