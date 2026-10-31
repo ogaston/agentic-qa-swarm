@@ -292,6 +292,53 @@ describe('RunPage', () => {
     expect(screen.getByText(/identificador de corrida no válido/i)).toBeTruthy();
   });
 
+  it('awaiting_execution muestra «Ejecutar pruebas», el aviso y confirma con POST', async () => {
+    let gets = 0;
+    let posts = 0;
+    server.use(
+      http.get(`/api/runs/${ID}`, () => {
+        gets++;
+        return HttpResponse.json({ id: ID, state: 'rehearsing', awaiting_execution: gets === 1 });
+      }),
+      http.post(`/api/runs/${ID}/execute`, () => {
+        posts++;
+        return HttpResponse.json({ id: ID, state: 'rehearsing', awaiting_execution: false }, { status: 202 });
+      }),
+    );
+    renderRun();
+    await vaciar();
+    expect(screen.getByText('Esperando tu confirmación', { selector: '.phase-name' })).toBeTruthy();
+    expect(screen.getByText(/Las pruebas están listas\. Revisa los flujos y pulsa «Ejecutar pruebas» para empezar\./)).toBeTruthy();
+    const boton = screen.getByTestId('run-execute-button');
+    expect(boton.textContent).toBe('Ejecutar pruebas');
+    act(() => boton.click());
+    await vaciar();
+    expect(posts).toBe(1);
+    expect(gets).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByTestId('run-execute-button')).toBeNull();
+  });
+
+  it('awaiting_execution:false no muestra el botón «Ejecutar pruebas»', async () => {
+    respuestas('rehearsing');
+    renderRun();
+    await vaciar();
+    expect(screen.queryByTestId('run-execute-button')).toBeNull();
+    expect(screen.queryByText('Esperando tu confirmación')).toBeNull();
+  });
+
+  it('un 403 al ejecutar muestra el aviso de acceso', async () => {
+    server.use(
+      http.get(`/api/runs/${ID}`, () => HttpResponse.json({ id: ID, state: 'rehearsing', awaiting_execution: true })),
+      http.post(`/api/runs/${ID}/execute`, () =>
+        HttpResponse.json({ code: 'forbidden', message: 'forbidden' }, { status: 403 })),
+    );
+    renderRun();
+    await vaciar();
+    act(() => screen.getByTestId('run-execute-button').click());
+    await vaciar();
+    expect(screen.getByText('No tienes acceso a esta información.')).toBeTruthy();
+  });
+
   it('no expone trazas ni componentes internos', async () => {
     respuestas('running');
     renderRun();
