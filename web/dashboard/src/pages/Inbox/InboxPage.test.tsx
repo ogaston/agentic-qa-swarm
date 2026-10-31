@@ -255,6 +255,46 @@ describe('Inbox confirma', () => {
     expect(reg.posts[0]).toEqual({ id: 'n-1', body: { flows: ['happy-path'] } });
   });
 
+  it('el paso 2 muestra solo las familias de flujos con las futuras deshabilitadas', async () => {
+    const user = await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro())]);
+    const dialogo = await abrirPanel(user, 'acme/api');
+
+    expect(within(dialogo).queryByRole('heading', { name: 'Resumen del cambio' })).toBeNull();
+    expect(within(dialogo).queryByText('Resumen del cambio')).toBeNull();
+
+    const happy = within(dialogo).getByRole('checkbox', { name: 'happy-path' }) as HTMLInputElement;
+    expect(happy.checked).toBe(true);
+    expect(happy.disabled).toBe(false);
+
+    const carga = within(dialogo).getByRole('checkbox', {
+      name: 'Pruebas de carga',
+    }) as HTMLInputElement;
+    const seguridad = within(dialogo).getByRole('checkbox', {
+      name: 'Pruebas de seguridad',
+    }) as HTMLInputElement;
+    for (const futura of [carga, seguridad]) {
+      expect(futura.disabled).toBe(true);
+      expect(futura.checked).toBe(false);
+    }
+
+    expect(within(dialogo).getAllByText('Próximamente')).toHaveLength(2);
+  });
+
+  it('la confirmación solo envía las familias disponibles', async () => {
+    const reg = nuevoRegistro();
+    const user = await abrirInbox([
+      listaPorEstado({ pending: [pendienteA] }, reg),
+      http.post(CONFIRM, async ({ params, request }) => {
+        reg.posts.push({ id: String(params['id']), body: await request.json() });
+        return HttpResponse.json(recibo, { status: 201 });
+      }),
+    ]);
+    const dialogo = await abrirPanel(user, 'acme/api');
+    await user.click(within(dialogo).getByRole('button', { name: 'Confirmar corrida' }));
+    await waitFor(() => expect(reg.posts).toHaveLength(1));
+    expect(reg.posts[0]?.body).toEqual({ flows: ['happy-path'] });
+  });
+
   it('sin familias seleccionadas el botón Confirmar corrida está deshabilitado', async () => {
     const user = await abrirInbox([listaPorEstado({ pending: [pendienteA] }, nuevoRegistro())]);
     const dialogo = await abrirPanel(user, 'acme/api');
@@ -532,11 +572,11 @@ describe('Inbox diálogo modal (U10-T02 CA-2)', () => {
     expect(within(dialogo).getByRole('heading', { name: 'Revisar notificación' })).toBeTruthy();
     expect(within(dialogo).getByText('Paso 2 de 2 · Confirmar corrida')).toBeTruthy();
 
-    const primerEnlace = within(dialogo).getByTestId('inbox-repository-link');
+    const primerEnfocable = within(dialogo).getByRole('checkbox', { name: 'happy-path' });
     const confirmar = within(dialogo).getByRole('button', { name: 'Confirmar corrida' });
     confirmar.focus();
     await user.keyboard('{Tab}');
-    expect(document.activeElement).toBe(primerEnlace);
+    expect(document.activeElement).toBe(primerEnfocable);
     await user.keyboard('{Shift>}{Tab}{/Shift}');
     expect(document.activeElement).toBe(confirmar);
 
@@ -645,7 +685,7 @@ describe('Inbox display updates', () => {
     expect(screen.getByRole('button', { name: 'Actualizar' })).toBeTruthy();
   });
 
-  it('shows seven trailing artifact characters with full tooltip and links in both modal steps', async () => {
+  it('shows seven trailing artifact characters with full tooltip and links in the detail step', async () => {
     const ref = 'ghcr.io/acme/api@sha256:0123456789abcdef';
     const user = await abrirInbox([listaPorEstado({ pending: [{ ...pendienteA, artifact: { kind: 'published-image', ref } }] }, nuevoRegistro())]);
     await screen.findByText('image: 9abcdef');
@@ -656,17 +696,19 @@ describe('Inbox display updates', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('tooltip')).toBeNull();
     await user.click(within(filaDe('acme/api')).getByRole('button', { name: 'Revisar' }));
-    for (let step = 0; step < 2; step++) {
-      const dialog = screen.getByRole('dialog');
-      const repo = within(dialog).getByTestId('inbox-repository-link');
-      const commit = within(dialog).getByTestId('inbox-commit-link');
-      expect(repo.getAttribute('href')).toBe('https://github.com/acme/api');
-      expect(commit.getAttribute('href')).toBe('https://github.com/acme/api/commit/abcdef1234567890');
-      expect(repo.getAttribute('target')).toBe('_blank');
-      expect(commit.getAttribute('rel')).toBe('noopener noreferrer');
-      expect(repo.querySelector('svg')).toBeTruthy();
-      if (step === 0) await user.click(within(dialog).getByRole('button', { name: 'Ver detalle →' }));
-    }
+    const detalle = screen.getByRole('dialog');
+    const repo = within(detalle).getByTestId('inbox-repository-link');
+    const commit = within(detalle).getByTestId('inbox-commit-link');
+    expect(repo.getAttribute('href')).toBe('https://github.com/acme/api');
+    expect(commit.getAttribute('href')).toBe('https://github.com/acme/api/commit/abcdef1234567890');
+    expect(repo.getAttribute('target')).toBe('_blank');
+    expect(commit.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(repo.querySelector('svg')).toBeTruthy();
+    // El paso 2 ya solo muestra las familias de flujos: sin resumen ni enlaces del cambio.
+    await user.click(within(detalle).getByRole('button', { name: 'Ver detalle →' }));
+    const paso2 = screen.getByRole('dialog');
+    expect(within(paso2).queryByTestId('inbox-repository-link')).toBeNull();
+    expect(within(paso2).queryByTestId('inbox-commit-link')).toBeNull();
   });
 
   it('shows relative age and updates it without refetching', async () => {

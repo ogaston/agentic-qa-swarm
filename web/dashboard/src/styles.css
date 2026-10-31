@@ -1262,6 +1262,22 @@ dl.kv-list .modal-detail dd {
   accent-color: var(--accent);
 }
 
+/* Familias que aún no existen en el servidor: visibles, deshabilitadas y con su insignia de texto. */
+.modal-flow-option-disabled {
+  color: var(--text-muted);
+  background: var(--surface-2);
+  cursor: not-allowed;
+}
+
+.modal-flow-option-disabled:hover {
+  border-color: var(--border-subtle);
+  background: var(--surface-2);
+}
+
+.modal-flow-badge {
+  margin-left: auto;
+}
+
 /* Pie del modal: contexto a la izquierda y acciones a la derecha. */
 .modal-footer {
   display: flex;

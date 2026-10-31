@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { components } from '../../api/schema.gen';
 import { ApiError, apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
-import { FLOW_FAMILIES, type FlowFamily } from '../../inbox/flows';
+import { FLOW_FAMILIES, esDisponible, familiasDisponibles, type FlowFamily } from '../../inbox/flows';
 import { Badge, type TonoBadge } from '../../components/Badge';
 import { Kpi } from '../../components/Kpi';
 import { PageHeader } from '../../components/PageHeader';
@@ -91,7 +91,7 @@ export function InboxPage() {
   const [warm, setWarm] = useState<WarmState | null>(null);
   const [seleccionadaId, setSeleccionadaId] = useState<string | null>(null);
   const [panelAbierto, setPanelAbierto] = useState(false);
-  const [familias, setFamilias] = useState<FlowFamily[]>([...FLOW_FAMILIES]);
+  const [familias, setFamilias] = useState<FlowFamily[]>(familiasDisponibles);
   const [enVuelo, setEnVuelo] = useState(false);
   const [mensajeAccion, setMensajeAccion] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<unknown>(null);
@@ -214,7 +214,7 @@ export function InboxPage() {
   }
 
   function abrirPanel() {
-    setFamilias([...FLOW_FAMILIES]);
+    setFamilias(familiasDisponibles());
     setErrorAccion(null);
     setMensajeAccion(null);
     setPanelAbierto(true);
@@ -546,51 +546,40 @@ export function InboxPage() {
             ) : (
               <>
                 <div className="modal-body">
-                  <section className="modal-section" aria-labelledby="modal-resumen-titulo">
-                    <div className="modal-section-heading">
-                      <h3 id="modal-resumen-titulo">Resumen del cambio</h3>
-                      <p>Esta será la versión que se probará en el entorno.</p>
-                    </div>
-                    <dl className="kv-list modal-details">
-                      <div className="modal-detail">
-                        <dt>Repositorio</dt>
-                        <dd><GithubLink repo={seleccionada.repo}>{seleccionada.repo}</GithubLink></dd>
-                      </div>
-                      <div className="modal-detail">
-                        <dt>SHA</dt>
-                        <dd><GithubLink repo={seleccionada.repo} sha={seleccionada.sha}><code>{seleccionada.sha}</code></GithubLink></dd>
-                      </div>
-                      <div className="modal-detail">
-                        <dt>Artefacto</dt>
-                        <dd>
-                          {seleccionada.artifact
-                            ? textoArtefacto(seleccionada.artifact)
-                            : 'Sin artefacto'}
-                        </dd>
-                      </div>
-                    </dl>
-                  </section>
                   <fieldset className="fieldset modal-flows" aria-describedby="modal-flows-hint">
                     <legend>Familias de flujos</legend>
                     <p className="modal-flows-hint" id="modal-flows-hint">
                       Elige qué pruebas quieres incluir en esta corrida.
                     </p>
                     <div className="modal-flow-options">
-                      {FLOW_FAMILIES.map((f) => (
-                        <label
-                          key={f}
-                          className={`check modal-flow-option${familias.includes(f) ? ' selected' : ''}`}
-                        >
-                          <input
-                            type="checkbox"
-                            name="familias"
-                            value={f}
-                            checked={familias.includes(f)}
-                            onChange={() => alternarFamilia(f)}
-                          />
-                          <span className="mono">{f}</span>
-                        </label>
-                      ))}
+                      {FLOW_FAMILIES.map((familia) => {
+                        const disponible = esDisponible(familia);
+                        const marcada = disponible && familias.includes(familia.id);
+                        return (
+                          <label
+                            key={familia.id}
+                            className={`check modal-flow-option${marcada ? ' selected' : ''}${disponible ? '' : ' modal-flow-option-disabled'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              name="familias"
+                              value={familia.id}
+                              aria-label={familia.etiqueta}
+                              checked={marcada}
+                              disabled={!disponible}
+                              onChange={() => {
+                                if (esDisponible(familia)) alternarFamilia(familia.id);
+                              }}
+                            />
+                            <span className="mono">{familia.etiqueta}</span>
+                            {disponible ? null : (
+                              <Badge tono="neutral" className="modal-flow-badge">
+                                Próximamente
+                              </Badge>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                   </fieldset>
                   {errorAccion !== null ? <ApiErrorNotice error={errorAccion} /> : null}
