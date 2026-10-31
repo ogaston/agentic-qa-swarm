@@ -23,7 +23,7 @@ report() { # <rc> <objeto>
 
 # available_ok <ns> <tipo.apps/nombre>: réplicas disponibles >= deseadas, leídas del objeto ahora mismo.
 available_ok() {
-  local ns=$1 obj=$2 kind name want got restarts
+  local ns=$1 obj=$2 kind name want got pods
   kind=${obj%%.*}
   name=${obj##*/}
   case "$kind" in
@@ -35,14 +35,16 @@ available_ok() {
       got=$(kubectl get statefulset "$name" -n "$ns" -o jsonpath='{.status.readyReplicas}' 2>/dev/null) ;;
     *) return 1 ;;
   esac
-  # Reinicios de los pods del objeto (prefijo <nombre>-): un bucle de reinicios no está «disponible»,
-  # aunque en un instante concreto tenga un pod Ready.
-  # StatefulSet: solo sus pods <nombre>-<ordinal> (un prefijo «nats-» contaría también el Job nats-init).
+  # Historical restart counts survive a node restart. Reject current waiting or
+  # terminated containers instead, and fail closed if pod status cannot be read.
   local re="^$name-"
-  [ "$kind" = statefulset ] && re="^$name-[0-9]+\$"
-  restarts=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq --arg re "$re" \
-    '[.items[] | select(.metadata.name | test($re)) | (.status.containerStatuses // [])[] | .restartCount] | add // 0')
-  [ "${restarts:-0}" -eq 0 ] || return 1
+  [ "$kind" = statefulset ] && re="^$name-[0-9]+$"
+  pods=$(kubectl get pods -n "$ns" -o json 2>/dev/null) || return 1
+  jq -e --arg re "$re" '
+    [.items[] | select(.metadata.name | test($re)) |
+      ((.status.initContainerStatuses // []) + (.status.containerStatuses // []))[] |
+      select(.state.waiting != null or (.state.terminated != null and .state.terminated.exitCode != 0))] | length == 0
+  ' <<<"$pods" >/dev/null || return 1
   [ "${got:-0}" -ge "${want:-1}" ] && [ "${got:-0}" -gt 0 ]
 }
 

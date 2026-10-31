@@ -303,7 +303,11 @@ if [ "$fail" -eq 0 ]; then
   if [ "$fail" -eq 0 ]; then
     if [ -n "${AQS_DEMO_PUBLIC_URL:-}" ]; then
       URL_PUBLICA=${AQS_DEMO_PUBLIC_URL%/}
-      echo "usando túnel externo: $URL_PUBLICA (inicia el conector cloudflared si es necesario)"
+      echo "usando URL pública: $URL_PUBLICA"
+      if ! tunnel_activo; then
+        nohup cloudflared tunnel --url "http://127.0.0.1:$P_INTAKE" run "$TUNNEL_NAME" >"$CF_LOG" 2>&1 &
+        echo $! >"$CF_PID"
+      fi
     elif ! tunnel_activo; then
       if cloudflared tunnel list 2>/dev/null | grep -q "$TUNNEL_NAME"; then
         # Túnel con nombre (URL estable, recomendado por el doc de operaciones).
@@ -429,20 +433,6 @@ if [ -n "$URL_PUBLICA" ]; then
 else
   echo "URL pública del webhook: NO DISPONIBLE (revisa el túnel: log $CF_LOG)"
 fi
-echo "dashboard: http://127.0.0.1:18610 (arráncalo con: bash scripts/kind/dashboard-up.sh)"
-echo
-echo "Lo que queda EN MANOS DEL HUMANO (la plataforma no lo hace):"
-echo "  1. Webhook en https://github.com/$TARGET_REPO_FULL/settings/hooks :"
-echo "       Payload URL   = la URL pública de arriba"
-echo "       Content type  = application/json ; eventos = solo push ; Active"
-echo "       Secret        = el de go-intake-webhook, SIN imprimirlo:"
-echo "         kubectl --context $KIND_CONTEXT -n $NS_SYS get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d | wl-copy   # Wayland"
-echo "         kubectl --context $KIND_CONTEXT -n $NS_SYS get secret go-intake-webhook -o jsonpath='{.data.secret}' | base64 -d | xclip -selection clipboard   # X11"
-echo "  2. Clon local del repo objetivo con permiso de push a main:"
-echo "       git clone $TARGET_REPO_URL"
-echo "  3. Detalle completo: docs/operaciones/webhook-github-cloudflared.md y docs/demo-real.md"
-echo "======================================================"
-
 if [ "$fail" -eq 0 ]; then
   echo "setup: OK (entorno listo para la demo en vivo)"
   exit 0
