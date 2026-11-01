@@ -32,6 +32,7 @@ type TokenVerifier interface {
 // ExecutionApprover es el controlador de corridas para la confirmación humana de ejecución (U12-T02).
 type ExecutionApprover interface {
 	ApproveExecution(ctx context.Context, id, principalID string, admin bool) error
+	RetryGeneration(ctx context.Context, id, principalID string, admin bool) error
 }
 
 // IdentityVerifier valida contra GET {base}/auth/session (mismo contrato que U1-T07), 2 s.
@@ -141,6 +142,38 @@ func New(store runctl.RunStore, exec ExecutionApprover, v TokenVerifier) http.Ha
 		}
 		id := r.PathValue("id")
 		switch err := exec.ApproveExecution(r.Context(), id, principal.ID, principal.Admin); {
+		case err == nil:
+		case errors.Is(err, runctl.ErrNotFound):
+			writeErr(w, http.StatusNotFound, "not_found")
+			return
+		case errors.Is(err, runctl.ErrForbidden):
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		case errors.Is(err, runctl.ErrNotAwaiting):
+			writeErr(w, http.StatusConflict, "not_awaiting")
+			return
+		case errors.Is(err, runctl.ErrPersist):
+			writeErr(w, http.StatusServiceUnavailable, "persistence_unavailable")
+			return
+		default:
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
+		run, ok := store.Get(id)
+		if !ok {
+			writeErr(w, http.StatusNotFound, "not_found")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, view(run))
+	})
+	// POST /runs/{id}/retry-generation: el humano solicita reintentar la generación de pruebas.
+	mux.HandleFunc("POST /runs/{id}/retry-generation", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := auth(w, r)
+		if !ok {
+			return
+		}
+		id := r.PathValue("id")
+		switch err := exec.RetryGeneration(r.Context(), id, principal.ID, principal.Admin); {
 		case err == nil:
 		case errors.Is(err, runctl.ErrNotFound):
 			writeErr(w, http.StatusNotFound, "not_found")

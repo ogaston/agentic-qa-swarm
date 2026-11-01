@@ -223,7 +223,7 @@ describe('RunPage: plan de flujos', () => {
     await vaciar();
     expect(screen.getByRole('heading', { name: 'Flujos principales' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Reglas de negocio' })).toBeTruthy();
-    expect(screen.getByText('Aprobada')).toBeTruthy();
+    expect(screen.getByText('Exitosa')).toBeTruthy();
     expect(screen.getByText('Fallida')).toBeTruthy();
     const firstFlow = planCon.flows[0];
     if (!firstFlow) throw new Error('Missing flow fixture');

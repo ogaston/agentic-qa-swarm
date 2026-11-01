@@ -126,6 +126,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/retry-generation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * El humano solicita reintentar la generación de pruebas con la IA tras el ensayo.
+         * @description Solo el dueño de la corrida (o un admin) puede solicitar el reintento mientras espera confirmación. Limpia el plan y relanza la generación y el ensayo.
+         */
+        post: operations["retryRunGeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/plan": {
         parameters: {
             query?: never;
@@ -670,6 +690,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Aprobación registrada; devuelve la corrida actualizada. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    retryRunGeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reintento registrado; devuelve la corrida actualizada. */
             202: {
                 headers: {
                     [name: string]: unknown;

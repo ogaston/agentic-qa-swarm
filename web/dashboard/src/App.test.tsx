@@ -21,7 +21,7 @@ describe('rutas de la app', () => {
     renderApp('/');
     await waitFor(() =>
       expect(
-        screen.getByRole('heading', { level: 1, name: /Your releases, tested by a swarm/ }),
+        screen.getByRole('heading', { level: 1, name: /Tus releases, probados por un enjambre/ }),
       ).toBeTruthy(),
     );
     expect(currentLocation()).toBe('/');

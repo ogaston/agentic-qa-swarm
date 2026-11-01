@@ -308,7 +308,7 @@ describe('RunPage', () => {
     renderRun();
     await vaciar();
     expect(screen.getByText('Esperando tu confirmación', { selector: '.phase-name' })).toBeTruthy();
-    expect(screen.getByText(/Las pruebas están listas\. Revisa los flujos y pulsa «Ejecutar pruebas» para empezar\./)).toBeTruthy();
+    expect(screen.getByText(/Pruebas listas. Revisa los flujos/)).toBeTruthy();
     const boton = screen.getByTestId('run-execute-button');
     expect(boton.textContent).toBe('Ejecutar pruebas');
     act(() => boton.click());
@@ -316,6 +316,26 @@ describe('RunPage', () => {
     expect(posts).toBe(1);
     expect(gets).toBeGreaterThanOrEqual(2);
     expect(screen.queryByTestId('run-execute-button')).toBeNull();
+  });
+
+  it('awaiting_execution muestra «Reintentar generación» y llama con POST', async () => {
+    let posts = 0;
+    server.use(
+      http.get(`/api/runs/${ID}`, () =>
+        HttpResponse.json({ id: ID, state: 'rehearsing', awaiting_execution: true }),
+      ),
+      http.post(`/api/runs/${ID}/retry-generation`, () => {
+        posts++;
+        return HttpResponse.json({ id: ID, state: 'rehearsing', awaiting_execution: false }, { status: 202 });
+      }),
+    );
+    renderRun();
+    await vaciar();
+    const botonReintentar = screen.getByTestId('run-retry-generation-button');
+    expect(botonReintentar.textContent).toBe('Reintentar generación');
+    act(() => botonReintentar.click());
+    await vaciar();
+    expect(posts).toBe(1);
   });
 
   it('awaiting_execution:false no muestra el botón «Ejecutar pruebas»', async () => {
