@@ -188,8 +188,8 @@ func (s *StateStore) LookupState(ctx context.Context, idOrNS string) (wm.WarmSta
 	nss, err := s.C.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: "aqs.io/plane=warm"})
 	if err == nil {
 		for _, item := range nss.Items {
-			if item.Labels["aqs.io/repo"] == idOrNS {
-				return s.getInNamespace(ctx, item.Name, "", item.Labels["aqs.io/repo"])
+			if item.Annotations["aqs.io/repo"] == idOrNS {
+				return s.getInNamespace(ctx, item.Name, "", item.Annotations["aqs.io/repo"])
 			}
 			st, err := s.getInNamespace(ctx, item.Name, "", "")
 			if err == nil && (st.WarmID == idOrNS || st.Namespace == idOrNS || st.Repo == idOrNS) {

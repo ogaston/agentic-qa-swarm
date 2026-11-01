@@ -59,10 +59,11 @@ func WorkloadTemplate(target warmtarget.WarmTarget) (*WarmResources, error) {
 	res := &WarmResources{
 		Namespace: &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: ns,
+				Name:        ns,
+				Annotations: map[string]string{"aqs.io/repo": target.Repo},
 				Labels: map[string]string{
 					"aqs.io/plane": "warm",
-					"aqs.io/repo":  target.Repo,
+					"aqs.io/repo":  warmtarget.Slug(target.Repo),
 				},
 			},
 		},
@@ -537,7 +538,7 @@ func WorkloadTemplate(target warmtarget.WarmTarget) (*WarmResources, error) {
 				Namespace: ns,
 			},
 			Data: map[string]string{
-				"state": fmt.Sprintf(`{"warm_id":%q,"state":"ready","reset_verified":true,"baseline_version":"v1","namespace":%q,"repo":%q}`,
+				"state": fmt.Sprintf(`{"warm_id":%q,"state":"provisioning","reset_verified":false,"baseline_version":"","namespace":%q,"repo":%q}`,
 					target.WarmID, ns, target.Repo),
 			},
 		},

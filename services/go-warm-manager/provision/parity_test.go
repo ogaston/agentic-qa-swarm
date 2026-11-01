@@ -32,8 +32,8 @@ func TestWorkloadTemplateParityWithWarmYAML(t *testing.T) {
 	if res.Namespace.Labels["aqs.io/plane"] != "warm" {
 		t.Errorf("label aqs.io/plane = %s, esperado warm", res.Namespace.Labels["aqs.io/plane"])
 	}
-	if res.Namespace.Labels["aqs.io/repo"] != target.Repo {
-		t.Errorf("label aqs.io/repo = %s, esperado %s", res.Namespace.Labels["aqs.io/repo"], target.Repo)
+	if res.Namespace.Annotations["aqs.io/repo"] != target.Repo {
+		t.Errorf("label aqs.io/repo = %s, esperado %s", res.Namespace.Annotations["aqs.io/repo"], target.Repo)
 	}
 
 	// 2. warm-app Deployment
