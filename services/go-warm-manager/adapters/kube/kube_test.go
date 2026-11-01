@@ -2,6 +2,7 @@ package kube_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	wm "github.com/ogaston/agentic-qa-swarm/services/go-warm-manager"
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/adapters/kube"
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/internal/fakes"
+	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/warmtarget"
 )
 
 // La semilla (estado si falta el ConfigMap) es siempre no-listo: nunca ready+reset_verified.
@@ -434,5 +436,29 @@ func TestStateStoreCompareAndSwapSendsResourceVersionOfTheRead(t *testing.T) {
 	}
 	if sent != "42" {
 		t.Fatalf("el Update llevo resourceVersion %q, se esperaba el del Get (42)", sent)
+	}
+}
+
+func TestClaimBootstrapDurableIntent(t *testing.T) {
+	ctx := context.Background()
+	target := warmtarget.TargetForRepo("acme/shop")
+	initial := wm.WarmState{WarmID: target.WarmID, Namespace: target.Namespace, Repo: target.Repo, State: wm.StateProvisioning, BaselineVersion: "unverified"}
+	raw, _ := json.Marshal(initial)
+	client := fake.NewClientset(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "warm-state", Namespace: target.Namespace}, Data: map[string]string{"state": string(raw)}})
+	store := &kube.StateStore{C: client}
+	if err := store.ClaimBootstrap(ctx, target, "run-1", "ghcr.io/acme/shop:abc"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ClaimBootstrap(ctx, target, "run-1", "ghcr.io/acme/shop:abc"); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	for _, pair := range [][2]string{{"run-2", "ghcr.io/acme/shop:abc"}, {"run-1", "ghcr.io/acme/shop:def"}} {
+		if err := store.ClaimBootstrap(ctx, target, pair[0], pair[1]); !errors.Is(err, wm.ErrNotReady) {
+			t.Fatalf("claim by another identity: %v", err)
+		}
+	}
+	state, err := store.GetForTarget(ctx, target)
+	if err != nil || state.State != wm.StateDirty || state.ResetVerified {
+		t.Fatalf("state: %+v %v", state, err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -80,6 +81,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, targets []warmtarget.WarmTar
 		}
 		if created {
 			res.CreatedNamespaces = append(res.CreatedNamespaces, t.Namespace)
+		}
+
+		binding := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "aqs-reset-warm", Namespace: t.Namespace}, RoleRef: rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: "aqs-reset-warm"}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: "go-reset", Namespace: "aqs-system"}}}
+		if _, err := r.Kube.RbacV1().RoleBindings(t.Namespace).Create(ctx, binding, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("creando RoleBinding %s: %w", t.Namespace, err)
 		}
 
 		if err := r.ensureConfigMap(ctx, resources.PolicyConfigMap); err != nil {

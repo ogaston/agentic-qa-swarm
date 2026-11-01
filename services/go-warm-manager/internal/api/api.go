@@ -128,6 +128,30 @@ func (s *Server) Handler() http.Handler {
 			writeJSON(w, 409, st)
 		}
 	}))
+	mux.HandleFunc("POST /warm/bootstrap", s.auth(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			RunID    string      `json:"run_id"`
+			Artifact wm.Artifact `json:"artifact"`
+			Target   string      `json:"target"`
+		}
+		if err := decode(r, &req); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "invalid_body"})
+			return
+		}
+		err := s.Svc.Bootstrap(r.Context(), req.RunID, req.Artifact, req.Target)
+		switch {
+		case errors.Is(err, wm.ErrNotReady), errors.Is(err, wm.ErrStateConflict):
+			writeJSON(w, 409, map[string]string{"error": "not_provisioning"})
+		case errors.Is(err, wm.ErrBuildNotSupported), errors.Is(err, wm.ErrImageNotAllowed):
+			writeJSON(w, 422, map[string]string{"error": "unsupported_artifact"})
+		case errors.Is(err, wm.ErrInvalidRunID), errors.Is(err, wm.ErrInvalidArtifact), errors.Is(err, wm.ErrRegistryNotAllowed):
+			writeJSON(w, 400, map[string]string{"error": "invalid_request"})
+		case err != nil:
+			writeJSON(w, 503, map[string]string{"error": "bootstrap_failed"})
+		default:
+			writeJSON(w, 200, map[string]string{"status": "deployed"})
+		}
+	}))
 	mux.HandleFunc("POST /deploys", s.auth(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			RunID    string      `json:"run_id"`

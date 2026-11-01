@@ -28,6 +28,41 @@ type StateStore struct {
 	Namespace string       // namespace por defecto (wm.LegacyNamespace si está vacío)
 }
 
+// ClaimBootstrap reserva atómicamente estado e identidad de la primera imagen.
+func (s *StateStore) ClaimBootstrap(ctx context.Context, target warmtarget.WarmTarget, runID, ref string) error {
+	cm, err := s.C.CoreV1().ConfigMaps(target.Namespace).Get(ctx, StateConfigMap, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	var w wm.WarmState
+	if err := json.Unmarshal([]byte(cm.Data["state"]), &w); err != nil || !w.Valid() {
+		return errors.New("warm-state corrupto")
+	}
+	const runKey = "aqs.io/bootstrap-run"
+	const imageKey = "aqs.io/bootstrap-image"
+	if w.State == wm.StateDirty && !w.ResetVerified && cm.Annotations[runKey] == runID && cm.Annotations[imageKey] == ref {
+		return nil
+	}
+	if w.State != wm.StateProvisioning || w.ResetVerified || cm.Annotations[runKey] != "" {
+		return wm.ErrNotReady
+	}
+	w.State = wm.StateDirty
+	data, err := json.Marshal(w)
+	if err != nil {
+		return err
+	}
+	if cm.Annotations == nil {
+		cm.Annotations = map[string]string{}
+	}
+	cm.Annotations[runKey], cm.Annotations[imageKey] = runID, ref
+	cm.Data["state"] = string(data)
+	_, err = s.C.CoreV1().ConfigMaps(target.Namespace).Update(ctx, cm, metav1.UpdateOptions{})
+	if apierrors.IsConflict(err) {
+		return wm.ErrStateConflict
+	}
+	return err
+}
+
 func (s *StateStore) ns(override ...string) string {
 	if len(override) > 0 && override[0] != "" {
 		return override[0]

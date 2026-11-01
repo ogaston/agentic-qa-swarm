@@ -37,12 +37,11 @@ func TestWorkloadTemplateParityWithWarmYAML(t *testing.T) {
 	}
 
 	// 2. warm-app Deployment
-	if !strings.Contains(content, "nginx:1.27.2") {
-		t.Fatalf("warm.yaml no contiene nginx:1.27.2")
-	}
 	appContainer := res.AppDeployment.Spec.Template.Spec.Containers[0]
-	if appContainer.Image != "nginx:1.27.2" {
-		t.Errorf("app imagen = %s, esperado nginx:1.27.2", appContainer.Image)
+	// El placeholder no sirve HTTP ni baseline; solo la imagen del evento puede
+	// pasar las sondas y el reset verificado.
+	if appContainer.Image != "registry.k8s.io/pause:3.10" {
+		t.Errorf("app imagen inicial = %s", appContainer.Image)
 	}
 	if len(appContainer.Ports) != 2 || appContainer.Ports[0].ContainerPort != 80 || appContainer.Ports[1].ContainerPort != 9090 {
 		t.Errorf("app puertos inesperados: %+v", appContainer.Ports)

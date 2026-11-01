@@ -122,8 +122,9 @@ func WorkloadTemplate(target warmtarget.WarmTarget) (*WarmResources, error) {
 						},
 						Containers: []corev1.Container{
 							{
-								Name:  "warm-app",
-								Image: "nginx:1.27.2",
+								Name: "warm-app",
+								// Inerte hasta que el primer evento autorizado aporte la imagen real.
+								Image: "registry.k8s.io/pause:3.10",
 								Env: []corev1.EnvVar{
 									{Name: "TZ", Value: "UTC"},
 									{

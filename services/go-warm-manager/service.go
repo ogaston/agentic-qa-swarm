@@ -363,6 +363,43 @@ func (s *Service) wakeWarm(ctx context.Context, w WarmState, target warmtarget.W
 	return nw, nil
 }
 
+// Bootstrap instala la primera imagen autorizada sin declarar el warm listo.
+// El CAS deja dirty antes de cualquier mutación y reserva el entorno de forma durable.
+func (s *Service) Bootstrap(ctx context.Context, runID string, a Artifact, targetName string) error {
+	if err := ValidateRunID(runID); err != nil {
+		return err
+	}
+	target := s.resolveTarget(targetName)
+	if targetName == "" || target.Repo == "" || target.ImageRepo == "" || target.Namespace == LegacyNamespace || !warmtarget.ValidWarmNamespace(target.Namespace) {
+		return ErrNotReady
+	}
+	if err := ValidateArtifact(a, s.Cfg.AllowedRegistries, s.allowedPrefixesForTarget(target)); err != nil {
+		return err
+	}
+	if a.Kind == KindBuildFromRepo {
+		return ErrBuildNotSupported
+	}
+	take, _ := s.getWarmMus(target.WarmID)
+	take.Lock()
+	defer take.Unlock()
+	claim, ok := s.State.(interface {
+		ClaimBootstrap(context.Context, warmtarget.WarmTarget, string, string) error
+	})
+	if !ok {
+		return errors.New("bootstrap durable no disponible")
+	}
+	if err := claim.ClaimBootstrap(ctx, target, runID, a.Ref); err != nil {
+		return err
+	}
+	if err := s.setImage(ctx, target, a.Ref); err != nil {
+		return err
+	}
+	if ok, why := s.waitRollout(ctx, target, a.Ref); !ok {
+		return errors.New(why)
+	}
+	return nil
+}
+
 // StartDeploy valida y, si el warm esta listo, lanza el deploy en segundo plano (idempotente por run_id).
 // Si el warm no esta listo devuelve ErrNotReady junto con el WarmState y NO crea estado pending.
 func (s *Service) StartDeploy(ctx context.Context, runID string, a Artifact, trace string, targetOrRepo ...any) (DeployStatus, WarmState, error) {
