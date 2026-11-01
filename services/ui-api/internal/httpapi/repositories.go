@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"mime"
@@ -16,7 +17,7 @@ import (
 // Constantes de gobernanza / repositorios.
 const (
 	GovernanceUnavailable = "governance_unavailable"
-	GovernanceRetryAfter   = 10
+	GovernanceRetryAfter  = 10
 )
 
 // repoNameRe valida el patrón OpenAPI '^[a-z0-9-]+/[a-z0-9._-]+$'.
@@ -62,6 +63,15 @@ func (h *Handler) proxyRepositories(w http.ResponseWriter, r *http.Request, _ au
 		w.Header().Set("Retry-After", strconv.Itoa(GovernanceRetryAfter))
 		writeError(w, http.StatusServiceUnavailable, GovernanceUnavailable, "go-governance no disponible")
 		return
+	}
+	if r.Method == http.MethodGet && status == http.StatusOK {
+		var ok bool
+		body, ok = h.overlayRepositoryWarm(r, body, true)
+		if !ok {
+			w.Header().Set("Retry-After", strconv.Itoa(WarmRetryAfter))
+			writeError(w, http.StatusServiceUnavailable, WarmUnavailable, "estado del warm no disponible")
+			return
+		}
 	}
 	if ra := hdrs.Get("Retry-After"); ra != "" {
 		w.Header().Set("Retry-After", ra)
@@ -110,6 +120,15 @@ func (h *Handler) proxyRepositoryItem(w http.ResponseWriter, r *http.Request, _ 
 		writeError(w, http.StatusServiceUnavailable, GovernanceUnavailable, "go-governance no disponible")
 		return
 	}
+	if r.Method == http.MethodGet && status == http.StatusOK {
+		var ok bool
+		body, ok = h.overlayRepositoryWarm(r, body, false)
+		if !ok {
+			w.Header().Set("Retry-After", strconv.Itoa(WarmRetryAfter))
+			writeError(w, http.StatusServiceUnavailable, WarmUnavailable, "estado del warm no disponible")
+			return
+		}
+	}
 	if ra := hdrs.Get("Retry-After"); ra != "" {
 		w.Header().Set("Retry-After", ra)
 	}
@@ -155,4 +174,44 @@ func (h *Handler) repositoryActivity(w http.ResponseWriter, r *http.Request, _ a
 		resp.LastSeenAt = &seen
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// overlayRepositoryWarm sustituye el estado persistido por la lectura actual del namespace.
+func (h *Handler) overlayRepositoryWarm(r *http.Request, body []byte, list bool) ([]byte, bool) {
+	var repos []map[string]json.RawMessage
+	if list {
+		if json.Unmarshal(body, &repos) != nil || repos == nil {
+			return nil, false
+		}
+	} else {
+		var repo map[string]json.RawMessage
+		if json.Unmarshal(body, &repo) != nil || repo == nil {
+			return nil, false
+		}
+		repos = []map[string]json.RawMessage{repo}
+	}
+	for _, repo := range repos {
+		var warm map[string]json.RawMessage
+		if json.Unmarshal(repo["warm"], &warm) != nil || warm == nil {
+			return nil, false
+		}
+		var namespace string
+		if json.Unmarshal(warm["namespace"], &namespace) != nil || namespace == "" || h.warmc == nil {
+			return nil, false
+		}
+		request := r.Clone(r.Context())
+		request.URL.RawQuery = url.Values{"namespace": {namespace}}.Encode()
+		state, ok := h.fetchWarm(request)
+		if !ok || (state.Namespace != "" && state.Namespace != namespace) {
+			return nil, false
+		}
+		warm["state"], _ = json.Marshal(state.State)
+		repo["warm"], _ = json.Marshal(warm)
+	}
+	if list {
+		body, _ = json.Marshal(repos)
+	} else {
+		body, _ = json.Marshal(repos[0])
+	}
+	return body, true
 }

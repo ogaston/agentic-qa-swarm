@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -68,8 +70,15 @@ func TestRepositoriesProxyGetAndPost(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
+	warm := newWarmFake(t, respond(http.StatusOK, `{"warm_id":"w1","state":"ready","reset_verified":true,"baseline_version":"b1"}`))
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte(warmSvcMarker), 0600); err != nil {
+		t.Fatal(err)
+	}
 	e := newEnv(t, nil, func(c *Config) {
 		c.GovernanceURL = f.srv.URL
+		c.WarmURL = warm.srv.URL
+		c.WarmTokenFile = tokenFile
 	})
 
 	// GET /repositories
@@ -116,8 +125,15 @@ func TestRepositoryItemProxyGetPatchDelete(t *testing.T) {
 		}
 	})
 
+	warm := newWarmFake(t, respond(http.StatusOK, `{"warm_id":"w1","state":"ready","reset_verified":true,"baseline_version":"b1"}`))
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte(warmSvcMarker), 0600); err != nil {
+		t.Fatal(err)
+	}
 	e := newEnv(t, nil, func(c *Config) {
 		c.GovernanceURL = f.srv.URL
+		c.WarmURL = warm.srv.URL
+		c.WarmTokenFile = tokenFile
 	})
 
 	// GET /repositories/acme/shop
@@ -265,5 +281,48 @@ func TestRoutePatternRepositories(t *testing.T) {
 		if got := RoutePattern(req); got != tc.want {
 			t.Errorf("RoutePattern(%q) = %q, want %q", tc.path, got, tc.want)
 		}
+	}
+}
+
+func TestRepositoryWarmOverlay(t *testing.T) {
+	gov := newGovFake(t, respond(http.StatusOK, `[{"repo":"acme/shop","warm":{"namespace":"ns-one","state":"provisioning"}},{"repo":"acme/other","warm":{"namespace":"ns-two","state":"ready"}}]`))
+	warm := newWarmFake(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+warmSvcMarker {
+			t.Error("service token missing")
+		}
+		state := "ready"
+		if r.URL.Query().Get("namespace") == "ns-two" {
+			state = "dirty"
+		}
+		_, _ = w.Write([]byte(`{"warm_id":"w","state":"` + state + `","reset_verified":true,"baseline_version":"b"}`))
+	})
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte(warmSvcMarker), 0600); err != nil {
+		t.Fatal(err)
+	}
+	e := newEnv(t, nil, func(c *Config) { c.GovernanceURL = gov.srv.URL; c.WarmURL = warm.srv.URL; c.WarmTokenFile = tokenFile })
+	w := e.do(http.MethodGet, "/repositories?ignored=yes", secretTok, "")
+	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), warmSvcMarker) {
+		t.Fatalf("unexpected response: %d %s", w.Code, w.Body.String())
+	}
+	var repos []struct {
+		Warm struct {
+			State string `json:"state"`
+		} `json:"warm"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &repos); err != nil || len(repos) != 2 || repos[0].Warm.State != "ready" || repos[1].Warm.State != "dirty" {
+		t.Fatalf("overlay: %s", w.Body.String())
+	}
+	if warm.query(0).Encode() != "namespace=ns-one" || warm.query(1).Encode() != "namespace=ns-two" {
+		t.Fatal("wrong namespace query")
+	}
+}
+
+func TestRepositoryWarmUnavailableFailsClosed(t *testing.T) {
+	gov := newGovFake(t, respond(http.StatusOK, `{"repo":"acme/shop","warm":{"namespace":"ns-one","state":"ready"}}`))
+	e := newEnv(t, nil, func(c *Config) { c.GovernanceURL = gov.srv.URL })
+	w := e.do(http.MethodGet, "/repositories/acme/shop", secretTok, "")
+	if w.Code != http.StatusServiceUnavailable || strings.Contains(w.Body.String(), `"ready"`) {
+		t.Fatalf("unexpected response: %d %s", w.Code, w.Body.String())
 	}
 }
