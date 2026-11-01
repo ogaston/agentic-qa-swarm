@@ -51,5 +51,8 @@ export AQS_IDENTITY_URL="http://127.0.0.1:$P_IDENTITY"
 export AQS_RUN_CONTROLLER_URL="http://127.0.0.1:$P_RUN"
 export AQS_UI_API_URL="http://127.0.0.1:$P_UI"
 
+# Vite incorpora esta variable al compilar, no al ejecutar preview. Configurarla
+# con la URL HTTPS pública del intake antes de `npm run build`; localhost no es
+# accesible para GitHub. Sin configuración, el dashboard pide contactar al operador.
 echo "dashboard-serve: running on http://127.0.0.1:$P_WEB"
 exec ./node_modules/.bin/vite preview --host 127.0.0.1 --port "$P_WEB" --strictPort

@@ -69,10 +69,8 @@ export function RepositoriesPage() {
   const tituloModalCrearRef = useRef<HTMLHeadingElement>(null);
   const tituloModalEliminarRef = useRef<HTMLHeadingElement>(null);
 
-  const webhookUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.protocol}//${window.location.host}/webhooks/github`
-      : 'http://localhost/webhooks/github';
+  // La URL debe apuntar al intake público, no necesariamente al host del dashboard.
+  const webhookUrl = import.meta.env.VITE_PUBLIC_WEBHOOK_URL?.trim() || '';
 
   const cargarRepositorios = async () => {
     try {
@@ -121,7 +119,7 @@ export function RepositoriesPage() {
   };
 
   const copiarUrl = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    if (webhookUrl && typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(webhookUrl).catch(() => {});
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
@@ -272,15 +270,16 @@ export function RepositoriesPage() {
         <dl className="kv-list" style={{ marginTop: '12px' }}>
           <dt>Payload URL</dt>
           <dd style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <code data-testid="webhook-url">{webhookUrl}</code>
-            <button
-              type="button"
-              className="btn btn-sm"
-              data-testid="btn-copiar-webhook-url"
-              onClick={copiarUrl}
-            >
-              {copiado ? '¡Copiado!' : 'Copiar URL'}
-            </button>
+            {webhookUrl ? (
+              <>
+                <code data-testid="webhook-url">{webhookUrl}</code>
+                <button type="button" className="btn btn-sm" data-testid="btn-copiar-webhook-url" onClick={copiarUrl}>
+                  {copiado ? '¡Copado!' : 'Copiar URL'}
+                </button>
+              </>
+            ) : (
+              <span>La URL pública del webhook no está configurada. Solicítala a tu operador.</span>
+            )}
           </dd>
           <dt>Content type</dt>
           <dd>

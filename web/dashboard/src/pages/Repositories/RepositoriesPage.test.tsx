@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../api/schema.gen';
 import { renderApp } from '../../test/renderApp';
 import { server } from '../../test/server';
@@ -77,13 +77,15 @@ async function loginAndNavigate() {
 }
 
 describe('RepositoriesPage (U12 Self-Service)', () => {
+  afterEach(() => vi.unstubAllEnvs());
   it('muestra cabecera, instrucciones de webhook y lista de repositorios', async () => {
     setupAuthAndRepos();
     await loginAndNavigate();
 
     expect(screen.getByRole('heading', { level: 1, name: 'Repositorios' })).toBeTruthy();
     expect(screen.getByText('Configuración de Webhooks en GitHub')).toBeTruthy();
-    expect(screen.getByTestId('webhook-url').textContent).toContain('/webhooks/github');
+    expect(screen.getByText(/La URL pública del webhook no está configurada/)).toBeTruthy();
+    expect(screen.queryByTestId('btn-copiar-webhook-url')).toBeNull();
 
     // Tabla con repositorios
     await waitFor(() => {
@@ -102,7 +104,8 @@ describe('RepositoriesPage (U12 Self-Service)', () => {
     });
   });
 
-  it('permite copiar la URL de webhook al portapapeles', async () => {
+  it('permite copiar la URL pública configurada al portapapeles', async () => {
+    vi.stubEnv('VITE_PUBLIC_WEBHOOK_URL', 'https://intake.example.com/webhooks/github');
     setupAuthAndRepos();
     const user = await loginAndNavigate();
 
@@ -114,8 +117,7 @@ describe('RepositoriesPage (U12 Self-Service)', () => {
 
     const btnCopiar = screen.getByTestId('btn-copiar-webhook-url');
     await user.click(btnCopiar);
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/webhooks/github'));
-    expect(screen.getByText('¡Copiado!')).toBeTruthy();
+    expect(writeText).toHaveBeenCalledWith('https://intake.example.com/webhooks/github');
   });
 
   it('muestra mensaje amigable cuando no hay repositorios registrados', async () => {
