@@ -90,7 +90,7 @@ func ValidateSurface(s SurfaceArtifact) error {
 // ValidateWarmState replica contracts/plans/warm-state.schema.json.
 func ValidateWarmState(w WarmState) error {
 	switch w.State {
-	case "ready", "dirty", "cuarentena", "idle-escalado":
+	case "ready", "dirty", "cuarentena", "idle-escalado", "provisioning", "deleting":
 	default:
 		return errors.New("warm-state: state inválido")
 	}

@@ -322,6 +322,32 @@ func TestRunConfirmedConWarmTargetEmiteGateAlNamespace(t *testing.T) {
 	if len(r.gate.Calls) != 1 || r.gate.Calls[0].TargetNamespace != "aqs-w-demo" {
 		t.Fatalf("GateRequest esperaba TargetNamespace aqs-w-demo, obtuve: %+v", r.gate.Calls)
 	}
+	if r.warm.TargetNamespace != "aqs-w-demo" {
+		t.Fatalf("reset_verified se leyó de %q, se esperaba aqs-w-demo", r.warm.TargetNamespace)
+	}
+}
+
+func TestWarmTargetPreparesBeforeGate(t *testing.T) {
+	r := newRig(t, AllowAll())
+	ev := confirmedEv()
+	ev.Warm = &WarmTarget{WarmID: "w-demo", Namespace: "aqs-w-demo"}
+	if err := r.k.Apply(t.Context(), ev); err != nil {
+		t.Fatal(err)
+	}
+	r.ph.PrepareErr = errors.New("reset not verified")
+	if err := r.k.Drive(t.Context(), ev.RunID); err == nil {
+		t.Fatal("preparation failure must block gate")
+	}
+	if r.state(ev.RunID) != Confirmed || len(r.gate.Calls) != 0 {
+		t.Fatal("gate advanced before verified preparation")
+	}
+	r.ph.PrepareErr = nil
+	if err := r.k.Drive(t.Context(), ev.RunID); err != nil {
+		t.Fatal(err)
+	}
+	if r.state(ev.RunID) != WarmReady || r.ph.PrepareCalls != 2 || len(r.gate.Calls) != 1 {
+		t.Fatalf("state=%s prepares=%d gates=%d", r.state(ev.RunID), r.ph.PrepareCalls, len(r.gate.Calls))
+	}
 }
 
 // Sin warm destino en el evento, el gate usa DefaultNamespace (aqs-test).

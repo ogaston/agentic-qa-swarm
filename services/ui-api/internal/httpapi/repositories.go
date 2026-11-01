@@ -205,7 +205,13 @@ func (h *Handler) overlayRepositoryWarm(r *http.Request, body []byte, list bool)
 		if !ok || (state.Namespace != "" && state.Namespace != namespace) {
 			return nil, false
 		}
+		var warmID string
+		if json.Unmarshal(warm["warm_id"], &warmID) != nil || warmID != state.WarmID {
+			return nil, false
+		}
 		warm["state"], _ = json.Marshal(state.State)
+		warm["reset_verified"], _ = json.Marshal(state.ResetVerified)
+		warm["baseline_version"], _ = json.Marshal(state.BaselineVersion)
 		repo["warm"], _ = json.Marshal(warm)
 	}
 	if list {

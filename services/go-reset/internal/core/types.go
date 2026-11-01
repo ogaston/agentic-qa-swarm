@@ -36,6 +36,8 @@ type WarmState struct {
 	State           string `json:"state"`
 	ResetVerified   bool   `json:"reset_verified"`
 	BaselineVersion string `json:"baseline_version"`
+	Namespace       string `json:"namespace,omitempty"`
+	Repo            string `json:"repo,omitempty"`
 }
 
 // Snapshot es el estado más la hora de su última escritura.

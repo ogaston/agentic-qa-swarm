@@ -40,12 +40,30 @@ excepcion_recurso_prohibido(obj, r, recurso) if {
 	}
 }
 
+excepcion_recurso_prohibido(obj, r, recurso) if {
+	obj.kind == "ClusterRole"
+	obj.metadata.name == "aqs-reset-warm"
+	recurso == "secrets"
+	object.get(r, "resourceNames", []) == ["target-app-baseline-token"]
+	object.get(r, "verbs", []) == ["get"]
+}
+
 deny contains msg if {
 	input.kind in {"Role", "ClusterRole"}
 	some r in lista(object.get(input, "rules", []))
 	some verbo in lista(object.get(r, "verbs", []))
 	verbo in verbos_prohibidos
+	not excepcion_verbo_prohibido(input, r, verbo)
 	msg := sprintf("%s/%s: el verbo %s esta prohibido (escalada)", [input.kind, input.metadata.name, verbo])
+}
+
+excepcion_verbo_prohibido(obj, r, verbo) if {
+	obj.kind == "ClusterRole"
+	obj.metadata.name == "warm-provisioner"
+	verbo == "bind"
+	object.get(r, "resources", []) == ["clusterroles"]
+	object.get(r, "resourceNames", []) == ["aqs-reset-warm"]
+	object.get(r, "verbs", []) == ["bind"]
 }
 
 # C-28: RoleBinding fuera de namespaces warm (dentro de namespaces warm ya lo cubre isolation.rego).

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -285,7 +286,7 @@ func TestRoutePatternRepositories(t *testing.T) {
 }
 
 func TestRepositoryWarmOverlay(t *testing.T) {
-	gov := newGovFake(t, respond(http.StatusOK, `[{"repo":"acme/shop","warm":{"namespace":"ns-one","state":"provisioning"}},{"repo":"acme/other","warm":{"namespace":"ns-two","state":"ready"}}]`))
+	gov := newGovFake(t, respond(http.StatusOK, `[{"repo":"acme/shop","warm":{"namespace":"ns-one","warm_id":"w","state":"provisioning"}},{"repo":"acme/other","warm":{"namespace":"ns-two","warm_id":"w","state":"ready"}}]`))
 	warm := newWarmFake(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+warmSvcMarker {
 			t.Error("service token missing")
@@ -294,7 +295,8 @@ func TestRepositoryWarmOverlay(t *testing.T) {
 		if r.URL.Query().Get("namespace") == "ns-two" {
 			state = "dirty"
 		}
-		_, _ = w.Write([]byte(`{"warm_id":"w","state":"` + state + `","reset_verified":true,"baseline_version":"b"}`))
+		verified := state == "ready"
+		_, _ = w.Write([]byte(fmt.Sprintf(`{"warm_id":"w","state":%q,"reset_verified":%t,"baseline_version":"b"}`, state, verified)))
 	})
 	tokenFile := filepath.Join(t.TempDir(), "token")
 	if err := os.WriteFile(tokenFile, []byte(warmSvcMarker), 0600); err != nil {
@@ -307,10 +309,12 @@ func TestRepositoryWarmOverlay(t *testing.T) {
 	}
 	var repos []struct {
 		Warm struct {
-			State string `json:"state"`
+			State           string `json:"state"`
+			ResetVerified   bool   `json:"reset_verified"`
+			BaselineVersion string `json:"baseline_version"`
 		} `json:"warm"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &repos); err != nil || len(repos) != 2 || repos[0].Warm.State != "ready" || repos[1].Warm.State != "dirty" {
+	if err := json.Unmarshal(w.Body.Bytes(), &repos); err != nil || len(repos) != 2 || repos[0].Warm.State != "ready" || !repos[0].Warm.ResetVerified || repos[0].Warm.BaselineVersion != "b" || repos[1].Warm.State != "dirty" || repos[1].Warm.ResetVerified {
 		t.Fatalf("overlay: %s", w.Body.String())
 	}
 	if warm.query(0).Encode() != "namespace=ns-one" || warm.query(1).Encode() != "namespace=ns-two" {

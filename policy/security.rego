@@ -32,7 +32,13 @@ cp_deployments := {"go-run-controller", "go-warm-manager", "go-reset"}
 deny contains msg if {
 	input.kind in {"ClusterRole", "ClusterRoleBinding"}
 	input.metadata.name != "warm-provisioner"
+	not reset_warm_role(input)
 	msg := sprintf("%s/%s: ClusterRole y ClusterRoleBinding estan prohibidos", [input.kind, input.metadata.name])
+}
+
+reset_warm_role(obj) if {
+	obj.kind == "ClusterRole"
+	obj.metadata.name == "aqs-reset-warm"
 }
 
 deny contains msg if {

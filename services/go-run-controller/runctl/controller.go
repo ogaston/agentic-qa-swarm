@@ -146,7 +146,20 @@ func (k *Controller) request(ctx context.Context, r Run, to State) GateRequest {
 		req.EnsayoPassed = r.EnsayoPassed
 	}
 	if to == WarmReady || to == Deploying {
-		if f, err := k.c.Warm.ResetVerified(ctx); err == nil && (f == True || f == False) {
+		var f Fact
+		var err error
+		if r.Warm != nil {
+			if reader, ok := k.c.Warm.(interface {
+				ResetVerifiedForTarget(context.Context, string) (Fact, error)
+			}); ok {
+				f, err = reader.ResetVerifiedForTarget(ctx, targetNS)
+			} else {
+				err = errors.New("warm reader does not support target namespaces")
+			}
+		} else {
+			f, err = k.c.Warm.ResetVerified(ctx)
+		}
+		if err == nil && (f == True || f == False) {
 			req.ResetVerified = f
 		}
 	}
@@ -354,6 +367,17 @@ func (k *Controller) Drive(ctx context.Context, id string) error {
 	if r.FailReason != "" && (r.State != Resetting || exhausted(r, PhaseReset)) {
 		// Salida pendiente (gate caído o disco): solo se reintenta la transición, nunca la fase agotada.
 		return k.failRun(ctx, id, r.FailReason)
+	}
+	if r.State == Confirmed && r.Warm != nil {
+		preparer, ok := k.c.Phases.(interface {
+			PrepareWarm(context.Context, Run) error
+		})
+		if !ok {
+			return errors.New("repository warm preparation unavailable")
+		}
+		if err := preparer.PrepareWarm(ctx, r); err != nil {
+			return fmt.Errorf("preparing repository warm: %w", err)
+		}
 	}
 	if r.State == Confirmed || r.State == WarmReady {
 		return k.advance(ctx, r, chain[r.State])

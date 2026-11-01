@@ -138,7 +138,16 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 
 // State lee GET /warm (validado contra warm-state.schema.json).
 func (w *WarmClient) State(ctx context.Context) (plan.WarmState, error) {
-	b, err := w.s.call(ctx, http.MethodGet, "/warm", nil, 200)
+	return w.StateForTarget(ctx, "")
+}
+
+// StateForTarget reads the selected warm instead of the legacy default.
+func (w *WarmClient) StateForTarget(ctx context.Context, namespace string) (plan.WarmState, error) {
+	path := "/warm"
+	if namespace != "" {
+		path += "?namespace=" + url.QueryEscape(namespace)
+	}
+	b, err := w.s.call(ctx, http.MethodGet, path, nil, 200)
 	if err != nil {
 		return plan.WarmState{}, err
 	}
@@ -159,7 +168,12 @@ func decodeWarm(b []byte) (plan.WarmState, error) {
 
 // ResetVerified implementa runctl.WarmStateReader: solo true/false cuando el warm respondió bien.
 func (w *WarmClient) ResetVerified(ctx context.Context) (runctl.Fact, error) {
-	ws, err := w.State(ctx)
+	return w.ResetVerifiedForTarget(ctx, "")
+}
+
+// ResetVerifiedForTarget supplies the gate with the assigned warm's fact.
+func (w *WarmClient) ResetVerifiedForTarget(ctx context.Context, namespace string) (runctl.Fact, error) {
+	ws, err := w.StateForTarget(ctx, namespace)
 	if err != nil {
 		return runctl.Unknown, err
 	}
@@ -183,6 +197,25 @@ func (w *WarmClient) Ensure(ctx context.Context, target ...string) error {
 	}
 	if ws.State != "ready" || !ws.ResetVerified {
 		return errors.New("go-warm-manager: el warm no está listo con reset verificado")
+	}
+	return nil
+}
+
+// Bootstrap installs the confirmed image in a new repository warm before its first reset.
+func (w *WarmClient) Bootstrap(ctx context.Context, runID, kind, ref, namespace string) error {
+	if !runIDRe.MatchString(runID) || namespace == "" {
+		return errors.New("bootstrap target or run_id invalid")
+	}
+	in := map[string]any{"run_id": runID, "artifact": map[string]string{"kind": kind, "ref": ref}, "target": namespace}
+	b, _, err := w.s.callStatusT(ctx, w.MaxWait, http.MethodPost, "/warm/bootstrap", in, 200)
+	if err != nil {
+		return err
+	}
+	var out struct {
+		Status string `json:"status"`
+	}
+	if err := strict(b, &out); err != nil || out.Status != "deployed" {
+		return errors.New("go-warm-manager: invalid bootstrap response")
 	}
 	return nil
 }
@@ -307,7 +340,10 @@ func (w *WarmClient) SurfaceForTarget(ctx context.Context, runID, target string)
 }
 
 // ResetClient habla con go-reset.
-type ResetClient struct{ s *svc }
+type ResetClient struct {
+	s            *svc
+	ResetTimeout time.Duration
+}
 
 // NewResetClient valida URL http(s) y token.
 func NewResetClient(base, token string) (*ResetClient, error) {
@@ -315,19 +351,22 @@ func NewResetClient(base, token string) (*ResetClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ResetClient{s: s}, nil
+	return &ResetClient{s: s, ResetTimeout: 12 * time.Minute}, nil
 }
 
 // Reset pide POST /resets: solo 200 con reset_verified=true es éxito (409, 5xx, cuerpo inválido: error).
-func (r *ResetClient) Reset(ctx context.Context, runID string) error {
+func (r *ResetClient) Reset(ctx context.Context, runID string, target ...string) error {
 	if !runIDRe.MatchString(runID) {
 		return errors.New("run_id inválido")
 	}
 	in := map[string]string{"run_id": runID}
+	if len(target) > 0 && target[0] != "" {
+		in["namespace"] = target[0]
+	}
 	if tr := runctl.TraceFrom(ctx); tr != "" && runIDRe.MatchString(tr) {
 		in["trace_id"] = tr
 	}
-	b, err := r.s.call(ctx, http.MethodPost, "/resets", in, 200)
+	b, _, err := r.s.callStatusT(ctx, r.ResetTimeout, http.MethodPost, "/resets", in, 200)
 	if err != nil {
 		return err
 	}
@@ -357,6 +396,39 @@ type RealPhases struct {
 	Rehearse      runctl.PhaseLauncher
 	Run           runctl.PhaseLauncher // runners (U2-T05); sin él la fase run falla cerrado
 	Report        *ReporterClient      // reporter (U8-T06); sin él la fase report falla cerrado
+}
+
+// PrepareWarm initializes a repository warm with the confirmed image and a verified reset.
+// The legacy warm is prepared out of band and follows its existing path.
+func (p *RealPhases) PrepareWarm(ctx context.Context, run runctl.Run) error {
+	if run.Warm == nil {
+		return nil
+	}
+	if p.Warm == nil || p.Reset == nil || p.Artifact == nil {
+		return errors.New("bootstrap dependencies unavailable")
+	}
+	namespace := run.TargetNamespace("")
+	ws, err := p.Warm.StateForTarget(ctx, namespace)
+	if err != nil {
+		return err
+	}
+	if ws.State == "ready" && ws.ResetVerified {
+		return nil
+	}
+	kind, ref, err := p.Artifact(run.ID)
+	if err != nil {
+		return err
+	}
+	if err := ValidateImage(kind, ref, AllowedPrefixesForRun(run, p.ImagePrefixes, ref)); err != nil {
+		return err
+	}
+	if ws.State != "provisioning" && ws.State != "dirty" {
+		return errors.New("repository warm is not available for bootstrap")
+	}
+	if err := p.Warm.Bootstrap(ctx, run.ID, kind, ref, namespace); err != nil {
+		return err
+	}
+	return p.Reset.Reset(ctx, run.ID, namespace)
 }
 
 var (
@@ -400,7 +472,7 @@ func (p *RealPhases) Launch(ctx context.Context, phase string, run runctl.Run) (
 		}
 		return p.Run.Launch(ctx, phase, run)
 	case runctl.PhaseReset:
-		return nil, p.Reset.Reset(ctx, run.ID)
+		return nil, p.Reset.Reset(ctx, run.ID, run.TargetNamespace(""))
 	case runctl.PhaseReport:
 		_, err := p.LaunchReport(ctx, run)
 		return nil, err
