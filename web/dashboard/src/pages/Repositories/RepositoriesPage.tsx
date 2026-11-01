@@ -226,7 +226,7 @@ export function RepositoriesPage() {
     setEnVuelo(true);
     setDeleteError(null);
     try {
-      await apiFetch<void>(`/api/repositories/${repoAEliminar.repo}`, {
+      await apiFetch<undefined>(`/api/repositories/${repoAEliminar.repo}`, {
         method: 'DELETE',
       });
       setRepos((prev) => prev?.filter((r) => r.repo !== repoAEliminar.repo) ?? null);
