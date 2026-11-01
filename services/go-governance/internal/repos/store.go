@@ -146,6 +146,12 @@ func (s *FileStore) Create(ctx context.Context, r Repository) error {
 	if _, exists := s.entries[key]; exists {
 		return ErrAlreadyExists
 	}
+	for _, existing := range s.entries {
+		if (r.Warm.Namespace != "" && existing.Warm.Namespace == r.Warm.Namespace) ||
+			(r.Warm.WarmID != "" && existing.Warm.WarmID == r.Warm.WarmID) {
+			return ErrAlreadyExists
+		}
+	}
 	s.entries[key] = r
 	if err := s.persistLocked(); err != nil {
 		delete(s.entries, key)

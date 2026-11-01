@@ -295,7 +295,9 @@ func (s *Service) CreateRepository(ctx context.Context, actor string, in repos.R
 	}
 
 	// Verificar si ya existe (409)
-	if _, found, _ := s.repos.Get(ctx, repo); found {
+	if _, found, err := s.repos.Get(ctx, repo); err != nil {
+		return repos.Repository{}, err
+	} else if found {
 		return repos.Repository{}, repos.ErrAlreadyExists
 	}
 
@@ -303,6 +305,11 @@ func (s *Service) CreateRepository(ctx context.Context, actor string, in repos.R
 	existing, err := s.repos.List(ctx)
 	if err != nil {
 		return repos.Repository{}, err
+	}
+	for _, registered := range existing {
+		if registered.Warm.Namespace == repos.NamespaceForRepo(repo) || registered.Warm.WarmID == repos.WarmIDForRepo(repo) {
+			return repos.Repository{}, fmt.Errorf("%w: namespace warm en uso", repos.ErrAlreadyExists)
+		}
 	}
 	if len(existing) >= s.warmMaxEnvs {
 		return repos.Repository{}, repos.ErrWarmCapExceeded

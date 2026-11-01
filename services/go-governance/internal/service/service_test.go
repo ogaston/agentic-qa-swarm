@@ -424,3 +424,36 @@ func TestServiceRepositories(t *testing.T) {
 		t.Fatalf("auditoría rota tras operaciones de repositorio: %v", err)
 	}
 }
+
+func TestConcurrentCollidingRepositoryNames(t *testing.T) {
+	e := newEnv(t)
+	results := make(chan error, 2)
+	for _, name := range []string{"a/b.c", "a/b-c"} {
+		go func(name string) {
+			_, err := e.svc.CreateRepository(context.Background(), "owner", repos.RepositoryInput{Repo: name})
+			results <- err
+		}(name)
+	}
+	var successes, conflicts int
+	for i := 0; i < 2; i++ {
+		err := <-results
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, repos.ErrAlreadyExists):
+			conflicts++
+		default:
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("successes=%d conflicts=%d", successes, conflicts)
+	}
+	entries, err := e.svc.ListRepositories(context.Background())
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("entries=%v err=%v", entries, err)
+	}
+	if got := len(e.log.Query("", 10)); got != 1 {
+		t.Fatalf("expected one creation audit entry, got %d", got)
+	}
+}
