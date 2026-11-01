@@ -26,6 +26,7 @@ func (f verifierFunc) Verify(context.Context, string) (Principal, error) {
 type noExec struct{}
 
 func (noExec) ApproveExecution(context.Context, string, string, bool) error { return nil }
+func (noExec) RetryGeneration(context.Context, string, string, bool) error   { return nil }
 
 func TestRunsEndpoint(t *testing.T) {
 	st := runctl.NewMemStore()

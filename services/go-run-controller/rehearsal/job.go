@@ -78,14 +78,16 @@ func BuildJob(c Config, runID string, flow plan.Flow, attempt int) (*batchv1.Job
 	f, t, ro := false, true, true
 	var user int64 = 65532
 	var backoff int32
+	var ttl int32 = 600
 	labels := map[string]string{LabelRun: runID, LabelPhase: PhaseValue, LabelAtt: fmt.Sprint(attempt),
 		"app.kubernetes.io/name": "rehearsal", "aqs.io/role": "rehearsal"}
 	return &batchv1.Job{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "batch/v1", Kind: "Job"},
 		ObjectMeta: metav1.ObjectMeta{Name: JobName(runID, attempt), Namespace: c.Namespace, Labels: labels},
 		Spec: batchv1.JobSpec{
-			BackoffLimit:          &backoff,
-			ActiveDeadlineSeconds: &dl,
+			BackoffLimit:            &backoff,
+			ActiveDeadlineSeconds:   &dl,
+			TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{

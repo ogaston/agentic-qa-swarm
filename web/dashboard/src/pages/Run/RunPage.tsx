@@ -65,9 +65,9 @@ function VistaCorrida({ id }: { id: string }) {
     },
   );
 
-  // U12-T02: confirmación humana de la ejecución. Mientras la petición está en vuelo el botón
-  // queda deshabilitado; al terminar se refresca el sondeo (que no se detiene: no es terminal).
+  // U12-T02: confirmación humana de la ejecución y reintento de generación.
   const [aprobando, setAprobando] = useState(false);
+  const [reintentando, setReintentando] = useState(false);
   const [errorEjecucion, setErrorEjecucion] = useState<unknown>(null);
   const ejecutarPruebas = async () => {
     setAprobando(true);
@@ -81,6 +81,19 @@ function VistaCorrida({ id }: { id: string }) {
       else setErrorEjecucion(e);
     } finally {
       setAprobando(false);
+    }
+  };
+  const reintentarGeneracion = async () => {
+    setReintentando(true);
+    setErrorEjecucion(null);
+    try {
+      await apiFetch<Run>(`/api/runs/${id}/retry-generation`, { method: 'POST' });
+      refrescar();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) refrescar();
+      else setErrorEjecucion(e);
+    } finally {
+      setReintentando(false);
     }
   };
 
@@ -105,8 +118,9 @@ function VistaCorrida({ id }: { id: string }) {
   // El informe existe al terminar («done») o, si falla, cuando el controlador ya guardó su report_uri.
   const informeListo = data !== null && (data.state === 'done' || (data.state === 'failed' && data.report_uri !== undefined));
   const enCurso = data !== null && !esTerminal(data);
-  const plan = <PlanFlujos key="plan" id={id} activo={alcanzoEnsayo} automatico={enCurso} enEjecucion={data?.state === 'running'} encabezado={encabezadoPlan(data?.state)} />;
-  const informe = data !== null ? <PostMortem key="informe" id={id} activo={informeListo} verdict={data.verdict} /> : null;
+  const [reportFindings, setReportFindings] = useState<components['schemas']['Report']['findings'] | undefined>(undefined);
+  const plan = <PlanFlujos key="plan" id={id} activo={alcanzoEnsayo} automatico={enCurso} enEjecucion={data?.state === 'running'} encabezado={encabezadoPlan(data?.state)} estadoCorrida={data?.state} reportFindings={reportFindings} />;
+  const informe = data !== null ? <PostMortem key="informe" id={id} activo={informeListo} verdict={data.verdict} onReportLoaded={(r) => setReportFindings(r.findings)} /> : null;
 
   return (
     <main className="az-container run-page">
@@ -129,15 +143,24 @@ function VistaCorrida({ id }: { id: string }) {
             <span className="az-meta-value">{estadoConsulta}</span>
           </div>
           {data?.awaiting_execution === true && (
-            <div className="az-meta-item">
+            <div className="az-meta-item run-actions">
               <button
                 type="button"
                 className="btn btn-primary"
                 data-testid="run-execute-button"
-                disabled={aprobando}
+                disabled={aprobando || reintentando}
                 onClick={() => void ejecutarPruebas()}
               >
-                Ejecutar pruebas
+                {aprobando ? 'Iniciando…' : 'Ejecutar pruebas'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                data-testid="run-retry-generation-button"
+                disabled={aprobando || reintentando}
+                onClick={() => void reintentarGeneracion()}
+              >
+                {reintentando ? 'Reintentando…' : 'Reintentar generación'}
               </button>
             </div>
           )}
@@ -146,7 +169,7 @@ function VistaCorrida({ id }: { id: string }) {
 
       {data?.awaiting_execution === true && (
         <p role="status" className="notice run-awaiting-notice">
-          Las pruebas están listas. Revisa los flujos y pulsa «Ejecutar pruebas» para empezar.
+          Pruebas listas. Revisa los flujos y confirma la ejecución o regenera el plan.
         </p>
       )}
 

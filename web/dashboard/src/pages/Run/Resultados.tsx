@@ -105,11 +105,16 @@ function TarjetaPostMortem({
 }
 
 /** Post-mortem: `GET /api/reports/{run}` una sola vez; «Reintentar» es la única petición extra. */
-export function PostMortem({ id, activo, verdict }: { id: string; activo: boolean; verdict: Verdict | undefined }) {
+export function PostMortem({ id, activo, verdict, onReportLoaded }: {
+  id: string; activo: boolean; verdict: Verdict | undefined; onReportLoaded?: (report: Report) => void;
+}) {
   const { data, error, cargando, reintentar } = useUnaVez<Report>(
     () => apiFetch<Report>(`/api/reports/${id}`),
     activo,
   );
+  useEffect(() => {
+    if (data !== null) onReportLoaded?.(data);
+  }, [data, onReportLoaded]);
 
   if (!activo) {
     return (
@@ -205,8 +210,8 @@ export function PostMortem({ id, activo, verdict }: { id: string; activo: boolea
  * de estado (mockup: «Flujos inferidos», «Flujos en ejecución», «Flujos ejecutados»). La tarjeta se pliega; cada flujo, también.
  * Mientras la corrida está activa, plan_not_ready se reintenta con un presupuesto acotado.
  */
-export function PlanFlujos({ id, activo, encabezado, automatico = false, enEjecucion = false }: {
-  id: string; activo: boolean; encabezado: string; automatico?: boolean; enEjecucion?: boolean;
+export function PlanFlujos({ id, activo, encabezado, automatico = false, enEjecucion = false, estadoCorrida, reportFindings }: {
+  id: string; activo: boolean; encabezado: string; automatico?: boolean; enEjecucion?: boolean; estadoCorrida?: string | undefined; reportFindings?: Report['findings'] | undefined;
 }) {
   const intentos = useRef(0);
   const { data, error, cargando, reintentar } = useUnaVez<FlowPlan>(
@@ -232,12 +237,31 @@ export function PlanFlujos({ id, activo, encabezado, automatico = false, enEjecu
       if (!vigente) return;
       const disponibles: Record<string, 'passed' | 'failed' | 'timeout'> = {};
       for (const [flow, status] of respuestas) if (status === 'passed' || status === 'failed' || status === 'timeout') disponibles[flow] = status;
+
+      // Si la corrida ya terminó pero no se pudieron obtener evidencias individuales,
+      // deducir el resultado de cada flujo a partir de los hallazgos del informe post-mortem.
+      const corridaTerminada = estadoCorrida === 'done' || estadoCorrida === 'failed';
+      if (corridaTerminada && Object.keys(disponibles).length === 0 && reportFindings !== undefined) {
+        const failingFlows = new Set<string>();
+        for (const f of reportFindings) {
+          for (const uri of f.evidence_uris) {
+            for (const fl of data.flows) {
+              if (uri.includes(`/${fl.flow_id}/`)) failingFlows.add(fl.flow_id);
+            }
+          }
+        }
+        for (const fl of data.flows) {
+          disponibles[fl.flow_id] = failingFlows.has(fl.flow_id) ? 'failed' : 'passed';
+        }
+      }
+
+      if (!vigente) return;
       setResultados(disponibles);
       if (automatico) timer = setTimeout(consultar, 3000);
     };
     void consultar();
     return () => { vigente = false; if (timer !== undefined) clearTimeout(timer); };
-  }, [activo, automatico, data, id]);
+  }, [activo, automatico, data, id, estadoCorrida, reportFindings]);
   const estabaEjecutando = useRef(false);
   useEffect(() => {
     const iniciaEjecucion = enEjecucion && !estabaEjecutando.current;
@@ -308,7 +332,7 @@ export function PlanFlujos({ id, activo, encabezado, automatico = false, enEjecu
               <span className={`badge flow-status ${resultados[flow.flow_id] === 'passed' ? 'badge-ok' : resultados[flow.flow_id] === 'failed' ? 'badge-danger' : resultados[flow.flow_id] === 'timeout' ? 'badge-warn' : 'badge-neutral'}`}>
                 {resultados[flow.flow_id] === 'passed' && <span aria-hidden="true">✓</span>}
                 {resultados[flow.flow_id] === 'failed' && <span aria-hidden="true">✕</span>}
-                {resultados[flow.flow_id] === 'passed' ? 'Aprobada' : resultados[flow.flow_id] === 'failed' ? 'Fallida' : resultados[flow.flow_id] === 'timeout' ? 'Tiempo agotado' : 'Sin resultado'}
+                {resultados[flow.flow_id] === 'passed' ? 'Exitosa' : resultados[flow.flow_id] === 'failed' ? 'Fallida' : resultados[flow.flow_id] === 'timeout' ? 'Tiempo agotado' : 'Pendiente'}
               </span>
             </summary>
             <div className="flow-content">

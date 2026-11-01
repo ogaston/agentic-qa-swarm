@@ -151,6 +151,23 @@ paths:
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /runs/{id}/retry-generation:
+    post:
+      operationId: retryRunGeneration
+      summary: El humano solicita reintentar la generación de pruebas con la IA tras el ensayo.
+      description: Solo el dueño de la corrida (o un admin) puede solicitar el reintento mientras espera confirmación. Limpia el plan y relanza la generación y el ensayo.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '202':
+          description: Reintento registrado; devuelve la corrida actualizada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Run'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
   /runs/{id}/plan:
     get:
       operationId: getRunPlan

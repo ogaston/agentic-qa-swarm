@@ -122,6 +122,38 @@ func (k *Controller) ApproveExecution(ctx context.Context, id, principalID strin
 	return nil
 }
 
+// RetryGeneration limpia el plan y los hechos de ensayo para forzar una nueva generación con el LLM
+// y un nuevo ensayo si la corrida espera confirmación de ejecución.
+func (k *Controller) RetryGeneration(ctx context.Context, id, principalID string, admin bool) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	r, ok := k.c.Store.Get(id)
+	if !ok {
+		return ErrNotFound
+	}
+	ctx = withTrace(ctx, r.TraceID)
+	if !admin && principalID != r.ConfirmedBy {
+		return ErrForbidden
+	}
+	if !AwaitingExecution(r) {
+		return ErrNotAwaiting
+	}
+	r.Plan = nil
+	r.EnsayoPassed = Unknown
+	r.ExecutionApprovedBy = ""
+	r.AwaitingSince = time.Time{}
+	delete(r.Launched, PhaseRehearse)
+	if r.Started == nil {
+		r.Started = map[string]int{}
+	}
+	r.Started[PhaseRehearse]++
+	if err := k.save(r); err != nil {
+		return err
+	}
+	k.c.Log.InfoContext(ctx, "reintento de generación de pruebas solicitado por el humano", "run_id", id, "principal_id", principalID, "admin", admin)
+	return nil
+}
+
 // Namespace devuelve el namespace fijo de las transiciones.
 func (k *Controller) Namespace() string { return k.c.Namespace }
 

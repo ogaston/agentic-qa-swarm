@@ -17,7 +17,7 @@ describe('LandingPage', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: /Your releases, tested by a swarm/,
+        name: /Tus releases, probados por un enjambre/,
       }),
     ).toBeTruthy();
     expect(screen.getAllByText('Agentic QA Swarm').length).toBeGreaterThan(0);
@@ -25,12 +25,12 @@ describe('LandingPage', () => {
 
   it('las CTA llevan a /login', () => {
     renderLanding();
-    const ctas = screen.getAllByRole('link', { name: /Request access/ });
+    const ctas = screen.getAllByRole('link', { name: /Solicitar acceso/ });
     expect(ctas.length).toBeGreaterThan(0);
     for (const cta of ctas) {
       expect(cta.getAttribute('href')).toBe('/login');
     }
-    expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/login');
+    expect(screen.getByRole('link', { name: 'Iniciar sesión' }).getAttribute('href')).toBe('/login');
   });
 
   it('los .ed-reveal quedan visibles sin IntersectionObserver (jsdom)', () => {
@@ -43,6 +43,11 @@ describe('LandingPage', () => {
   it('las secciones de la landing usan el contenedor .ed-container', () => {
     const { container } = renderLanding();
     const contenedores = container.querySelectorAll('.ed-container');
-    expect(contenedores.length).toBeGreaterThanOrEqual(7);
+    expect(contenedores.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('no incluye la tira gráfica ed-strip', () => {
+    const { container } = renderLanding();
+    expect(container.querySelector('.ed-strip')).toBeNull();
   });
 });

@@ -577,6 +577,14 @@
   transition-delay: 240ms;
 }
 
+.ed-reveal-delay-4 {
+  transition-delay: 320ms;
+}
+
+.ed-reveal-delay-5 {
+  transition-delay: 400ms;
+}
+
 /* Con movimiento reducido el contenido se muestra siempre, sin esperar al observador. */
 @media (prefers-reduced-motion: reduce) {
   .ed-root .ed-reveal,
@@ -721,62 +729,6 @@
 .ed-cross-br {
   bottom: -5px;
   right: 0;
-}
-
-/* ---------- Tira gráfica abstracta ---------- */
-
-.ed-strip {
-  padding: 0 0 96px;
-}
-
-.ed-strip-track {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 4px;
-}
-
-.ed-tile {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: 4px;
-}
-
-.ed-reveal-delay-4 {
-  transition-delay: 320ms;
-}
-
-.ed-reveal-delay-5 {
-  transition-delay: 400ms;
-}
-
-@media (max-width: 900px) {
-  .ed-strip {
-    padding-bottom: 64px;
-  }
-
-  .ed-strip-track {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .ed-strip-track {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.ed-strip-track > span {
-  display: block;
-  min-width: 0;
-}
-
-.ed-tile {
-  transition: transform var(--ed-dur-fast) ease;
-}
-
-.ed-tile:hover {
-  transform: translateY(-2px);
 }
 
 /* ---------- Baliza de estado (Beacon) ---------- */
