@@ -538,7 +538,7 @@ func WorkloadTemplate(target warmtarget.WarmTarget) (*WarmResources, error) {
 				Namespace: ns,
 			},
 			Data: map[string]string{
-				"state": fmt.Sprintf(`{"warm_id":%q,"state":"provisioning","reset_verified":false,"baseline_version":"","namespace":%q,"repo":%q}`,
+				"state": fmt.Sprintf(`{"warm_id":%q,"state":"provisioning","reset_verified":false,"baseline_version":"unverified","namespace":%q,"repo":%q}`,
 					target.WarmID, ns, target.Repo),
 			},
 		},

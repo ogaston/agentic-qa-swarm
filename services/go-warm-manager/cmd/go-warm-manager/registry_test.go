@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,6 +33,14 @@ func TestSyncRepositories(t *testing.T) {
 	}
 	if _, err := cs.CoreV1().Namespaces().Get(context.Background(), "aqs-w-acme-shop", metav1.GetOptions{}); err != nil {
 		t.Fatal(err)
+	}
+	cm, err := cs.CoreV1().ConfigMaps("aqs-w-acme-shop").Get(context.Background(), "warm-state", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state wm.WarmState
+	if err := json.Unmarshal([]byte(cm.Data["state"]), &state); err != nil || !state.Valid() || state.State != wm.StateProvisioning || state.ResetVerified {
+		t.Fatalf("invalid initial state: %+v, %v", state, err)
 	}
 	body = `null`
 	if err := sync(); err == nil {
