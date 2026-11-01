@@ -135,6 +135,8 @@ const (
 	RouteRepositories       = "/repositories"
 	RouteRepositoryItem     = "/repositories/{owner}/{repo}"
 	RouteRepositoryActivity = "/repositories/{owner}/{repo}/activity"
+	RouteEvidence           = "/run-evidence/{run}/{flow}/{name}"
+	RouteReportEvidence     = "/report-evidence/{run}/{finding}/{evidence}"
 )
 
 // RoutePattern devuelve el PATRÓN de ruta de la petición ("unmatched" si no hay), nunca la ruta cruda.
@@ -166,6 +168,14 @@ func RoutePattern(r *http.Request) string {
 		}
 		if len(parts) == 4 && parts[1] != "" && parts[2] != "" && parts[3] == "activity" {
 			return RouteRepositoryActivity
+		}
+	case strings.HasPrefix(p, "/report-evidence/"):
+		if len(strings.Split(strings.TrimPrefix(p, "/report-evidence/"), "/")) == 3 {
+			return RouteReportEvidence
+		}
+	case strings.HasPrefix(p, "/run-evidence/"):
+		if len(strings.Split(strings.TrimPrefix(p, "/run-evidence/"), "/")) == 3 {
+			return RouteEvidence
 		}
 	}
 	return "unmatched"
@@ -305,6 +315,24 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request) {
 		}
 		if pr, ok := h.authenticate(w, r); ok {
 			h.confirm(w, r, pr, id)
+		}
+	case strings.HasPrefix(p, "/report-evidence/"):
+		parts := strings.Split(strings.TrimPrefix(p, "/report-evidence/"), "/")
+		if len(parts) != 3 || r.Method != http.MethodGet {
+			writeError(w, http.StatusNotFound, "not_found", "ruta inexistente")
+			return
+		}
+		if pr, ok := h.authenticate(w, r); ok {
+			h.reportEvidence(w, r, pr, parts[0], parts[1], parts[2])
+		}
+	case strings.HasPrefix(p, "/run-evidence/"):
+		parts := strings.Split(strings.TrimPrefix(p, "/run-evidence/"), "/")
+		if len(parts) != 3 || r.Method != http.MethodGet {
+			writeError(w, http.StatusNotFound, "not_found", "ruta inexistente")
+			return
+		}
+		if pr, ok := h.authenticate(w, r); ok {
+			h.evidence(w, r, pr, parts[0], parts[1], parts[2])
 		}
 	case strings.HasPrefix(p, "/reports/"):
 		runID := strings.TrimPrefix(p, "/reports/")

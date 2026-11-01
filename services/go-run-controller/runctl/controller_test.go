@@ -46,7 +46,7 @@ func (r *rig) state(id string) State { x, _ := r.store.Get(id); return x.State }
 func TestEveryLegalTransitionAppliesWithGate(t *testing.T) {
 	for p := range legalPairs {
 		r := newRig(t, AllowAll())
-		_ = r.store.Save(Run{ID: "r", State: p[0], ConfirmedBy: "u", Flows: []string{"f"}, EnsayoPassed: True})
+		_ = r.store.Save(Run{ID: "r", State: p[0], ConfirmedBy: "u", Flows: []string{"f"}, EnsayoPassed: True, ExecutionApprovedBy: "u"})
 		if err := r.k.Transition(t.Context(), "r", p[1]); err != nil {
 			t.Fatalf("%v: %v", p, err)
 		}
@@ -203,6 +203,9 @@ func TestHappyPathReachesDoneAndPublishesOnce(t *testing.T) {
 		t.Fatal(r.state("r-1"))
 	}
 	_ = r.k.Apply(t.Context(), Event{Type: EvRehearsalPassed, EventID: "e2", RunID: "r-1"})
+	if err := r.k.ApproveExecution(t.Context(), "r-1", "u-1", false); err != nil {
+		t.Fatal(err)
+	}
 	driveUntilStable(r)
 	if r.state("r-1") != Done || len(r.pub.Events) != 1 {
 		t.Fatal(r.state("r-1"), r.pub.Events)
@@ -244,6 +247,9 @@ func TestResetFailureThreeTimesFails(t *testing.T) {
 	_ = r.k.Apply(t.Context(), confirmedEv())
 	driveUntilStable(r)
 	_ = r.k.Apply(t.Context(), Event{Type: EvRehearsalPassed, EventID: "e2", RunID: "r-1"})
+	if err := r.k.ApproveExecution(t.Context(), "r-1", "u-1", false); err != nil {
+		t.Fatal(err)
+	}
 	driveUntilStable(r)
 	if r.state("r-1") != Failed || r.ph.Launches[PhaseReset] != 3 || len(r.al.Calls) != 1 {
 		t.Fatal(r.state("r-1"), r.ph.Launches, r.al.Calls)

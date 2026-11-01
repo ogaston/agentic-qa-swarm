@@ -100,6 +100,14 @@ func (r *demoRig) pass(t *testing.T, id string) {
 	}
 }
 
+// approve confirma la ejecución como el dueño ("u"): U12-T02 exige la aprobación humana tras el ensayo.
+func (r *demoRig) approve(t *testing.T, id string) {
+	t.Helper()
+	if err := r.ctl.ApproveExecution(t.Context(), id, "u", false); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // u3Stub sirve POST /v1/plan; mutate ajusta el plan antes de responder.
 func u3Stub(t *testing.T, mutate func(*plan.FlowPlan)) *httptest.Server {
 	t.Helper()
@@ -161,6 +169,7 @@ func TestDemoLocal_CaminoFeliz(t *testing.T) {
 		t.Fatalf("ensayo con plan de U3: %v jobs=%d", err, demoJobs(t, cs))
 	}
 	r.pass(t, "r-1")
+	r.approve(t, "r-1")
 	r.drive()
 	if r.state("r-1") != runctl.Done || len(r.pub.Events) != 1 {
 		t.Fatal(r.state("r-1"), r.pub.Events)
@@ -181,6 +190,7 @@ func TestDemoLocal_ResetEntreCorridas(t *testing.T) {
 		r.confirm(t, id)
 		r.drive()
 		r.pass(t, id)
+		r.approve(t, id)
 		r.drive()
 		if r.state(id) != runctl.Done {
 			t.Fatalf("corrida %d terminó en %s", i, r.state(id))

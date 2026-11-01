@@ -8,7 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SMOKE = (ROOT / 'scripts/kind/kind-smoke.sh').read_text()
-SETUP = (ROOT / 'scripts/demo/00-setup.sh').read_text()
+SETUP = (ROOT / 'scripts/kind/demo-preflight.sh').read_text()
 
 
 def function(name):

@@ -319,7 +319,9 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 > **U11-T5 (PR #139) y U11-T6 (PR #142) fusionadas (2026-10-26)**; U11-T06 cerró con VERDE en la ronda 2 (la ronda 1 fue NO-VERDE por F-01 y F-02, corregidos). **Siguiente**: CA-6 de U11-T2 (humo y e2e en un clúster real con un segundo commit distinto de `b97a719`) y el ensayo real con el humano (webhook de GitHub, túnel y DeepSeek; ver `docs/demo-real.md`).
 
 
-## U12 — Autoservicio de Repositorios y Entornos Warm
+> Nota: el identificador U12 se usó en dos frentes paralelos; U12-SS conserva la referencia histórica del PR #151.
+
+## U12-SS (PR #151) — Autoservicio de Repositorios y Entornos Warm
 
 - **Responsabilidad**: permitir el autoservicio completo de repositorios desde la interfaz de usuario (`/repositories`), con registro en el plano de gobernanza, aprovisionamiento y aislamiento dinámico en tiempo de ejecución de entornos warm (`aqs-w-<slug>`) acotados por cuotas y admisiones estrictas, y búsqueda dinámica de repositorios en el webhook intake.
 - **Bounded context**: transversal (gobernanza, ingesta, control de ejecución, warm manager, seguridad, interfaz de usuario).
@@ -338,3 +340,17 @@ No forman parte del MVP ni del plan de tareas (alcance = Must M1-M10). Se reacti
 | U12-T6 | [x] | Interfaz de autoservicio en `web/dashboard`: vista `/repositories`, modal de configuración, comprobación de contratos, proxy en `ui-api` y suite de 242 pruebas de frontend | US-SS1 | `(cd web/dashboard && npm test -- --run && npm run build) && (cd services/ui-api && go test ./...)` |
 
 > **Implementación y Verificación (2026-10-28/29)**: Desarrollada en arquitectura de 5 carriles paralelos (A: Gobernanza/Intake, B: Warm Manager, C: Run Controller/Reset, D: Seguridad/RBAC, E: UI-API/Dashboard) sobre la rama `feat/self-service-repos`. Revisión de código independiente abordada con 4 hallazgos corregidos (RBAC matriz y live smoke cluster, reconciliación idempotente de secretos sin lectura get, reenvío de target en WarmClient, prefijos exactos de imagen por slug). Verificada de punta a punta en `kind-aqs` con `scripts/test/u12-self-service-kind.sh` y `scripts/kind/kind-smoke.sh` en verde (0 fallas).
+## U12 — Control humano de la ejecución
+
+- **Responsabilidad**: que el humano decida qué familias de flujos entran en la corrida y confirme explícitamente la ejecución después del ensayo, viendo el plan antes de que corra nada.
+- **Bounded context**: ejecución (go-run-controller) y frontend. **Historias**: US-M2, US-M5, S5.
+- **Límites**: sin estado nuevo en el enum de `Run.state`, sin cambios en Rego, sin eventos NATS nuevos.
+- **Predecesoras**: U9, U10 y U11 cerradas.
+
+| # | Hecho | Tarea | Historias | Comando de verificación |
+|---|---|---|---|---|
+| U12-T1 | [ ] | Paso 2 del modal: solo familias de flujos; carga y seguridad visibles y deshabilitadas («Próximamente») | US-M2, S5 | `tareas/U12-T01-familias-de-flujos-en-el-modal.md` |
+| U12-T2 | [ ] | La corrida espera tras el ensayo; «Ejecutar pruebas» en `/runs/:id` la lleva a `running` (dueño o admin; caduca a los 30 min) | US-M2, US-M5, S5 | `tareas/U12-T02-confirmacion-antes-de-ejecutar.md` |
+| U12-T3 | [ ] | `up.sh` reconstruye, carga y reinicia las imágenes de la plataforma también sobre un clúster existente, con lectura de vuelta del `startTime` de los pods | S5 | `tareas/U12-T03-imagenes-frescas-en-cluster-existente.md` |
+
+> **Tareas redactadas (2026-10-31)**, a pedido del humano. Olas: **1** = T01 ∥ T02 (unidades de archivos disjuntas). Diagnóstico adjunto: «Sin resultado» y evidencias inaccesibles en `/runs/:id` no son un defecto de código: la imagen `ui-api` del clúster (importada el 2026-10-26) es anterior a la ruta `/run-evidence` (`f5a2682`, 2026-10-29) y responde `404 route=unmatched`. Se resuelve reconstruyendo y cargando las imágenes (acción del humano). Candidata nueva C-134: el humo del dashboard debe comprobar `/api/run-evidence`.

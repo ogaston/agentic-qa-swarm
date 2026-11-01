@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -35,6 +36,7 @@ class Service:
     limits: Limits
     # Bucket de los reportes guardados (GET /v1/reports). Vacío = el GET responde invalid_uri a todo.
     report_bucket: str = ""
+    evidence_bucket: str = "evidence"
 
 
 def handle_get_report(svc: Service, uri: str) -> tuple[int, bytes | dict]:
@@ -49,6 +51,36 @@ def handle_get_report(svc: Service, uri: str) -> tuple[int, bytes | dict]:
         return 400, {"error": "invalid_uri"}
     except Exception:  # noqa: BLE001 - el mensaje del proveedor no sale
         return 502, {"error": "store_unavailable"}
+
+
+def handle_get_evidence(svc: Service, run_id: str, flow_id: str, name: str) -> tuple[int, bytes | dict]:
+    """Read only runner artifacts addressed by validated run and flow identifiers."""
+    if (not re.fullmatch(r"run-[0-9a-f]{16}", run_id)
+            or not re.fullmatch(r"[a-z0-9](?:[-a-z0-9]{0,33}[a-z0-9])?", flow_id)
+            or name not in ("result.json", "logs.txt") or not svc.evidence_bucket):
+        return 400, {"error": "invalid_request"}
+    try:
+        return 200, svc.reader.get(f"s3://{svc.evidence_bucket}/runs/{run_id}/{flow_id}/{name}")
+    except Exception:  # noqa: BLE001
+        return 502, {"error": "evidence_unavailable"}
+
+
+def handle_get_report_evidence(svc: Service, run_id: str, uri: str) -> tuple[int, bytes | dict]:
+    """Read a run-scoped object from the configured evidence bucket."""
+    try:
+        parsed = urlsplit(uri)
+    except ValueError:
+        return 400, {"error": "invalid_uri"}
+    parts = parsed.path.lstrip("/").split("/")
+    scoped = (len(parts) >= 3 and parts[0] == "runs" and parts[1] == run_id) or (len(parts) >= 2 and parts[0] == run_id)
+    if (not re.fullmatch(r"run-[0-9a-f]{16}", run_id) or parsed.scheme != "s3"
+            or parsed.netloc != svc.evidence_bucket or parsed.query or parsed.fragment
+            or not scoped or any(part in ("", ".", "..") for part in parts)):
+        return 400, {"error": "invalid_uri"}
+    try:
+        return 200, svc.reader.get(uri)
+    except Exception:  # noqa: BLE001
+        return 502, {"error": "evidence_unavailable"}
 
 
 def handle_report(svc: Service, body: bytes) -> tuple[int, dict]:
@@ -114,6 +146,18 @@ def make_handler(svc: Service):
                 if code != 200:
                     return self._send(code, payload)
                 return self._send(200, payload, "application/json")
+            elif url.path == "/v1/report-evidence":
+                params = parse_qs(url.query, keep_blank_values=True)
+                if set(params) != {"run", "uri"} or any(len(v) != 1 for v in params.values()):
+                    return self._send(400, {"error": "invalid_request"})
+                code, payload = handle_get_report_evidence(svc, params["run"][0], params["uri"][0])
+                return self._send(code, payload, "application/octet-stream" if code == 200 else "application/json")
+            elif url.path == "/v1/evidence":
+                params = parse_qs(url.query, keep_blank_values=True)
+                if set(params) != {"run", "flow", "name"} or any(len(v) != 1 for v in params.values()):
+                    return self._send(400, {"error": "invalid_request"})
+                code, payload = handle_get_evidence(svc, params["run"][0], params["flow"][0], params["name"][0])
+                return self._send(code, payload, "application/octet-stream" if code == 200 else "application/json")
             else:
                 self._send(404, {"error": "not_found"})
 
@@ -212,7 +256,8 @@ def build_service(env=None) -> Service:
     else:
         raise SystemExit("LLM_PROVIDER no soportado")
     report_bucket = e.get("EVIDENCE_BUCKET", "") if e.get("REPORTER_EVIDENCE", "dir") == "s3" else ""
-    return Service(reader, llm, store, RecordingPublisher(), limits, report_bucket=report_bucket)
+    return Service(reader, llm, store, RecordingPublisher(), limits, report_bucket=report_bucket,
+                   evidence_bucket=e.get("EVIDENCE_BUCKET", "evidence"))
 
 
 def main() -> None:

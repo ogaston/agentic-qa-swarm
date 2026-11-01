@@ -1,3 +1,8 @@
+> **Current demo entry points:** Run `bash scripts/demo/up.sh`, create a commit with
+> `scripts/demo/10-push-commit.sh`, wait for its image, and confirm it in the dashboard.
+> Stop with `bash scripts/demo/down.sh`. The historical walkthrough below predates the
+> two-command lifecycle and its references to removed scripts are historical.
+
 # Demo con el repositorio real (U11-T02)
 
 Guion de la demo de punta a punta con el repositorio objetivo **real**, `ogaston/demo-target-app-qa-swarm`

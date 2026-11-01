@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -83,7 +83,8 @@ describe('RunPage: veredicto', () => {
       const { unmount } = renderRun();
       await vaciar();
       const insignia = document.querySelector(`[data-veredicto="${verdict}"]`);
-      expect(insignia?.textContent).toBeTruthy();
+      if (verdict === 'sin-hallazgos') expect(insignia).toBeNull();
+      else expect(insignia?.textContent).toBeTruthy();
       textos.push(insignia?.textContent ?? '');
       unmount();
     }
@@ -118,16 +119,17 @@ describe('RunPage: post-mortem', () => {
     ruta(`/api/reports/${ID}`, [{ json: { ...informeDosHallazgos, run_id: ID } }]);
     renderRun();
     await vaciar();
-    const pm = within(screen.getByRole('region', { name: 'Informe post-mortem' }));
+    const pm = within(screen.getByRole('region', { name: 'Resultados de la prueba' }));
     expect(pm.getByText('Dos flujos fallidos')).toBeTruthy();
     expect(pm.getByText('/orders')).toBeTruthy();
     expect(pm.getByText('/orders/{id}')).toBeTruthy();
     expect(pm.getByText('inv a')).toBeTruthy();
     expect(pm.getByText('causa a')).toBeTruthy();
-    expect(pm.getByText('s3://aqs-evidence/runs/run-1/flow-1/result.json')).toBeTruthy();
-    expect(pm.getByText('s3://aqs-evidence/runs/run-1/flow-1/logs.txt')).toBeTruthy();
-    expect(pm.getByText('https://evidence.example/run-1/flow-2/result.json')).toBeTruthy();
-    expect(pm.queryByRole('link')).toBeNull();
+    expect(pm.queryByText('s3://aqs-evidence/runs/run-1/flow-1/result.json')).toBeNull();
+    expect(pm.queryByText('s3://aqs-evidence/runs/run-1/flow-1/logs.txt')).toBeNull();
+    expect(pm.queryByText('https://evidence.example/run-1/flow-2/result.json')).toBeNull();
+    expect(pm.getByRole('link', { name: /Abrir evidencia/ })).toBeTruthy();
+    expect(pm.getAllByRole('link', { name: /Descargar evidencia/ })).toHaveLength(2);
   });
 
   it('findings vacío muestra un mensaje sin hallazgos', async () => {
@@ -136,7 +138,7 @@ describe('RunPage: post-mortem', () => {
     ruta(`/api/reports/${ID}`, [{ json: { ...informeSinHallazgos, run_id: ID } }]);
     renderRun();
     await vaciar();
-    expect(screen.getByText('No se encontraron hallazgos en esta corrida.')).toBeTruthy();
+    expect(screen.queryByText('No se encontraron hallazgos en esta corrida.')).toBeNull();
   });
 
   it('404 report_not_ready muestra el aviso y «Reintentar» hace una petición más', async () => {
@@ -210,6 +212,139 @@ describe('RunPage: post-mortem', () => {
 });
 
 describe('RunPage: plan de flujos', () => {
+  it('muestra el resultado real de cada flujo y permite descargar evidencia', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('done')]);
+    ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    server.use(http.get('/api/run-evidence/:run/:flow/result.json', ({ params }) =>
+      HttpResponse.json({ status: params.flow === planCon.flows[0]?.flow_id ? 'passed' : 'failed' }),
+    ));
+    renderRun();
+    await vaciar();
+    await vaciar();
+    expect(screen.getByRole('heading', { name: 'Flujos principales' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Reglas de negocio' })).toBeTruthy();
+    expect(screen.getByText('Aprobada')).toBeTruthy();
+    expect(screen.getByText('Fallida')).toBeTruthy();
+    const firstFlow = planCon.flows[0];
+    if (!firstFlow) throw new Error('Missing flow fixture');
+    const flow = screen.getByText(firstFlow.name).closest('details');
+    if (!flow) throw new Error('Missing flow details');
+    const summary = flow.querySelector('summary');
+    if (!summary) throw new Error('Missing flow summary');
+    expect(flow.open).toBe(false);
+    expect(within(flow).getByRole('button', { name: 'Descargar resultados', hidden: true })).toBeTruthy();
+    expect(within(flow).getByRole('button', { name: 'Descargar registros', hidden: true })).toBeTruthy();
+    fireEvent.click(summary);
+    expect(flow.open).toBe(true);
+    fireEvent.click(summary);
+    expect(flow.open).toBe(false);
+  });
+  it('running mantiene los flujos cerrados hasta que se abran', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('running')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    renderRun();
+    await vaciar();
+    const region = screen.getByRole('region', { name: 'Plan de flujos' });
+    const flujos = region.querySelectorAll<HTMLDetailsElement>('.flow-details');
+    expect(flujos.length).toBe(2);
+    flujos.forEach((flujo) => expect(flujo.open).toBe(false));
+    expect(region.parentElement?.firstElementChild).toBe(region);
+    // El sondeo de la corrida no vuelve a abrir lo que el usuario cierra.
+    await act(async () => { if (flujos[0]) flujos[0].open = false; });
+    await avanzar(9000);
+    expect(flujos[0]?.open).toBe(false);
+    expect(plan.n).toBe(1);
+  });
+
+  it('al pasar de rehearsing a running mantiene los flujos cerrados sin volver a pedir el plan', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('rehearsing'), corrida('running')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    renderRun();
+    await vaciar();
+    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(false);
+    await avanzar(3000);
+    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(false);
+    expect(plan.n).toBe(1);
+  });
+
+  it('recupera plan_not_ready durante running y deja de pedir al recibir el plan', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('running')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [error(404, 'plan_not_ready'), { json: { ...planCon, run_id: ID } }]);
+    renderRun();
+    await vaciar();
+    expect(plan.n).toBe(1);
+    await avanzar(3000);
+    expect(plan.n).toBe(2);
+    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(false);
+    await avanzar(30_000);
+    expect(plan.n).toBe(2);
+  });
+
+  it('limita plan_not_ready a cinco intentos y permite reintento manual', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('running')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [error(404, 'plan_not_ready')]);
+    renderRun();
+    await vaciar();
+    for (let i = 0; i < 5; i++) await avanzar(3000);
+    expect(plan.n).toBe(5);
+    await avanzar(30_000);
+    expect(plan.n).toBe(5);
+    await pulsar('Reintentar');
+    expect(plan.n).toBe(6);
+    await avanzar(3000);
+    expect(plan.n).toBe(7);
+  });
+
+  it('running consulta inmediatamente aunque se agotaran los intentos durante rehearsing', async () => {
+    ruta(`/api/runs/${ID}`, [
+      ...Array.from({ length: 6 }, () => corrida('rehearsing')),
+      corrida('running'),
+    ]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [
+      ...Array.from({ length: 5 }, () => error(404, 'plan_not_ready')),
+      { json: { ...planCon, run_id: ID } },
+    ]);
+    renderRun();
+    await vaciar();
+    for (let i = 0; i < 5; i++) await avanzar(3000);
+    expect(plan.n).toBe(5);
+    await avanzar(3000);
+    expect(plan.n).toBe(6);
+    expect(document.querySelector<HTMLDetailsElement>('.flow-details')?.open).toBe(false);
+  });
+
+  it('desmontar cancela el reintento pendiente del plan', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('running')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [error(404, 'plan_not_ready')]);
+    const { unmount } = renderRun();
+    await vaciar();
+    unmount();
+    await avanzar(9000);
+    expect(plan.n).toBe(1);
+  });
+
+  it('al terminar cancela los reintentos pendientes y conserva reintento manual', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('rehearsing'), corrida('failed')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [error(404, 'plan_not_ready')]);
+    renderRun();
+    await vaciar();
+    await avanzar(3000);
+    const pedidosAlTerminar = plan.n;
+    await avanzar(30_000);
+    expect(plan.n).toBe(pedidosAlTerminar);
+    expect(screen.getByTestId('run-plan-retry-button')).toBeTruthy();
+  });
+
+  it('403 del plan no reintenta automáticamente', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('running')]);
+    const plan = ruta(`/api/runs/${ID}/plan`, [error(403, 'forbidden')]);
+    renderRun();
+    await vaciar();
+    await avanzar(30_000);
+    expect(plan.n).toBe(1);
+    expect(screen.getByRole('alert').textContent).toContain('No tienes acceso');
+  });
+
   it('antes de rehearsing no pide el plan', async () => {
     ruta(`/api/runs/${ID}`, [corrida('inferring')]);
     const plan = ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
@@ -227,7 +362,7 @@ describe('RunPage: plan de flujos', () => {
     await avanzar(10_000);
     expect(plan.n).toBe(1);
     expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
-    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
     const pre = document.querySelector('pre');
     expect(pre?.textContent).toBe(JSON.stringify({ product_id: 1, qty: 11 }, null, 2));
   });
@@ -248,7 +383,7 @@ describe('RunPage: plan de flujos', () => {
     await avanzar(10_000);
     expect(plan.n).toBe(1);
     expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
-    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
   });
 
   it('failed llegando desde rehearsing pide el plan y lo muestra', async () => {
@@ -259,7 +394,7 @@ describe('RunPage: plan de flujos', () => {
     await avanzar(3000);
     expect(plan.n).toBe(1);
     expect(screen.getByRole('region', { name: 'Plan de flujos' })).toBeTruthy();
-    expect(screen.getByText('1. sondeo: no vender mas stock del disponible')).toBeTruthy();
+    expect(screen.getByText('sondeo: no vender mas stock del disponible')).toBeTruthy();
   });
 
   it('failed sin plan muestra «Plan aún no disponible»', async () => {
@@ -295,7 +430,8 @@ describe('RunPage: plan de flujos', () => {
     ruta(`/api/reports/${ID}`, [error(400, 'invalid_run')]);
     renderRun();
     await vaciar();
-    expect(screen.getByText('invalid_run')).toBeTruthy();
+    expect(screen.queryByText('invalid_run')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('No se pudo actualizar la información');
   });
 
   it('502 en el plan muestra «Reintentar» y lo vuelve a pedir', async () => {

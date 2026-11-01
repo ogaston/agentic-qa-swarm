@@ -294,7 +294,7 @@ func run(log *slog.Logger, env func(string) string) error {
 		return err
 	}
 	checks := append(readyChecks(store, ctl), transportChecks...)
-	app := httpapi.New(store, httpapi.NewIdentityVerifier(strings.TrimRight(c.identityURL, "/")))
+	app := httpapi.New(store, ctl, httpapi.NewIdentityVerifier(strings.TrimRight(c.identityURL, "/")))
 	h := obs.Wrap(obs.Config{Service: serviceName, Log: log, Registry: reg, Metrics: obs.NewHTTPMetrics(reg, serviceName), Ready: checks,
 		Route: func(r *http.Request) string {
 			if strings.HasPrefix(r.URL.Path, "/runs/") {

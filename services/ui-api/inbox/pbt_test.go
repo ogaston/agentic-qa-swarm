@@ -404,7 +404,7 @@ func TestPBT_ListOrderAndIdempotence(t *testing.T) {
 		for pos, i := range idx {
 			e := order[i]
 			want := inbox.Notification{ID: e.Data.NotificationID, GithubEvent: e.Data.GithubEvent, Repo: e.Data.Repo,
-				SHA: e.Data.SHA, Artifact: e.Data.Artifact, State: inbox.StatePending}
+				SHA: e.Data.SHA, Artifact: e.Data.Artifact, State: inbox.StatePending, CreatedAt: e.OccurredAt}
 			if !reflect.DeepEqual(got[pos], want) {
 				t.Fatalf("posición %d: %+v, quiero %+v", pos, got[pos], want)
 			}

@@ -113,7 +113,8 @@ func Artifact() *rapid.Generator[inbox.Artifact] {
 func Notification() *rapid.Generator[inbox.Notification] {
 	return rapid.Custom(func(t *rapid.T) inbox.Notification {
 		n := inbox.Notification{
-			ID: "n-" + UUID().Draw(t, "id"), GithubEvent: rapid.SampledFrom(Events).Draw(t, "event"),
+			CreatedAt: Instant().Draw(t, "created-at").UTC(),
+			ID:        "n-" + UUID().Draw(t, "id"), GithubEvent: rapid.SampledFrom(Events).Draw(t, "event"),
 			Repo: Repo().Draw(t, "repo"), SHA: Sha40().Draw(t, "sha"), State: rapid.SampledFrom(States).Draw(t, "state"),
 		}
 		if rapid.IntRange(0, 3).Draw(t, "hasart") > 0 {

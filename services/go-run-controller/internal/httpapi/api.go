@@ -18,9 +18,20 @@ var (
 	ErrUnavailable     = errors.New("identidad no disponible")
 )
 
-// TokenVerifier valida un bearer (sin caché).
+// Principal es la identidad autenticada que devuelve GET /auth/session.
+type Principal struct {
+	ID    string // principal_id
+	Admin bool   // role == "admin"
+}
+
+// TokenVerifier valida un bearer (sin caché) y devuelve el principal autenticado.
 type TokenVerifier interface {
-	Verify(ctx context.Context, bearer string) error
+	Verify(ctx context.Context, bearer string) (Principal, error)
+}
+
+// ExecutionApprover es el controlador de corridas para la confirmación humana de ejecución (U12-T02).
+type ExecutionApprover interface {
+	ApproveExecution(ctx context.Context, id, principalID string, admin bool) error
 }
 
 // IdentityVerifier valida contra GET {base}/auth/session (mismo contrato que U1-T07), 2 s.
@@ -35,25 +46,25 @@ func NewIdentityVerifier(base string) *IdentityVerifier {
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
 
-// Verify: 200 con Session válida -> nil (el Role se valida, no se aplica: C-47); 401 -> ErrUnauthenticated;
-// cualquier otra cosa -> ErrUnavailable.
-func (v *IdentityVerifier) Verify(ctx context.Context, bearer string) error {
+// Verify: 200 con Session válida -> principal (el Role se valida, no se aplica: C-47); 401 ->
+// ErrUnauthenticated; cualquier otra cosa -> ErrUnavailable.
+func (v *IdentityVerifier) Verify(ctx context.Context, bearer string) (Principal, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.URL, nil)
 	if err != nil {
-		return ErrUnavailable
+		return Principal{}, ErrUnavailable
 	}
 	req.Header.Set("Authorization", "Bearer "+bearer)
 	resp, err := v.Client.Do(req)
 	if err != nil {
-		return ErrUnavailable
+		return Principal{}, ErrUnavailable
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusUnauthorized:
-		return ErrUnauthenticated
+		return Principal{}, ErrUnauthenticated
 	case http.StatusOK:
 	default:
-		return ErrUnavailable
+		return Principal{}, ErrUnavailable
 	}
 	var s struct {
 		PrincipalID string `json:"principal_id"`
@@ -63,47 +74,56 @@ func (v *IdentityVerifier) Verify(ctx context.Context, bearer string) error {
 	}
 	if json.NewDecoder(io.LimitReader(resp.Body, 16<<10)).Decode(&s) != nil || s.PrincipalID == "" || s.SessionID == "" ||
 		(s.Role != "user" && s.Role != "admin") {
-		return ErrUnavailable
+		return Principal{}, ErrUnavailable
 	}
 	if _, err := time.Parse(time.RFC3339, s.ExpiresAt); err != nil {
-		return ErrUnavailable
+		return Principal{}, ErrUnavailable
 	}
-	return nil
+	return Principal{ID: s.PrincipalID, Admin: s.Role == "admin"}, nil
 }
 
 // RunView es components.schemas.Run.
 type RunView struct {
-	ID        string       `json:"id"`
-	State     runctl.State `json:"state"`
-	TraceID   string       `json:"trace_id,omitempty"`
-	Verdict   string       `json:"verdict,omitempty"`
-	ReportURI string       `json:"report_uri,omitempty"`
+	ID                string       `json:"id"`
+	State             runctl.State `json:"state"`
+	TraceID           string       `json:"trace_id,omitempty"`
+	Verdict           string       `json:"verdict,omitempty"`
+	ReportURI         string       `json:"report_uri,omitempty"`
+	AwaitingExecution bool         `json:"awaiting_execution"`
 }
 
-// New devuelve el handler de la aplicación.
-func New(store runctl.RunStore, v TokenVerifier) http.Handler {
+// view arma la vista HTTP de una corrida.
+func view(run runctl.Run) RunView {
+	return RunView{ID: run.ID, State: run.State, TraceID: run.TraceID, Verdict: run.Verdict,
+		ReportURI: run.ReportURI, AwaitingExecution: runctl.AwaitingExecution(run)}
+}
+
+// New devuelve el handler de la aplicación. exec es el controlador (no el almacén a pelo) porque
+// POST /runs/{id}/execute tiene que serializar la aprobación con el resto de la máquina de estados.
+func New(store runctl.RunStore, exec ExecutionApprover, v TokenVerifier) http.Handler {
 	mux := http.NewServeMux()
-	// auth escribe la respuesta de error y devuelve false si la petición no está autenticada.
-	auth := func(w http.ResponseWriter, r *http.Request) bool {
+	// auth escribe la respuesta de error y devuelve ok=false si la petición no está autenticada.
+	auth := func(w http.ResponseWriter, r *http.Request) (Principal, bool) {
 		const p = "Bearer "
 		h := r.Header.Get("Authorization")
 		if len(h) <= len(p) || h[:len(p)] != p {
 			writeErr(w, http.StatusUnauthorized, "unauthenticated")
-			return false
+			return Principal{}, false
 		}
-		switch err := v.Verify(r.Context(), h[len(p):]); {
+		principal, err := v.Verify(r.Context(), h[len(p):])
+		switch {
 		case errors.Is(err, ErrUnauthenticated):
 			writeErr(w, http.StatusUnauthorized, "unauthenticated")
-			return false
+			return Principal{}, false
 		case err != nil:
 			w.Header().Set("Retry-After", "10")
 			writeErr(w, http.StatusServiceUnavailable, "identity_unavailable")
-			return false
+			return Principal{}, false
 		}
-		return true
+		return principal, true
 	}
 	mux.HandleFunc("GET /runs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if !auth(w, r) {
+		if _, ok := auth(w, r); !ok {
 			return
 		}
 		run, ok := store.Get(r.PathValue("id"))
@@ -111,11 +131,43 @@ func New(store runctl.RunStore, v TokenVerifier) http.Handler {
 			writeErr(w, http.StatusNotFound, "not_found")
 			return
 		}
-		writeJSON(w, http.StatusOK, RunView{ID: run.ID, State: run.State, TraceID: run.TraceID, Verdict: run.Verdict, ReportURI: run.ReportURI})
+		writeJSON(w, http.StatusOK, view(run))
+	})
+	// POST /runs/{id}/execute: el humano confirma la ejecución tras el ensayo (U12-T02).
+	mux.HandleFunc("POST /runs/{id}/execute", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := auth(w, r)
+		if !ok {
+			return
+		}
+		id := r.PathValue("id")
+		switch err := exec.ApproveExecution(r.Context(), id, principal.ID, principal.Admin); {
+		case err == nil:
+		case errors.Is(err, runctl.ErrNotFound):
+			writeErr(w, http.StatusNotFound, "not_found")
+			return
+		case errors.Is(err, runctl.ErrForbidden):
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		case errors.Is(err, runctl.ErrNotAwaiting):
+			writeErr(w, http.StatusConflict, "not_awaiting")
+			return
+		case errors.Is(err, runctl.ErrPersist):
+			writeErr(w, http.StatusServiceUnavailable, "persistence_unavailable")
+			return
+		default:
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
+		run, ok := store.Get(id)
+		if !ok {
+			writeErr(w, http.StatusNotFound, "not_found")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, view(run))
 	})
 	// GET /runs/{id}/plan devuelve el FlowPlan guardado; nunca llama al planner.
 	mux.HandleFunc("GET /runs/{id}/plan", func(w http.ResponseWriter, r *http.Request) {
-		if !auth(w, r) {
+		if _, ok := auth(w, r); !ok {
 			return
 		}
 		run, ok := store.Get(r.PathValue("id"))

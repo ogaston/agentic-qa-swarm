@@ -49,11 +49,12 @@ La tabla vive en `src/proxy/table.ts`, función pura con pruebas.
   El código se envía solo si se rellenó.
 - Tras entrar se llama a `GET /api/auth/session` para obtener `principal_id` y `role`, que se
   muestran en la cabecera junto al botón de salir.
-- **El token vive solo en memoria** (estado de React y el módulo del cliente). No se usa
-  `localStorage`, `sessionStorage`, `indexedDB` ni `document.cookie`. **Recargar la página
-  obliga a iniciar sesión otra vez.** Es una decisión de seguridad: un XSS no puede leer lo
-  que no se persiste, a cambio de pedir login al recargar. Cambiarlo es decisión del humano
-  (candidata C-94).
+- Token y caducidad se guardan en `localStorage` bajo `aqs.session.v1`, sin contraseña ni OTP.
+  Al recargar se valida el registro y se consulta `/api/auth/session` antes de mostrar páginas
+  protegidas. La identidad y el rol siempre se obtienen del servidor. Logout, caducidad y 401
+  borran el registro. Si storage está bloqueado, el login funciona en memoria.
+  Esta persistencia fue solicitada explícitamente por el humano; un XSS podría leer el token
+  persistido, por lo que se mantiene la CSP y no se muestra el token en el DOM ni en logs.
 - Un temporizador cierra la sesión local al llegar a `expires_at`. Cualquier `401` de una
   llamada autenticada borra la sesión y lleva a `/login?next=<ruta>`. Tras entrar se navega a
   `next` solo si es una ruta interna (empieza por `/`, no por `//` ni `/\`).

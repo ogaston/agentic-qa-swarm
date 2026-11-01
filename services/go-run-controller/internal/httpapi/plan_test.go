@@ -25,7 +25,7 @@ func planFor(runID string) plan.FlowPlan {
 
 func getPlan(t *testing.T, st runctl.RunStore, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	h := New(st, verifierFunc(func() error { return nil }))
+	h := New(st, noExec{}, verifierFunc(func() error { return nil }))
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set("Authorization", "Bearer x")
 	w := httptest.NewRecorder()
@@ -75,7 +75,7 @@ func TestPlanEndpointCorruptPlanFailsClosed(t *testing.T) {
 func TestPlanEndpointRequiresAuth(t *testing.T) {
 	st := runctl.NewMemStore()
 	_ = st.Save(runctl.Run{ID: "r-1", State: runctl.Running})
-	h := New(st, verifierFunc(func() error { return nil }))
+	h := New(st, noExec{}, verifierFunc(func() error { return nil }))
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/runs/r-1/plan", nil))
 	if w.Code != http.StatusUnauthorized {

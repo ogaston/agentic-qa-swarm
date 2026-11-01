@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiFetch } from '../api/client';
 import { server } from '../test/server';
 import { currentLocation, renderApp } from '../test/renderApp';
-import { SessionProvider, useSession } from './SessionContext';
+import { SESSION_STORAGE_KEY, SessionProvider, useSession } from './SessionContext';
 
 const TOKEN = 'tok-MARCADOR-unico-7f3a9c';
 
@@ -79,6 +79,7 @@ describe('sesión', () => {
       vi.advanceTimersByTime(61_000);
     });
     await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
+    expect(localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
     await expect(apiFetch('/api/probe')).resolves.toBeDefined();
     expect(ultimaAutorizacion).toBeNull();
   });
@@ -95,6 +96,7 @@ describe('sesión', () => {
     await loginDesdeFormulario(user);
     await expect(apiFetch('/api/protegida')).rejects.toBeInstanceOf(ApiError);
     await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
+    expect(localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
     expect(screen.queryByText('ana')).toBeNull();
   });
 
@@ -113,12 +115,12 @@ describe('sesión', () => {
     }
   });
 
-  it('el token no persiste: storage vacío, sin cookie y sin token en el DOM', async () => {
+  it('persiste solo token y caducidad, sin cookie ni token en el DOM', async () => {
     server.use(...loginHandlers());
     const user = userEvent.setup();
     renderApp('/login');
     await loginDesdeFormulario(user);
-    expect(localStorage.length).toBe(0);
+    expect(JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) ?? '{}')).toEqual({ version: 1, token: TOKEN, expiresAt: '2099-01-01T00:00:00.000Z' });
     expect(sessionStorage.length).toBe(0);
     expect(document.cookie).toBe('');
     expect(document.body.innerHTML.includes(TOKEN)).toBe(false);
@@ -170,6 +172,7 @@ describe('el token del módulo se borra en todo cierre', () => {
       vi.advanceTimersByTime(61_000);
     });
     await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
+    expect(localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
     await apiFetch('/api/probe');
     expect(ultimaAutorizacion).toBeNull();
   });
@@ -186,6 +189,7 @@ describe('el token del módulo se borra en todo cierre', () => {
     await confirmarBearerVivo();
     await expect(apiFetch('/api/protegida')).rejects.toBeInstanceOf(ApiError);
     await waitFor(() => expect(currentLocation()).toBe('/login?next=%2Finbox'));
+    expect(localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
     await apiFetch('/api/probe');
     expect(ultimaAutorizacion).toBeNull();
   });

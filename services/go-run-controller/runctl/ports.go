@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Fact es un hecho tri-estado hacia el gate. El valor cero es Unknown: lo que el controlador
@@ -97,6 +98,9 @@ type Run struct {
 	Artifact     *Artifact         `json:"artifact,omitempty"`    // artefacto del evento run.confirmed (U11-T01); nil = respaldo RUN_ARTIFACT_REF
 	Warm         *WarmTarget       `json:"warm,omitempty"`        // destino warm opcional (U12); nil = DefaultNamespace
 	Metadata     map[string]string `json:"metadata,omitempty"`    // metadatos de la corrida (U12)
+	// U12-T02: tras el ensayo aprobado la corrida espera confirmación humana para ejecutar.
+	ExecutionApprovedBy string    `json:"execution_approved_by,omitempty"` // principal que aprobó la ejecución ("" = pendiente)
+	AwaitingSince       time.Time `json:"awaiting_since,omitzero"`         // desde cuándo espera la aprobación
 }
 
 // TargetNamespace devuelve el namespace asignado a la corrida, o el fallback si no tiene warm asignado.
@@ -292,4 +296,7 @@ var (
 	ErrDenied   = errors.New("gate denegó la transición")
 	ErrGate     = errors.New("gate no disponible o respuesta inválida")
 	ErrPersist  = errors.New("no se pudo persistir")
+	// U12-T02: aprobación de la ejecución.
+	ErrForbidden   = errors.New("sin permiso para aprobar la ejecución")
+	ErrNotAwaiting = errors.New("la corrida no está esperando aprobación de ejecución")
 )

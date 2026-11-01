@@ -51,11 +51,11 @@ afterEach(() => {
 const FASES_ESPERADAS = [
   'Confirmada',
   'Entorno listo',
-  'Desplegando',
-  'Infiriendo superficie',
-  'Ensayando',
-  'Ejecutando',
-  'Reseteando',
+  'Preparando la versión',
+  'Analizando tu aplicación',
+  'Validando las pruebas',
+  'Ejecutando pruebas',
+  'Restaurando el entorno',
   'Generando informe',
   'Completada',
 ];
@@ -65,13 +65,13 @@ describe('RunPage fidelidad: encabezado y línea de tiempo', () => {
     ruta(`/api/runs/${ID}`, [corrida('running')]);
     renderRun();
     await vaciar();
-    expect(screen.getByRole('heading', { level: 1, name: /Corrida/ })).toBeTruthy();
-    expect(screen.getByText('tr-fid')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: /Resumen de la corrida/ })).toBeTruthy();
+    expect(screen.queryByText('tr-fid')).toBeNull();
     expect(screen.getByText('Estado de corrida')).toBeTruthy();
     expect(screen.queryByText('Sondeo')).toBeNull();
   });
 
-  it('9 fases con estado textual (hecha, actual, pendiente) además del color', async () => {
+  it('9 fases con indicador accesible de carga además del color', async () => {
     ruta(`/api/runs/${ID}`, [corrida('running')]);
     renderRun();
     await vaciar();
@@ -83,11 +83,13 @@ describe('RunPage fidelidad: encabezado y línea de tiempo', () => {
     expect(items.filter((li) => li.textContent?.includes('hecha')).length).toBe(5);
     const actual = items[5];
     expect(actual?.getAttribute('aria-current')).toBe('step');
-    expect(actual?.textContent).toContain('actual');
+    expect(actual?.textContent).toContain('En curso');
+    expect(actual?.textContent).not.toContain('actual');
+    expect(actual?.querySelector('.phase-spinner')?.getAttribute('aria-hidden')).toBe('true');
     expect(items[8]?.textContent).toContain('pendiente');
     // Ningún ítem depende solo del color: cada uno lleva su estado escrito.
     for (const li of items) {
-      expect(/hecha|actual|pendiente/.test(li.textContent ?? '')).toBe(true);
+      expect(/hecha|En curso|pendiente/.test(li.textContent ?? '')).toBe(true);
     }
   });
 
@@ -118,8 +120,8 @@ describe('RunPage fidelidad: estados', () => {
     ruta(`/api/runs/${ID}`, [corrida('inferring')]);
     renderRun();
     await vaciar();
-    const pm = screen.getByRole('region', { name: 'Informe post-mortem' });
-    expect(within(pm).getByText('Sin reporte aún.')).toBeTruthy();
+    const pm = screen.getByRole('region', { name: 'Resultados de la prueba' });
+    expect(within(pm).getByText('Los resultados estarán disponibles al finalizar la prueba.')).toBeTruthy();
   });
 
   it('reporte con bug: veredicto con texto y hallazgo con método, invariante, causa y evidencias copiables', async () => {
@@ -129,16 +131,17 @@ describe('RunPage fidelidad: estados', () => {
     renderRun();
     await vaciar();
     const badge = document.querySelector('[data-veredicto="bug"]');
-    expect(badge?.textContent).toBe('Veredicto: bug');
+    expect(badge?.textContent).toBe('Fallos encontrados');
     expect(badge?.classList.contains('badge-danger')).toBe(true);
-    const pm = within(screen.getByRole('region', { name: 'Informe post-mortem' }));
+    const pm = within(screen.getByRole('region', { name: 'Resultados de la prueba' }));
     expect(pm.getByText('Dos flujos fallidos')).toBeTruthy();
     expect(pm.getAllByText('POST').length).toBeGreaterThan(0);
     expect(pm.getByText('/orders')).toBeTruthy();
     expect(pm.getByText('inv a')).toBeTruthy();
     expect(pm.getByText('causa a')).toBeTruthy();
-    const uris = document.querySelectorAll('code.evidence-uri');
-    expect(uris.length).toBe(3);
+    const uris = pm.getAllByRole('link', { name: /Descargar evidencia/ });
+    expect(uris.length).toBe(2);
+    expect(pm.getByRole('link', { name: /Abrir evidencia/ })).toBeTruthy();
   });
 
   it('sin hallazgos: insignia «Sin hallazgos» y mensaje propio', async () => {
@@ -148,9 +151,8 @@ describe('RunPage fidelidad: estados', () => {
     renderRun();
     await vaciar();
     const badge = document.querySelector('[data-veredicto="sin-hallazgos"]');
-    expect(badge?.textContent).toBe('Veredicto: sin-hallazgos');
-    expect(badge?.classList.contains('badge-ok')).toBe(true);
-    expect(screen.getByText('No se encontraron hallazgos en esta corrida.')).toBeTruthy();
+    expect(badge).toBeNull();
+    expect(screen.queryByText('No se encontraron hallazgos en esta corrida.')).toBeNull();
   });
 
   it('inconcluso: insignia «Inconcluso» con aviso de color y texto', async () => {
@@ -160,7 +162,7 @@ describe('RunPage fidelidad: estados', () => {
     renderRun();
     await vaciar();
     const badge = document.querySelector('[data-veredicto="inconcluso"]');
-    expect(badge?.textContent).toBe('Veredicto: inconcluso');
+    expect(badge?.textContent).toBe('Resultado inconcluso');
     expect(badge?.classList.contains('badge-warn')).toBe(true);
   });
 
@@ -211,5 +213,20 @@ describe('RunPage fidelidad: plan de flujos plegable', () => {
     for (const b of insignias) {
       expect((b.textContent ?? '').trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+
+describe('Contenido para clientes', () => {
+  it('oculta referencias operativas y conserva copiables las evidencias originales', async () => {
+    ruta(`/api/runs/${ID}`, [corrida('done', { verdict: 'bug' })]);
+    ruta(`/api/runs/${ID}/plan`, [{ json: { ...planCon, run_id: ID } }]);
+    ruta(`/api/reports/${ID}`, [{ json: { ...informeDosHallazgos, run_id: ID,
+      summary: 'agent-reporter guardó el informe en MinIO s3://private-bucket/result.json' } }]);
+    renderRun();
+    await vaciar();
+    expect(document.body.textContent).not.toMatch(/agent-reporter|MinIO|private-bucket|invariant_probe|workflow:|tr-fid|GET \/api/);
+    const links = screen.getAllByRole('link', { name: /Descargar evidencia/ });
+    expect(links[0]?.getAttribute('href')).toBe(`/api/report-evidence/${ID}/0/0`);
   });
 });

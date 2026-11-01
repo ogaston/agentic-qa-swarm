@@ -25,6 +25,9 @@ func TestResetExhaustedWithGateDownNeverRelaunchesNorDuplicatesHandoff(t *testin
 	_ = r.k.Apply(t.Context(), confirmedEv())
 	driveUntilStable(r)
 	_ = r.k.Apply(t.Context(), Event{Type: EvRehearsalPassed, EventID: "e2", RunID: "r-1"})
+	if err := r.k.ApproveExecution(t.Context(), "r-1", "u-1", false); err != nil {
+		t.Fatal(err)
+	}
 	down = true
 	for i := 0; i < 30; i++ {
 		r.k.DriveAll(t.Context())
@@ -111,6 +114,9 @@ func TestRehearsalEventOutsideRehearsingIsDroppedAndNeverSetsFact(t *testing.T) 
 	}
 	// ... y uno nuevo en rehearsing sí.
 	_ = r.k.Apply(t.Context(), Event{Type: EvRehearsalPassed, EventID: "real", RunID: "r-1"})
+	if err := r.k.ApproveExecution(t.Context(), "r-1", "u-1", false); err != nil {
+		t.Fatal(err)
+	}
 	driveUntilStable(r)
 	if r.state("r-1") != Done {
 		t.Fatal(r.state("r-1"))

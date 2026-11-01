@@ -13,14 +13,14 @@ import (
 
 type okVerifier struct{}
 
-func (okVerifier) Verify(context.Context, string) error { return nil }
+func (okVerifier) Verify(context.Context, string) (Principal, error) { return Principal{ID: "u-1"}, nil }
 
 // GET /runs/{id} expone el veredicto de la fase report y omite el campo mientras no hay reporte.
 func TestGetRunExponeVeredicto(t *testing.T) {
 	store := runctl.NewMemStore()
 	_ = store.Save(runctl.Run{ID: "r1", State: runctl.Done, Verdict: "bug", ReportURI: "s3://evidence/reports/r1.json"})
 	_ = store.Save(runctl.Run{ID: "r2", State: runctl.Running})
-	h := New(store, okVerifier{})
+	h := New(store, noExec{}, okVerifier{})
 	get := func(id string) map[string]any {
 		req := httptest.NewRequest(http.MethodGet, "/runs/"+id, nil)
 		req.Header.Set("Authorization", "Bearer t")

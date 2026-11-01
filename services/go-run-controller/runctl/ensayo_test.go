@@ -24,7 +24,7 @@ func TestEnsayoGateDeniedByGateEvenWithRecordedPass(t *testing.T) {
 		return GateDecision{Allow: false, Reason: "U4 dice no", AuditRef: "x"}, nil
 	}}
 	r := newRig(t, g)
-	_ = r.store.Save(Run{ID: "r", State: Rehearsing, ConfirmedBy: "u", EnsayoPassed: True})
+	_ = r.store.Save(Run{ID: "r", State: Rehearsing, ConfirmedBy: "u", EnsayoPassed: True, ExecutionApprovedBy: "u-2"})
 	if err := r.k.Transition(t.Context(), "r", Running); !errors.Is(err, ErrDenied) || r.state("r") != Rehearsing {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestEnsayoGateDeniedByGateEvenWithRecordedPass(t *testing.T) {
 
 func TestEnsayoGateEnsayoPassedTrueAdvances(t *testing.T) {
 	r := newRig(t, AllowAll())
-	_ = r.store.Save(Run{ID: "r", State: Rehearsing, ConfirmedBy: "u", EnsayoPassed: True})
+	_ = r.store.Save(Run{ID: "r", State: Rehearsing, ConfirmedBy: "u", EnsayoPassed: True, ExecutionApprovedBy: "u-1"})
 	if err := r.k.Transition(t.Context(), "r", Running); err != nil || r.state("r") != Running {
 		t.Fatal(err)
 	}
@@ -97,7 +97,15 @@ func TestResultsPortPassedAdvancesFailedRetriesErrorWaits(t *testing.T) {
 		return RehearsalOutcome{Done: true, Passed: true, EventID: "e"}, nil
 	}))
 	r.k.DriveAll(t.Context())
-	if cur, _ := r.store.Get("r"); cur.State != Running || cur.EnsayoPassed != True || len(cur.Seen) != 1 {
+	if cur, _ := r.store.Get("r"); cur.State != Rehearsing || cur.EnsayoPassed != True || len(cur.Seen) != 1 {
+		t.Fatalf("%+v", cur)
+	}
+	// U12-T02: el ensayo aprobado espera la confirmación humana antes de ejecutar.
+	if err := r.k.ApproveExecution(t.Context(), "r", "u", false); err != nil {
+		t.Fatal(err)
+	}
+	r.k.DriveAll(t.Context())
+	if cur, _ := r.store.Get("r"); cur.State != Running {
 		t.Fatalf("%+v", cur)
 	}
 	// failed: cuenta un fallo y reintenta
