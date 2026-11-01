@@ -36,3 +36,24 @@ subjects:
   - kind: ServiceAccount
     name: go-reset
     namespace: aqs-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aqs-reset-warm
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["warm-app"]
+    verbs: ["get", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["warm-state", "warm-policy"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["target-app-baseline-token"]
+    verbs: ["get"]

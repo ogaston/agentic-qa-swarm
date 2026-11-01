@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ type Cleaner struct {
 	Timeout time.Duration // obligatorio (viene de RESET_SCRIPT_TIMEOUT)
 	// StaticVersion (RESET_BASELINE_VERSION) tiene prioridad; si está vacía, `script version` la informa.
 	StaticVersion string
+	URL           string
+	Token         func(context.Context) ([]byte, error)
 }
 
 // Version devuelve la versión del baseline o error si no se conoce.
@@ -41,6 +44,28 @@ func (c *Cleaner) run(ctx context.Context, arg string) (string, error) {
 	defer cancel()
 	var out, errb bytes.Buffer
 	cmd := exec.CommandContext(ctx, c.Path, arg) //nolint:gosec // ruta fijada por configuración
+	if c.Token != nil {
+		token, err := c.Token(ctx)
+		if err != nil {
+			return "", err
+		}
+		if len(token) == 0 {
+			return "", fmt.Errorf("baseline token vacío")
+		}
+		f, err := os.CreateTemp("", "aqs-baseline-*")
+		if err != nil {
+			return "", err
+		}
+		defer os.Remove(f.Name())
+		if _, err = f.Write(token); err != nil {
+			f.Close()
+			return "", err
+		}
+		if err = f.Close(); err != nil {
+			return "", err
+		}
+		cmd.Env = append(os.Environ(), "TARGET_APP_BASELINE_URL="+c.URL, "TARGET_APP_BASELINE_TOKEN_FILE="+f.Name())
+	}
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("%s %s: %w", c.Path, arg, err)

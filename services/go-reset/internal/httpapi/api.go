@@ -26,6 +26,7 @@ type Resetter interface {
 type Config struct {
 	Token    string
 	Service  Resetter
+	Target   func(context.Context, string) (Resetter, error)
 	Sessions core.SessionStore
 	Clock    core.Clock
 	Log      *slog.Logger
@@ -40,14 +41,28 @@ func New(c Config) http.Handler {
 	mux.Handle("GET /metrics", promhttp.HandlerFor(c.Gatherer, promhttp.HandlerOpts{}))
 	mux.HandleFunc("POST /resets", c.auth(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			RunID   string `json:"run_id"`
-			TraceID string `json:"trace_id"`
+			RunID     string `json:"run_id"`
+			TraceID   string `json:"trace_id"`
+			Namespace string `json:"namespace"`
 		}
 		if !decode(w, r, &in) || !idRe.MatchString(in.RunID) || (in.TraceID != "" && !idRe.MatchString(in.TraceID)) {
 			bad(w)
 			return
 		}
-		res, err := c.Service.Reset(r.Context(), in.RunID, in.TraceID)
+		svc := c.Service
+		if in.Namespace != "" {
+			if c.Target == nil {
+				bad(w)
+				return
+			}
+			var err error
+			svc, err = c.Target(r.Context(), in.Namespace)
+			if err != nil {
+				bad(w)
+				return
+			}
+		}
+		res, err := svc.Reset(r.Context(), in.RunID, in.TraceID)
 		if err != nil {
 			c.Log.Error("reset falló", "run_id", in.RunID, "trace_id", in.TraceID, "error", err.Error())
 			write(w, 500, map[string]string{"error": "internal"})
