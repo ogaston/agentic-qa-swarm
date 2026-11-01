@@ -274,7 +274,7 @@ export function RepositoriesPage() {
               <>
                 <code data-testid="webhook-url">{webhookUrl}</code>
                 <button type="button" className="btn btn-sm" data-testid="btn-copiar-webhook-url" onClick={copiarUrl}>
-                  {copiado ? '¡Copado!' : 'Copiar URL'}
+                  {copiado ? '¡Copiado!' : 'Copiar URL'}
                 </button>
               </>
             ) : (
