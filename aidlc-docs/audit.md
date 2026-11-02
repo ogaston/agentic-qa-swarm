@@ -2307,3 +2307,31 @@ commit everything and push
 **Context**: Fuera de etapa; sin transición.
 
 ---
+
+## Reset del warm y humo
+**Timestamp**: 2026-11-02T15:25:35-05:00
+**User Input**: "resetea el warm y corre el humo otra vez"
+**AI Response**: Se revisa el camino de reset de scripts/demo/up.sh antes de ejecutarlo.
+**Context**: Aprobación explícita del humano para el reset verificado del warm en kind-aqs.
+
+---
+
+## 2026-11-02T15:26:46-05:00 - User Input
+can we do this with my litellm server (chalas-lab:4000):
+
+1. Correr agents/eval/run-models.sh <modelo-A> <modelo-B> contra tu gateway y pegar la tabla en el §5 del README.
+
+## Reset del warm — diagnóstico y decisión
+**Timestamp**: 2026-11-02T15:30:45-05:00
+**AI Response**: up.sh --reset devolvió HTTP 409 {state: cuarentena, reset_verified: false}. Causa: Deployment aqs-test/warm-app con imagen ghcr.io/ogaston/demo-target-app-qa-swarm:81b5ea9… inexistente (GHCR 404; commit inexistente, 422) → ImagePullBackOff → verificación app-ready falla. Pregunta al usuario sobre cómo restaurar.
+**User Input**: "Volver a Git vía Flux (Recommended)" — borrar warm-app y dejar que Flux lo recree desde Git con la imagen de referencia b97a719.
+**Context**: Aprobación explícita para borrar el Deployment aqs-test/warm-app.
+
+---
+
+## Reset del warm — resultado
+**Timestamp**: 2026-11-02T15:32:12-05:00
+**AI Response**: Deployment warm-app borrado 15:30:45; Flux lo recreó 15:30:48 con ghcr.io/ogaston/demo-target-app-qa-swarm:b97a719…; rollout OK. up.sh --reset: OK (state=ready, reset_verified=true). kind-smoke.sh --preflight: 24 OK, 0 FALLA. Evidencia en docs/entrega/evidencia-2026-11-02.md §7.
+**Context**: Sin transición de etapa.
+
+---

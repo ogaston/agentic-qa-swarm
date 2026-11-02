@@ -114,7 +114,7 @@ OK clúster en la revisión de Git
 Efecto secundario observado al instalar Flux: en la primera reconciliación los 9 Deployments del control plane se
 reiniciaron una vez (Flux toma la propiedad de los campos que había aplicado `kubectl`). Después, 0 reinicios en
 más de 5 reconciliaciones. `kind-smoke.sh --preflight` tras el cambio: todo OK salvo `warm-estado` (el warm ya
-estaba en cuarentena antes de instalar Flux; ver `aidlc-docs/aidlc-state.md`, entrada del 2026-11-02).
+estaba en cuarentena antes de instalar Flux; resuelto en la sección 7).
 
 ## 6. Evaluación por modelo (`agents/eval`)
 
@@ -127,3 +127,28 @@ $ .venv/bin/python -m pytest -q tests/test_live_model.py
 
 Pendiente antes de presentar: `agents/eval/run-models.sh <modelo-A> <modelo-B>` contra el gateway real y pegar
 aquí `out/comparacion.md`.
+
+## 7. Cuarentena real y recuperación por GitOps
+
+El reset se negó a declarar listo un warm roto: el Deployment `aqs-test/warm-app` apuntaba a la imagen
+`demo-target-app-qa-swarm:81b5ea9…`, que no existe en GHCR (404) ni como commit del repo objetivo.
+
+```console
+$ bash scripts/demo/up.sh --reset
+reset: not verified (HTTP 409)
+{"attempts":2,"checks":null,"reset_verified":false,"state":"cuarentena"}
+# go-reset: "alert":"warm.quarantined","reason":"verificación fallida: [app-ready: pod no Ready]"
+```
+
+Recuperación sin `kubectl apply`: se borró el Deployment y Flux lo recreó desde Git (`ssa: IfNotPresent` crea lo
+que falta) con la imagen de referencia del overlay.
+
+```console
+$ kubectl -n aqs-test delete deployment warm-app          # 15:30:45
+$ kubectl -n aqs-test get deploy warm-app -o jsonpath=...  # 15:30:48
+ghcr.io/ogaston/demo-target-app-qa-swarm:b97a719199d5ccbc2ff24f9cfc408ec7ee31114d
+$ bash scripts/demo/up.sh --reset
+reset: OK (state=ready, reset_verified=true)
+$ bash scripts/kind/kind-smoke.sh --preflight
+smoke: OK (sin FALLA; pendientes declarados arriba)          # 24 OK, 0 FALLA
+```

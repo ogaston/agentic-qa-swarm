@@ -422,7 +422,7 @@ Mapa del monorepo: `services/` (control plane en Go), `agents/` (planner, report
 
 | Riesgo | Mitigación | Estado |
 |---|---|---|
-| **Contaminación entre corridas** en el entorno warm (el riesgo número 1 tras el pivote) | Reset verificado (restart, DB limpia, caché vaciada) y `reset_verified=true` antes de cada corrida. Si falla, cuarentena y la corrida no arranca | Implementado. Hoy el warm de kind está en cuarentena: el mecanismo funciona, pero hay que resetearlo antes de la demo |
+| **Contaminación entre corridas** en el entorno warm (el riesgo número 1 tras el pivote) | Reset verificado (restart, DB limpia, caché vaciada) y `reset_verified=true` antes de cada corrida. Si falla, cuarentena y la corrida no arranca | Implementado. El 2026-11-02 la cuarentena saltó de verdad: el warm apuntaba a una imagen inexistente y el reset se negó a declararlo listo (HTTP 409). Se restauró desde Git y el reset quedó verificado |
 | **Escape del namespace** | RBAC por namespace (con un `ClusterRole` acotado por admisión), NetworkPolicy default-deny, Pod Security `baseline`, `ValidatingAdmissionPolicy` que confina a go-warm-manager a `aqs-w-*`, y Rego en CI | Implementado y verificado (§2.3) |
 | **El LLM alucina la superficie** (el bucle del error 400) | Validación del plan contra los endpoints observados y ensayo con un solo usuario antes de la corrida completa | Implementado |
 | **El LLM en el bucle de cada petición** quiebra el margen | Los runners no tienen credenciales del modelo ni salida al LLM | Implementado (`OK netpol-sin-egress-test`) |
