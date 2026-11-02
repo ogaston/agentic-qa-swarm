@@ -2335,3 +2335,27 @@ can we do this with my litellm server (chalas-lab:4000):
 **Context**: Sin transición de etapa.
 
 ---
+
+## 2026-11-02T15:37:28-05:00 - User Input
+do option A
+
+## 2026-11-02T15:38:56-05:00 - User Input
+cancel, do deepseek flash vs qwen
+
+## 2026-11-02T15:48:50-05:00 - User Input
+why is lasting so long?
+
+## Comparación de modelos, respaldo y Flux en main
+**Timestamp**: 2026-11-02T15:53:13-05:00
+**User Input**: "1. ya corri en out/comparacion.md 2. explicame que hacer exactamete 3. eso se puede hacer ahora? si si, entonces hazlo"
+**AI Response**: Se lee agents/eval/out/comparacion.md para llevarlo al README §5; se explica la grabación de respaldo; se evalúa si flux-up en main es posible antes de fusionar el PR #158.
+**Context**: Sin transición de etapa.
+
+---
+
+## Comparación de modelos — diagnóstico
+**Timestamp**: 2026-11-02T15:54:44-05:00
+**AI Response**: comparacion.md del humano: Deepseek-V4-Flash y Qwen-3.8-Max-Quantized idénticos (2/12, adherencia 0.68). Causa: planner PlanRejected (Deepseek) y BudgetExceeded (Qwen) en los 10 casos con superficie, por topes por defecto del LLM falso (25 s/4000 tok) frente a los del clúster (120 s/8000 tok). Corregido run-models.sh (topes del clúster por defecto) y _err del eval (código fijo del error). 113 pruebas OK. Pide al humano repetir la corrida. flux-up en main no se ejecuta: requiere fusionar el PR #158 (lo fusiona el humano).
+**Context**: Sin transición de etapa.
+
+---

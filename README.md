@@ -350,11 +350,12 @@ export LLM_BASE_URL=https://<gateway>/v1 LLM_API_KEY_FILE=<archivo-con-la-clave>
 
 Lo que ya está probado sin red (`tests/test_live_model.py`, 9 pruebas): con un gateway compatible con OpenAI en
 loopback, cambiar **solo** `LLM_MODEL` lleva al «modelo bueno» a 12/12 casos con rc 0, y al «modelo roto» a 2/12 con
-rc 1. **Pendiente antes de presentar:** correr `run-models.sh` con dos modelos reales y pegar aquí la tabla.
+rc 1. **Medición con modelos reales (`Deepseek-V4-Flash` y `Qwen-3.8-Max-Quantized`, vía LiteLLM):**
 
 | llm | factualidad | precisión | ruido | adherencia | casos ok | umbrales |
 |---|---|---|---|---|---|---|
-| *(pendiente: salida de `out/comparacion.md`)* | | | | | | |
+| http:Deepseek-V4-Flash | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
+| http:Qwen-3.8-Max-Quantized | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
 
 Límite honesto: son 12 casos sintéticos. Detectan regresiones entre modelos; no miden la calidad en apps reales.
 

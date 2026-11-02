@@ -143,3 +143,25 @@ def test_guarda_de_red_permite_solo_el_host_del_llm():
     with pytest.raises(NetworkBlocked):
         g._check_addr(("198.51.100.1", 443))
     assert g.attempts == ["198.51.100.1"]
+
+
+def test_el_informe_guarda_el_codigo_fijo_del_error(gateway, monkeypatch, tmp_path):
+    """Sin el código, un fallo sistemático (p. ej. content vacío de un modelo de razonamiento) es indistinguible."""
+    base, _ = gateway
+    _env(monkeypatch, tmp_path, base, "modelo-roto")
+    cli.main(["run", "--llm", "http", "--out", str(tmp_path / "e")])
+    rep = json.loads((tmp_path / "e" / "report.json").read_text())
+    errs = {a["id"]: a["planner"]["error"] for a in rep["per_artifact"]}
+    assert errs["golden-ecom-01"].startswith("PlanRejected:")
+    assert errs["noarranca-ecom-01"] == "NoSurface"  # A3 sigue comparando el nombre exacto
+
+
+def test_err_incluye_kind_y_reason():
+    from agent_eval.runner import _err
+    from agent_planner.errors import BudgetExceeded, PlanRejected
+    from agent_reporter.errors import BudgetExceeded as RBudget
+
+    assert _err(BudgetExceeded("time")) == "BudgetExceeded:time"
+    assert _err(PlanRejected("json_invalido")) == "PlanRejected:json_invalido"
+    assert _err(RBudget("salida")) == "BudgetExceeded:salida"
+    assert _err(ValueError("x")) == "ValueError"

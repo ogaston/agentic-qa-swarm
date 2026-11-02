@@ -152,3 +152,27 @@ reset: OK (state=ready, reset_verified=true)
 $ bash scripts/kind/kind-smoke.sh --preflight
 smoke: OK (sin FALLA; pendientes declarados arriba)          # 24 OK, 0 FALLA
 ```
+
+## 8. Primera corrida contra modelos reales (inválida por configuración)
+
+`agents/eval/run-models.sh Deepseek-V4-Flash Qwen-3.8-Max-Quantized`, 2026-11-02 ~15:45, con los topes por
+defecto de las bibliotecas (planner 25 s / 4000 tokens, reporter 30 s / 1024 tokens):
+
+| llm | factualidad | precision | ruido | adherencia | casos ok | umbrales |
+|---|---|---|---|---|---|---|
+| http:Deepseek-V4-Flash | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
+| http:Qwen-3.8-Max-Quantized | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
+
+Diagnóstico por caso (`report.json`): el planner falló en los 10 casos con superficie, con `PlanRejected` en
+Deepseek y `BudgetExceeded` en Qwen. Los dos `no-arranca` fallaron cerrado, como se esperaba. Que dos modelos
+distintos den números idénticos indica un fallo del sistema, no del modelo. El clúster corre los agentes con
+120 s y 8000 tokens de salida, porque un modelo de razonamiento con `max_tokens` bajo gasta la salida pensando y
+devuelve `content` vacío (comentario en `deploy/flux/kind/kustomization.yaml`). El eval usaba los topes del LLM
+falso.
+
+Corrección: `run-models.sh` usa por defecto los topes del clúster, y el informe guarda el código fijo del error
+(`PlanRejected:json_invalido`, `BudgetExceeded:time`…) para que un fallo sistemático se diagnostique sin adivinar.
+Hay que repetir la corrida.
+
+Lectura para la sustentación: la prueba de cambio de modelo cumplió su función. Detectó que la configuración del
+arnés no era la del despliegue antes de que llegara a una demo.

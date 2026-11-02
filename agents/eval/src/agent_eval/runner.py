@@ -85,7 +85,13 @@ def canned_plan(surface: dict, workflow: str, resp: dict) -> dict:
 
 
 def _err(e: BaseException) -> str:
-    return type(e).__name__
+    """Nombre del error y, si lo tiene, su codigo fijo (`reason` de *Rejected, `kind` de BudgetExceeded): p. ej.
+    `PlanRejected:json_invalido` o `BudgetExceeded:time`. Los codigos los fijan los agentes; nunca llevan
+    contenido del modelo ni de la superficie."""
+    code = getattr(e, "reason", None) or getattr(e, "kind", None)
+    if code is None and type(e).__name__ == "BudgetExceeded" and e.args:
+        code = e.args[0]  # reporter: "entrada" | "timeout" | "salida", literales fijos
+    return f"{type(e).__name__}:{code}" if isinstance(code, str) and code else type(e).__name__
 
 
 def run_planner(art: Artifact, surface: dict, plan_fn, limits: PlannerLimits, live=None):
