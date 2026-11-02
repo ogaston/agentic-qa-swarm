@@ -51,6 +51,8 @@ spec:
               value: http://go-run-controller.aqs-system.svc:8080
             - name: REPORTER_URL
               value: http://agent-reporter.aqs-system.svc:8080
+            - name: GOVERNANCE_URL
+              value: http://go-governance.aqs-system.svc:8080
           image: ghcr.io/ogaston/agentic-qa-swarm/ui-api:0.0.0
           ports:
             - name: http
@@ -131,6 +133,13 @@ spec:
             # Vacía o ausente = fail-closed: todo evento responde 422 repo_not_allowed.
             - name: INTAKE_ALLOWED_REPOS
               value: ogaston/demo-target-app-qa-swarm
+            - name: GOVERNANCE_URL
+              value: http://go-governance.aqs-system.svc:8080
+            - name: GOVERNANCE_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: go-governance-service-token
+                  key: token
           image: ghcr.io/ogaston/agentic-qa-swarm/go-intake:0.0.0
           ports:
             - name: http
@@ -410,6 +419,13 @@ spec:
             # U11-T03: solo se despliegan imágenes de estos repositorios (fail-closed).
             - name: WARM_ALLOWED_IMAGE_PREFIXES
               value: ghcr.io/ogaston/demo-target-app-qa-swarm,ghcr.io/ogaston/agentic-qa-swarm/target-app
+            - name: GOVERNANCE_URL
+              value: http://go-governance.aqs-system.svc:8080
+            - name: GOVERNANCE_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: go-governance-service-token
+                  key: token
           image: ghcr.io/ogaston/agentic-qa-swarm/go-warm-manager:0.0.0
           ports:
             - name: http

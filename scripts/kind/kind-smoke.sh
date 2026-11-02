@@ -27,13 +27,14 @@ NS_SYS=aqs-system
 NS_TEST=aqs-test
 PROBE=aqs-smoke-probe
 PROBE_IMAGE=busybox:1.37.0
-P_IDENTITY=18600
-P_UI=18601
-P_INTAKE=18602
-P_RUN=18603
-P_WARM=18604
-P_RESET=18605
-P_GOV=18606
+PORT_OFFSET="${AQS_PORT_OFFSET:-0}"
+P_IDENTITY=$((18600 + PORT_OFFSET))
+P_UI=$((18601 + PORT_OFFSET))
+P_INTAKE=$((18602 + PORT_OFFSET))
+P_RUN=$((18603 + PORT_OFFSET))
+P_WARM=$((18604 + PORT_OFFSET))
+P_RESET=$((18605 + PORT_OFFSET))
+P_GOV=$((18606 + PORT_OFFSET))
 SERVICES=(go-identity ui-api go-intake go-run-controller go-warm-manager go-reset go-governance)
 declare -A PORT=([go-identity]=$P_IDENTITY [ui-api]=$P_UI [go-intake]=$P_INTAKE [go-run-controller]=$P_RUN \
   [go-warm-manager]=$P_WARM [go-reset]=$P_RESET [go-governance]=$P_GOV)
@@ -169,6 +170,11 @@ rbac_test_ns_only() {
     got=$(kubectl auth can-i --as="system:serviceaccount:$NS_SYS:$subj" "$verb" "$res" -n "$ns" 2>/dev/null) || true
     want=no
     [ "$exp" = yes ] && want=yes
+    # U12: go-warm-manager tiene el ClusterRole warm-provisioner (create secrets cluster-wide acotado por ValidatingAdmissionPolicy a aqs-w-*).
+    # auth can-i evalua RBAC puro (no admission plugins), por lo que reporta 'yes'.
+    if [ "$subj" = "go-warm-manager" ] && [ "$res" = "secrets" ] && [ "$verb" = "create" ]; then
+      want=yes
+    fi
     if [ "$got" != "$want" ]; then
       echo "difiere $subj $ns $verb $res: esperado=$want obtenido=${got:-vacio}"
       bad=$((bad + 1))

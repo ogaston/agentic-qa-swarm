@@ -26,6 +26,7 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/adapters/probe"
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/internal/api"
 	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/internal/obs"
+	"github.com/ogaston/agentic-qa-swarm/services/go-warm-manager/provision"
 )
 
 func main() {
@@ -178,6 +179,11 @@ func run(getenv func(string) string, log *slog.Logger) error {
 	hs := srv.HTTPServer(addr)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	if base, token := getenv("GOVERNANCE_URL"), getenv("GOVERNANCE_SERVICE_TOKEN"); base != "" && token != "" {
+		go pollRepositories(ctx, base, token, &provision.Reconciler{Kube: cs, Log: log}, svc, log)
+	} else {
+		log.Warn("reconciliación de repositorios deshabilitada: falta configuración de governance")
+	}
 	log.Info("escuchando", "addr", addr)
 	return serve(ctx, hs, nil, shutdownGrace)
 }

@@ -19,11 +19,16 @@ func (h *HTTP) BaseURL() string { return h.Base }
 
 // Get hace GET base+path (cuerpo limitado a 2 MiB, sin seguir redirecciones).
 func (h *HTTP) Get(ctx context.Context, path string) (int, []byte, error) {
+	return h.GetWithBaseURL(ctx, h.Base, path)
+}
+
+// GetWithBaseURL hace GET sobre baseURL+path con el cliente configurado.
+func (h *HTTP) GetWithBaseURL(ctx context.Context, baseURL, path string) (int, []byte, error) {
 	c := h.Client
 	if c == nil {
 		c = &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.Base+path, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
 	if err != nil {
 		return 0, nil, err
 	}

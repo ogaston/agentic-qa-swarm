@@ -52,7 +52,16 @@ func run(log *slog.Logger) error {
 		addr = ":8080"
 	}
 	allowed := intake.ParseAllowedRepos(os.Getenv("INTAKE_ALLOWED_REPOS"))
-	handler, err := newHandlerWith(log, []byte(secret), dataDir, os.Getenv("ARTIFACT_REGISTRY"), allowed, pub, ready)
+	var lookup intake.RepoLookup
+	if govURL := os.Getenv("GOVERNANCE_URL"); govURL != "" {
+		lookup = intake.NewRegistryRepoLookup(intake.RegistryLookupConfig{
+			GovernanceURL: govURL,
+			ServiceToken:  os.Getenv("GOVERNANCE_SERVICE_TOKEN"),
+			Seed:          allowed,
+			Log:           log,
+		})
+	}
+	handler, err := newHandlerWithLookup(log, []byte(secret), dataDir, os.Getenv("ARTIFACT_REGISTRY"), allowed, lookup, pub, ready)
 	if err != nil {
 		return err
 	}
@@ -130,6 +139,10 @@ func newHandler(log *slog.Logger, secret []byte, dataDir, eventsFile, artifactRe
 // newHandlerWith arma la cadena completa: webhook + obs.Wrap, que sirve /healthz, /readyz y /metrics
 // (sin token) antes de la aplicación y añade identificadores, log de acceso y métricas HTTP.
 func newHandlerWith(log *slog.Logger, secret []byte, dataDir, artifactRegistry string, allowed []string, pub intake.EventPublisher, ready []obs.Check) (http.Handler, error) {
+	return newHandlerWithLookup(log, secret, dataDir, artifactRegistry, allowed, nil, pub, ready)
+}
+
+func newHandlerWithLookup(log *slog.Logger, secret []byte, dataDir, artifactRegistry string, allowed []string, lookup intake.RepoLookup, pub intake.EventPublisher, ready []obs.Check) (http.Handler, error) {
 	store, err := intake.OpenJSONLStore(dataDir)
 	if err != nil {
 		return nil, err
@@ -143,6 +156,7 @@ func newHandlerWith(log *slog.Logger, secret []byte, dataDir, artifactRegistry s
 		Publisher:    pub,
 		Resolver:     intake.NewArtifactResolver(artifactRegistry),
 		AllowedRepos: allowed,
+		RepoLookup:   lookup,
 		Log:          log,
 		Metrics:      obs.NewIntake(reg),
 	})

@@ -51,6 +51,8 @@ const ETIQUETA_ENTORNO: Record<WarmState['state'], string> = {
   dirty: 'Requiere limpieza',
   cuarentena: 'En cuarentena',
   'idle-escalado': 'En pausa',
+  provisioning: 'Aprovisionando',
+  deleting: 'Eliminando',
 };
 
 type TonoEntorno = 'ok' | 'warn' | 'neutral';
@@ -61,6 +63,8 @@ const TONO_ENTORNO: Record<WarmState['state'], TonoEntorno> = {
   dirty: 'warn',
   cuarentena: 'warn',
   'idle-escalado': 'neutral',
+  provisioning: 'neutral',
+  deleting: 'warn',
 };
 
 /** Filas por página del listado. La paginación es local: la API devuelve la lista completa. */

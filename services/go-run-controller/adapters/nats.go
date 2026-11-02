@@ -69,6 +69,7 @@ type runConfirmedWire struct {
 		ConfirmedBy    string          `json:"confirmed_by"`
 		Flows          []string        `json:"flows"`
 		Artifact       json.RawMessage `json:"artifact,omitempty"`
+		Warm           json.RawMessage `json:"warm,omitempty"`
 	} `json:"data"`
 }
 
@@ -98,6 +99,31 @@ func parseArtifact(raw json.RawMessage) (*runctl.Artifact, error) {
 		return nil, errors.New("run.confirmed: artifact.ref vacío")
 	}
 	return &runctl.Artifact{Kind: a.Kind, Ref: a.Ref}, nil
+}
+
+// parseWarm valida el destino warm opcional de run.confirmed (U12) con las reglas del esquema:
+// warm_id y namespace strings no vacíos y sin campos extra. Ausente (vacío) = nil, sin error.
+// Un null explícito se rechaza: el esquema exige un objeto.
+func parseWarm(raw json.RawMessage) (*runctl.WarmTarget, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	if string(raw) == "null" {
+		return nil, errors.New("run.confirmed: warm no puede ser null")
+	}
+	var w struct {
+		WarmID    string `json:"warm_id"`
+		Namespace string `json:"namespace"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&w); err != nil {
+		return nil, errors.New("run.confirmed: warm malformado o con campos desconocidos")
+	}
+	if w.WarmID == "" || w.Namespace == "" {
+		return nil, errors.New("run.confirmed: warm_id o namespace vacío")
+	}
+	return &runctl.WarmTarget{WarmID: w.WarmID, Namespace: w.Namespace}, nil
 }
 
 // ParseRunConfirmed valida una línea run.confirmed contra el esquema: campos exactos (sin extras),
@@ -139,8 +165,12 @@ func ParseRunConfirmed(line []byte) (runctl.Event, error) {
 	if err != nil {
 		return runctl.Event{}, err
 	}
+	warm, err := parseWarm(w.Data.Warm)
+	if err != nil {
+		return runctl.Event{}, err
+	}
 	return runctl.Event{Type: w.Type, EventID: w.EventID, TraceID: w.TraceID, RunID: w.Data.RunID,
-		ConfirmedBy: w.Data.ConfirmedBy, Flows: w.Data.Flows, Artifact: art}, nil
+		ConfirmedBy: w.Data.ConfirmedBy, Flows: w.Data.Flows, Artifact: art, Warm: warm}, nil
 }
 
 // NATSSource entrega run.confirmed desde el consumidor durable go-run-controller-confirmed (AckExplicit).

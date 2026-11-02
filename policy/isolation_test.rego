@@ -47,3 +47,34 @@ test_isolation_user_other_allowed if {
 test_isolation_sa_null_namespace_denied if {
 	count(deny) > 0 with input as rb({"kind": "ServiceAccount", "name": "x", "namespace": null})
 }
+
+# U12: namespaces aqs-w-* y con etiqueta aqs.io/plane=warm
+rb_w(ns, s) := {"kind": "RoleBinding", "metadata": {"name": "b", "namespace": ns}, "subjects": [s]}
+
+test_isolation_aqs_w_local_sa_denied if {
+	count(deny) > 0 with input as rb_w("aqs-w-demo", {"kind": "ServiceAccount", "name": "app", "namespace": "aqs-w-demo"})
+}
+
+test_isolation_aqs_w_sa_without_namespace_denied if {
+	count(deny) > 0 with input as rb_w("aqs-w-demo", {"kind": "ServiceAccount", "name": "app"})
+}
+
+test_isolation_aqs_w_user_synthetic_denied if {
+	count(deny) > 0 with input as rb_w("aqs-w-demo", {"kind": "User", "name": "system:serviceaccount:aqs-w-demo:app"})
+}
+
+test_isolation_aqs_w_group_denied if {
+	count(deny) > 0 with input as rb_w("aqs-w-demo", {"kind": "Group", "name": "system:serviceaccounts:aqs-w-demo"})
+}
+
+test_isolation_aqs_w_control_plane_sa_allowed if {
+	count(deny) == 0 with input as rb_w("aqs-w-demo", {"kind": "ServiceAccount", "name": "go-warm-manager", "namespace": "aqs-system"})
+}
+
+test_isolation_plane_warm_label_denied if {
+	count(deny) > 0 with input as {
+		"kind": "RoleBinding",
+		"metadata": {"name": "b", "namespace": "custom-ns", "labels": {"aqs.io/plane": "warm"}},
+		"subjects": [{"kind": "ServiceAccount", "name": "x", "namespace": "custom-ns"}],
+	}
+}

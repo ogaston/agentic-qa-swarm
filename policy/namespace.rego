@@ -14,6 +14,8 @@ cluster_kinds := {
 	"ValidatingWebhookConfiguration",
 	"MutatingWebhookConfiguration",
 	"APIService",
+	"ValidatingAdmissionPolicy",
+	"ValidatingAdmissionPolicyBinding",
 }
 
 meta := m if {

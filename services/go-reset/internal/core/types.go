@@ -36,6 +36,8 @@ type WarmState struct {
 	State           string `json:"state"`
 	ResetVerified   bool   `json:"reset_verified"`
 	BaselineVersion string `json:"baseline_version"`
+	Namespace       string `json:"namespace,omitempty"`
+	Repo            string `json:"repo,omitempty"`
 }
 
 // Snapshot es el estado más la hora de su última escritura.
@@ -76,7 +78,7 @@ type Event struct {
 
 // Puertos.
 type (
-	// KubeAPI opera solo sobre el namespace aqs-test.
+	// KubeAPI opera sobre el namespace configurado (aqs-test o aqs-w-*).
 	KubeAPI interface {
 		Replicas(ctx context.Context) (int32, error)
 		RestartApp(ctx context.Context) error

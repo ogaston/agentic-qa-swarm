@@ -36,8 +36,22 @@ func pod(name string, ready bool, phase corev1.PodPhase) *corev1.Pod {
 }
 
 func TestKubeRejectsForeignNamespace(t *testing.T) {
-	if _, err := kube.New(fake.NewSimpleClientset(), "aqs-system", nil); err == nil {
-		t.Fatal("aceptó aqs-system")
+	for _, ns := range []string{"aqs-system", "default", "kube-system", "aqs-w-", "aqs-w-DEMO", "aqs-w-repo_1", "aqs-w-repo-"} {
+		if _, err := kube.New(fake.NewSimpleClientset(), ns, nil); err == nil {
+			t.Errorf("aceptó namespace inválido %q", ns)
+		}
+	}
+}
+
+func TestKubeAcceptsWarmNamespaces(t *testing.T) {
+	for _, ns := range []string{"aqs-test", "aqs-w-demo", "aqs-w-repo-1", "aqs-w-a"} {
+		c, err := kube.New(fake.NewSimpleClientset(), ns, nil)
+		if err != nil {
+			t.Fatalf("rechazó namespace válido %q: %v", ns, err)
+		}
+		if c == nil {
+			t.Fatalf("client nulo para %q", ns)
+		}
 	}
 }
 

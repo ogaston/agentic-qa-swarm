@@ -1,6 +1,10 @@
 package adapters
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ogaston/agentic-qa-swarm/services/go-run-controller/runctl"
+)
 
 // U11-T03: un prefijo mal formado impide arrancar; vacío = todo rechazado (fail-closed).
 func TestParseImagePrefixesMalFormadoOVacio(t *testing.T) {
@@ -35,5 +39,36 @@ func TestParseImagePrefixesElementoVacioYSegmentosPunto(t *testing.T) {
 	ok, err := ParseImagePrefixes("ghcr.io/o/a,ghcr.io/o/b/c")
 	if err != nil || len(ok) != 2 {
 		t.Fatalf("lista válida: %v %v", ok, err)
+	}
+}
+
+func TestAllowedPrefixesForRunWithRepoAndWarm(t *testing.T) {
+	seed := []string{"ghcr.io/seed/app"}
+
+	// 1. Con run.Artifact.ImagePrefix
+	r1 := runctl.Run{Artifact: &runctl.Artifact{Kind: "published-image", Ref: "ghcr.io/custom/app:1.0", ImagePrefix: "ghcr.io/custom/app"}}
+	p1 := AllowedPrefixesForRun(r1, seed, "ghcr.io/custom/app:1.0")
+	if err := ValidateImage("published-image", "ghcr.io/custom/app:1.0", p1); err != nil {
+		t.Fatalf("debería permitir prefijo del artefacto: %v", err)
+	}
+
+	// 2. Con run.Metadata["image_prefix"]
+	r2 := runctl.Run{Metadata: map[string]string{"image_prefix": "ghcr.io/meta/app"}}
+	p2 := AllowedPrefixesForRun(r2, seed, "ghcr.io/meta/app:2.0")
+	if err := ValidateImage("published-image", "ghcr.io/meta/app:2.0", p2); err != nil {
+		t.Fatalf("debería permitir prefijo de metadata: %v", err)
+	}
+
+	// 3. Con run.Warm.Namespace coincidente con el slug del repo
+	r3 := runctl.Run{Warm: &runctl.WarmTarget{WarmID: "w-my-service", Namespace: "aqs-w-my-service"}}
+	p3 := AllowedPrefixesForRun(r3, seed, "ghcr.io/my/service:v1")
+	if err := ValidateImage("published-image", "ghcr.io/my/service:v1", p3); err != nil {
+		t.Fatalf("debería permitir prefijo derivado del warm namespace: %v", err)
+	}
+
+	// 4. Imagen ajena no permitida (fail-closed)
+	p4 := AllowedPrefixesForRun(r3, seed, "ghcr.io/unrelated/other:v1")
+	if err := ValidateImage("published-image", "ghcr.io/unrelated/other:v1", p4); err == nil {
+		t.Fatal("imagen ajena debe rechazarse")
 	}
 }

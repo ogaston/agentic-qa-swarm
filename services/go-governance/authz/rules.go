@@ -3,12 +3,20 @@ package authz
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
 
 // DefaultTestNamespace es el único namespace donde se permite correr.
 const DefaultTestNamespace = "aqs-test"
+
+var warmNamespaceRegex = regexp.MustCompile(`^aqs-w-[a-z0-9]([a-z0-9-]{0,44}[a-z0-9])?$`)
+
+// ValidWarmNamespace verifica si un namespace cumple el formato de entorno warm (inicia con aqs-w- y formato válido).
+func ValidWarmNamespace(ns string) bool {
+	return warmNamespaceRegex.MatchString(ns)
+}
 
 // legal lista las transiciones legales (sin la regla "→ failed desde no terminal").
 var legal = map[State][]State{
@@ -109,8 +117,14 @@ func (e *RuleEvaluator) AuthorizeTransition(ctx context.Context, in GateInput) (
 	if ns == "" {
 		ns = DefaultTestNamespace
 	}
+	allowedNS := func(target string) bool {
+		if e.TestNamespace != "" && e.TestNamespace != DefaultTestNamespace {
+			return target == e.TestNamespace
+		}
+		return target == DefaultTestNamespace || ValidWarmNamespace(target)
+	}
 	needNS := func() {
-		if in.TargetNamespace != ns {
+		if !allowedNS(in.TargetNamespace) {
 			missing = append(missing, fmt.Sprintf("namespace %q no es el de prueba %q", in.TargetNamespace, ns))
 			codes = append(codes, DenyNamespaceNotTest)
 		}

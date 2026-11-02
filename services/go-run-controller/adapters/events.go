@@ -42,6 +42,7 @@ type rawEvent struct {
 		ConfirmedBy string          `json:"confirmed_by"`
 		Flows       []string        `json:"flows"`
 		Artifact    json.RawMessage `json:"artifact,omitempty"`
+		Warm        json.RawMessage `json:"warm,omitempty"`
 	} `json:"data"`
 }
 
@@ -66,8 +67,12 @@ func ParseEvent(line []byte) (ev runctl.Event, ok bool, err error) {
 	if err != nil {
 		return ev, true, err
 	}
+	warm, err := parseWarm(r.Data.Warm)
+	if err != nil {
+		return ev, true, err
+	}
 	return runctl.Event{Type: r.Type, EventID: r.EventID, TraceID: r.TraceID, RunID: r.Data.RunID,
-		ConfirmedBy: r.Data.ConfirmedBy, Flows: r.Data.Flows, Artifact: art}, true, nil
+		ConfirmedBy: r.Data.ConfirmedBy, Flows: r.Data.Flows, Artifact: art, Warm: warm}, true, nil
 }
 
 // Poll implementa EventSource. Relee desde el último offset confirmado: un evento sin Ack se vuelve

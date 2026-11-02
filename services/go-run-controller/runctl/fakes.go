@@ -71,12 +71,18 @@ func (s *MemStore) Save(r Run) error {
 
 // FakeWarm es un WarmStateReader fijo.
 type FakeWarm struct {
-	Fact Fact
-	Err  error
+	Fact            Fact
+	Err             error
+	TargetNamespace string
 }
 
 // ResetVerified implementa WarmStateReader.
 func (w *FakeWarm) ResetVerified(context.Context) (Fact, error) { return w.Fact, w.Err }
+
+func (w *FakeWarm) ResetVerifiedForTarget(_ context.Context, namespace string) (Fact, error) {
+	w.TargetNamespace = namespace
+	return w.Fact, w.Err
+}
 
 // FakeAlerter registra los handoffs.
 type FakeAlerter struct {
@@ -111,9 +117,18 @@ func (p *FakePublisher) Publish(_ context.Context, ev OutEvent) error {
 
 // FakePhases es un PhaseLauncher: FailFirst[fase] = cuántos lanzamientos fallan antes de tener éxito.
 type FakePhases struct {
-	mu        sync.Mutex
-	FailFirst map[string]int
-	Launches  map[string]int
+	mu           sync.Mutex
+	FailFirst    map[string]int
+	Launches     map[string]int
+	PrepareCalls int
+	PrepareErr   error
+}
+
+func (f *FakePhases) PrepareWarm(_ context.Context, _ Run) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.PrepareCalls++
+	return f.PrepareErr
 }
 
 // Launch implementa PhaseLauncher. La fase report devuelve una URI de evidencia.

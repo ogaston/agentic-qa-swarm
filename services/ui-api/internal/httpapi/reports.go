@@ -6,6 +6,7 @@ package httpapi
 // servicio para el reporter hoy; ver candidatas de U9-T01). Sin LLM y sin cliente S3 aquí.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -64,11 +65,11 @@ func newUpstreamClient(raw string, timeout time.Duration, now func() time.Time, 
 	}, nil
 }
 
-// get devuelve el status y el cuerpo, o errUpstreamDown si no hubo respuesta utilizable.
-func (u *upstreamClient) get(parent context.Context, path string, q url.Values, bearer string) (int, []byte, error) {
+// do ejecuta una petición HTTP al upstream con timeout y cortacircuitos.
+func (u *upstreamClient) do(parent context.Context, method, path string, q url.Values, body []byte, bearer string) (int, http.Header, []byte, error) {
 	probe, ok := u.br.admit()
 	if !ok {
-		return 0, nil, errUpstreamDown
+		return 0, nil, nil, errUpstreamDown
 	}
 	ctx, cancel := context.WithTimeout(parent, u.timeout)
 	defer cancel()
@@ -76,12 +77,19 @@ func (u *upstreamClient) get(parent context.Context, path string, q url.Values, 
 	if len(q) > 0 {
 		target += "?" + q.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	var bodyReader io.Reader
+	if len(body) > 0 {
+		bodyReader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, bodyReader)
 	if err != nil {
 		u.br.abort(probe)
-		return 0, nil, errUpstreamDown
+		return 0, nil, nil, errUpstreamDown
 	}
 	req.Header.Set("Accept", "application/json")
+	if len(body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
@@ -89,18 +97,24 @@ func (u *upstreamClient) get(parent context.Context, path string, q url.Values, 
 	if err != nil {
 		if parent.Err() != nil { // lo abortó el cliente de ui-api: no es fallo del upstream
 			u.br.abort(probe)
-			return 0, nil, errUpstreamDown
+			return 0, nil, nil, errUpstreamDown
 		}
 		u.br.settle(probe, false)
-		return 0, nil, errUpstreamDown
+		return 0, nil, nil, errUpstreamDown
 	}
 	defer resp.Body.Close()
 	u.br.settle(probe, true)
 	b, err := io.ReadAll(io.LimitReader(resp.Body, reportMaxBody+1))
 	if err != nil || len(b) > reportMaxBody {
-		return 0, nil, errUpstreamDown
+		return 0, nil, nil, errUpstreamDown
 	}
-	return resp.StatusCode, b, nil
+	return resp.StatusCode, resp.Header.Clone(), b, nil
+}
+
+// get devuelve el status y el cuerpo, o errUpstreamDown si no hubo respuesta utilizable.
+func (u *upstreamClient) get(parent context.Context, path string, q url.Values, bearer string) (int, []byte, error) {
+	status, _, body, err := u.do(parent, http.MethodGet, path, q, nil, bearer)
+	return status, body, err
 }
 
 // report atiende GET /reports/{run} ya autenticado (pr = persona, token = su bearer).

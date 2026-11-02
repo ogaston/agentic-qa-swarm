@@ -16,6 +16,8 @@ const COLOR_ESTADO: Record<Warm['state'], 'ok' | 'warn' | 'neutral'> = {
   dirty: 'warn',
   cuarentena: 'warn',
   'idle-escalado': 'neutral',
+  provisioning: 'neutral',
+  deleting: 'warn',
 };
 
 const ETIQUETAS: Record<Warm['state'], string> = {
@@ -23,6 +25,8 @@ const ETIQUETAS: Record<Warm['state'], string> = {
   dirty: 'Requiere limpieza',
   cuarentena: 'En cuarentena',
   'idle-escalado': 'En pausa',
+  provisioning: 'Aprovisionando',
+  deleting: 'Eliminando',
 };
 
 /** Trazo del icono por estado (decorativo: el texto de la etiqueta es el significado). */
@@ -37,6 +41,8 @@ const ICONO_ESTADO: Record<Warm['state'], ReactNode> = {
   ),
   cuarentena: <path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z" />,
   'idle-escalado': <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />,
+  provisioning: <path d="M12 6v6l4 2" />,
+  deleting: <path d="M6 18L18 6M6 6l12 12" />,
 };
 
 function IconoEstado({ estado }: { estado: Warm['state'] }) {

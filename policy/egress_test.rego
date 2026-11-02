@@ -71,3 +71,27 @@ test_egress_intra_plus_ipblock_denied if {
 test_egress_second_rule_bad_denied if {
 	count(deny) > 0 with input as np([{"to": [{"podSelector": {}}]}, {}])
 }
+
+# U12: namespaces aqs-w-* y con etiqueta aqs.io/plane=warm
+np_w(ns, rules) := {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": {"name": "f", "namespace": ns}, "spec": {"podSelector": {}, "policyTypes": ["Egress"], "egress": rules}}
+
+test_egress_aqs_w_intra_allowed if {
+	count(deny) == 0 with input as np_w("aqs-w-demo", [{"to": [{"podSelector": {}}]}])
+}
+
+test_egress_aqs_w_dns_allowed if {
+	count(deny) == 0 with input as np_w("aqs-w-demo", [{"to": [ks], "ports": dns_ports}])
+}
+
+test_egress_aqs_w_ipblock_denied if {
+	count(deny) > 0 with input as np_w("aqs-w-demo", [{"to": [{"ipBlock": {"cidr": "10.0.0.0/8"}}]}])
+}
+
+test_egress_plane_warm_label_ipblock_denied if {
+	count(deny) > 0 with input as {
+		"apiVersion": "networking.k8s.io/v1",
+		"kind": "NetworkPolicy",
+		"metadata": {"name": "f", "namespace": "custom-ns", "labels": {"aqs.io/plane": "warm"}},
+		"spec": {"podSelector": {}, "policyTypes": ["Egress"], "egress": [{"to": [{"ipBlock": {"cidr": "10.0.0.0/8"}}]}],
+	}}
+}

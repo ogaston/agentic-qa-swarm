@@ -321,3 +321,20 @@ func TestArtifactDelDeployEsElDelEvento(t *testing.T) {
 	}
 	check(j2)
 }
+
+func TestTargetURLDynamicAndFallback(t *testing.T) {
+	for _, tc := range []struct {
+		namespace string
+		want      string
+	}{
+		{"", "http://warm-app.aqs-test.svc:8080"},
+		{"aqs-test", "http://warm-app.aqs-test.svc:8080"},
+		{"aqs-w-demo", "http://warm-app.aqs-w-demo.svc:8080"},
+		{"aqs-w-custom-repo", "http://warm-app.aqs-w-custom-repo.svc:8080"},
+	} {
+		got := TargetURL(tc.namespace)
+		if got != tc.want {
+			t.Errorf("TargetURL(%q) = %q, want %q", tc.namespace, got, tc.want)
+		}
+	}
+}

@@ -38,23 +38,25 @@ deny contains msg if {
 	msg := sprintf("Deployment/%s: requiere automountServiceAccountToken: false en el pod", [input.metadata.name])
 }
 
-en_aqs_test(o) if {
-	o.metadata.namespace == ns_test
+en_warm(o) if {
+	es_warm(o)
 	o.kind in {"Deployment", "StatefulSet", "Job", "CronJob"}
 }
 
+en_aqs_test(o) if en_warm(o)
+
 deny contains msg if {
-	en_aqs_test(input)
+	en_warm(input)
 	object.get(plantilla(input), "automountServiceAccountToken", false) in {true, "true"}
-	msg := sprintf("%s/%s: automountServiceAccountToken: true prohibido en aqs-test", [input.kind, input.metadata.name])
+	msg := sprintf("%s/%s: automountServiceAccountToken: true prohibido en namespace warm", [input.kind, input.metadata.name])
 }
 
 # Cualquier valor distinto de ausente/null/false cuenta como activado (incluido "true" como string).
 deny contains msg if {
-	en_aqs_test(input)
+	en_warm(input)
 	some campo in {"hostNetwork", "hostPID", "hostIPC"}
 	v := object.get(plantilla(input), campo, false)
 	v != false
 	v != null
-	msg := sprintf("%s/%s: %s prohibido en aqs-test", [input.kind, input.metadata.name, campo])
+	msg := sprintf("%s/%s: %s prohibido en namespace warm", [input.kind, input.metadata.name, campo])
 }

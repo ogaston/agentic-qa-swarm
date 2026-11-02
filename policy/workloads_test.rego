@@ -61,3 +61,34 @@ test_hostnetwork_string_denied if {
 test_hostnetwork_false_allowed if {
 	count(deny) == 0 with input as wl_pod("Deployment", {"serviceAccountName": "aqs-runner", "hostNetwork": false})
 }
+
+# U12: workloads en namespaces aqs-w-* y con etiqueta aqs.io/plane=warm
+wl_pod_w(ns, kind, spec) := {"kind": kind, "metadata": {"name": "w", "namespace": ns}, "spec": {"template": {"spec": spec}}} if kind != "CronJob"
+
+wl_pod_w(ns, "CronJob", spec) := {"kind": "CronJob", "metadata": {"name": "w", "namespace": ns}, "spec": {"jobTemplate": {"spec": {"template": {"spec": spec}}}}}
+
+test_automount_true_en_aqs_w_denied if {
+	every k in {"Deployment", "StatefulSet", "Job", "CronJob"} {
+		count(deny) > 0 with input as wl_pod_w("aqs-w-demo", k, {"serviceAccountName": "app", "automountServiceAccountToken": true})
+	}
+}
+
+test_automount_false_en_aqs_w_allowed if {
+	every k in {"Deployment", "StatefulSet", "Job", "CronJob"} {
+		count(deny) == 0 with input as wl_pod_w("aqs-w-demo", k, {"serviceAccountName": "app", "automountServiceAccountToken": false})
+	}
+}
+
+test_host_namespaces_en_aqs_w_denied if {
+	every c in {"hostNetwork", "hostPID", "hostIPC"} {
+		count(deny) > 0 with input as wl_pod_w("aqs-w-demo", "Deployment", {"serviceAccountName": "app", c: true})
+	}
+}
+
+test_workload_plane_warm_label_denied if {
+	count(deny) > 0 with input as {
+		"kind": "Deployment",
+		"metadata": {"name": "w", "namespace": "custom-ns", "labels": {"aqs.io/plane": "warm"}},
+		"spec": {"template": {"spec": {"serviceAccountName": "app", "automountServiceAccountToken": true}}},
+	}
+}

@@ -3,6 +3,8 @@ kind: NetworkPolicy
 metadata:
   name: default-deny
   namespace: aqs-test
+  labels:
+    aqs.io/plane: warm
 spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]
@@ -12,6 +14,8 @@ kind: NetworkPolicy
 metadata:
   name: allow-same-namespace
   namespace: aqs-test
+  labels:
+    aqs.io/plane: warm
 spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]
@@ -27,6 +31,8 @@ kind: NetworkPolicy
 metadata:
   name: allow-dns
   namespace: aqs-test
+  labels:
+    aqs.io/plane: warm
 spec:
   podSelector: {}
   policyTypes: [Egress]
@@ -44,6 +50,8 @@ kind: NetworkPolicy
 metadata:
   name: allow-from-control-plane
   namespace: aqs-test
+  labels:
+    aqs.io/plane: warm
 spec:
   podSelector: {}
   policyTypes: [Ingress]

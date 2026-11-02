@@ -7,8 +7,11 @@ import (
 	"strings"
 )
 
-// Namespace es el único namespace de prueba que el servicio acepta.
-const Namespace = "aqs-test"
+// LegacyNamespace es el único namespace de prueba previo a U12.
+const LegacyNamespace = "aqs-test"
+
+// Namespace es el namespace legacy conservado para compatibilidad hacia atrás.
+const Namespace = LegacyNamespace
 
 // Estados del warm (contracts/plans/warm-state.schema.json).
 const (
@@ -16,6 +19,8 @@ const (
 	StateDirty        = "dirty"
 	StateCuarentena   = "cuarentena"
 	StateIdleEscalado = "idle-escalado"
+	StateProvisioning = "provisioning"
+	StateDeleting     = "deleting"
 )
 
 // WarmState es el WarmState del contrato.
@@ -24,6 +29,8 @@ type WarmState struct {
 	State           string `json:"state"`
 	ResetVerified   bool   `json:"reset_verified"`
 	BaselineVersion string `json:"baseline_version"`
+	Namespace       string `json:"namespace,omitempty"`
+	Repo            string `json:"repo,omitempty"`
 }
 
 // Artefactos soportados.
@@ -79,6 +86,8 @@ func Transition(cur WarmState, to string, resetVerified bool) (WarmState, error)
 		next.ResetVerified = false
 	case cur.State == StateReady && to == StateIdleEscalado, cur.State == StateIdleEscalado && to == StateReady:
 		// conserva reset_verified
+	case cur.State == StateProvisioning && to == StateReady:
+		next.ResetVerified = resetVerified
 	default:
 		return cur, fmt.Errorf("%w: %s->%s", ErrIllegalTransition, cur.State, to)
 	}
@@ -88,7 +97,7 @@ func Transition(cur WarmState, to string, resetVerified bool) (WarmState, error)
 // Valid indica si el WarmState cumple el esquema (campos y enum).
 func (w WarmState) Valid() bool {
 	switch w.State {
-	case StateReady, StateDirty, StateCuarentena, StateIdleEscalado:
+	case StateReady, StateDirty, StateCuarentena, StateIdleEscalado, StateProvisioning, StateDeleting:
 	default:
 		return false
 	}

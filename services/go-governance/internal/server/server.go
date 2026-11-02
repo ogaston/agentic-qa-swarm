@@ -16,6 +16,7 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/auth"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/obs"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/policy"
+	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/repos"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/service"
 )
 
@@ -96,6 +97,10 @@ func routeOf(r *http.Request) string {
 		return "/audit"
 	case strings.HasPrefix(r.URL.Path, "/policies/"):
 		return "/policies/{name}"
+	case r.URL.Path == "/repositories" || r.URL.Path == "/v1/repositories":
+		return "/repositories"
+	case strings.HasPrefix(r.URL.Path, "/repositories/") || strings.HasPrefix(r.URL.Path, "/v1/repositories/"):
+		return "/repositories/{owner}/{repo}"
 	}
 	return "unmatched"
 }
@@ -149,6 +154,32 @@ func (s *Server) routes() http.Handler {
 			default:
 				methodNotAllowed(w, http.MethodGet, http.MethodPut)
 			}
+		case r.URL.Path == "/repositories" || r.URL.Path == "/v1/repositories":
+			switch r.Method {
+			case http.MethodGet:
+				s.listRepositories(w, r)
+			case http.MethodPost:
+				s.createRepository(w, r)
+			default:
+				methodNotAllowed(w, http.MethodGet, http.MethodPost)
+			}
+		case strings.HasPrefix(r.URL.Path, "/repositories/") || strings.HasPrefix(r.URL.Path, "/v1/repositories/"):
+			owner, repo, ok := parseRepoPath(r.URL.Path)
+			if !ok {
+				writeErr(w, http.StatusNotFound, "not_found", "ruta desconocida")
+				return
+			}
+			repoFullName := owner + "/" + repo
+			switch r.Method {
+			case http.MethodGet:
+				s.getRepository(w, r, repoFullName)
+			case http.MethodPatch:
+				s.patchRepository(w, r, repoFullName)
+			case http.MethodDelete:
+				s.deleteRepository(w, r, repoFullName)
+			default:
+				methodNotAllowed(w, http.MethodGet, http.MethodPatch, http.MethodDelete)
+			}
 		default:
 			writeErr(w, http.StatusNotFound, "not_found", "ruta desconocida")
 		}
@@ -157,10 +188,17 @@ func (s *Server) routes() http.Handler {
 
 // person autentica a la persona y comprueba el acceso. ok=false: ya se respondió.
 func (s *Server) person(w http.ResponseWriter, r *http.Request, a Access) (authz.Principal, bool) {
+	return s.authCaller(w, r, a, false)
+}
+
+func (s *Server) authCaller(w http.ResponseWriter, r *http.Request, a Access, allowService bool) (authz.Principal, bool) {
 	tok, ok := auth.BearerToken(r.Header)
 	if !ok {
 		writeErr(w, http.StatusUnauthorized, "unauthorized", "falta el token")
 		return authz.Principal{}, false
+	}
+	if allowService && s.svcToken.Matches(tok) {
+		return authz.Principal{ID: "service:governance-client", Role: authz.RoleAdmin}, true
 	}
 	p, err := s.verifier.Verify(r.Context(), tok)
 	switch {
@@ -326,4 +364,150 @@ func (s *Server) queryAudit(w http.ResponseWriter, r *http.Request) {
 		out = append(out, view{e.At.UTC().Format("2006-01-02T15:04:05.999999999Z07:00"), e.Actor, e.Action, e.RunID})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func parseRepoPath(path string) (string, string, bool) {
+	var suffix string
+	if strings.HasPrefix(path, "/v1/repositories/") {
+		suffix = strings.TrimPrefix(path, "/v1/repositories/")
+	} else if strings.HasPrefix(path, "/repositories/") {
+		suffix = strings.TrimPrefix(path, "/repositories/")
+	} else {
+		return "", "", false
+	}
+	parts := strings.Split(suffix, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return strings.ToLower(parts[0]), strings.ToLower(parts[1]), true
+}
+
+func (s *Server) listRepositories(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.authCaller(w, r, AccessAuthenticated, true); !ok {
+		return
+	}
+	list, err := s.svc.ListRepositories(r.Context())
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "error listando repositorios", "error", err.Error())
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "almacén de repositorios no disponible")
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (s *Server) createRepository(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.authCaller(w, r, AccessAuthenticated, true)
+	if !ok {
+		return
+	}
+	body, code := readBody(w, r)
+	if code == http.StatusRequestEntityTooLarge {
+		writeErr(w, code, "payload_too_large", "cuerpo demasiado grande")
+		return
+	} else if code != 0 {
+		writeErr(w, code, "bad_request", "cuerpo ilegible")
+		return
+	}
+	var in repos.RepositoryInput
+	dec := json.NewDecoder(strings.NewReader(string(body)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "JSON inválido")
+		return
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		writeErr(w, http.StatusBadRequest, "bad_request", "JSON inválido")
+		return
+	}
+
+	created, err := s.svc.CreateRepository(r.Context(), p.ID, in)
+	switch {
+	case errors.Is(err, repos.ErrInvalid):
+		writeErr(w, http.StatusUnprocessableEntity, "invalid_input", err.Error())
+	case errors.Is(err, repos.ErrAlreadyExists):
+		writeErr(w, http.StatusConflict, "conflict", "repositorio ya registrado")
+	case errors.Is(err, repos.ErrWarmCapExceeded):
+		writeErr(w, http.StatusTooManyRequests, "warm_max_environments_exceeded", "límite de entornos warm alcanzado (WARM_MAX_ENVIRONMENTS)")
+	case err != nil:
+		s.log.ErrorContext(r.Context(), "error creando repositorio", "error", err.Error())
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "no se pudo crear el repositorio")
+	default:
+		writeJSON(w, http.StatusCreated, created)
+	}
+}
+
+func (s *Server) getRepository(w http.ResponseWriter, r *http.Request, repoFullName string) {
+	if _, ok := s.authCaller(w, r, AccessAuthenticated, true); !ok {
+		return
+	}
+	repo, found, err := s.svc.GetRepository(r.Context(), repoFullName)
+	switch {
+	case err != nil:
+		s.log.ErrorContext(r.Context(), "error obteniendo repositorio", "error", err.Error())
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "almacén no disponible")
+	case !found:
+		writeErr(w, http.StatusNotFound, "not_found", "repositorio no encontrado")
+	default:
+		writeJSON(w, http.StatusOK, repo)
+	}
+}
+
+func (s *Server) patchRepository(w http.ResponseWriter, r *http.Request, repoFullName string) {
+	p, ok := s.authCaller(w, r, AccessAuthenticated, true)
+	if !ok {
+		return
+	}
+	body, code := readBody(w, r)
+	if code == http.StatusRequestEntityTooLarge {
+		writeErr(w, code, "payload_too_large", "cuerpo demasiado grande")
+		return
+	} else if code != 0 {
+		writeErr(w, code, "bad_request", "cuerpo ilegible")
+		return
+	}
+	var patch repos.RepositoryPatch
+	dec := json.NewDecoder(strings.NewReader(string(body)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&patch); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "JSON inválido")
+		return
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		writeErr(w, http.StatusBadRequest, "bad_request", "JSON inválido")
+		return
+	}
+
+	updated, err := s.svc.PatchRepository(r.Context(), p.ID, p.Role, repoFullName, patch)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		writeErr(w, http.StatusNotFound, "not_found", "repositorio no encontrado")
+	case errors.Is(err, repos.ErrForbidden):
+		writeErr(w, http.StatusForbidden, "forbidden", "rol o permisos insuficientes sobre el repositorio")
+	case errors.Is(err, repos.ErrInvalid):
+		writeErr(w, http.StatusUnprocessableEntity, "invalid_input", err.Error())
+	case err != nil:
+		s.log.ErrorContext(r.Context(), "error actualizando repositorio", "error", err.Error())
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "no se pudo actualizar el repositorio")
+	default:
+		writeJSON(w, http.StatusOK, updated)
+	}
+}
+
+func (s *Server) deleteRepository(w http.ResponseWriter, r *http.Request, repoFullName string) {
+	p, ok := s.authCaller(w, r, AccessAuthenticated, true)
+	if !ok {
+		return
+	}
+	err := s.svc.DeleteRepository(r.Context(), p.ID, p.Role, repoFullName)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		writeErr(w, http.StatusNotFound, "not_found", "repositorio no encontrado")
+	case errors.Is(err, repos.ErrForbidden):
+		writeErr(w, http.StatusForbidden, "forbidden", "rol o permisos insuficientes sobre el repositorio")
+	case err != nil:
+		s.log.ErrorContext(r.Context(), "error eliminando repositorio", "error", err.Error())
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "no se pudo eliminar el repositorio")
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

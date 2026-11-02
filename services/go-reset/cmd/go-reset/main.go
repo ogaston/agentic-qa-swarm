@@ -7,9 +7,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -60,10 +62,15 @@ func run(args []string) error {
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 		runID := fs.String("run", "", "run_id")
 		image := fs.String("image", os.Getenv("RESET_JOB_IMAGE"), "imagen con tag fijado (por defecto RESET_JOB_IMAGE)")
+		ns := fs.String("namespace", os.Getenv("RESET_NAMESPACE"), "namespace destino (por defecto RESET_NAMESPACE o aqs-test)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		j, err := jobspec.Build(*runID, *image)
+		targetNS := *ns
+		if targetNS == "" {
+			targetNS = jobspec.Namespace
+		}
+		j, err := jobspec.BuildInNamespace(*runID, *image, targetNS)
 		if err != nil {
 			return err
 		}
@@ -144,7 +151,44 @@ func serve() error {
 	if err != nil {
 		return err
 	}
-	h := httpapi.New(httpapi.Config{Token: c.Token, Service: w.svc, Sessions: w.sessions, Clock: realClock{},
+	var mu sync.Mutex
+	targets := map[string]*core.Service{}
+	target := func(ctx context.Context, ns string) (httpapi.Resetter, error) {
+		if ns == c.Namespace {
+			return w.svc, nil
+		}
+		if !kube.ValidNamespace(ns) || ns == kube.Namespace || c.Backend != "kube" {
+			return nil, fmt.Errorf("namespace no permitido")
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if svc := targets[ns]; svc != nil {
+			return svc, nil
+		}
+		rc, err := rest.InClusterConfig()
+		if err != nil {
+			return nil, err
+		}
+		cs, err := kubernetes.NewForConfig(rc)
+		if err != nil {
+			return nil, err
+		}
+		k, err := kube.New(cs, ns, nil)
+		if err != nil {
+			return nil, err
+		}
+		cl := &script.Cleaner{Path: c.BaselineScript, Timeout: c.ScriptTimeout, URL: "http://warm-app." + ns + ".svc:9090", Token: func(ctx context.Context) ([]byte, error) {
+			secret, err := cs.CoreV1().Secrets(ns).Get(ctx, "target-app-baseline-token", metav1.GetOptions{})
+			if err != nil {
+				return nil, err
+			}
+			return secret.Data["token"], nil
+		}}
+		svc := &core.Service{Kube: k, State: k, DB: cl, Cache: &redis.Flusher{Addr: "warm-redis." + ns + ".svc:6379", Timeout: c.RedisTimeout}, Sessions: w.sessions, Events: w.svc.Events, Alert: obs.LogAlerter{Log: obs.NewLogger(os.Stdout)}, Clock: realClock{}, Cfg: core.Config{DefaultWarmID: "w-" + ns[len("aqs-w-"):], ReadyTimeout: c.ReadyTimeout, ReadyInterval: c.ReadyInterval, Grace: c.Grace}}
+		targets[ns] = svc
+		return svc, nil
+	}
+	h := httpapi.New(httpapi.Config{Token: c.Token, Service: w.svc, Target: target, Sessions: w.sessions, Clock: realClock{},
 		Log: obs.NewLogger(os.Stdout), Gatherer: w.reg})
 	srv := &http.Server{Addr: c.Listen, Handler: h, ReadHeaderTimeout: 5 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

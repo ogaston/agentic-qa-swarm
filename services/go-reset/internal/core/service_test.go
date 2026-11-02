@@ -44,6 +44,22 @@ func TestResetHappyPathReadsBack(t *testing.T) {
 	}
 }
 
+func TestResetPreservesRepositoryIdentity(t *testing.T) {
+	b := fakes.NewBundle()
+	initial := core.WarmState{WarmID: "w-acme-shop", State: core.StateDirty, ResetVerified: false, BaselineVersion: "unverified", Namespace: "aqs-w-acme-shop", Repo: "acme/shop"}
+	if err := b.State.Put(ctx, initial, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := b.Svc.Reset(ctx, "r-1", "")
+	if err != nil || !res.Verified {
+		t.Fatalf("reset: %+v %v", res, err)
+	}
+	got := state(t, b)
+	if got.Namespace != initial.Namespace || got.Repo != initial.Repo || !got.ResetVerified {
+		t.Fatalf("repository identity lost after reset: %+v", got)
+	}
+}
+
 func TestResetFailsRestartStep(t *testing.T) {
 	b := fakes.NewBundle()
 	b.Kube.RestartErr = fakes.ErrBoom

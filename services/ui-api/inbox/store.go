@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -181,6 +182,25 @@ func (s *Store) Counts() map[string]int {
 		out[string(s.view(e).State)]++
 	}
 	return out
+}
+
+// Activity devuelve la actividad de webhook más reciente para un repositorio repo ("owner/repo").
+func (s *Store) Activity(repo string) (hasWebhook bool, lastEvent, lastSHA string, lastSeenAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var latest *entry
+	for _, e := range s.items {
+		if !strings.EqualFold(e.n.Repo, repo) {
+			continue
+		}
+		if latest == nil || e.at.After(latest.at) || (e.at.Equal(latest.at) && e.seq > latest.seq) {
+			latest = e
+		}
+	}
+	if latest == nil {
+		return false, "", "", time.Time{}
+	}
+	return true, latest.n.GithubEvent, latest.n.SHA, latest.at
 }
 
 // Receipts devuelve hasta limit recibos, el más reciente primero, filtrados por visible.

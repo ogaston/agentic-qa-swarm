@@ -33,13 +33,22 @@ const (
 
 // WarmState es components.schemas.WarmState (contracts/plans/warm-state.schema.json).
 type WarmState struct {
+	Repo            string `json:"repo,omitempty"`
+	Namespace       string `json:"namespace,omitempty"`
 	WarmID          string `json:"warm_id"`
 	State           string `json:"state"`
 	ResetVerified   bool   `json:"reset_verified"`
 	BaselineVersion string `json:"baseline_version"`
 }
 
-var warmStates = map[string]bool{"ready": true, "dirty": true, "cuarentena": true, "idle-escalado": true}
+var warmStates = map[string]bool{
+	"ready":         true,
+	"dirty":         true,
+	"cuarentena":    true,
+	"idle-escalado": true,
+	"provisioning":  true,
+	"deleting":      true,
+}
 
 // parseWarmState valida el cuerpo contra el esquema: campos required, sin campos extra
 // (additionalProperties false), enum de state y minLength 1 en las cadenas.
@@ -47,6 +56,8 @@ func parseWarmState(b []byte) (WarmState, bool) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	var raw struct {
+		Repo            *string `json:"repo"`
+		Namespace       *string `json:"namespace"`
 		WarmID          *string `json:"warm_id"`
 		State           *string `json:"state"`
 		ResetVerified   *bool   `json:"reset_verified"`
@@ -64,7 +75,45 @@ func parseWarmState(b []byte) (WarmState, bool) {
 	if *raw.WarmID == "" || *raw.BaselineVersion == "" || !warmStates[*raw.State] {
 		return WarmState{}, false
 	}
-	return WarmState{WarmID: *raw.WarmID, State: *raw.State, ResetVerified: *raw.ResetVerified, BaselineVersion: *raw.BaselineVersion}, true
+	st := WarmState{
+		WarmID:          *raw.WarmID,
+		State:           *raw.State,
+		ResetVerified:   *raw.ResetVerified,
+		BaselineVersion: *raw.BaselineVersion,
+	}
+	if raw.Repo != nil {
+		st.Repo = *raw.Repo
+	}
+	if raw.Namespace != nil {
+		st.Namespace = *raw.Namespace
+	}
+	return st, true
+}
+
+type warmEnvItem struct {
+	Repo            string `json:"repo"`
+	Namespace       string `json:"namespace"`
+	WarmID          string `json:"warm_id"`
+	State           string `json:"state"`
+	ResetVerified   bool   `json:"reset_verified"`
+	BaselineVersion string `json:"baseline_version"`
+}
+
+func parseWarmArray(b []byte) ([]warmEnvItem, bool) {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	var items []warmEnvItem
+	if err := dec.Decode(&items); err != nil {
+		return nil, false
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, false
+	}
+	for _, it := range items {
+		if it.WarmID == "" || !warmStates[it.State] {
+			return nil, false
+		}
+	}
+	return items, true
 }
 
 // warmClient habla con go-warm-manager y lleva el circuito (abre tras WarmCircuitThresh fallos de
@@ -149,26 +198,30 @@ func (c *warmClient) readToken() (string, error) {
 	return tok, nil
 }
 
-// fetch devuelve el WarmState validado, o false (warm_unavailable). Nunca registra el token.
-func (h *Handler) fetchWarm(r *http.Request) (WarmState, bool) {
+// fetchWarmBytes obtiene los bytes de respuesta del warm-manager.
+func (h *Handler) fetchWarmBytes(r *http.Request) ([]byte, bool) {
 	c := h.warmc
 	probe, ok := c.admit()
 	if !ok {
 		h.logAt(r, slog.LevelWarn, "warm no disponible: circuito abierto")
-		return WarmState{}, false
+		return nil, false
 	}
 	tok, err := c.readToken()
 	if err != nil {
 		c.abort(probe)
 		h.logAt(r, slog.LevelError, "warm no disponible: "+err.Error())
-		return WarmState{}, false
+		return nil, false
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), c.timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, nil)
+	targetURL := c.url
+	if r.URL.RawQuery != "" {
+		targetURL += "?" + r.URL.RawQuery
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
 		c.abort(probe)
-		return WarmState{}, false
+		return nil, false
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Accept", "application/json")
@@ -176,11 +229,11 @@ func (h *Handler) fetchWarm(r *http.Request) (WarmState, bool) {
 	if err != nil {
 		if r.Context().Err() != nil { // lo abortó el cliente: no es fallo del warm
 			c.abort(probe)
-			return WarmState{}, false
+			return nil, false
 		}
 		c.settle(probe, false)
 		h.logAt(r, slog.LevelWarn, "go-warm-manager inalcanzable o con plazo vencido")
-		return WarmState{}, false
+		return nil, false
 	}
 	defer resp.Body.Close()
 	c.settle(probe, true)
@@ -188,39 +241,79 @@ func (h *Handler) fetchWarm(r *http.Request) (WarmState, bool) {
 	case resp.StatusCode == http.StatusUnauthorized:
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, warmMaxBody))
 		h.logAt(r, slog.LevelError, "go-warm-manager rechazó el token de servicio (401): revisar UIAPI_WARM_TOKEN_FILE")
-		return WarmState{}, false
+		return nil, false
 	case resp.StatusCode >= 500:
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, warmMaxBody))
 		h.logAt(r, slog.LevelWarn, "go-warm-manager respondió error", "status", resp.StatusCode)
-		return WarmState{}, false
+		return nil, false
 	case resp.StatusCode != http.StatusOK:
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, warmMaxBody))
 		h.logAt(r, slog.LevelWarn, "go-warm-manager respondió un estado inesperado", "status", resp.StatusCode)
-		return WarmState{}, false
+		return nil, false
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, warmMaxBody+1))
 	if err != nil || len(b) > warmMaxBody {
 		h.logAt(r, slog.LevelWarn, "respuesta del warm-manager ilegible o demasiado grande")
-		return WarmState{}, false
+		return nil, false
 	}
-	st, ok := parseWarmState(b)
+	return b, true
+}
+
+// fetch devuelve el WarmState validado, o false (warm_unavailable). Nunca registra el token.
+func (h *Handler) fetchWarm(r *http.Request) (WarmState, bool) {
+	b, ok := h.fetchWarmBytes(r)
 	if !ok {
-		h.logAt(r, slog.LevelWarn, "respuesta del warm-manager no cumple WarmState")
 		return WarmState{}, false
 	}
-	return st, true
+	return parseWarmState(bytes.TrimSpace(b))
 }
 
 // warm atiende GET /warm (ya autenticado con el token de la persona).
+// Con ?repo= devuelve el estado del warm específico; sin parámetro devuelve la lista o el warm principal.
 func (h *Handler) warm(w http.ResponseWriter, r *http.Request) {
 	if h.warmc == nil {
 		writeError(w, http.StatusServiceUnavailable, WarmUnavailable, "warm no configurado")
 		return
 	}
-	st, ok := h.fetchWarm(r)
+	b, ok := h.fetchWarmBytes(r)
 	if !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(WarmRetryAfter))
 		writeError(w, http.StatusServiceUnavailable, WarmUnavailable, "estado del warm no disponible")
+		return
+	}
+	repoFilter := strings.TrimSpace(r.URL.Query().Get("repo"))
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		items, ok := parseWarmArray(trimmed)
+		if !ok {
+			h.logAt(r, slog.LevelWarn, "respuesta array del warm-manager no cumple WarmEnvironment")
+			w.Header().Set("Retry-After", strconv.Itoa(WarmRetryAfter))
+			writeError(w, http.StatusServiceUnavailable, WarmUnavailable, "estado del warm no disponible")
+			return
+		}
+		if repoFilter != "" {
+			for _, it := range items {
+				if strings.EqualFold(it.Repo, repoFilter) {
+					writeJSON(w, http.StatusOK, it)
+					return
+				}
+			}
+			writeError(w, http.StatusNotFound, "not_found", "entorno warm no encontrado para el repositorio")
+			return
+		}
+		writeJSON(w, http.StatusOK, items)
+		return
+	}
+
+	st, ok := parseWarmState(trimmed)
+	if !ok {
+		h.logAt(r, slog.LevelWarn, "respuesta del warm-manager no cumple WarmState")
+		w.Header().Set("Retry-After", strconv.Itoa(WarmRetryAfter))
+		writeError(w, http.StatusServiceUnavailable, WarmUnavailable, "estado del warm no disponible")
+		return
+	}
+	if repoFilter != "" && st.Repo != "" && !strings.EqualFold(st.Repo, repoFilter) {
+		writeError(w, http.StatusNotFound, "not_found", "entorno warm no encontrado para el repositorio")
 		return
 	}
 	writeJSON(w, http.StatusOK, st)

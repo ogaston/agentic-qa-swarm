@@ -30,9 +30,19 @@ type ClientGo struct {
 	NS string
 }
 
+// InNamespace devuelve una copia de ClientGo apuntando al namespace dado.
+func (c ClientGo) InNamespace(ns string) ClientGo {
+	c.NS = ns
+	return c
+}
+
 // CreateJob implementa KubeAPI.
 func (c ClientGo) CreateJob(ctx context.Context, j *batchv1.Job) error {
-	_, err := c.CS.BatchV1().Jobs(c.NS).Create(ctx, j, metav1.CreateOptions{})
+	ns := c.NS
+	if j != nil && j.Namespace != "" {
+		ns = j.Namespace
+	}
+	_, err := c.CS.BatchV1().Jobs(ns).Create(ctx, j, metav1.CreateOptions{})
 	return err
 }
 
@@ -86,6 +96,27 @@ func jobState(j batchv1.Job) (done, passed bool) {
 
 func attemptOf(j batchv1.Job) int { n, _ := strconv.Atoi(j.Labels[LabelAtt]); return n }
 
+func (l *Launcher) kubeFor(run runctl.Run) KubeAPI {
+	ns := l.Cfg.Namespace
+	if run.Warm != nil && run.Warm.Namespace != "" {
+		ns = run.Warm.Namespace
+	}
+	if ns == "" {
+		return l.Kube
+	}
+	type inNamespace interface {
+		InNamespace(string) ClientGo
+	}
+	if in, ok := l.Kube.(inNamespace); ok {
+		return in.InNamespace(ns)
+	}
+	if cg, ok := l.Kube.(ClientGo); ok {
+		cg.NS = ns
+		return cg
+	}
+	return l.Kube
+}
+
 // Launch es idempotente por (corrida, fase): valida el plan ANTES de tocar Kubernetes (un plan roto
 // no crea ningún Job); adopta el Job vivo por etiquetas; solo si no hay ninguno crea
 // rehearsal-<run>-<Started>. AlreadyExists cuenta como éxito. Nunca crea más de 3 Jobs por corrida.
@@ -103,7 +134,8 @@ func (l *Launcher) Launch(ctx context.Context, phase string, run runctl.Run) ([]
 	if fp.RunID != run.ID {
 		return nil, errors.New("flow-plan de otra corrida")
 	}
-	jobs, err := l.Kube.ListJobs(ctx, selector(run.ID))
+	k := l.kubeFor(run)
+	jobs, err := k.ListJobs(ctx, selector(run.ID))
 	if err != nil {
 		return nil, fmt.Errorf("listando Jobs de ensayo: %w", err)
 	}
@@ -119,11 +151,16 @@ func (l *Launcher) Launch(ctx context.Context, phase string, run runctl.Run) ([]
 	if attempt < 1 {
 		attempt = 1
 	}
-	job, err := BuildJob(l.Cfg, run.ID, fp.Flows[0], attempt)
+	cfg := l.Cfg
+	if run.Warm != nil && run.Warm.Namespace != "" {
+		cfg.Namespace = run.Warm.Namespace
+		cfg.TargetURL = runctl.WarmTargetURL(run.Warm.Namespace)
+	}
+	job, err := BuildJob(cfg, run.ID, fp.Flows[0], attempt)
 	if err != nil {
 		return nil, err
 	}
-	if err := l.Kube.CreateJob(ctx, job); err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := k.CreateJob(ctx, job); err != nil && !apierrors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("creando el Job de ensayo: %w", err)
 	}
 	return nil, nil
@@ -132,7 +169,8 @@ func (l *Launcher) Launch(ctx context.Context, phase string, run runctl.Run) ([]
 // Result lee el estado del Job más reciente de la corrida. Done=false mientras corre (o no existe).
 // Passed solo sale de un Job completado con éxito; un error de lectura nunca es passed.
 func (l *Launcher) Result(ctx context.Context, run runctl.Run) (runctl.RehearsalOutcome, error) {
-	jobs, err := l.Kube.ListJobs(ctx, selector(run.ID))
+	k := l.kubeFor(run)
+	jobs, err := k.ListJobs(ctx, selector(run.ID))
 	if err != nil {
 		return runctl.RehearsalOutcome{}, err
 	}

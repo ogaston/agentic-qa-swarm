@@ -3,7 +3,8 @@
 # Solo mata los pids que consta haber creado; no toca otros procesos ni clústeres. Idempotente.
 set -uo pipefail
 
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/aqs-dashboard"
+PORT_OFFSET="${AQS_PORT_OFFSET:-0}"
+STATE_DIR="${STATE_DIR:-${XDG_RUNTIME_DIR:-/tmp}/aqs-dashboard${PORT_OFFSET:+-offset-$PORT_OFFSET}}"
 [ -d "$STATE_DIR" ] || exit 0
 
 for pidf in "$STATE_DIR"/*.pid; do

@@ -22,6 +22,7 @@ import (
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/auth"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/obs"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/policy"
+	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/repos"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/server"
 	"github.com/ogaston/agentic-qa-swarm/services/go-governance/internal/service"
 )
@@ -65,6 +66,7 @@ type config struct {
 	identityURL           string
 	retentionDays         int
 	verifyInterval        time.Duration
+	warmMaxEnvs           int
 }
 
 // MinRetentionDays es la retención mínima de la auditoría; el servicio no arranca con menos.
@@ -115,6 +117,15 @@ func loadConfig(env func(string) string) (config, error) {
 	if c.verifyInterval, err = parseVerifyInterval(env("GOVERNANCE_VERIFY_INTERVAL")); err != nil {
 		return c, err
 	}
+	warmMax := 3
+	if v := env("WARM_MAX_ENVIRONMENTS"); v != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n <= 0 {
+			return c, errors.New("WARM_MAX_ENVIRONMENTS inválido (entero positivo)")
+		}
+		warmMax = n
+	}
+	c.warmMaxEnvs = warmMax
 	c.identityURL = env("IDENTITY_URL")
 	c.testNS = env("GOVERNANCE_TEST_NAMESPACE")
 	if c.testNS == "" {
@@ -233,6 +244,11 @@ func run(log *slog.Logger, env func(string) string) error {
 		return err
 	}
 	defer ps.Close()
+	reposStore, err := repos.OpenFileStore(filepath.Join(c.dataDir, "repositories.json"))
+	if err != nil {
+		return err
+	}
+	defer reposStore.Close()
 	mon := obs.NewChainMonitor(al.VerifyNow, gov, 10*time.Second, nil, log)
 	_ = mon.Verify() // estado inicial de aqs_audit_chain_ok (Open ya exigió una cadena íntegra)
 	checks := []obs.Check{
@@ -243,7 +259,14 @@ func run(log *slog.Logger, env func(string) string) error {
 	if c.identityURL != "" {
 		checks = append(checks, obs.Check{Name: "identity", Fn: identityCheck(c.identityURL)})
 	}
-	svc := service.New(service.Config{Policies: ps, Audit: al, TestNamespace: c.testNS, Observer: gov})
+	svc := service.New(service.Config{
+		Policies:      ps,
+		Audit:         al,
+		TestNamespace: c.testNS,
+		Observer:      gov,
+		Repos:         reposStore,
+		WarmMaxEnvs:   c.warmMaxEnvs,
+	})
 	srv := server.New(server.Config{Service: svc, Verifier: c.verifier, Token: c.token, Logger: log, Registry: reg, Ready: checks})
 	hs := &http.Server{
 		Addr:              c.addr,

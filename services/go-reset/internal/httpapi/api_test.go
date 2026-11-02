@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -69,6 +70,26 @@ func TestAPISessionHeartbeat(t *testing.T) {
 		t.Fatal(l)
 	}
 	if got := do(h, "PUT", "/sessions", "", `{}`); got != 401 {
+		t.Fatal(got)
+	}
+}
+
+func TestResetRoutesToRequestedTarget(t *testing.T) {
+	legacy, target := fakes.NewBundle(), fakes.NewBundle()
+	h := httpapi.New(httpapi.Config{Token: "tok", Service: legacy.Svc, Sessions: legacy.Sessions, Clock: legacy.Clock, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Gatherer: prometheus.NewRegistry(), Target: func(_ context.Context, ns string) (httpapi.Resetter, error) {
+		if ns != "aqs-w-shop" {
+			return nil, fmt.Errorf("invalid namespace")
+		}
+		return target.Svc, nil
+	}})
+	target.DB.Sticky = 1
+	if got := do(h, "POST", "/resets", "tok", `{"run_id":"r-1","namespace":"aqs-w-shop"}`); got != 409 {
+		t.Fatal(got)
+	}
+	if got := do(h, "POST", "/resets", "tok", `{"run_id":"r-1","namespace":"aqs-system"}`); got != 400 {
+		t.Fatal(got)
+	}
+	if got := do(h, "POST", "/resets", "tok", `{"run_id":"r-2"}`); got != 200 {
 		t.Fatal(got)
 	}
 }

@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -98,6 +99,65 @@ func TestWarmStateAndResetVerified(t *testing.T) {
 	w2 := warmClient(t, http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) { js(rw, 500, `{}`) }))
 	if f, err := w2.ResetVerified(t.Context()); err == nil || f != runctl.Unknown {
 		t.Fatalf("un error nunca es un hecho: %v %v", f, err)
+	}
+}
+
+func TestResetVerifiedReadsAssignedNamespace(t *testing.T) {
+	w := warmClient(t, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/warm" || r.URL.Query().Get("namespace") != "aqs-w-owner-repo" {
+			js(rw, 404, `{}`)
+			return
+		}
+		js(rw, 200, warmDirty)
+	}))
+	if f, err := w.ResetVerifiedForTarget(t.Context(), "aqs-w-owner-repo"); err != nil || f != runctl.False {
+		t.Fatalf("assigned namespace fact = %v, %v", f, err)
+	}
+}
+
+func TestPrepareRepositoryWarmBootstrapsThenVerifiesTarget(t *testing.T) {
+	var calls []string
+	warm := warmClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer tok" {
+			js(w, 401, `{}`)
+			return
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/warm":
+			if r.URL.Query().Get("namespace") != "aqs-w-a-b" {
+				t.Errorf("wrong target: %s", r.URL.RawQuery)
+			}
+			calls = append(calls, "state")
+			js(w, 200, `{"warm_id":"w-a-b","state":"provisioning","reset_verified":false,"baseline_version":"unverified"}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/warm/bootstrap":
+			calls = append(calls, "bootstrap")
+			js(w, 200, `{"status":"deployed"}`)
+		default:
+			js(w, 404, `{}`)
+		}
+	}))
+	resetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Namespace string `json:"namespace"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Namespace != "aqs-w-a-b" {
+			t.Errorf("reset namespace = %q, err = %v", body.Namespace, err)
+		}
+		calls = append(calls, "reset")
+		js(w, 200, `{"state":"ready","reset_verified":true,"checks":[],"attempts":1}`)
+	}))
+	defer resetServer.Close()
+	reset, err := NewResetClient(resetServer.URL, "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &RealPhases{Warm: warm, Reset: reset, Artifact: func(string) (string, string, error) { return "published-image", "ghcr.io/a/b:abc123", nil }}
+	run := runctl.Run{ID: "r-1", Warm: &runctl.WarmTarget{Namespace: "aqs-w-a-b"}, Artifact: &runctl.Artifact{ImagePrefix: "ghcr.io/a/b"}}
+	if err := p.PrepareWarm(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(calls, ","); got != "state,bootstrap,reset" {
+		t.Fatalf("call order = %s", got)
 	}
 }
 

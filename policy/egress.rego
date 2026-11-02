@@ -1,14 +1,14 @@
-# Egress en aqs-test (U5-T10, C-19): solo se aceptan reglas (a) intra-namespace o (b) DNS a kube-system:53.
+# Egress en namespaces warm (U5-T10, C-19, U12): solo se aceptan reglas (a) intra-namespace o (b) DNS a kube-system:53.
 package main
 
 import rego.v1
 
 deny contains msg if {
 	input.kind == "NetworkPolicy"
-	input.metadata.namespace == "aqs-test"
+	es_warm(input)
 	some i, rule in input.spec.egress
 	not egress_rule_ok(rule)
-	msg := sprintf("aqs-test: NetworkPolicy %s, egress[%d] no es intra-namespace ni DNS a kube-system:53", [input.metadata.name, i])
+	msg := sprintf("%s: NetworkPolicy %s, egress[%d] no es intra-namespace ni DNS a kube-system:53", [object.get(input.metadata, "namespace", "warm"), input.metadata.name, i])
 }
 
 egress_rule_ok(rule) if egress_intra(rule)

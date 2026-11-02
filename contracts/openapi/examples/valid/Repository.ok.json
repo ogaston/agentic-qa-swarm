@@ -1,0 +1,12 @@
+{
+  "repo": "acme/shop",
+  "image_repo": "ghcr.io/acme/shop",
+  "enabled": true,
+  "owner": "u-admin",
+  "created_at": "2026-10-28T21:00:00Z",
+  "warm": {
+    "namespace": "aqs-w-acme-shop",
+    "warm_id": "w-acme-shop",
+    "state": "ready"
+  }
+}
