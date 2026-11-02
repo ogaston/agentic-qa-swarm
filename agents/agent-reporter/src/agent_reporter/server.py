@@ -201,8 +201,12 @@ def _http_llm(e):
     stream = e.get("LLM_STREAM", "")
     if stream not in ("", "0", "1"):
         raise SystemExit("LLM_STREAM debe ser 0 o 1")
+    no_think = e.get("LLM_DISABLE_THINKING", "")
+    if no_think not in ("", "0", "1"):
+        raise SystemExit("LLM_DISABLE_THINKING debe ser 0 o 1")
     try:
-        return HttpLLM(base, model, key_file, insecure_http_host=insecure_host, stream=stream == "1")
+        return HttpLLM(base, model, key_file, insecure_http_host=insecure_host, stream=stream == "1",
+                       disable_thinking=no_think == "1")
     except (ValueError, OSError):
         raise SystemExit("configuracion LLM_PROVIDER=http invalida") from None
 

@@ -2418,3 +2418,16 @@ why is lasting so long?
 **AI Response**: Corrida terminada (23 min 14 s, rc 1). Deepseek-V4-Flash 10/12 (precisión 0,90; adherencia 0,97); Qwen-3.8-Flash 6/12 (precisión 0,70; adherencia 0,84; 5 BudgetExceeded:time). Causa de la demora: Qwen razona ~6665 tokens por plan (150 s > tope 120 s); con enable_thinking=false tarda 8,8 s. README §5 y evidencia §11 actualizados. Se propone al usuario LLM_DISABLE_THINKING (pendiente de su decisión).
 
 ---
+
+## Entrega módulo 8: LLM_DISABLE_THINKING
+**Timestamp**: 2026-11-02T22:18:36Z
+**User Input**: "sí, agrega LLM_DISABLE_THINKING y pero no vuelvas a correr las pruebas."
+**AI Response**: Se agrega LLM_DISABLE_THINKING=1 (chat_template_kwargs.enable_thinking=false) en planner y reporter, con pruebas unitarias; no se repite la corrida de modelos.
+
+---
+
+## Entrega módulo 8: LLM_DISABLE_THINKING implementado
+**Timestamp**: 2026-11-02T22:20:14Z
+**AI Response**: LLM_DISABLE_THINKING (0|1, otro valor impide el arranque) en planner y reporter; en kind, LITELLM_UPSTREAM_DISABLE_THINKING → Secret llm-upstream/disable-thinking → env opcional. Pruebas unitarias nuevas (cuerpo de la petición con y sin streaming, validación de config). Sin nueva corrida de modelos, por instrucción del usuario; el README lo declara.
+
+---

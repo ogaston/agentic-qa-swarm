@@ -328,7 +328,8 @@ En kind salen del Secret `llm-upstream`, que `scripts/kind/secrets.sh` genera de
 # en ~/.local/state/aqs-kind/litellm.env:
 #   LITELLM_UPSTREAM_MODEL=<otro-modelo>
 #   LITELLM_UPSTREAM_STREAM=1     # solo si el modelo exige streaming (p. ej. Qwen-3.8-Flash en Together)
-bash scripts/kind/secrets.sh                      # reaplica agents-llm-key y llm-upstream (model, stream)
+#   LITELLM_UPSTREAM_DISABLE_THINKING=1   # apaga el razonamiento de modelos híbridos (Qwen-3.8-Flash: 150 s → 8,8 s)
+bash scripts/kind/secrets.sh                      # reaplica agents-llm-key y llm-upstream (model, stream, disable-thinking)
 kubectl -n aqs-system rollout restart deploy/agent-planner deploy/agent-reporter
 ```
 
@@ -384,6 +385,10 @@ nuestros, no de los modelos:
    [`validate.py`](agents/agent-planner/src/agent_planner/validate.py)), y la regla A1 del eval usa la misma función.
 2. Qwen-3.8-Flash solo se sirve con streaming (Together: `streaming_required`). Los dos agentes aceptan ahora
    `LLM_STREAM=1`, que en kind se configura con `LITELLM_UPSTREAM_STREAM=1`.
+
+Para los timeouts de Qwen, los dos agentes aceptan además `LLM_DISABLE_THINKING=1` (en kind,
+`LITELLM_UPSTREAM_DISABLE_THINKING=1`), que pide `enable_thinking: false`. La tabla de arriba es anterior a esta
+opción; Qwen con el razonamiento apagado no se ha vuelto a medir con los 12 casos.
 
 Una primera corrida con los topes del LLM falso (25 s, 4000 tokens) dio números idénticos en dos modelos; está en
 la [evidencia §8](docs/entrega/evidencia-2026-11-02.md). El diagnóstico está en la

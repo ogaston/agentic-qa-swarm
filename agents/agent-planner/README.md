@@ -34,6 +34,7 @@ Convierte un `SurfaceArtifact` y un workflow en un `FlowPlan` valido contra
 | `PLANNER_PORT` / `PLANNER_HOST` | `8080` / `0.0.0.0` | escucha |
 | `LLM_PROVIDER` | (obligatorio) | solo `fake`; otro valor: «proveedor no implementado» (el real es U3-T07) |
 | `LLM_STREAM` | `0` | `1`: pide la respuesta en streaming (SSE) y la agrega; para modelos que solo responden así (p. ej. Qwen-3.8-Flash en Together). Otro valor impide el arranque |
+| `LLM_DISABLE_THINKING` | `0` | `1`: agrega `chat_template_kwargs: {"enable_thinking": false}` y apaga el razonamiento de modelos híbridos (Qwen-3.8-Flash: 150 s → 8,8 s por plan). Otro valor impide el arranque |
 | `PLANNER_ALLOW_FAKE` | | debe ser `true` para `fake`; con `PLANNER_ENV=prod` el arranque se rechaza |
 
 Valores no positivos o no numericos impiden el arranque. Un timeout del modelo es `BudgetExceeded("time")` (504).

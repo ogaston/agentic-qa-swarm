@@ -57,3 +57,7 @@ se redactan aqui.
 los modelos que solo responden así (p. ej. Qwen-3.8-Flash en Together). El plazo total se respeta aunque cada
 fragmento llegue a tiempo. Sin `usage` en el stream, los tokens se estiman con ceil(len/4). Pruebas:
 `tests/test_llm_stream.py`. El adaptador está duplicado con el del planner: si cambia uno, cambia el otro.
+
+`LLM_DISABLE_THINKING=1` agrega `chat_template_kwargs: {"enable_thinking": false}` a la petición: apaga el
+razonamiento de modelos híbridos como Qwen-3.8-Flash, que si no razona miles de tokens y se pasa del tope de
+tiempo. Por defecto `0`; otro valor impide el arranque.
