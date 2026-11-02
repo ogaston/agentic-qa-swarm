@@ -144,6 +144,40 @@ func TestApproveExecution(t *testing.T) {
 	})
 }
 
+func TestRetryGeneration(t *testing.T) {
+	r := rigWith(t, Config{})
+	initial := runEnsayoAprobado()
+	initial.Plan = []byte(`{"flows":[{"flow_id":"f1"}]}`)
+	_ = r.store.Save(initial)
+
+	// Otro usuario no puede reintentar
+	if err := r.k.RetryGeneration(t.Context(), "r-1", "u-otro", false); err != ErrForbidden {
+		t.Fatalf("esperaba ErrForbidden, obtuve %v", err)
+	}
+
+	// Dueño solicita reintentar generación
+	if err := r.k.RetryGeneration(t.Context(), "r-1", "u-1", false); err != nil {
+		t.Fatalf("error al reintentar generación: %v", err)
+	}
+
+	cur, _ := r.store.Get("r-1")
+	if len(cur.Plan) != 0 {
+		t.Fatalf("esperaba Plan vacío, tiene %s", string(cur.Plan))
+	}
+	if cur.EnsayoPassed != Unknown {
+		t.Fatalf("esperaba EnsayoPassed=Unknown, tiene %v", cur.EnsayoPassed)
+	}
+	if cur.ExecutionApprovedBy != "" {
+		t.Fatalf("esperaba ExecutionApprovedBy vacío, tiene %q", cur.ExecutionApprovedBy)
+	}
+	if !cur.AwaitingSince.IsZero() {
+		t.Fatalf("esperaba AwaitingSince cero, tiene %v", cur.AwaitingSince)
+	}
+	if cur.Launched[PhaseRehearse] {
+		t.Fatal("esperaba PhaseRehearse no lanzada")
+	}
+}
+
 // CA-4: sin aprobación, pasados 30 min + 1 s la corrida sale por resetting con FailReason;
 // a los 29 min sigue esperando.
 func TestAprobacionCaduca(t *testing.T) {

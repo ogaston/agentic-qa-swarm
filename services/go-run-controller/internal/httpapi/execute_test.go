@@ -112,3 +112,40 @@ func TestExecuteRun202YReadback(t *testing.T) {
 		t.Fatalf("ExecutionApprovedBy = %q", r.ExecutionApprovedBy)
 	}
 }
+
+func TestRetryGenerationRun(t *testing.T) {
+	h, st := execRig(t, Principal{ID: "u-1"})
+	_ = st.Save(runctl.Run{
+		ID:           "r-5",
+		State:        runctl.Rehearsing,
+		ConfirmedBy:  "u-1",
+		EnsayoPassed: runctl.True,
+		Plan:         []byte(`{"workflow":"w","flows":[]}`),
+		Launched:     map[string]bool{runctl.PhaseRehearse: true},
+	})
+
+	if got := awaitingView(t, h, "/runs/r-5")["awaiting_execution"]; got != true {
+		t.Fatalf("antes de reintentar awaiting_execution = %v, esperado true", got)
+	}
+	w := doReq(t, h, http.MethodPost, "/runs/r-5/retry-generation", "tok")
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["awaiting_execution"] != false {
+		t.Fatalf("202 con awaiting_execution = %v, esperado false", body["awaiting_execution"])
+	}
+	r, _ := st.Get("r-5")
+	if len(r.Plan) != 0 {
+		t.Fatalf("plan no se vació: %s", string(r.Plan))
+	}
+	if r.EnsayoPassed != runctl.Unknown {
+		t.Fatalf("EnsayoPassed no es Unknown: %v", r.EnsayoPassed)
+	}
+	if r.Launched[runctl.PhaseRehearse] {
+		t.Fatal("PhaseRehearse sigue marcada como lanzada")
+	}
+}
