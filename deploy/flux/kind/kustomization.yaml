@@ -273,6 +273,13 @@ patches:
                 key: model
           - name: LLM_API_KEY_FILE
             value: /etc/aqs/llm/api-key
+          # 1 si el modelo solo responde en streaming (LITELLM_UPSTREAM_STREAM en litellm.env). Opcional: sin la clave, 0.
+          - name: LLM_STREAM
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: stream
+                optional: true
           # Opt-in de riesgo aceptado (ronda 4): http solo hacia el host exacto del gateway (Secret llm-upstream).
           - name: LLM_ALLOW_INSECURE_HTTP
             value: "1"
@@ -308,6 +315,13 @@ patches:
                 key: model
           - name: LLM_API_KEY_FILE
             value: /etc/aqs/llm/api-key
+          # 1 si el modelo solo responde en streaming (LITELLM_UPSTREAM_STREAM en litellm.env). Opcional: sin la clave, 0.
+          - name: LLM_STREAM
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: stream
+                optional: true
           # Opt-in de riesgo aceptado (ronda 4): http solo hacia el host exacto del gateway (Secret llm-upstream).
           - name: LLM_ALLOW_INSECURE_HTTP
             value: "1"

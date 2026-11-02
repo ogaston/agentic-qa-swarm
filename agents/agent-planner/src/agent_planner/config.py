@@ -64,8 +64,11 @@ def _http_llm(env: Mapping[str, str]) -> HttpLLM:
         raise ConfigError("LLM_PROVIDER=http requiere LLM_BASE_URL, LLM_MODEL y LLM_API_KEY_FILE")
     # U8-T09 (ronda 4): opt-in explícito a http hacia UN host privado (kind). Por defecto, no.
     insecure_host = _insecure_http_host(env)
+    stream = env.get("LLM_STREAM", "")
+    if stream not in ("", "0", "1"):
+        raise ConfigError("LLM_STREAM debe ser 0 o 1")
     try:
-        return HttpLLM(base, model, key_file, insecure_http_host=insecure_host)
+        return HttpLLM(base, model, key_file, insecure_http_host=insecure_host, stream=stream == "1")
     except (ValueError, OSError):
         raise ConfigError("configuracion LLM_PROVIDER=http invalida") from None
 

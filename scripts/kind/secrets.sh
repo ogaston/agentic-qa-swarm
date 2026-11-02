@@ -89,6 +89,10 @@ check_litellm_inputs() {
   fi
   [[ "$LITELLM_UPSTREAM_PORT" =~ ^[0-9]{1,5}$ ]] || fail "LITELLM_UPSTREAM_PORT ausente o no numérico en litellm.env"
   [[ "$LITELLM_UPSTREAM_MODEL" =~ ^[A-Za-z0-9._/-]+$ ]] || fail "LITELLM_UPSTREAM_MODEL ausente o con caracteres no válidos en litellm.env"
+  # Opcional: 1 si el modelo solo responde en streaming (p. ej. Qwen-3.8-Flash en Together). Por defecto 0.
+  LITELLM_UPSTREAM_STREAM=$(litellm_var LITELLM_UPSTREAM_STREAM)
+  LITELLM_UPSTREAM_STREAM=${LITELLM_UPSTREAM_STREAM:-0}
+  [[ "$LITELLM_UPSTREAM_STREAM" =~ ^[01]$ ]] || fail "LITELLM_UPSTREAM_STREAM debe ser 0 o 1 en litellm.env"
 }
 
 # Namespace con apply (no create): así lleva last-applied-configuration y apply -k no avisa (F-04).
@@ -261,7 +265,7 @@ gen_agents_llm_key() { # key: api-key
   tr -d ' \r\n' < "$deepseek_key" > "$1/api-key"
 }
 # Endpoint y modelo del gateway (U8-T09, ronda 3): salen de litellm.env. Se reaplican en cada ejecución.
-gen_llm_upstream() { # keys: base-url (http://IP:PUERTO/v1), host (IP literal del gateway), model (modelo del gateway)
+gen_llm_upstream() { # keys: base-url (http://IP:PUERTO/v1), host (IP literal del gateway), model (modelo del gateway), stream (0|1)
   if [ -n "$LITELLM_UPSTREAM_URL" ]; then
     printf '%s' "${LITELLM_UPSTREAM_URL%/}" > "$1/base-url"
     printf '%s' "$(sed -E 's#^https://([^:/]+).*#\1#' <<<"$LITELLM_UPSTREAM_URL")" > "$1/host"
@@ -270,6 +274,7 @@ gen_llm_upstream() { # keys: base-url (http://IP:PUERTO/v1), host (IP literal de
     printf '%s' "$LITELLM_UPSTREAM_IP" > "$1/host"
   fi
   printf '%s' "$LITELLM_UPSTREAM_MODEL" > "$1/model"
+  printf '%s' "${LITELLM_UPSTREAM_STREAM:-0}" > "$1/stream"
 }
 
 # NetworkPolicy de egreso de planner y reporter al gateway: IP/32 y puerto de litellm.env. Se aplica al clúster

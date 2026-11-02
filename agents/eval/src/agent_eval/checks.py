@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from agent_planner.prompt import CLOSE_TAG, INSTRUCTIONS, OPEN_TAG
+from agent_planner.validate import match_endpoint
 from agent_reporter.redact import redact_text_counted
 
 
@@ -18,10 +19,10 @@ def a1_steps_observed(plan, surface) -> dict:
     """Todo paso del plan cita un par (method, path) de la superficie. Sin plan: no verificable = falla."""
     if not isinstance(plan, dict):
         return check("A1", False, "sin plan")
-    observed = {(e["method"], e["path"]) for e in surface["endpoints"]}
+    # Misma regla que el validador del planner: la plantilla observada o una instancia concreta de ella.
     for i, fl in enumerate(plan.get("flows", [])):
         for j, st in enumerate(fl.get("steps", [])):
-            if (st.get("method"), st.get("path")) not in observed:
+            if match_endpoint(st.get("method"), st.get("path"), surface["endpoints"]) is None:
                 return check("A1", False, f"endpoint_no_observado:{i}/{j}")
     return check("A1", True)
 

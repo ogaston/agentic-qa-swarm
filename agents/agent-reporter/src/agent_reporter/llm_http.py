@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import math
+import time
 import socket
 import urllib.error
 import urllib.request
@@ -66,7 +68,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 class HttpLLM:
     def __init__(self, base_url: str, model: str, api_key_file: str | Path,
-                 insecure_http_host: str | None = None) -> None:
+                 insecure_http_host: str | None = None, stream: bool = False) -> None:
         self._base = check_base_url(base_url, insecure_http_host)
         if not model:
             raise ValueError("LLM_MODEL no configurado")
@@ -75,6 +77,9 @@ class HttpLLM:
         if not self._key:
             raise ValueError("LLM_API_KEY_FILE vacio")
         self._opener = urllib.request.build_opener(_NoRedirect)
+        # LLM_STREAM=1: algunos proveedores (p. ej. Qwen-3.8-Flash en Together) solo responden en streaming.
+        # Se pide stream y se agrega el texto aqui; el resto del agente no se entera.
+        self._stream = stream
 
     def complete(self, prompt: str, *, max_tokens: int, timeout_s: float) -> LLMResult:
         body = json.dumps({
@@ -82,6 +87,7 @@ class HttpLLM:
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
             "temperature": 0,
+            **({"stream": True, "stream_options": {"include_usage": True}} if self._stream else {}),
         }).encode("utf-8")
         req = urllib.request.Request(
             self._base + "/chat/completions",
@@ -91,6 +97,8 @@ class HttpLLM:
         )
         try:
             with self._opener.open(req, timeout=timeout_s) as resp:
+                if self._stream:
+                    return _read_stream(resp, prompt, time.monotonic() + timeout_s)
                 raw = resp.read()
         except urllib.error.HTTPError:
             raise LLMUnavailable("http_error") from None
@@ -115,3 +123,41 @@ class HttpLLM:
         if not isinstance(text, str):
             raise LLMUnavailable("respuesta_sin_campos")
         return LLMResult(text, inp, out)
+
+
+def _read_stream(resp, prompt: str, deadline: float) -> LLMResult:
+    """Agrega una respuesta SSE compatible con OpenAI (`data: {...}` hasta `data: [DONE]`).
+
+    El timeout de urllib es por lectura; el plazo total se comprueba aqui (LLMTimeout). Solo se toma
+    `choices[0].delta.content` (el razonamiento, si viene aparte, se descarta). Si el proveedor no manda `usage`,
+    se estima con ceil(len/4), la misma regla que usan los topes de los agentes.
+    """
+    parts: list[str] = []
+    usage = None
+    for line in resp:
+        if time.monotonic() > deadline:
+            raise LLMTimeout("timeout")
+        line = line.strip()
+        if not line.startswith(b"data:"):
+            continue
+        data = line[5:].strip()
+        if data == b"[DONE]":
+            break
+        try:
+            chunk = json.loads(data.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            raise LLMUnavailable("respuesta_no_json") from None
+        if not isinstance(chunk, dict):
+            raise LLMUnavailable("respuesta_sin_campos")
+        if chunk.get("usage"):
+            usage = chunk["usage"]
+        for ch in chunk.get("choices") or []:
+            content = (ch.get("delta") or {}).get("content") if isinstance(ch, dict) else None
+            if isinstance(content, str):
+                parts.append(content)
+    text = "".join(parts)
+    try:
+        inp, out = int(usage["prompt_tokens"]), int(usage["completion_tokens"])
+    except (KeyError, TypeError, ValueError):
+        inp, out = math.ceil(len(prompt) / 4), math.ceil(len(text) / 4)
+    return LLMResult(text, inp, out)
