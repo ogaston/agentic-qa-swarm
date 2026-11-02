@@ -348,7 +348,7 @@ export LLM_BASE_URL=https://<gateway>/v1 LLM_API_KEY_FILE=<archivo-con-la-clave>
 ./run-models.sh <modelo-A> <modelo-B>       # solo cambia LLM_MODEL entre corridas; deja out/comparacion.md
 ```
 
-Lo que ya está probado sin red (`tests/test_live_model.py`, 9 pruebas): con un gateway compatible con OpenAI en
+Lo que ya está probado sin red (`tests/test_live_model.py`, 11 pruebas): con un gateway compatible con OpenAI en
 loopback, cambiar **solo** `LLM_MODEL` lleva al «modelo bueno» a 12/12 casos con rc 0, y al «modelo roto» a 2/12 con
 rc 1. **Medición con modelos reales (`Deepseek-V4-Flash` y `Qwen-3.8-Max-Quantized`, vía LiteLLM):**
 
@@ -356,6 +356,13 @@ rc 1. **Medición con modelos reales (`Deepseek-V4-Flash` y `Qwen-3.8-Max-Quanti
 |---|---|---|---|---|---|---|
 | http:Deepseek-V4-Flash | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
 | http:Qwen-3.8-Max-Quantized | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
+
+**Esta tabla no mide a los modelos.** Dos modelos distintos con números idénticos apuntan al sistema. El planner
+falló en los 10 casos con superficie (`PlanRejected` en Deepseek, `BudgetExceeded` en Qwen), porque el arnés usaba
+los topes del LLM falso (25 s, 4000 tokens) y no los del clúster (120 s, 8000 tokens). Con esos topes, un modelo de
+razonamiento gasta la salida pensando y devuelve `content` vacío. Se corrigió el script, no el modelo, y ahora el
+informe guarda el código del error. Diagnóstico completo en la
+[evidencia §8](docs/entrega/evidencia-2026-11-02.md). **Pendiente:** repetir `run-models.sh` y reemplazar la tabla.
 
 Límite honesto: son 12 casos sintéticos. Detectan regresiones entre modelos; no miden la calidad en apps reales.
 
