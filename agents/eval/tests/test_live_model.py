@@ -164,4 +164,7 @@ def test_err_incluye_kind_y_reason():
     assert _err(BudgetExceeded("time")) == "BudgetExceeded:time"
     assert _err(PlanRejected("json_invalido")) == "PlanRejected:json_invalido"
     assert _err(RBudget("salida")) == "BudgetExceeded:salida"
+    from agent_planner.llm import LLMUnavailable
+
+    assert _err(LLMUnavailable("http_error")) == "LLMUnavailable:http_error"
     assert _err(ValueError("x")) == "ValueError"

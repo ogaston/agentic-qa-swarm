@@ -89,8 +89,8 @@ def _err(e: BaseException) -> str:
     `PlanRejected:json_invalido` o `BudgetExceeded:time`. Los codigos los fijan los agentes; nunca llevan
     contenido del modelo ni de la superficie."""
     code = getattr(e, "reason", None) or getattr(e, "kind", None)
-    if code is None and type(e).__name__ == "BudgetExceeded" and e.args:
-        code = e.args[0]  # reporter: "entrada" | "timeout" | "salida", literales fijos
+    if code is None and type(e).__name__ in ("BudgetExceeded", "LLMUnavailable", "LLMTimeout") and e.args:
+        code = e.args[0]  # literales fijos del agente ("salida", "http_error", "inalcanzable"...), sin contenido externo
     return f"{type(e).__name__}:{code}" if isinstance(code, str) and code else type(e).__name__
 
 

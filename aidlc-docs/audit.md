@@ -2374,3 +2374,26 @@ why is lasting so long?
 **Context**: Sin transición de etapa.
 
 ---
+
+## Modelo Qwen para la comparación
+**Timestamp**: 2026-11-02T16:07:02-05:00
+**User Input**: "para together_ai/Qwen/Qwen3.8-Flash"
+**AI Response**: Se busca el gateway que sirve ese modelo y se corre la comparación deepseek-flash vs together_ai/Qwen/Qwen3.8-Flash.
+**Context**: Sin transición de etapa.
+
+---
+
+## Gateway LiteLLM para la comparación
+**Timestamp**: 2026-11-02T16:08:17-05:00
+**User Input**: "this is the litellm url http://chalas-lab:4000/"
+**AI Response**: Se resuelve el host a IP para usar la excepción http ya aprobada (IP privada exacta) y se prueba con litellm.key.
+**Context**: Sin transición de etapa.
+
+---
+
+## Comparación Deepseek-V4-Flash vs Qwen-3.8-Flash — resultado
+**Timestamp**: 2026-11-02T16:14:33-05:00
+**AI Response**: Gateway LiteLLM http://chalas-lab:4000 (100.84.211.20) con litellm.key. Deepseek-V4-Flash: 2/12 (PlanRejected:endpoint_no_observado, defecto de rutas con plantilla). Qwen-3.8-Flash: 2/12, LLMUnavailable en todas las llamadas; causa confirmada: Together exige stream=true (streaming_required) y el adaptador no soporta streaming. Qwen-3.8-Max-Quantized sí responde sin streaming. _err del eval ahora incluye el literal de LLMUnavailable/LLMTimeout. 113 pruebas OK. Evidencia §10. Se pregunta al humano cómo seguir.
+**Context**: Sin transición de etapa.
+
+---

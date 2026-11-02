@@ -214,3 +214,26 @@ El modelo concreta los parámetros de ruta, y `validate.py` compara `(method, pa
 Es un defecto del contrato del planner, no del modelo: un plan razonable se rechaza entero. Corrección propuesta
 como tarea: aceptar instancias de una plantilla observada (cada segmento `{x}` casa con un segmento no vacío, sin
 `/`, `..` ni host) y conservar la plantilla en el `FlowPlan` para A1 y para el runner.
+
+## 10. Deepseek-V4-Flash contra Qwen-3.8-Flash en el gateway LiteLLM del humano
+
+Gateway `http://chalas-lab:4000` (`100.84.211.20`, Tailscale; excepción http acotada a esa IP), clave
+`litellm.key`, topes del clúster. `run-models.sh Deepseek-V4-Flash Qwen-3.8-Flash`, 5 min 4 s:
+
+| llm | factualidad | precision | ruido | adherencia | casos ok | umbrales |
+|---|---|---|---|---|---|---|
+| http:Deepseek-V4-Flash | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
+| http:Qwen-3.8-Flash | 0.00 | 0.00 | 0.00 | 0.63 | 2/12 | FALLA |
+
+- **Deepseek-V4-Flash** repite el patrón de §9: `PlanRejected:endpoint_no_observado` en los 10 casos con superficie
+  (rutas con plantilla concretadas) y el reporter acierta en los 7 golden y bug-sembrado.
+- **Qwen-3.8-Flash** da `LLMUnavailable` en todas las llamadas. Prueba directa al gateway:
+  `Together_aiException … "This model only supports streaming. Set \"stream\": true." (code: streaming_required)`.
+  Nuestro adaptador (`agents/*/llm_http.py`) solo hace llamadas sin streaming. Es una incompatibilidad del
+  adaptador, no una medida del modelo. `Qwen3.7-Max` da el mismo error; `Qwen-3.8-Max-Quantized` responde sin
+  streaming (HTTP 200).
+- Los dos `no-arranca` fallan cerrado en ambos modelos, sin llamar al LLM.
+
+Lectura: los 12 casos detectaron dos incompatibilidades antes de llegar a producción. Sin ellos, cambiar a
+`Qwen-3.8-Flash` en el Secret `llm-upstream` habría dejado toda corrida en `llm_unavailable`, y los planes con
+rutas `{id}` se habrían rechazado con cualquier modelo que concrete parámetros.
