@@ -86,6 +86,14 @@ func TestWarmEnsureFailsClosed(t *testing.T) {
 }
 
 func TestWarmStateAndResetVerified(t *testing.T) {
+	const warmWithInfra = `{"warm_id":"warm-1","state":"idle-escalado","reset_verified":true,"baseline_version":"v1","infrastructure_ready":false}`
+	wInfra := warmClient(t, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		js(rw, 200, warmWithInfra)
+	}))
+	if f, err := wInfra.ResetVerified(t.Context()); err != nil || f != runctl.True {
+		t.Fatalf("esperado true con infrastructure_ready, obtuve %v err=%v", f, err)
+	}
+
 	w := warmClient(t, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer tok" {
 			js(rw, 401, `{}`)

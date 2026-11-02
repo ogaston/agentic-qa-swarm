@@ -133,10 +133,10 @@ paths:
             schema: {$ref: '#/components/schemas/RepositoryInput'}
       responses:
         '201':
-          description: Repositorio registrado.
+          description: Repositorio registrado y secreto webhook disponible una sola vez.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/Repository'}
+              schema: {$ref: '#/components/schemas/RepositoryCredentials'}
         '400': {$ref: '#/components/responses/Error'}
         '401': {$ref: '#/components/responses/Error'}
         '409':
@@ -200,6 +200,22 @@ paths:
       responses:
         '204':
           description: Repositorio y entorno eliminados.
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /repositories/{owner}/{repo}/webhook-secret/rotate:
+    post:
+      operationId: rotateRepositoryWebhookSecret
+      summary: Rota el secreto webhook derivado (owner o admin) y lo devuelve una sola vez.
+      parameters:
+        - {name: owner, in: path, required: true, schema: {type: string}}
+        - {name: repo, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Nueva versión y secreto webhook.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RepositoryCredentials'}
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
@@ -629,18 +645,19 @@ components:
         state: {type: string, enum: [pending, confirmed, rejected]}
     WarmState:
       type: object
-      required: [warm_id, state, reset_verified, baseline_version]
+      required: [warm_id, state, reset_verified, baseline_version, infrastructure_ready]
       additionalProperties: false
       properties:
         warm_id: {type: string, minLength: 1}
         state: {type: string, enum: [ready, dirty, cuarentena, idle-escalado, provisioning, deleting]}
         reset_verified: {type: boolean}
         baseline_version: {type: string, minLength: 1}
+        infrastructure_ready: {type: boolean}
         namespace: {type: string}
         repo: {type: string}
     WarmEnvironment:
       type: object
-      required: [namespace, warm_id, state]
+      required: [namespace, warm_id, state, infrastructure_ready]
       additionalProperties: false
       properties:
         repo: {type: string}
@@ -649,19 +666,27 @@ components:
         state: {type: string, enum: [ready, dirty, cuarentena, idle-escalado, provisioning, deleting]}
         reset_verified: {type: boolean}
         baseline_version: {type: string}
+        infrastructure_ready: {type: boolean}
     Repository:
       type: object
-      required: [repo, image_repo, enabled, owner, warm]
+      required: [repo, name, resources, webhook_secret_version, image_repo, enabled, owner, warm]
       additionalProperties: false
       properties:
         repo: {type: string, description: "owner/repo en minúsculas"}
+        name: {type: string, minLength: 1, maxLength: 120}
+        description: {type: string, maxLength: 500}
+        resources:
+          type: array
+          uniqueItems: true
+          items: {type: string, enum: [postgresql, redis]}
+        webhook_secret_version: {type: integer, minimum: 0}
         image_repo: {type: string, description: "Prefijo de imagen en GHCR"}
         enabled: {type: boolean}
         owner: {type: string, description: "principal_id del creador"}
         created_at: {type: string, format: date-time}
         warm:
           type: object
-          required: [namespace, warm_id, state]
+          required: [namespace, warm_id, state, infrastructure_ready]
           additionalProperties: false
           properties:
             repo: {type: string}
@@ -670,6 +695,7 @@ components:
             state: {type: string, enum: [ready, dirty, cuarentena, idle-escalado, provisioning, deleting]}
             reset_verified: {type: boolean}
             baseline_version: {type: string}
+            infrastructure_ready: {type: boolean}
     RepositoryInput:
       type: object
       required: [repo]
@@ -679,9 +705,22 @@ components:
           type: string
           pattern: '^[a-z0-9-]+/[a-z0-9._-]+$'
           description: "owner/repo en minúsculas"
+        name: {type: string, minLength: 1, maxLength: 120}
+        description: {type: string, maxLength: 500}
+        resources:
+          type: array
+          uniqueItems: true
+          items: {type: string, enum: [postgresql, redis]}
         image_repo:
           type: string
           description: "Prefijo de imagen en GHCR (opcional, default ghcr.io/<repo>)"
+    RepositoryCredentials:
+      type: object
+      required: [repository, webhook_secret]
+      additionalProperties: false
+      properties:
+        repository: {$ref: '#/components/schemas/Repository'}
+        webhook_secret: {type: string, pattern: '^whsec_[0-9a-f]{64}$'}
     RepositoryPatch:
       type: object
       additionalProperties: false

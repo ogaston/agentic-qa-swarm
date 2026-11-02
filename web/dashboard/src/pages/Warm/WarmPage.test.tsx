@@ -173,6 +173,32 @@ describe('WarmPage (estructura del mockup, U10-T04)', () => {
     expect(screen.queryByText('warm-1')).toBeNull();
   });
 
+  it('muestra los componentes seleccionados de cada proyecto', async () => {
+    contarPeticiones(() => HttpResponse.json(WARM));
+    server.use(
+      http.get('/api/repositories', () => HttpResponse.json([
+        {
+          repo: 'acme/shop', name: 'Tienda', resources: ['postgresql', 'redis'], webhook_secret_version: 1,
+          image_repo: 'ghcr.io/acme/shop', enabled: true, owner: 'ana',
+          warm: { namespace: 'aqs-w-acme-shop', warm_id: 'warm-shop', state: 'ready', infrastructure_ready: true },
+        },
+        {
+          repo: 'acme/stateless', name: 'Catálogo', resources: [], webhook_secret_version: 1,
+          image_repo: 'ghcr.io/acme/stateless', enabled: true, owner: 'ana',
+          warm: { namespace: 'aqs-w-acme-stateless', warm_id: 'warm-stateless', state: 'ready', infrastructure_ready: true },
+        },
+      ])),
+    );
+    renderWarm();
+    await vaciar();
+    expect(screen.getByRole('heading', { level: 2, name: 'Componentes por proyecto' })).toBeTruthy();
+    expect(screen.getByText('Tienda')).toBeTruthy();
+    expect(screen.getByText('PostgreSQL')).toBeTruthy();
+    expect(screen.getByText('Redis')).toBeTruthy();
+    expect(screen.getByText('Catálogo')).toBeTruthy();
+    expect(screen.getByText('Sin recursos')).toBeTruthy();
+  });
+
   it('los 4 estados se leen como texto y llevan un icono decorativo', async () => {
     const esperado: Record<string, string> = {
       ready: 'Listo',

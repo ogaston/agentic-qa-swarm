@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ApiError, apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
 import type { components } from '../../api/schema.gen';
@@ -7,6 +7,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { usePolling } from '../../hooks/usePolling';
 
 type Warm = components['schemas']['WarmState'];
+type Repository = components['schemas']['Repository'];
 
 const INTERVALO_MS = 10_000;
 
@@ -27,6 +28,11 @@ const ETIQUETAS: Record<Warm['state'], string> = {
   'idle-escalado': 'En pausa',
   provisioning: 'Aprovisionando',
   deleting: 'Eliminando',
+};
+
+const RECURSOS: Record<string, string> = {
+  postgresql: 'PostgreSQL',
+  redis: 'Redis',
 };
 
 /** Trazo del icono por estado (decorativo: el texto de la etiqueta es el significado). */
@@ -66,11 +72,32 @@ function IconoEstado({ estado }: { estado: Warm['state'] }) {
 
 /** Estado del warm (`/warm`). Solo lectura: sondeo cada 10 s, pausado con la pestaña oculta. */
 export function WarmPage() {
-  const { data, error, agotado, refrescar } = usePolling<Warm>(
+  const { data, error, agotado, refrescar: refrescarWarm } = usePolling<Warm>(
     () => apiFetch<Warm>('/api/warm'),
     INTERVALO_MS,
     { isTerminal: () => false },
   );
+  const [repositorios, setRepositorios] = useState<Repository[] | null>(null);
+  const [errorRepositorios, setErrorRepositorios] = useState<unknown>(null);
+
+  const cargarRepositorios = useCallback(async () => {
+    try {
+      const data = await apiFetch<Repository[]>('/api/repositories');
+      setRepositorios(data);
+      setErrorRepositorios(null);
+    } catch (err) {
+      setErrorRepositorios(err);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarRepositorios();
+  }, [cargarRepositorios]);
+
+  function actualizar() {
+    refrescarWarm();
+    void cargarRepositorios();
+  }
 
   const warmNoDisponible = error instanceof ApiError && error.status === 503 && error.code === 'warm_unavailable';
 
@@ -80,7 +107,7 @@ export function WarmPage() {
         titulo="Entorno"
         descripcion="Consulta si tu entorno de pruebas está disponible para la próxima corrida."
         acciones={
-          <button type="button" className="btn btn-primary" data-testid="warm-refresh-button" onClick={refrescar}>
+          <button type="button" className="btn btn-primary" data-testid="warm-refresh-button" onClick={actualizar}>
             Actualizar
           </button>
         }
@@ -95,7 +122,7 @@ export function WarmPage() {
       {error !== null && data !== null && <p className="notice">Mostrando la última lectura correcta.</p>}
       {agotado && (
         <p>
-          <button type="button" className="btn btn-secondary" onClick={refrescar}>
+          <button type="button" className="btn btn-secondary" onClick={actualizar}>
             Reintentar
           </button>
         </p>
@@ -139,6 +166,37 @@ export function WarmPage() {
           </div>
         </section>
       )}
+
+      <section aria-labelledby="environment-project-components-title" className="card card-pad environment-project-components">
+        <div className="card-head">
+          <div>
+            <h2 id="environment-project-components-title" className="card-title">Componentes por proyecto</h2>
+            <div className="card-sub">Recursos seleccionados para cada repositorio dentro de este entorno.</div>
+          </div>
+        </div>
+        {repositorios === null && errorRepositorios === null && <p role="status">Consultando componentes de proyectos…</p>}
+        {errorRepositorios !== null && <ApiErrorNotice error={errorRepositorios} />}
+        {repositorios !== null && repositorios.length === 0 && <p>No hay proyectos registrados todavía.</p>}
+        {repositorios !== null && repositorios.length > 0 && (
+          <ul className="environment-project-list">
+            {repositorios.map((repo) => (
+              <li key={repo.repo} className="environment-project-item">
+                <div>
+                  <strong>{repo.name || repo.repo}</strong>
+                  <span className="environment-project-repo">{repo.repo}</span>
+                </div>
+                <div className="environment-resource-list" aria-label={`Recursos de ${repo.name || repo.repo}`}>
+                  {repo.resources.length === 0 ? (
+                    <span className="badge badge-neutral">Sin recursos</span>
+                  ) : (
+                    repo.resources.map((resource) => <span key={resource} className="badge badge-neutral">{RECURSOS[resource] ?? resource}</span>)
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }

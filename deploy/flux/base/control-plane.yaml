@@ -53,6 +53,8 @@ spec:
               value: http://agent-reporter.aqs-system.svc:8080
             - name: GOVERNANCE_URL
               value: http://go-governance.aqs-system.svc:8080
+            - name: UIAPI_WEBHOOK_KEY_FILE
+              value: /etc/aqs/webhook/secret
           image: ghcr.io/ogaston/agentic-qa-swarm/ui-api:0.0.0
           ports:
             - name: http
@@ -68,6 +70,9 @@ spec:
             - name: warm-token
               mountPath: /etc/aqs/warm
               readOnly: true
+            - name: webhook-key
+              mountPath: /etc/aqs/webhook
+              readOnly: true
       volumes:
         - name: warm-token
           secret:
@@ -75,6 +80,12 @@ spec:
             items:
               - key: token
                 path: token
+        - name: webhook-key
+          secret:
+            secretName: go-intake-webhook
+            items:
+              - key: secret
+                path: secret
 ---
 apiVersion: v1
 kind: Service

@@ -2,13 +2,16 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
 	"mime"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -53,6 +56,10 @@ type Config struct {
 	GovernanceURL string
 	// GovernanceTimeout es el plazo de las llamadas a go-governance; 0 = 2 s.
 	GovernanceTimeout time.Duration
+	// WebhookKeyFile es la ruta al archivo con la clave HMAC de webhook (go-intake-webhook).
+	WebhookKeyFile string
+	// WebhookKey es la clave directa (para pruebas o si ya fue leída).
+	WebhookKey []byte
 }
 
 // IdentityRetryAfter es el Retry-After (segundos) del 503 identity_unavailable.
@@ -60,14 +67,15 @@ const IdentityRetryAfter = 10
 
 // Handler es el http.Handler de ui-api.
 type Handler struct {
-	cfg     Config
-	lim     *limiter
-	origins map[string]struct{}
-	log     *log.Logger
-	warmc   *warmClient     // nil = sin WARM_URL
-	runc    *upstreamClient // nil = sin RUN_CONTROLLER_URL
-	repc    *upstreamClient // nil = sin REPORTER_URL
-	govc    *upstreamClient // nil = sin GOVERNANCE_URL
+	cfg        Config
+	lim        *limiter
+	origins    map[string]struct{}
+	log        *log.Logger
+	warmc      *warmClient     // nil = sin WARM_URL
+	runc       *upstreamClient // nil = sin RUN_CONTROLLER_URL
+	repc       *upstreamClient // nil = sin REPORTER_URL
+	govc       *upstreamClient // nil = sin GOVERNANCE_URL
+	webhookKey []byte
 }
 
 // New construye el handler con toda la cadena de middleware.
@@ -122,21 +130,33 @@ func New(cfg Config) (http.Handler, error) {
 		}
 		h.govc = c
 	}
+	var webhookKey []byte
+	if len(cfg.WebhookKey) > 0 {
+		webhookKey = cfg.WebhookKey
+	} else if cfg.WebhookKeyFile != "" {
+		b, err := os.ReadFile(cfg.WebhookKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("leyendo webhook key file: %w", err)
+		}
+		webhookKey = bytes.TrimSpace(b)
+	}
+	h.webhookKey = webhookKey
 	return h, nil
 }
 
 // Patrones de ruta de ui-api (etiqueta route de las métricas).
 const (
-	RouteList               = "/notifications"
-	RouteConfirm            = "/notifications/{id}/confirm"
-	RouteWarm               = "/warm"
-	RouteConfirmations      = "/confirmations"
-	RouteReport             = "/reports/{run}"
-	RouteRepositories       = "/repositories"
-	RouteRepositoryItem     = "/repositories/{owner}/{repo}"
-	RouteRepositoryActivity = "/repositories/{owner}/{repo}/activity"
-	RouteEvidence           = "/run-evidence/{run}/{flow}/{name}"
-	RouteReportEvidence     = "/report-evidence/{run}/{finding}/{evidence}"
+	RouteList                   = "/notifications"
+	RouteConfirm                = "/notifications/{id}/confirm"
+	RouteWarm                   = "/warm"
+	RouteConfirmations          = "/confirmations"
+	RouteReport                 = "/reports/{run}"
+	RouteRepositories           = "/repositories"
+	RouteRepositoryItem         = "/repositories/{owner}/{repo}"
+	RouteRepositoryRotateSecret = "/repositories/{owner}/{repo}/webhook-secret/rotate"
+	RouteRepositoryActivity     = "/repositories/{owner}/{repo}/activity"
+	RouteEvidence               = "/run-evidence/{run}/{flow}/{name}"
+	RouteReportEvidence         = "/report-evidence/{run}/{finding}/{evidence}"
 )
 
 // RoutePattern devuelve el PATRÓN de ruta de la petición ("unmatched" si no hay), nunca la ruta cruda.
@@ -168,6 +188,9 @@ func RoutePattern(r *http.Request) string {
 		}
 		if len(parts) == 4 && parts[1] != "" && parts[2] != "" && parts[3] == "activity" {
 			return RouteRepositoryActivity
+		}
+		if len(parts) == 5 && parts[1] != "" && parts[2] != "" && parts[3] == "webhook-secret" && parts[4] == "rotate" {
+			return RouteRepositoryRotateSecret
 		}
 	case strings.HasPrefix(p, "/report-evidence/"):
 		if len(strings.Split(strings.TrimPrefix(p, "/report-evidence/"), "/")) == 3 {
@@ -291,6 +314,17 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request) {
 			}
 			if pr, ok := h.authenticate(w, r); ok {
 				h.repositoryActivity(w, r, pr, owner, repo)
+			}
+			return
+		}
+		if len(parts) == 5 && parts[1] != "" && parts[2] != "" && parts[3] == "webhook-secret" && parts[4] == "rotate" {
+			owner, repo := parts[1], parts[2]
+			if r.Method != http.MethodPost {
+				methodNotAllowed(w, "POST")
+				return
+			}
+			if pr, ok := h.authenticate(w, r); ok {
+				h.rotateRepositoryWebhookSecret(w, r, pr, owner, repo)
 			}
 			return
 		}

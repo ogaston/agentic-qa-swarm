@@ -125,7 +125,7 @@ func TestPBT_NotifyCreatedRoundTrip(t *testing.T) {
 			t.Fatalf("el JSON producido no valida contra el esquema: %v\n%s", err, raw)
 		}
 		var back intake.Event
-		if err := json.Unmarshal(raw, &back); err != nil || back != e {
+		if err := json.Unmarshal(raw, &back); err != nil || !reflect.DeepEqual(back, e) {
 			t.Fatalf("round-trip: %+v / %v, quiero %+v", back, err, e)
 		}
 	})
@@ -276,13 +276,13 @@ func TestPBT_Fixed_NotifyCreatedRoundTrip(t *testing.T) {
 	e := intake.Event{EventID: "3f2b8c1e-6a4d-4e7b-9c10-5d2e8a7f1b34", Type: "notify.created", Version: 1,
 		OccurredAt: "2026-01-15T10:00:00Z", TraceID: "4bf92f3577b34da6a3ce929d0e0e4736",
 		Data: intake.EventData{NotificationID: "n-1", GithubEvent: "commit", Repo: "acme/shop", SHA: strings.Repeat("a", 40),
-			Artifact: intake.Artifact{Kind: "build-from-repo", Ref: "acme/shop@" + strings.Repeat("a", 40)}}}
+			Artifact: &intake.Artifact{Kind: "build-from-repo", Ref: "acme/shop@" + strings.Repeat("a", 40)}}}
 	raw, _ := json.Marshal(e)
 	if err := gen.ValidateJSON(gen.NotifySchema(t), raw); err != nil {
 		t.Fatal(err)
 	}
 	var back intake.Event
-	if err := json.Unmarshal(raw, &back); err != nil || back != e {
+	if err := json.Unmarshal(raw, &back); err != nil || !reflect.DeepEqual(back, e) {
 		t.Fatalf("%+v %v", back, err)
 	}
 }

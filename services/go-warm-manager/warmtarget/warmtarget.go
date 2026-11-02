@@ -14,13 +14,61 @@ const LegacyWarmID = "warm-1"
 
 var warmNamespaceRegex = regexp.MustCompile(`^aqs-w-[a-z0-9]([a-z0-9-]{0,44}[a-z0-9])?$`)
 
+const (
+	ResourcePostgreSQL = "postgresql"
+	ResourceRedis      = "redis"
+)
+
 // WarmTarget representa el destino de despliegue y pruebas de un repositorio.
 type WarmTarget struct {
-	Repo      string `json:"repo"`
-	Namespace string `json:"namespace"`
-	WarmID    string `json:"warm_id"`
-	AppURL    string `json:"app_url"`
-	ImageRepo string `json:"image_repo,omitempty"`
+	Repo      string   `json:"repo"`
+	Namespace string   `json:"namespace"`
+	WarmID    string   `json:"warm_id"`
+	AppURL    string   `json:"app_url"`
+	ImageRepo string   `json:"image_repo,omitempty"`
+	Resources []string `json:"resources,omitempty"`
+}
+
+// NormalizeResources conserva una selección vacía explícita y aplica ambos recursos a targets legacy.
+func NormalizeResources(resources []string) []string {
+	if resources == nil {
+		return []string{ResourcePostgreSQL, ResourceRedis}
+	}
+	out := make([]string, 0, len(resources))
+	for _, canonical := range []string{ResourcePostgreSQL, ResourceRedis} {
+		for _, selected := range resources {
+			if selected == canonical {
+				out = append(out, canonical)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// ValidateResources rechaza recursos desconocidos o duplicados.
+func ValidateResources(resources []string) error {
+	seen := map[string]bool{}
+	for _, resource := range resources {
+		if resource != ResourcePostgreSQL && resource != ResourceRedis {
+			return fmt.Errorf("recurso warm no soportado: %q", resource)
+		}
+		if seen[resource] {
+			return fmt.Errorf("recurso warm duplicado: %q", resource)
+		}
+		seen[resource] = true
+	}
+	return nil
+}
+
+// HasResource indica si el target necesita una dependencia.
+func (t WarmTarget) HasResource(resource string) bool {
+	for _, selected := range NormalizeResources(t.Resources) {
+		if selected == resource {
+			return true
+		}
+	}
+	return false
 }
 
 // TargetForRepo calcula el WarmTarget a partir de un repo.
@@ -33,6 +81,7 @@ func TargetForRepo(repo string) WarmTarget {
 		Namespace: ns,
 		WarmID:    wid,
 		AppURL:    fmt.Sprintf("http://warm-app.%s.svc:8080", ns),
+		Resources: NormalizeResources(nil),
 	}
 }
 
@@ -50,6 +99,7 @@ func LegacyTarget() WarmTarget {
 		Namespace: LegacyNamespace,
 		WarmID:    LegacyWarmID,
 		AppURL:    "http://warm-app.aqs-test.svc:8080",
+		Resources: NormalizeResources(nil),
 	}
 }
 

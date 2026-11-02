@@ -211,6 +211,66 @@ func TestStoreActivity(t *testing.T) {
 	}
 }
 
+func TestStoreActivityWithWebhookValidated(t *testing.T) {
+	st := open(t, t.TempDir())
+	t0 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+
+	v1 := WebhookValidated{
+		EventID:    "e-ping-1",
+		Type:       "webhook.validated",
+		Version:    1,
+		OccurredAt: t0,
+		TraceID:    "trace-1",
+	}
+	v1.Data.Repo = "acme/shop"
+	v1.Data.GithubEvent = "ping"
+	v1.Data.DeliveryID = "deliv-1"
+
+	if !st.ApplyWebhookValidated(v1) {
+		t.Fatal("ApplyWebhookValidated debió retornar true")
+	}
+	if st.ApplyWebhookValidated(v1) {
+		t.Fatal("ApplyWebhookValidated duplicado debió retornar false")
+	}
+
+	hasWebhook, lastEvent, lastSHA, lastSeenAt := st.Activity("acme/shop")
+	if !hasWebhook || lastEvent != "ping" || lastSHA != "" || !lastSeenAt.Equal(t0) {
+		t.Fatalf("actividad inesperada de ping: hasWebhook=%v event=%s sha=%s at=%v", hasWebhook, lastEvent, lastSHA, lastSeenAt)
+	}
+
+	// Notificación posterior actualiza el evento y el SHA
+	t1 := t0.Add(time.Hour)
+	e1 := ev("n1", t1)
+	e1.Data.Repo = "acme/shop"
+	e1.Data.GithubEvent = "push"
+	e1.Data.SHA = "sha-111"
+	st.Apply(e1)
+
+	hasWebhook, lastEvent, lastSHA, lastSeenAt = st.Activity("acme/shop")
+	if !hasWebhook || lastEvent != "push" || lastSHA != "sha-111" || !lastSeenAt.Equal(t1) {
+		t.Fatalf("actividad inesperada tras push: hasWebhook=%v event=%s sha=%s at=%v", hasWebhook, lastEvent, lastSHA, lastSeenAt)
+	}
+
+	// Ping aún más reciente actualiza el evento a ping y limpia el SHA
+	t2 := t1.Add(time.Hour)
+	v2 := WebhookValidated{
+		EventID:    "e-ping-2",
+		Type:       "webhook.validated",
+		Version:    1,
+		OccurredAt: t2,
+		TraceID:    "trace-2",
+	}
+	v2.Data.Repo = "acme/shop"
+	v2.Data.GithubEvent = "ping"
+	v2.Data.DeliveryID = "deliv-2"
+	st.ApplyWebhookValidated(v2)
+
+	hasWebhook, lastEvent, lastSHA, lastSeenAt = st.Activity("acme/shop")
+	if !hasWebhook || lastEvent != "ping" || lastSHA != "" || !lastSeenAt.Equal(t2) {
+		t.Fatalf("actividad inesperada tras segundo ping: hasWebhook=%v event=%s sha=%s at=%v", hasWebhook, lastEvent, lastSHA, lastSeenAt)
+	}
+}
+
 // El tiempo REST es el del evento original, incluso tras confirmar o volver a aplicarlo.
 func TestNotificationCreatedAtSurvivesConfirmationAndReplay(t *testing.T) {
 	original := time.Date(2026, 10, 28, 12, 30, 0, 123000000, time.UTC)

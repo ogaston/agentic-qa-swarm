@@ -116,7 +116,8 @@ async function rutaApi(route) {
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(cuerpo) });
   const p = url.pathname;
   if (p === '/api/auth/login') return json({ token: 'token-fidelidad', expires_at: new Date(Date.now() + 3600e3).toISOString() });
-  if (p === '/api/auth/session') return json({ principal_id: 'operador-demo', role: 'user' });
+  if (p === '/api/auth/session') return json({ principal_id: 'operador-demo', role: 'user', expires_at: new Date(Date.now() + 3600e3).toISOString() });
+  if (p === '/api/repositories') return json([]);
   if (p === '/api/notifications') {
     const estado = url.searchParams.get('state');
     return json(FIJOS.notificaciones.filter((n) => estado === null || n.state === estado));

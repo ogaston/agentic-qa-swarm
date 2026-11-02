@@ -2,6 +2,7 @@ package provision
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -136,10 +137,66 @@ func (r *Reconciler) Reconcile(ctx context.Context, targets []warmtarget.WarmTar
 			}
 		}
 
+		if err := r.reconcileInfrastructureStatus(ctx, t); err != nil {
+			return nil, err
+		}
 		res.EnsuredTargets = append(res.EnsuredTargets, t.Repo)
 	}
 
 	return res, nil
+}
+
+func (r *Reconciler) reconcileInfrastructureStatus(ctx context.Context, target warmtarget.WarmTarget) error {
+	ready := true
+	if target.HasResource(warmtarget.ResourcePostgreSQL) {
+		sts, err := r.Kube.AppsV1().StatefulSets(target.Namespace).Get(ctx, "warm-db", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("leyendo readiness PostgreSQL %s: %w", target.Namespace, err)
+		}
+		ready = ready && sts.Status.ReadyReplicas >= 1
+	}
+	if target.HasResource(warmtarget.ResourceRedis) {
+		dep, err := r.Kube.AppsV1().Deployments(target.Namespace).Get(ctx, "warm-redis", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("leyendo readiness Redis %s: %w", target.Namespace, err)
+		}
+		ready = ready && dep.Status.ReadyReplicas >= 1
+	}
+
+	stateCM, err := r.Kube.CoreV1().ConfigMaps(target.Namespace).Get(ctx, "warm-state", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("leyendo warm-state %s: %w", target.Namespace, err)
+	}
+	var state map[string]any
+	if err := json.Unmarshal([]byte(stateCM.Data["state"]), &state); err != nil {
+		return fmt.Errorf("warm-state corrupto %s: %w", target.Namespace, err)
+	}
+	if current, ok := state["infrastructure_ready"].(bool); !ok || current != ready {
+		state["infrastructure_ready"] = ready
+		raw, err := json.Marshal(state)
+		if err != nil {
+			return err
+		}
+		stateCM.Data["state"] = string(raw)
+		if _, err := r.Kube.CoreV1().ConfigMaps(target.Namespace).Update(ctx, stateCM, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("actualizando warm-state %s: %w", target.Namespace, err)
+		}
+	}
+
+	policyCM, err := r.Kube.CoreV1().ConfigMaps(target.Namespace).Get(ctx, "warm-policy", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("leyendo warm-policy %s: %w", target.Namespace, err)
+	}
+	resources := resourceSelectionJSON(target.Resources)
+	readyText := fmt.Sprint(ready)
+	if policyCM.Data["resources"] != resources || policyCM.Data["infrastructureReady"] != readyText {
+		policyCM.Data["resources"] = resources
+		policyCM.Data["infrastructureReady"] = readyText
+		if _, err := r.Kube.CoreV1().ConfigMaps(target.Namespace).Update(ctx, policyCM, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("actualizando warm-policy %s: %w", target.Namespace, err)
+		}
+	}
+	return nil
 }
 
 func (r *Reconciler) ensureNamespace(ctx context.Context, ns *corev1.Namespace) (bool, error) {
@@ -173,6 +230,9 @@ func (r *Reconciler) ensureConfigMap(ctx context.Context, cm *corev1.ConfigMap) 
 }
 
 func (r *Reconciler) ensureSecret(ctx context.Context, sec *corev1.Secret) error {
+	if sec == nil {
+		return nil
+	}
 	// go-warm-manager solo tiene permiso CREATE en secrets (no get/list por principio de mínimo privilegio).
 	// La idempotencia se garantiza intentando directamente Create e ignorando AlreadyExists.
 	_, err := r.Kube.CoreV1().Secrets(sec.Namespace).Create(ctx, sec, metav1.CreateOptions{})
@@ -183,6 +243,9 @@ func (r *Reconciler) ensureSecret(ctx context.Context, sec *corev1.Secret) error
 }
 
 func (r *Reconciler) ensureDeployment(ctx context.Context, dep *appsv1.Deployment) error {
+	if dep == nil {
+		return nil
+	}
 	_, err := r.Kube.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
 	if err == nil {
 		return nil
@@ -198,6 +261,9 @@ func (r *Reconciler) ensureDeployment(ctx context.Context, dep *appsv1.Deploymen
 }
 
 func (r *Reconciler) ensureStatefulSet(ctx context.Context, sts *appsv1.StatefulSet) error {
+	if sts == nil {
+		return nil
+	}
 	_, err := r.Kube.AppsV1().StatefulSets(sts.Namespace).Get(ctx, sts.Name, metav1.GetOptions{})
 	if err == nil {
 		return nil
@@ -213,6 +279,9 @@ func (r *Reconciler) ensureStatefulSet(ctx context.Context, sts *appsv1.Stateful
 }
 
 func (r *Reconciler) ensureService(ctx context.Context, svc *corev1.Service) error {
+	if svc == nil {
+		return nil
+	}
 	_, err := r.Kube.CoreV1().Services(svc.Namespace).Get(ctx, svc.Name, metav1.GetOptions{})
 	if err == nil {
 		return nil

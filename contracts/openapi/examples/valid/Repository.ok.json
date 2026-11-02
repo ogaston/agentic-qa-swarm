@@ -1,5 +1,12 @@
 {
   "repo": "acme/shop",
+  "name": "Acme Shop",
+  "description": "Tienda principal de Acme",
+  "resources": [
+    "postgresql",
+    "redis"
+  ],
+  "webhook_secret_version": 1,
   "image_repo": "ghcr.io/acme/shop",
   "enabled": true,
   "owner": "u-admin",
@@ -7,6 +14,7 @@
   "warm": {
     "namespace": "aqs-w-acme-shop",
     "warm_id": "w-acme-shop",
-    "state": "ready"
+    "state": "ready",
+    "infrastructure_ready": true
   }
 }

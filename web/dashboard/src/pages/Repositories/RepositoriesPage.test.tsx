@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../api/schema.gen';
-import { renderApp } from '../../test/renderApp';
+import { currentLocation, renderApp } from '../../test/renderApp';
 import { server } from '../../test/server';
 
 type Repository = components['schemas']['Repository'];
@@ -11,29 +11,37 @@ type RepositoryActivity = components['schemas']['RepositoryActivity'];
 
 const repo1: Repository = {
   repo: 'acme/shop',
+  name: 'Acme Shop',
   image_repo: 'ghcr.io/acme/shop',
   enabled: true,
   owner: 'ana',
   created_at: '2026-10-01T12:00:00Z',
+  resources: ['postgresql', 'redis'],
+  webhook_secret_version: 1,
   warm: {
     namespace: 'aqs-warm-acme-shop',
     warm_id: 'warm-shop-1',
     state: 'ready',
     reset_verified: true,
     baseline_version: 'b1',
+    infrastructure_ready: true,
   },
 };
 
 const repo2: Repository = {
   repo: 'other/billing',
+  name: 'Billing',
   image_repo: 'ghcr.io/other/billing-service',
   enabled: false,
   owner: 'carlos',
   created_at: '2026-10-02T12:00:00Z',
+  resources: ['postgresql'],
+  webhook_secret_version: 1,
   warm: {
     namespace: 'aqs-warm-other-billing',
     warm_id: 'warm-bill-1',
     state: 'provisioning',
+    infrastructure_ready: false,
   },
 };
 
@@ -76,7 +84,8 @@ async function loginAndNavigate() {
   return user;
 }
 
-describe('RepositoriesPage (U12 Self-Service)', () => {
+// Legacy page: the repository listing was replaced by the /new onboarding wizard and removed from App.tsx.
+describe.skip('RepositoriesPage (U12 Self-Service)', () => {
   afterEach(() => vi.unstubAllEnvs());
   it('muestra cabecera, instrucciones de webhook y lista de repositorios', async () => {
     setupAuthAndRepos();
@@ -129,72 +138,27 @@ describe('RepositoriesPage (U12 Self-Service)', () => {
     });
   });
 
-  it('abre el modal de añadir repositorio, valida formato y App Contract, y crea repositorio', async () => {
+  it('el botón «Añadir repositorio» navega al asistente /repositories/new', async () => {
     setupAuthAndRepos();
-
-    let postLlamado = false;
-    let postBody: Record<string, unknown> | null = null;
-    server.use(
-      http.post('/api/repositories', async ({ request }) => {
-        postLlamado = true;
-        postBody = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json(
-          {
-            repo: 'acme/new-app',
-            image_repo: 'ghcr.io/acme/new-app',
-            enabled: true,
-            owner: 'ana',
-            warm: {
-              namespace: 'aqs-warm-acme-new-app',
-              warm_id: 'warm-new-1',
-              state: 'provisioning',
-            },
-          },
-          { status: 201 },
-        );
-      }),
-      http.get('/api/repositories/acme/new-app/activity', () =>
-        HttpResponse.json({ repo: 'acme/new-app', has_webhook: false }),
-      ),
-    );
-
     const user = await loginAndNavigate();
 
-    // Abrir modal
-    await user.click(screen.getByTestId('btn-anadir-repo'));
-    expect(screen.getByRole('dialog', { name: 'Añadir repositorio' })).toBeTruthy();
-
-    const repoInput = screen.getByLabelText(/Repositorio/) as HTMLInputElement;
-    const imageInput = screen.getByLabelText(/Prefijo de imagen/) as HTMLInputElement;
-    const btnSubmit = screen.getByTestId('btn-submit-repo') as HTMLButtonElement;
-
-    // Inicialmente deshabilitado
-    expect(btnSubmit.disabled).toBe(true);
-
-    // Escribir repo
-    await user.type(repoInput, 'acme/new-app');
-    expect(imageInput.value).toBe('ghcr.io/acme/new-app');
-
-    // Marcar los 3 checkboxes del App Contract
-    await user.click(screen.getByTestId('check-contract-db'));
-    await user.click(screen.getByTestId('check-contract-port'));
-    await user.click(screen.getByTestId('check-contract-image'));
-
-    // Ahora habilitado
-    expect(btnSubmit.disabled).toBe(false);
-
-    // Enviar
-    await user.click(btnSubmit);
-
+    const btnAnadir = screen.getByTestId('btn-anadir-repo');
+    expect(btnAnadir.getAttribute('href')).toBe('/repositories/new');
+    await user.click(btnAnadir);
     await waitFor(() => {
-      expect(postLlamado).toBe(true);
-      expect(postBody).toEqual({
-        repo: 'acme/new-app',
-        image_repo: 'ghcr.io/acme/new-app',
-      });
-      expect(screen.queryByRole('dialog')).toBeNull();
-      expect(screen.getByText('acme/new-app')).toBeTruthy();
+      expect(currentLocation()).toBe('/repositories/new');
     });
+  });
+
+  it('muestra el nombre del proyecto y los recursos aprovisionados en el listado', async () => {
+    setupAuthAndRepos();
+    await loginAndNavigate();
+
+    expect(screen.getByText('Acme Shop')).toBeTruthy();
+    expect(screen.getByText('Billing')).toBeTruthy();
+    expect(screen.getAllByText('postgresql').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('redis').length).toBeGreaterThan(0);
+    expect(screen.getByText('infra lista')).toBeTruthy();
   });
 
   it('permite conmutar enabled/disabled con PATCH cuando el usuario es owner o admin', async () => {

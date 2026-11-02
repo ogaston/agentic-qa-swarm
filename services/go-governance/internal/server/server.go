@@ -164,12 +164,25 @@ func (s *Server) routes() http.Handler {
 				methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			}
 		case strings.HasPrefix(r.URL.Path, "/repositories/") || strings.HasPrefix(r.URL.Path, "/v1/repositories/"):
-			owner, repo, ok := parseRepoPath(r.URL.Path)
+			rotation := strings.HasSuffix(r.URL.Path, "/webhook-secret/rotate")
+			path := r.URL.Path
+			if rotation {
+				path = strings.TrimSuffix(path, "/webhook-secret/rotate")
+			}
+			owner, repo, ok := parseRepoPath(path)
 			if !ok {
 				writeErr(w, http.StatusNotFound, "not_found", "ruta desconocida")
 				return
 			}
 			repoFullName := owner + "/" + repo
+			if rotation {
+				if r.Method != http.MethodPost {
+					methodNotAllowed(w, http.MethodPost)
+					return
+				}
+				s.rotateWebhookSecret(w, r, repoFullName)
+				return
+			}
 			switch r.Method {
 			case http.MethodGet:
 				s.getRepository(w, r, repoFullName)
@@ -509,5 +522,24 @@ func (s *Server) deleteRepository(w http.ResponseWriter, r *http.Request, repoFu
 		writeErr(w, http.StatusServiceUnavailable, "unavailable", "no se pudo eliminar el repositorio")
 	default:
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (s *Server) rotateWebhookSecret(w http.ResponseWriter, r *http.Request, repoFullName string) {
+	p, ok := s.authCaller(w, r, AccessAuthenticated, false)
+	if !ok {
+		return
+	}
+	updated, err := s.svc.RotateWebhookSecret(r.Context(), p.ID, p.Role, repoFullName)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		writeErr(w, http.StatusNotFound, "not_found", "repositorio no encontrado")
+	case errors.Is(err, repos.ErrForbidden):
+		writeErr(w, http.StatusForbidden, "forbidden", "rol o permisos insuficientes sobre el repositorio")
+	case err != nil:
+		s.log.ErrorContext(r.Context(), "error rotando secreto webhook", "error", err.Error())
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "no se pudo rotar el secreto")
+	default:
+		writeJSON(w, http.StatusOK, updated)
 	}
 }

@@ -18,6 +18,7 @@ type Config struct {
 	ReadyTimeout    time.Duration
 	ReadyInterval   time.Duration
 	Grace           time.Duration
+	Resources       []string
 }
 
 // Service orquesta reset, idle, higiene y rebuild.
@@ -198,21 +199,32 @@ func (s *Service) attempt(ctx context.Context, first func(context.Context) error
 	if err := first(ctx); err != nil {
 		return nil, fmt.Errorf("restart: %w", err)
 	}
-	if err := s.DB.Clean(ctx); err != nil {
-		return nil, fmt.Errorf("db clean: %w", err)
+	if HasResource(s.Cfg.Resources, ResourcePostgreSQL) {
+		if err := s.DB.Clean(ctx); err != nil {
+			return nil, fmt.Errorf("db clean: %w", err)
+		}
 	}
-	if err := s.Cache.Flush(ctx); err != nil {
-		return nil, fmt.Errorf("cache flush: %w", err)
+	if HasResource(s.Cfg.Resources, ResourceRedis) {
+		if err := s.Cache.Flush(ctx); err != nil {
+			return nil, fmt.Errorf("cache flush: %w", err)
+		}
 	}
 	checks, err := s.Verify(ctx)
 	if err != nil {
 		return nil, err
 	}
-	v, err := s.DB.Version(ctx)
-	if err != nil || v == "" {
-		return nil, fmt.Errorf("versión del baseline desconocida: no se publica reset.verified con una inventada (%v)", err)
+	if HasResource(s.Cfg.Resources, ResourcePostgreSQL) {
+		v, err := s.DB.Version(ctx)
+		if err != nil || v == "" {
+			return nil, fmt.Errorf("versión del baseline desconocida: no se publica reset.verified con una inventada (%v)", err)
+		}
+		s.baseline = v
+	} else {
+		s.baseline = s.Cfg.BaselineVersion
+		if s.baseline == "" {
+			s.baseline = "stateless"
+		}
 	}
-	s.baseline = v
 	return checks, nil
 }
 
@@ -244,19 +256,23 @@ func (s *Service) Verify(ctx context.Context) ([]string, error) {
 	if ready {
 		checks = append(checks, CheckAppReady)
 	}
-	if n, err := s.DB.Diff(ctx); err != nil {
-		fails = append(fails, CheckDBBaseline+": "+err.Error())
-	} else if n != 0 {
-		fails = append(fails, fmt.Sprintf("%s: %d filas difieren del baseline", CheckDBBaseline, n))
-	} else {
-		checks = append(checks, CheckDBBaseline)
+	if HasResource(s.Cfg.Resources, ResourcePostgreSQL) {
+		if n, err := s.DB.Diff(ctx); err != nil {
+			fails = append(fails, CheckDBBaseline+": "+err.Error())
+		} else if n != 0 {
+			fails = append(fails, fmt.Sprintf("%s: %d filas difieren del baseline", CheckDBBaseline, n))
+		} else {
+			checks = append(checks, CheckDBBaseline)
+		}
 	}
-	if n, err := s.Cache.DBSize(ctx); err != nil {
-		fails = append(fails, CheckCacheEmpty+": "+err.Error())
-	} else if n != 0 {
-		fails = append(fails, fmt.Sprintf("%s: %d claves", CheckCacheEmpty, n))
-	} else {
-		checks = append(checks, CheckCacheEmpty)
+	if HasResource(s.Cfg.Resources, ResourceRedis) {
+		if n, err := s.Cache.DBSize(ctx); err != nil {
+			fails = append(fails, CheckCacheEmpty+": "+err.Error())
+		} else if n != 0 {
+			fails = append(fails, fmt.Sprintf("%s: %d claves", CheckCacheEmpty, n))
+		} else {
+			checks = append(checks, CheckCacheEmpty)
+		}
 	}
 	if len(fails) > 0 {
 		return nil, fmt.Errorf("verificación fallida: %v", fails)

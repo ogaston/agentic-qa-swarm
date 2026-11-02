@@ -15,8 +15,9 @@ import (
 )
 
 type registryRepo struct {
-	Repo      string `json:"repo"`
-	ImageRepo string `json:"image_repo"`
+	Repo      string   `json:"repo"`
+	ImageRepo string   `json:"image_repo"`
+	Resources []string `json:"resources"`
 }
 
 func syncRepositories(ctx context.Context, client *http.Client, base, token string, rec *provision.Reconciler, svc *wm.Service) error {
@@ -44,6 +45,10 @@ func syncRepositories(ctx context.Context, client *http.Client, base, token stri
 	seen := map[string]bool{}
 	for _, repo := range repos {
 		t := warmtarget.TargetForRepoWithImage(repo.Repo, repo.ImageRepo)
+		if err := warmtarget.ValidateResources(repo.Resources); err != nil {
+			return fmt.Errorf("recursos inválidos para %s: %w", repo.Repo, err)
+		}
+		t.Resources = warmtarget.NormalizeResources(repo.Resources)
 		if repo.Repo == "" || !warmtarget.ValidWarmNamespace(t.Namespace) || seen[t.Namespace] {
 			return fmt.Errorf("repositorio inválido o namespace duplicado: %q", repo.Repo)
 		}

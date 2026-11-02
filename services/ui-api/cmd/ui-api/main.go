@@ -136,21 +136,23 @@ func run(log *slog.Logger) error {
 		WarmURL: os.Getenv("WARM_URL"), WarmTokenFile: os.Getenv("UIAPI_WARM_TOKEN_FILE"),
 		RunControllerURL: os.Getenv("RUN_CONTROLLER_URL"), ReporterURL: os.Getenv("REPORTER_URL"),
 		GovernanceURL: os.Getenv("GOVERNANCE_URL"),
+		WebhookKeyFile: os.Getenv("UIAPI_WEBHOOK_KEY_FILE"),
 	}, tr.ready)
 	if err != nil {
 		return err
 	}
 
-	handle := func(ev inbox.NotifyCreated) { store.Apply(ev) }
+	handleNotify := func(ev inbox.NotifyCreated) { store.Apply(ev) }
+	handleValidated := func(ev inbox.WebhookValidated) { store.ApplyWebhookValidated(ev) }
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if tr.file != nil {
-		if _, err := tr.file.Drain(handle); err != nil { // carga inicial antes de servir
+		if _, err := tr.file.DrainWith(handleNotify, handleValidated); err != nil { // carga inicial antes de servir
 			return err
 		}
-		go func() { _ = tr.file.Run(ctx, handle) }()
+		go func() { _ = tr.file.RunWith(ctx, handleNotify, handleValidated) }()
 	} else {
-		go func() { _ = tr.nats.Run(ctx, handle) }() // replay del stream y luego el durable, en segundo plano
+		go func() { _ = tr.nats.RunWith(ctx, handleNotify, handleValidated) }() // replay del stream y luego el durable, en segundo plano
 	}
 	if tr.nats != nil {
 		pub.SetReplayed(tr.nats.Replayed) // F-07: aviso del replay terminado

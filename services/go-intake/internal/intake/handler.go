@@ -45,9 +45,10 @@ type Deps struct {
 
 // Handler sirve POST /webhooks/github.
 type Handler struct {
-	d      Deps
-	lookup RepoLookup
-	mu     sync.Mutex // serializa persistir+publicar para que una entrega no se duplique
+	d         Deps
+	lookup    RepoLookup
+	mu        sync.Mutex // serializa persistir+publicar para que una entrega no se duplique
+	validated map[string]struct{}
 }
 
 // ParseAllowedRepos interpreta INTAKE_ALLOWED_REPOS: lista separada por comas de owner/repo.
@@ -84,7 +85,7 @@ func NewHandler(d Deps) (http.Handler, error) {
 	} else {
 		lookup = NewStaticRepoLookup(nil)
 	}
-	h := &Handler{d: d, lookup: lookup}
+	h := &Handler{d: d, lookup: lookup, validated: map[string]struct{}{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /webhooks/github", h.webhook)
 	return mux, nil
@@ -140,8 +141,14 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	rawRepo := extractRepo(body)
+	secret, err := h.resolveSecret(ctx, rawRepo)
+	if err != nil {
+		reject(http.StatusUnauthorized, "invalid_signature", "firma invalida")
+		return
+	}
 	// La firma se verifica sobre el cuerpo crudo, antes de parsear nada.
-	if err := h.d.Verifier.Verify(h.d.Secret, body, sig); err != nil {
+	if err := h.d.Verifier.Verify(secret, body, sig); err != nil {
 		reject(http.StatusUnauthorized, "invalid_signature", "firma invalida")
 		return
 	}
@@ -156,8 +163,34 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Ping de GitHub (C-126): con firma válida responde 200 sin notificación ni evento.
+	// 3. Ping de GitHub (C-126) y actividad validada de webhook.
 	if r.Header.Get("X-GitHub-Event") == "ping" {
+		if rawRepo != "" && h.lookup.Allowed(ctx, rawRepo) {
+			h.mu.Lock()
+			if _, ok := h.validated[delivery]; !ok {
+				ev := Event{
+					EventID:    uuidV4(),
+					Type:       "webhook.validated",
+					Version:    1,
+					OccurredAt: h.d.Now().UTC().Format(time.RFC3339),
+					TraceID:    eventTraceID(ctx, r.Header.Get("traceparent")),
+					Data: EventData{
+						Repo:        rawRepo,
+						GithubEvent: "ping",
+						DeliveryID:  delivery,
+					},
+				}
+				if err := h.d.Publisher.Publish(ctx, ev); err != nil {
+					h.mu.Unlock()
+					h.d.Metrics.PublishFailed()
+					h.d.Log.ErrorContext(ctx, "no se pudo publicar webhook.validated", "delivery_id", clip(delivery), "repo", rawRepo, "error", err.Error())
+					reject(http.StatusServiceUnavailable, "publish_failed", "no se pudo publicar; reintente la entrega")
+					return
+				}
+				h.validated[delivery] = struct{}{}
+			}
+			h.mu.Unlock()
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "pong"})
 		return
 	}
@@ -230,6 +263,35 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, rec.Notification)
 }
 
+func extractRepo(body []byte) string {
+	var payload struct {
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
+	}
+	_ = json.Unmarshal(body, &payload)
+	return strings.ToLower(strings.TrimSpace(payload.Repository.FullName))
+}
+
+func (h *Handler) resolveSecret(ctx context.Context, repo string) ([]byte, error) {
+	if repo == "" {
+		return h.d.Secret, nil
+	}
+	ml, ok := h.lookup.(RepoMetadataLookup)
+	if !ok {
+		return h.d.Secret, nil
+	}
+	meta, found := ml.Metadata(ctx, repo)
+	if !found || meta.WebhookSecretVersion <= 0 {
+		return h.d.Secret, nil
+	}
+	derived, err := deriveWebhookSecret(h.d.Secret, repo, meta.WebhookSecretVersion)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(derived), nil
+}
+
 // clip acota a 64 bytes un valor controlado por el remitente antes de loguearlo.
 func clip(s string) string {
 	if len(s) > 64 {
@@ -273,7 +335,7 @@ func (h *Handler) publish(ctx context.Context, rec Record, traceparent string) e
 		},
 	}
 	if rec.Artifact != nil {
-		ev.Data.Artifact = *rec.Artifact
+		ev.Data.Artifact = rec.Artifact
 	}
 	return h.d.Publisher.Publish(ctx, ev)
 }

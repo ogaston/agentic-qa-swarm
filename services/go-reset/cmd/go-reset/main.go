@@ -177,6 +177,11 @@ func serve() error {
 		if err != nil {
 			return nil, err
 		}
+		policy, err := k.WarmPolicy(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("leyendo recursos de %s: %w", ns, err)
+		}
+		resources := core.NormalizeResources(policy.Resources)
 		cl := &script.Cleaner{Path: c.BaselineScript, Timeout: c.ScriptTimeout, URL: "http://warm-app." + ns + ".svc:9090", Token: func(ctx context.Context) ([]byte, error) {
 			secret, err := cs.CoreV1().Secrets(ns).Get(ctx, "target-app-baseline-token", metav1.GetOptions{})
 			if err != nil {
@@ -184,7 +189,15 @@ func serve() error {
 			}
 			return secret.Data["token"], nil
 		}}
-		svc := &core.Service{Kube: k, State: k, DB: cl, Cache: &redis.Flusher{Addr: "warm-redis." + ns + ".svc:6379", Timeout: c.RedisTimeout}, Sessions: w.sessions, Events: w.svc.Events, Alert: obs.LogAlerter{Log: obs.NewLogger(os.Stdout)}, Clock: realClock{}, Cfg: core.Config{DefaultWarmID: "w-" + ns[len("aqs-w-"):], ReadyTimeout: c.ReadyTimeout, ReadyInterval: c.ReadyInterval, Grace: c.Grace}}
+		var db core.DatabaseCleaner = core.StatelessDatabase{}
+		if core.HasResource(resources, core.ResourcePostgreSQL) {
+			db = cl
+		}
+		var cache core.CacheFlusher = core.StatelessCache{}
+		if core.HasResource(resources, core.ResourceRedis) {
+			cache = &redis.Flusher{Addr: "warm-redis." + ns + ".svc:6379", Timeout: c.RedisTimeout}
+		}
+		svc := &core.Service{Kube: k, State: k, DB: db, Cache: cache, Sessions: w.sessions, Events: w.svc.Events, Alert: obs.LogAlerter{Log: obs.NewLogger(os.Stdout)}, Clock: realClock{}, Cfg: core.Config{DefaultWarmID: "w-" + ns[len("aqs-w-"):], BaselineVersion: c.BaselineVersion, ReadyTimeout: c.ReadyTimeout, ReadyInterval: c.ReadyInterval, Grace: c.Grace, Resources: resources}}
 		targets[ns] = svc
 		return svc, nil
 	}

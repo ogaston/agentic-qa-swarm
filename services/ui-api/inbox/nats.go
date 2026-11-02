@@ -1,6 +1,7 @@
 package inbox
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,10 +21,11 @@ const EventsStreamName = "AQS_EVENTS"
 const durableInbox = "ui-api-inbox"
 
 const (
-	subjectPrefix   = "aqs.events."
-	subjectNotify   = subjectPrefix + "notify.created"
-	consumerAckWait = 30 * time.Second
-	retryBackoff    = time.Second
+	subjectPrefix    = "aqs.events."
+	subjectNotify    = subjectPrefix + "notify.created"
+	subjectValidated = subjectPrefix + "webhook.validated"
+	consumerAckWait  = 30 * time.Second
+	retryBackoff     = time.Second
 )
 
 // NATSPublisher publica run.confirmed en JetStream (C-45, U8-T02). Nats-Msg-Id = event_id: el stream
@@ -81,8 +83,13 @@ func (s *NATSSubscriber) Replayed() bool { return s.replayed.Load() }
 // Run implementa EventSubscriber. Bloquea hasta que ctx termina. Si NATS no responde o el stream aún
 // no existe (nats-init reinicia al arrancar el clúster), reintenta con espera fija; no termina.
 func (s *NATSSubscriber) Run(ctx context.Context, handle func(NotifyCreated)) error {
+	return s.RunWith(ctx, handle, nil)
+}
+
+// RunWith implementa la suscripción entregando notify.created y webhook.validated.
+func (s *NATSSubscriber) RunWith(ctx context.Context, handleNotify func(NotifyCreated), handleValidated func(WebhookValidated)) error {
 	for {
-		err := s.session(ctx, handle)
+		err := s.session(ctx, handleNotify, handleValidated)
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -96,28 +103,41 @@ func (s *NATSSubscriber) Run(ctx context.Context, handle func(NotifyCreated)) er
 }
 
 // session hace una pasada completa: stream, replay (si falta) y durable hasta que ctx o un error.
-func (s *NATSSubscriber) session(ctx context.Context, handle func(NotifyCreated)) error {
+func (s *NATSSubscriber) session(ctx context.Context, handleNotify func(NotifyCreated), handleValidated func(WebhookValidated)) error {
 	stream, err := s.js.Stream(ctx, EventsStreamName)
 	if err != nil {
 		return err
 	}
 	if !s.replayed.Load() {
-		if err := s.replay(ctx, stream, handle); err != nil {
+		if err := s.replay(ctx, stream, handleNotify, handleValidated); err != nil {
 			return err
 		}
 		s.replayed.Store(true)
 	}
 	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:       durableInbox,
-		FilterSubject: subjectNotify,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		AckWait:       consumerAckWait,
-		MaxDeliver:    -1,
+		Durable:        durableInbox,
+		FilterSubjects: []string{subjectNotify, subjectValidated},
+		AckPolicy:      jetstream.AckExplicitPolicy,
+		AckWait:        consumerAckWait,
+		MaxDeliver:     -1,
 	})
 	if err != nil {
 		return err
 	}
 	cc, err := cons.Consume(func(msg jetstream.Msg) {
+		if msg.Subject() == subjectValidated || bytes.Contains(msg.Data(), []byte(`"type":"webhook.validated"`)) {
+			ev, perr := ParseWebhookValidated(msg.Data())
+			if perr != nil {
+				s.log.WarnContext(ctx, "evento webhook.validated descartado (no cumple el contrato)", "error", perr.Error())
+				_ = msg.Term()
+				return
+			}
+			if handleValidated != nil {
+				handleValidated(ev)
+			}
+			_ = msg.Ack()
+			return
+		}
 		ev, perr := ParseNotifyCreated(msg.Data())
 		if perr != nil {
 			// Sin contenido en el log: el error de ParseNotifyCreated no cita valores del evento.
@@ -125,7 +145,9 @@ func (s *NATSSubscriber) session(ctx context.Context, handle func(NotifyCreated)
 			_ = msg.Term()
 			return
 		}
-		handle(ev)
+		if handleNotify != nil {
+			handleNotify(ev)
+		}
 		_ = msg.Ack()
 	})
 	if err != nil {
@@ -136,11 +158,11 @@ func (s *NATSSubscriber) session(ctx context.Context, handle func(NotifyCreated)
 	return nil
 }
 
-// replay entrega al handle todo el histórico de notify.created del stream, en orden, hasta alcanzar
+// replay entrega al handle todo el histórico del stream, en orden, hasta alcanzar
 // NumPending == 0 del consumidor efímero. Los inválidos se omiten (el durable los hará Term).
-func (s *NATSSubscriber) replay(ctx context.Context, stream jetstream.Stream, handle func(NotifyCreated)) error {
+func (s *NATSSubscriber) replay(ctx context.Context, stream jetstream.Stream, handleNotify func(NotifyCreated), handleValidated func(WebhookValidated)) error {
 	cons, err := stream.OrderedConsumer(ctx, jetstream.OrderedConsumerConfig{
-		FilterSubjects: []string{subjectNotify},
+		FilterSubjects: []string{subjectNotify, subjectValidated},
 		DeliverPolicy:  jetstream.DeliverAllPolicy,
 	})
 	if err != nil {
@@ -159,12 +181,25 @@ func (s *NATSSubscriber) replay(ctx context.Context, stream jetstream.Stream, ha
 			return err
 		}
 		for m := range msgs.Messages() {
+			if m.Subject() == subjectValidated || bytes.Contains(m.Data(), []byte(`"type":"webhook.validated"`)) {
+				ev, perr := ParseWebhookValidated(m.Data())
+				if perr != nil {
+					s.log.WarnContext(ctx, "replay: evento webhook.validated descartado", "error", perr.Error())
+					continue
+				}
+				if handleValidated != nil {
+					handleValidated(ev)
+				}
+				continue
+			}
 			ev, perr := ParseNotifyCreated(m.Data())
 			if perr != nil {
 				s.log.WarnContext(ctx, "replay: evento notify.created descartado", "error", perr.Error())
 				continue
 			}
-			handle(ev)
+			if handleNotify != nil {
+				handleNotify(ev)
+			}
 		}
 		if err := msgs.Error(); err != nil && !errors.Is(err, nats.ErrTimeout) {
 			return err

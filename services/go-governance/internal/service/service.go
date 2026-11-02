@@ -266,7 +266,14 @@ func (s *Service) ListRepositories(ctx context.Context) ([]repos.Repository, err
 	if s.repos == nil {
 		return []repos.Repository{}, nil
 	}
-	return s.repos.List(ctx)
+	list, err := s.repos.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		list[i] = repos.NormalizeRepository(list[i])
+	}
+	return list, nil
 }
 
 // GetRepository devuelve el repositorio especificado.
@@ -274,7 +281,8 @@ func (s *Service) GetRepository(ctx context.Context, repo string) (repos.Reposit
 	if s.repos == nil {
 		return repos.Repository{}, false, nil
 	}
-	return s.repos.Get(ctx, repo)
+	entry, found, err := s.repos.Get(ctx, repo)
+	return repos.NormalizeRepository(entry), found, err
 }
 
 // CreateRepository valida, audita y registra un repositorio si no se excede el límite WARM_MAX_ENVIRONMENTS.
@@ -286,6 +294,15 @@ func (s *Service) CreateRepository(ctx context.Context, actor string, in repos.R
 	if err := repos.ValidateRepoName(repo); err != nil {
 		return repos.Repository{}, err
 	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		name = repo
+	}
+	description := strings.TrimSpace(in.Description)
+	if err := repos.ValidateProjectDetails(name, description, in.Resources); err != nil {
+		return repos.Repository{}, err
+	}
+	resources := repos.NormalizeResources(in.Resources)
 
 	imageRepo := strings.TrimSpace(in.ImageRepo)
 	if imageRepo == "" {
@@ -317,11 +334,15 @@ func (s *Service) CreateRepository(ctx context.Context, actor string, in repos.R
 
 	now := s.now().UTC()
 	entry := repos.Repository{
-		Repo:      repo,
-		ImageRepo: imageRepo,
-		Enabled:   true,
-		Owner:     actor,
-		CreatedAt: now,
+		Repo:                 repo,
+		Name:                 name,
+		Description:          description,
+		Resources:            resources,
+		WebhookSecretVersion: 1,
+		ImageRepo:            imageRepo,
+		Enabled:              true,
+		Owner:                actor,
+		CreatedAt:            now,
 		Warm: repos.WarmEnvironment{
 			Repo:            repo,
 			Namespace:       repos.NamespaceForRepo(repo),
@@ -340,6 +361,7 @@ func (s *Service) CreateRepository(ctx context.Context, actor string, in repos.R
 				"repo":      repo,
 				"owner":     actor,
 				"namespace": entry.Warm.Namespace,
+				"resources": strings.Join(resources, ","),
 			},
 		}); err != nil {
 			return repos.Repository{}, fmt.Errorf("%w: %v", ErrAuditFailed, err)
@@ -347,6 +369,38 @@ func (s *Service) CreateRepository(ctx context.Context, actor string, in repos.R
 	}
 
 	if err := s.repos.Create(ctx, entry); err != nil {
+		return repos.Repository{}, err
+	}
+	return entry, nil
+}
+
+// RotateWebhookSecret incrementa la versión derivada sin persistir ningún secreto.
+func (s *Service) RotateWebhookSecret(ctx context.Context, actor string, role authz.Role, repo string) (repos.Repository, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entry, found, err := s.repos.Get(ctx, strings.ToLower(strings.TrimSpace(repo)))
+	if err != nil {
+		return repos.Repository{}, err
+	}
+	if !found {
+		return repos.Repository{}, repos.ErrNotFound
+	}
+	if role != authz.RoleAdmin && entry.Owner != actor {
+		return repos.Repository{}, repos.ErrForbidden
+	}
+	entry = repos.NormalizeRepository(entry)
+	entry.WebhookSecretVersion++
+	if s.audit != nil {
+		if _, err := s.audit.Append(audit.Entry{
+			Actor:  actor,
+			Action: "repo.webhook_secret_rotated:" + entry.Repo,
+			Detail: map[string]string{"repo": entry.Repo, "actor": actor},
+		}); err != nil {
+			return repos.Repository{}, fmt.Errorf("%w: %v", ErrAuditFailed, err)
+		}
+	}
+	if err := s.repos.Update(ctx, entry); err != nil {
 		return repos.Repository{}, err
 	}
 	return entry, nil

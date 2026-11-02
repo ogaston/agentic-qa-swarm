@@ -13,7 +13,9 @@ import (
 
 type okVerifier struct{}
 
-func (okVerifier) Verify(context.Context, string) (Principal, error) { return Principal{ID: "u-1"}, nil }
+func (okVerifier) Verify(context.Context, string) (Principal, error) {
+	return Principal{ID: "u-1"}, nil
+}
 
 // GET /runs/{id} expone el veredicto de la fase report y omite el campo mientras no hay reporte.
 func TestGetRunExponeVeredicto(t *testing.T) {

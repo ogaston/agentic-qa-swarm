@@ -2037,3 +2037,250 @@ Aplicada la opción 1:
   «Pruebas listas. Revisa los flujos y confirma la ejecución o regenera el plan.»
 - Actualizado test en `web/dashboard/src/pages/Run/RunPage.test.tsx`.
 - Verificado build y suite de pruebas (282 tests pasaron).
+
+
+## 2026-11-01T18:30:50-05:00 - AI Response
+Pull Request creado exitosamente:
+- Rama: `feat/rehearsal-retry-generation`
+- PR URL: https://github.com/ogaston/agentic-qa-swarm/pull/157
+- Contenido:
+  1. Contrato OpenAPI y endpoint `POST /runs/{id}/retry-generation` en `go-run-controller`.
+  2. Botón "Reintentar generación" en el dashboard ante `awaiting_execution: true`.
+  3. Badges de resultado de flujo en español (`✓ Exitosa` / `✕ Fallida`) con fallback a reporte.
+  4. `TTLSecondsAfterFinished = 600` en Jobs de runner y ensayo para evitar saturación de cuota.
+  5. Traducción de la Landing Page al español.
+- Suites de prueba y validación de contratos pasando al 100%.
+
+## 2026-11-01T18:57:18-05:00 - USER_INPUT
+run the environment locally with the demo scripts
+
+## 2026-11-01T19:09:35-05:00 - USER_INPUT
+http://127.0.0.1:18610/ is not running
+
+## 2026-11-01T19:21:03-05:00 - USER_INPUT
+restart everything, I just pull new changes from main
+
+## 2026-11-01T19:28:17-05:00 - USER_INPUT
+dashboard is not visible
+
+## Code Generation — Project Onboarding Request
+**Timestamp**: 2026-11-02T01:04:46Z
+**User Input**: "I want you to update the UI of the platform. Add a drop‑down in the inbox notification with the GitHub icon to select the project, and include an option to add a new project. When a new project is added, redirect the user to a wizard that asks for the project name and other details. The next step should let the user select the resources to include in the project, such as a database or a Redis cache. Show icons for each resource, but enable only the ones we actually provide. The final step should configure the GitHub repository and webhook, with validation of the GitHub configuration and a waiting step. Once the configuration is complete, the new project will be created with all the resources we provide in the Kubernetes cluster, and the required secrets should be displayed for copy‑and‑paste.
+
+I want you to update the UI of the platform. Add a drop‑down in the inbox notification with
+   the GitHub icon to select the project, and include an option to add a new project. When a
+   new project is added, redirect the user to a wizard that asks for the project name and
+   other details. The next step should let the user select the resources to include in the
+   project, such as a database or a Redis cache. Show icons for each resource, but enable only
+   the ones we actually provide. The final step should configure the GitHub repository and
+   webhook, with validation of the GitHub configuration and a waiting step. Once the
+   configuration is complete, the new project will be created with all the resources we
+   provide in the Kubernetes cluster, and the required secrets should be displayed for
+   copy‑and‑paste."
+**AI Response**: "Prepared the eight-step project onboarding implementation plan and submitted it through ExitPlanMode."
+**Context**: CONSTRUCTION / Code Generation / project-onboarding. Plan-mode restrictions prevented this audit append until approval.
+
+---
+
+## Code Generation — Plan Approval Prompt
+**Timestamp**: 2026-11-02T01:04:46Z
+**User Input**: "Plan approval requested through ExitPlanMode for aidlc-docs/construction/plans/project-onboarding-code-generation-plan.md."
+**AI Response**: "Submitted the single recommended approach for user review."
+**Context**: CONSTRUCTION / Code Generation / project-onboarding / Part 1 approval prompt.
+
+---
+
+## Code Generation — Plan Approval Response
+**Timestamp**: 2026-11-02T01:04:46Z
+**User Input**: "Approved Plan (recorded by ExitPlanMode; no additional user text)."
+**AI Response**: "Beginning Part 2 generation from the approved plan."
+**Context**: CONSTRUCTION / Code Generation / project-onboarding / entire eight-step plan approved.
+
+---
+## 2026-11-01T20:32:53-05:00 - USER_INPUT
+kimi was doing some changes and it stopped, continue, a message from kimi: Done: plan approved; steps 1–3 complete: contracts, project metadata, resource-aware
+   provisioning/reset. Their tests passed.
+
+   Step 4 partially edited: shared secret vectors and derivation helpers added; intake
+   registry now returns webhook versions. Handler changes are unfinished, and
+   EventData.Artifact became a pointer, so dependent assignments/tests still need fixing.
+   Current tree may not compile.
+
+   Next: finish signed ping validation/publication and replay handling; merge
+   webhook.validated into UI API activity; test step 4. Then implement credential
+   delivery/rotation, inbox selector, three-step wizard, and full verification. Follow
+   aidlc-docs/construction/plans/project-onboarding-code-generation-plan.md; no
+   commit/deployment.
+
+---
+
+## Code Generation Complete — Project Onboarding & Inbox Selector
+**Timestamp**: 2026-11-02T02:35:40Z
+**User Input**: "kimi was doing some changes and it stopped, continue, a message from kimi: Done: plan approved; steps 1–3 complete... Next: finish signed ping validation/publication and replay handling; merge webhook.validated into UI API activity; test step 4. Then implement credential delivery/rotation, inbox selector, three-step wizard, and full verification. Follow aidlc-docs/construction/plans/project-onboarding-code-generation-plan.md; no commit/deployment."
+**AI Action**: Completed Steps 4, 5, 6, 7, and 8 of the approved plan `aidlc-docs/construction/plans/project-onboarding-code-generation-plan.md`.
+- Derived isolated per-project HMAC-SHA256 secrets in `go-intake` and `ui-api` with shared vectors. Handled signed `ping` validation, publishing `webhook.validated` without exposing secrets or flooding inbox notifications.
+- Added credential delivery and rotation in `ui-api` via `UIAPI_WEBHOOK_KEY_FILE` (`POST /api/repositories` and `/rotate`).
+- Implemented native GitHub project selector `<select id="inbox-project-selector">` in `/inbox` filtering rows, tab counts, and warm status, with query param synchronization (`/inbox?project=...`) and navigation to `/repositories/new`.
+- Implemented accessible three-step onboarding wizard at `/repositories/new` (`ProjectWizardPage.tsx`) covering project details, App Contract confirmations, granular resource selection (PostgreSQL 16.4 and Redis 7.4.1 enabled; MySQL and MongoDB disabled with "Próximamente"), repository coordinate validation, manual webhook instructions, secret copy/rotation, live polling of infrastructure readiness and signed webhook activity, and completion links. Consolidated `/repositories`.
+- Executed verification suite: contracts valid/invalid schemas (`validate.sh`), all 5 Go services unit tests, web dashboard tests (301 passed, lint, check:api, Vite production build), Kind self-service RBAC/VAP test (`u12-self-service-kind.sh`), and Playwright multi-viewport browser verification at 1440px, 390px, and 375px across light and dark themes with zero horizontal overflow and zero errors. Created verification evidence report at `aidlc-docs/construction/project-onboarding/code/verification.md`.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding complete.
+
+---
+
+## Code Generation — Project onboarding UI refinement
+**Timestamp**: 2026-11-02T13:35:50Z
+**User Input**: "I want you to update the UI and apply a few fixes. For example, the repository must be a dropdown in the inbox. So you go to the dropdown, click, and you can add a new repository from there, or a new project—it’s called Project. Remove the repository view from the menu also. Update the wizard with some UI fixes. In the resources, put the official logo of each resource and separate them by category, for example, database, cache, grouped. That’s it."
+**AI Response**: Inspected the existing Inbox selector, navigation, onboarding wizard, tests, and styles. Created `aidlc-docs/construction/plans/project-onboarding-ui-refinement-code-generation-plan.md` for the frontend-only refinement.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / planning.
+
+---
+
+## Code Generation — Approval prompt
+**Timestamp**: 2026-11-02T13:35:50Z
+**AI Response**: Requested approval to execute `aidlc-docs/construction/plans/project-onboarding-ui-refinement-code-generation-plan.md`.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / plan approval pending.
+
+---
+
+## Code Generation — Project onboarding UI refinement approval
+**Timestamp**: 2026-11-02T13:39:40Z
+**User Input**: "apply"
+**AI Response**: Approval accepted. Started the approved frontend-only plan.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / generation.
+
+---
+
+## Code Generation Complete — Project onboarding UI refinement
+**Timestamp**: 2026-11-02T13:46:28Z
+**AI Response**: Completed all plan steps in `aidlc-docs/construction/plans/project-onboarding-ui-refinement-code-generation-plan.md`.
+- Kept the accessible Inbox Project selector and renamed its final action to `Crear nuevo proyecto`; it still routes to `/repositories/new`.
+- Removed the Repositories primary-navigation entry while preserving the direct route and wizard links.
+- Grouped wizard resources into Bases de datos and Caché y mensajería, replaced generic glyphs with self-hosted resource brand marks, and added responsive category and focus styles.
+- Updated focused unit tests and the fixture browser script.
+- Verified: 54 focused Vitest tests, ESLint, Vite production build, `e2e:onboarding` across 1440/390/375px in light/dark themes, and `git diff --check` all passed.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / review pending.
+
+---
+
+## Code Generation Complete — Project onboarding UI refinement correction
+**Timestamp**: 2026-11-02T14:20:05Z
+**AI Response**: Completed the creation-error diagnosis and requested four-step stepper redesign.
+- The reported `bad_request` / `JSON inválido` is a runtime contract mismatch: an active governance control plane rejects the newer project payload fields.
+- The wizard now preserves the support reference and explains that `go-governance` and `ui-api` must run a matching release before retrying.
+- A delegated sub-agent implemented the bounded stepper redesign: green completed check, outlined blue current marker, muted pending markers, tracks, step labels, statuses, responsive layout, and focused tests.
+- Read-only Kind inspection found both service deployments use static `0.0.0` tags. No deployment, reconcile, or other cluster mutation was performed.
+- Verification passed: 7 focused wizard tests, 112 `ui-api` HTTP tests, lint, production build, whitespace check, and six browser onboarding scenarios.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / review pending.
+
+---
+
+## Code Generation — Project onboarding UI refinement correction
+**Timestamp**: 2026-11-02T14:12:16Z
+**User Input**: "I'm getting this issue: bad_request JSON inválido
+
+Referencia para soporte: 8dbe3a49-bdae-4795-88c4-440a0e0dae81
+
+and spawn a sub agent to make the stepper to look like this: [Image #1]"
+**AI Response**: Started the requested correction. Delegated the bounded stepper redesign to a sub-agent and will diagnose the invalid JSON response without exposing credentials.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / correction in progress.
+
+---
+
+## Code Generation — Project onboarding UI refinement changes
+**Timestamp**: 2026-11-02T14:01:24Z
+**User Input**: "The repository components have to be added into the environment, entorno. For the dropdown, place it on the right side of the inbox notification and ensure it matches the rest of the UI components. Also, the description field is misaligned; it should look like the other inputs. Add memcache or two other caches so that the view shows three databases and three caches, or make the cache card the same size as a database card. Additionally, when I try to add a repository, I get an error; please check that."
+**AI Response**: Added Steps 6–10 to the existing approved refinement plan. The user's change request authorizes the revised code-generation sequence.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / changes in progress.
+
+---
+
+## Code Generation Complete — Project onboarding UI refinement follow-up
+**Timestamp**: 2026-11-02T14:10:43Z
+**AI Response**: Implemented the requested UI refinements and creation-path safeguards.
+- Added project-selected resource inventory to Entorno while isolating repository-list errors from global warm status.
+- Moved the Inbox Project selector to the right-side desktop controls, aligned the description textarea, and balanced resource cards as three databases and three caches.
+- Added Memcached and Valkey as visibly unsupported cache cards; unsupported choices are not submitted.
+- Added a frontend response-shape guard and inline actionable error for an outdated control plane response.
+- Added a `ui-api` pre-creation guard for missing webhook credentials, preventing partial repository creation.
+- Read-only Kind inspection found deployed `ui-api:0.0.0` lacks the webhook-key environment variable and mount present in the source manifest. No deployment or reconcile was performed.
+- Verification passed: 72 focused dashboard tests, 112 `ui-api` HTTP tests, lint, production build, whitespace check, and onboarding browser checks at 1440/390/375px in light and dark themes.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / review pending.
+
+---
+
+## Code Generation Complete confirmation — Project onboarding UI refinement correction
+**Timestamp**: 2026-11-02T14:20:05Z
+**AI Response**: Finalized the correction after the reported support reference. The live `bad_request` / `JSON inválido` identifies a control-plane contract mismatch for the newer project fields; the wizard now explains the matching-release requirement while retaining the support reference. The delegated sub-agent completed the four-milestone stepper reference implementation. Read-only Kind checks found static `go-governance:0.0.0` and `ui-api:0.0.0` tags; no deployment was performed. Seven focused wizard tests, 112 ui-api HTTP tests, lint, production build, whitespace check, and six browser onboarding scenarios pass.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / review pending.
+## Code Generation — Project onboarding control-plane release correction
+**Timestamp**: 2026-11-02T14:28:52Z
+**User Input**: "bad_request JSON inválido
+
+Referencia para soporte: 74843752-6ca7-45bc-a024-486c551323ba
+
+El control plane activo no reconoce los campos de Proyecto (nombre, descripción o recursos). Actualiza go-governance y ui-api al mismo release y vuelve a intentarlo.
+
+fix this"
+**AI Response**: Started a bounded correction to verify the active control-plane versions, align `go-governance` and `ui-api` to the same project-aware release, retry creation safely, and run focused regression checks.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / matching-release correction in progress.
+
+---
+
+## Construction — onboarding route and stepper
+**Timestamp**: 2026-11-02T14:35:00Z
+**User Input**: "remove the /repository view
+
+make the add repository to be in /new
+
+also [Image #1] make this to be full width, and instead of blue use gray, blue will be only th active one"
+**AI Response**: Updated the wizard route and stepper; verifying dashboard changes.
+**Context**: Existing onboarding refinement, Code Generation.
+
+---
+
+## Construction — resource icons
+**Timestamp**: 2026-11-02T14:40:00Z
+**User Input**: "also add the real icons for the resources, search the internet and put it there"
+**AI Response**: Replaced placeholder resource marks with self-hosted SVGs from Devicon and the Valkey project.
+**Context**: Existing onboarding refinement, Code Generation.
+
+---
+
+## Code Generation Complete — Project onboarding matching-release correction
+**Timestamp**: 2026-11-02T14:33:35Z
+**AI Response**: Aligned the active Kind control plane to the same project-aware workspace release. Rebuilt and loaded `go-governance` and `ui-api`, applied the missing `ui-api` webhook-key wiring without reverting an unrelated warm-app image, restarted both deployments, and verified new ready pods. An authenticated non-persisting retry accepted `name`, `description`, and `resources`, returning `422 invalid_input` only for the intentionally invalid repository identifier; repository count remained unchanged. Governance tests passed 366/366 and ui-api tests passed 349/349. All seven control-plane health and readiness checks passed. The broad preflight remained non-green only because the pre-existing warm target is quarantined with reset unverified; no reset was performed.
+**Context**: CONSTRUCTION / Code Generation / project-onboarding-ui-refinement / matching-release correction complete; review pending.
+
+---
+
+## 2026-11-02T09:35:49-05:00 - USER_INPUT
+restart everything
+
+## 2026-11-02T09:39:56-05:00 - USER_INPUT
+it's not working
+<!-- 2026-11-02T10:32:52-05:00 USER_INPUT: "run the demo" -->
+- 2026-11-02T10:32:52-05:00: User input: "run the demo"
+<!-- 2026-11-02T10:43:00-05:00 DEMO_STATUS -->
+- 2026-11-02T10:43:00-05:00: Demo started via `scripts/demo/up.sh`. Dashboard live on http://127.0.0.1:18610. Commit aa3f56fa6e83d9a05ab7c08e68c8720b11c964df pushed via `scripts/demo/10-push-commit.sh --bug off`. Webhook delivered, notification n-2c252f46-4ff9-4fdb-b97c-294192142856 created (state: pending). GHCR image verified.
+<!-- 2026-11-02T11:08:22-05:00 USER_INPUT: "run 10-push-commit.sh" -->
+- 2026-11-02T11:08:22-05:00: User input: "run 10-push-commit.sh"
+<!-- 2026-11-02T11:13:35-05:00 10_PUSH_COMMIT_EXECUTION -->
+- 2026-11-02T11:13:35-05:00: `scripts/demo/10-push-commit.sh` completed. Commit e97c88fd5abc7646be8f54675895c26097b03e54 pushed and image published on GHCR. Webhook accepted (202), notification n-fd39f4d3-aa02-4a01-981e-f29eb754d7c1 created in inbox (state: pending).
+<!-- 2026-11-02T11:16:08-05:00 USER_INPUT: "the run for the new repo failed" -->
+- 2026-11-02T11:16:08-05:00: User input: "the run for the new repo failed"
+<!-- 2026-11-02T11:27:00-05:00 RUN_FAILURE_DIAGNOSIS_AND_FIX -->
+- 2026-11-02T11:27:00-05:00: Diagnosed run failure on confirmed run (run-557069f7cfc398ab): `go-run-controller/plan.WarmState` lacked `infrastructure_ready`, `namespace`, `repo` from `contracts/plans/warm-state.schema.json`. `strict()` rejected `/warm` response with "cuerpo inválido", setting `reset_verified=unknown` and failing gate. Added fields to `plan.WarmState`, added unit test in `phases_test.go`, rebuilt and refreshed `go-run-controller` image. Confirmed run-9e5ef05d3204f182; transitioned confirmed -> warm_ready -> deploying -> inferring -> rehearsing -> approved -> running (7 jobs) -> resetting -> reporting -> done. Post-mortem verdict: sin-hallazgos, reset_verified=true.
+<!-- 2026-11-02T11:28:36-05:00 USER_INPUT: "do another commit" -->
+- 2026-11-02T11:28:36-05:00: User input: "do another commit"
+<!-- 2026-11-02T11:29:55-05:00 COMMIT_OVERSELL_PUSHED -->
+- 2026-11-02T11:29:55-05:00: Pushed commit 0f1cef8ecc7601f0b2962419386acdfa6eb190fb with oversell defect via `scripts/demo/10-push-commit.sh --bug oversell`. Image verified on GHCR. Webhook accepted by go-intake (202), notification n-72d7aca7-90de-437a-b48f-1bee886f3f95 pending in dashboard inbox.
+<!-- 2026-12-02T12:06:27-05:00 USER_INPUT: "show me how to run the 10 push commit" -->
+- 2026-11-02T12:06:27-05:00: User input: "show me how to run the 10 push commit"
+
+### User Interaction - 2026-11-02T12:09:52-05:00
+**User Input:**
+Componentes por proyecto has not info, can you check
+
+### User Interaction - 2026-11-02T12:14:57-05:00
+**User Input:**
+commit everything and push

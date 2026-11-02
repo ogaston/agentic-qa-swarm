@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-qa-swarm.example/contracts/events/v1/webhook.validated.schema.json",
+  "title": "Evento webhook.validated",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "const": "webhook.validated"
+    },
+    "version": {
+      "const": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+/[a-z0-9._-]+$"
+        },
+        "github_event": {
+          "const": "ping"
+        },
+        "delivery_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["repo", "github_event", "delivery_id"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["event_id", "type", "version", "occurred_at", "trace_id", "data"],
+  "additionalProperties": false
+}

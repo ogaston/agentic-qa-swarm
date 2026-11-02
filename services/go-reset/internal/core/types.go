@@ -5,6 +5,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -18,10 +19,54 @@ const (
 
 // Nombres de las comprobaciones de verificación.
 const (
-	CheckAppReady   = "app-ready"
-	CheckDBBaseline = "db-baseline"
-	CheckCacheEmpty = "cache-empty"
+	CheckAppReady      = "app-ready"
+	CheckDBBaseline    = "db-baseline"
+	CheckCacheEmpty    = "cache-empty"
+	ResourcePostgreSQL = "postgresql"
+	ResourceRedis      = "redis"
 )
+
+// NormalizeResources aplica el comportamiento legacy a una selección omitida.
+func NormalizeResources(resources []string) []string {
+	if resources == nil {
+		return []string{ResourcePostgreSQL, ResourceRedis}
+	}
+	out := make([]string, 0, len(resources))
+	for _, canonical := range []string{ResourcePostgreSQL, ResourceRedis} {
+		for _, selected := range resources {
+			if selected == canonical {
+				out = append(out, canonical)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// HasResource aplica la selección sin confundir una lista vacía con una omitida.
+func HasResource(resources []string, resource string) bool {
+	for _, selected := range NormalizeResources(resources) {
+		if selected == resource {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateResources rechaza dependencias que la plataforma no provisiona.
+func ValidateResources(resources []string) error {
+	seen := map[string]bool{}
+	for _, resource := range resources {
+		if resource != ResourcePostgreSQL && resource != ResourceRedis {
+			return fmt.Errorf("recurso no soportado %q", resource)
+		}
+		if seen[resource] {
+			return fmt.Errorf("recurso duplicado %q", resource)
+		}
+		seen[resource] = true
+	}
+	return nil
+}
 
 // Estados de sesión.
 const (
@@ -32,12 +77,13 @@ const (
 
 // WarmState es el WarmState del contrato.
 type WarmState struct {
-	WarmID          string `json:"warm_id"`
-	State           string `json:"state"`
-	ResetVerified   bool   `json:"reset_verified"`
-	BaselineVersion string `json:"baseline_version"`
-	Namespace       string `json:"namespace,omitempty"`
-	Repo            string `json:"repo,omitempty"`
+	WarmID              string `json:"warm_id"`
+	State               string `json:"state"`
+	ResetVerified       bool   `json:"reset_verified"`
+	BaselineVersion     string `json:"baseline_version"`
+	InfrastructureReady bool   `json:"infrastructure_ready"`
+	Namespace           string `json:"namespace,omitempty"`
+	Repo                string `json:"repo,omitempty"`
 }
 
 // Snapshot es el estado más la hora de su última escritura.
@@ -53,7 +99,23 @@ type Snapshot struct {
 type Policy struct {
 	IdleScaleDownAfter time.Duration
 	MinReplicasIdle    int32
+	Resources          []string
 }
+
+// StatelessDatabase evita llamadas nil cuando PostgreSQL no fue seleccionado.
+type StatelessDatabase struct{}
+
+func (StatelessDatabase) Clean(context.Context) error       { return nil }
+func (StatelessDatabase) Diff(context.Context) (int, error) { return 0, nil }
+func (StatelessDatabase) Version(context.Context) (string, error) {
+	return "stateless", nil
+}
+
+// StatelessCache evita llamadas nil cuando Redis no fue seleccionado.
+type StatelessCache struct{}
+
+func (StatelessCache) Flush(context.Context) error           { return nil }
+func (StatelessCache) DBSize(context.Context) (int64, error) { return 0, nil }
 
 // Session es la sesión de una corrida.
 type Session struct {

@@ -25,6 +25,9 @@
       "type": "string",
       "minLength": 1
     },
+    "infrastructure_ready": {
+      "type": "boolean"
+    },
     "namespace": {
       "type": "string"
     },

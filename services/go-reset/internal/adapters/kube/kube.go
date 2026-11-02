@@ -178,7 +178,16 @@ func (c *Client) WarmPolicy(ctx context.Context) (core.Policy, error) {
 	if err != nil || n < 0 {
 		return core.Policy{}, fmt.Errorf("minReplicasIdle inválido")
 	}
-	return core.Policy{IdleScaleDownAfter: d, MinReplicasIdle: int32(n)}, nil
+	var resources []string
+	if raw, ok := cm.Data["resources"]; ok {
+		if err := json.Unmarshal([]byte(raw), &resources); err != nil || resources == nil {
+			return core.Policy{}, fmt.Errorf("resources inválido")
+		}
+		if err := core.ValidateResources(resources); err != nil {
+			return core.Policy{}, fmt.Errorf("resources: %w", err)
+		}
+	}
+	return core.Policy{IdleScaleDownAfter: d, MinReplicasIdle: int32(n), Resources: core.NormalizeResources(resources)}, nil
 }
 
 // Get lee el ConfigMap warm-state (clave "state" = WarmState JSON; "updated_at" = RFC3339).

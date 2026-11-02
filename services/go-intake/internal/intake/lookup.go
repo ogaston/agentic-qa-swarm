@@ -16,12 +16,22 @@ type RepoLookup interface {
 	Allowed(ctx context.Context, repo string) bool
 }
 
+type RepoMetadata struct {
+	Allowed              bool
+	WebhookSecretVersion int
+}
+
+type RepoMetadataLookup interface {
+	Metadata(ctx context.Context, repo string) (RepoMetadata, bool)
+}
+
 // StaticRepoLookup es un lookup estático basado en una lista de repositorios permitidos.
 type StaticRepoLookup struct {
 	allowed map[string]struct{}
 }
 
 var _ RepoLookup = (*StaticRepoLookup)(nil)
+var _ RepoMetadataLookup = (*StaticRepoLookup)(nil)
 
 // NewStaticRepoLookup crea un lookup estático. Fail-closed si repos está vacío.
 func NewStaticRepoLookup(repos []string) *StaticRepoLookup {
@@ -36,11 +46,16 @@ func NewStaticRepoLookup(repos []string) *StaticRepoLookup {
 
 // Allowed implementa RepoLookup de forma fail-closed (lista vacía = false).
 func (s *StaticRepoLookup) Allowed(_ context.Context, repo string) bool {
+	_, ok := s.Metadata(context.Background(), repo)
+	return ok
+}
+
+func (s *StaticRepoLookup) Metadata(_ context.Context, repo string) (RepoMetadata, bool) {
 	if s == nil || len(s.allowed) == 0 {
-		return false
+		return RepoMetadata{}, false
 	}
 	_, ok := s.allowed[strings.ToLower(strings.TrimSpace(repo))]
-	return ok
+	return RepoMetadata{Allowed: ok}, ok
 }
 
 // HTTPDoer es la interfaz para realizar peticiones HTTP (lo cumple *http.Client).
@@ -65,12 +80,13 @@ type RegistryLookupConfig struct {
 type RegistryRepoLookup struct {
 	cfg         RegistryLookupConfig
 	mu          sync.RWMutex
-	cached      map[string]bool
+	cached      map[string]RepoMetadata
 	lastFetched time.Time
 	lastGood    time.Time
 }
 
 var _ RepoLookup = (*RegistryRepoLookup)(nil)
+var _ RepoMetadataLookup = (*RegistryRepoLookup)(nil)
 
 // NewRegistryRepoLookup construye un lookup respaldado por el registro de go-governance.
 func NewRegistryRepoLookup(cfg RegistryLookupConfig) *RegistryRepoLookup {
@@ -90,10 +106,10 @@ func NewRegistryRepoLookup(cfg RegistryLookupConfig) *RegistryRepoLookup {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 
-	cached := make(map[string]bool)
+	cached := make(map[string]RepoMetadata)
 	for _, s := range cfg.Seed {
 		if tr := strings.ToLower(strings.TrimSpace(s)); tr != "" {
-			cached[tr] = true
+			cached[tr] = RepoMetadata{Allowed: true}
 		}
 	}
 	r := &RegistryRepoLookup{
@@ -107,11 +123,12 @@ func NewRegistryRepoLookup(cfg RegistryLookupConfig) *RegistryRepoLookup {
 }
 
 type governanceRepoItem struct {
-	Repo    string `json:"repo"`
-	Enabled bool   `json:"enabled"`
+	Repo                 string `json:"repo"`
+	Enabled              bool   `json:"enabled"`
+	WebhookSecretVersion int    `json:"webhook_secret_version"`
 }
 
-func (r *RegistryRepoLookup) fetch(ctx context.Context) (map[string]bool, error) {
+func (r *RegistryRepoLookup) fetch(ctx context.Context) (map[string]RepoMetadata, error) {
 	url := fmt.Sprintf("%s/v1/repositories", strings.TrimRight(r.cfg.GovernanceURL, "/"))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -136,16 +153,16 @@ func (r *RegistryRepoLookup) fetch(ctx context.Context) (map[string]bool, error)
 		return nil, fmt.Errorf("decodificando repositorios de governance: %w", err)
 	}
 
-	m := make(map[string]bool, len(items)+len(r.cfg.Seed))
+	m := make(map[string]RepoMetadata, len(items)+len(r.cfg.Seed))
 	for _, s := range r.cfg.Seed {
 		if tr := strings.ToLower(strings.TrimSpace(s)); tr != "" {
-			m[tr] = true
+			m[tr] = RepoMetadata{Allowed: true}
 		}
 	}
 	for _, it := range items {
 		tr := strings.ToLower(strings.TrimSpace(it.Repo))
 		if tr != "" {
-			m[tr] = it.Enabled
+			m[tr] = RepoMetadata{Allowed: it.Enabled, WebhookSecretVersion: it.WebhookSecretVersion}
 		}
 	}
 	return m, nil
@@ -153,29 +170,32 @@ func (r *RegistryRepoLookup) fetch(ctx context.Context) (map[string]bool, error)
 
 // Allowed implementa RepoLookup.
 func (r *RegistryRepoLookup) Allowed(ctx context.Context, repo string) bool {
+	metadata, _ := r.Metadata(ctx, repo)
+	return metadata.Allowed
+}
+
+func (r *RegistryRepoLookup) Metadata(ctx context.Context, repo string) (RepoMetadata, bool) {
 	repo = strings.ToLower(strings.TrimSpace(repo))
 	if repo == "" {
-		return false
+		return RepoMetadata{}, false
 	}
 	now := r.cfg.Now()
 
-	// 1. Verificación rápida de caché bajo RLock (< 15s)
 	r.mu.RLock()
 	if !r.lastFetched.IsZero() && now.Sub(r.lastFetched) < r.cfg.CacheTTL {
-		allowed := r.cached[repo]
+		metadata, ok := r.cached[repo]
 		r.mu.RUnlock()
-		return allowed
+		return metadata, ok
 	}
 	r.mu.RUnlock()
 
-	// 2. Caché vencida o primera consulta
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Doble comprobación bajo lock
 	now = r.cfg.Now()
 	if !r.lastFetched.IsZero() && now.Sub(r.lastFetched) < r.cfg.CacheTTL {
-		return r.cached[repo]
+		metadata, ok := r.cached[repo]
+		return metadata, ok
 	}
 
 	fetched, err := r.fetch(ctx)
@@ -183,18 +203,15 @@ func (r *RegistryRepoLookup) Allowed(ctx context.Context, repo string) bool {
 		r.cached = fetched
 		r.lastFetched = now
 		r.lastGood = now
-		return r.cached[repo]
+		metadata, ok := r.cached[repo]
+		return metadata, ok
 	}
 
-	// Consulta fallida
 	r.lastFetched = now
 	r.cfg.Log.WarnContext(ctx, "fallo al consultar repositorios en governance", "error", err.Error())
-
-	// Comprobar last-known-good (5 minutos)
 	if !r.lastGood.IsZero() && now.Sub(r.lastGood) <= r.cfg.LkgTTL {
-		return r.cached[repo]
+		metadata, ok := r.cached[repo]
+		return metadata, ok
 	}
-
-	// Fail-closed si no hay last-known-good o ya expiró
-	return false
+	return RepoMetadata{}, false
 }

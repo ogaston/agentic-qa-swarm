@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { components } from '../../api/schema.gen';
 import { ApiError, apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
@@ -12,6 +12,7 @@ import { ArtifactLabel, GithubLink, relativeTime } from '../../inbox/display';
 type Notification = components['schemas']['Notification'];
 type ConfirmationReceipt = components['schemas']['ConfirmationReceipt'];
 type WarmState = components['schemas']['WarmState'];
+type Repository = components['schemas']['Repository'];
 type Estado = Notification['state'];
 
 const PESTANAS: { estado: Estado; etiqueta: string; vacio: string; vacioDescripcion: string }[] = [
@@ -97,9 +98,18 @@ function textoArtefacto(a: { kind: string; ref: string }): string {
 
 export function InboxPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const proyectoParam = searchParams.get('project') || '';
   const [estado, setEstado] = useState<Estado>('pending');
   const [notificaciones, setNotificaciones] = useState<Notification[] | null>(null);
-  const lista = notificaciones?.filter((n) => n.state === estado) ?? null;
+  const [repositorios, setRepositorios] = useState<Repository[] | null>(null);
+
+  const notificacionesFiltradas = notificaciones?.filter((n) => {
+    if (!proyectoParam) return true;
+    return n.repo === proyectoParam;
+  }) ?? null;
+
+  const lista = notificacionesFiltradas?.filter((n) => n.state === estado) ?? null;
   const [page, setPage] = useState(1);
   const totalPages = lista === null ? 0 : Math.ceil(lista.length / PAGE_SIZE);
   // Si la lista se encoge (p. ej. tras una recarga), la página se ajusta a la última válida.
@@ -109,14 +119,16 @@ export function InboxPage() {
   const pageEnd = Math.min(currentPage * PAGE_SIZE, lista?.length ?? 0);
   const [ahora, setAhora] = useState(Date.now);
   const [errorLista, setErrorLista] = useState<unknown>(null);
-  // Los totales siempre se calculan sobre el conjunto completo, independientemente de la pestaña.
-  const conteos = notificaciones === null ? {} : {
-    pending: notificaciones.filter((n) => n.state === 'pending').length,
-    confirmed: notificaciones.filter((n) => n.state === 'confirmed').length,
-    rejected: notificaciones.filter((n) => n.state === 'rejected').length,
+  // Los totales siempre se calculan sobre el conjunto filtrado (o global si no hay proyecto seleccionado).
+  const conteos = notificacionesFiltradas === null ? {} : {
+    pending: notificacionesFiltradas.filter((n) => n.state === 'pending').length,
+    confirmed: notificacionesFiltradas.filter((n) => n.state === 'confirmed').length,
+    rejected: notificacionesFiltradas.filter((n) => n.state === 'rejected').length,
   };
   // Estado del warm para el KPI. null = no disponible o aún no leído.
   const [warm, setWarm] = useState<WarmState | null>(null);
+  const repoSeleccionado = proyectoParam && repositorios ? repositorios.find((r) => r.repo === proyectoParam) : null;
+  const warmActualState = proyectoParam ? (repoSeleccionado ? repoSeleccionado.warm : null) : warm;
   const [seleccionadaId, setSeleccionadaId] = useState<string | null>(null);
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [familias, setFamilias] = useState<FlowFamily[]>(familiasDisponibles);
@@ -158,9 +170,22 @@ export function InboxPage() {
     }
   }, []);
 
+  const cargarRepositorios = useCallback(async () => {
+    try {
+      const datos = await apiFetch<Repository[]>('/api/repositories');
+      setRepositorios(datos);
+    } catch {
+      // Si falla, el listado de notificaciones continúa operativo
+    }
+  }, []);
+
   useEffect(() => {
     void cargarWarm();
   }, [cargarWarm]);
+
+  useEffect(() => {
+    void cargarRepositorios();
+  }, [cargarRepositorios]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 
@@ -206,6 +231,26 @@ export function InboxPage() {
     setPanelAbierto(false);
     setSeleccionadaId(null);
   }
+
+  function alCambiarProyecto(evento: React.ChangeEvent<HTMLSelectElement>) {
+    const valor = evento.target.value;
+    if (valor === '__new__') {
+      navigate('/new');
+      return;
+    }
+    cerrarModal();
+    setPage(1);
+    if (valor) {
+      setSearchParams({ project: valor });
+    } else {
+      setSearchParams({});
+    }
+  }
+
+  useEffect(() => {
+    setPage(1);
+    cerrarModal();
+  }, [proyectoParam]);
 
   // Foco inicial en el título del modal y al cambiar de paso; al cerrarlo, vuelve al botón de la fila.
   useEffect(() => {
@@ -308,6 +353,7 @@ export function InboxPage() {
   function actualizar() {
     void cargar();
     void cargarWarm();
+    void cargarRepositorios();
   }
 
   const pestanaVacia = PESTANAS.find((p) => p.estado === estado);
@@ -342,10 +388,10 @@ export function InboxPage() {
         />
         <Kpi
           etiqueta="Estado del entorno"
-          valor={warm !== null ? ETIQUETA_ENTORNO[warm.state] : 'Sin dato'}
+          valor={warmActualState !== null ? ETIQUETA_ENTORNO[warmActualState.state] : 'Sin dato'}
           claseValor="kpi-valor-20"
-          tono={warm === null ? 'neutral' : warm.state === 'ready' && !warm.reset_verified ? 'warn' : TONO_ENTORNO[warm.state]}
-          descripcion={warm === null ? 'No pudimos consultar su disponibilidad.' : warm.state === 'ready' && warm.reset_verified ? 'Disponible y con limpieza verificada.' : 'Consulta Entorno antes de iniciar otra corrida.'}
+          tono={warmActualState === null ? 'neutral' : warmActualState.state === 'ready' && !warmActualState.reset_verified ? 'warn' : TONO_ENTORNO[warmActualState.state]}
+          descripcion={warmActualState === null ? 'No pudimos consultar su disponibilidad.' : warmActualState.state === 'ready' && warmActualState.reset_verified ? 'Disponible y con limpieza verificada.' : 'Consulta Entorno antes de iniciar otra corrida.'}
           icono={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M7 10h3l2-3 2 7 2-4h2" /></svg>}
         />
         <Kpi
@@ -405,6 +451,22 @@ export function InboxPage() {
                 </svg>
                 Actualizar
               </button>
+            </div>
+            <div className="inbox-project-filter">
+              <label htmlFor="inbox-project-selector" className="inbox-project-label">
+                <span className="inbox-project-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+                  </svg>
+                </span>
+                Proyecto:
+              </label>
+              <select id="inbox-project-selector" data-testid="inbox-project-selector" className="inbox-project-select" value={proyectoParam} onChange={alCambiarProyecto}>
+                <option value="">Todos los proyectos</option>
+                {repositorios?.map((r) => <option key={r.repo} value={r.repo}>{r.name && r.name !== r.repo ? `${r.name} (${r.repo})` : r.repo}</option>)}
+                {proyectoParam && !repositorios?.some((r) => r.repo === proyectoParam) && <option value={proyectoParam}>{proyectoParam}</option>}
+                <option value="__new__">+ Crear nuevo proyecto</option>
+              </select>
             </div>
           </div>
         </div>

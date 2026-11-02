@@ -33,12 +33,13 @@ const (
 
 // WarmState es components.schemas.WarmState (contracts/plans/warm-state.schema.json).
 type WarmState struct {
-	Repo            string `json:"repo,omitempty"`
-	Namespace       string `json:"namespace,omitempty"`
-	WarmID          string `json:"warm_id"`
-	State           string `json:"state"`
-	ResetVerified   bool   `json:"reset_verified"`
-	BaselineVersion string `json:"baseline_version"`
+	Repo                string `json:"repo,omitempty"`
+	Namespace           string `json:"namespace,omitempty"`
+	WarmID              string `json:"warm_id"`
+	State               string `json:"state"`
+	ResetVerified       bool   `json:"reset_verified"`
+	BaselineVersion     string `json:"baseline_version"`
+	InfrastructureReady bool   `json:"infrastructure_ready"`
 }
 
 var warmStates = map[string]bool{
@@ -56,12 +57,13 @@ func parseWarmState(b []byte) (WarmState, bool) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	var raw struct {
-		Repo            *string `json:"repo"`
-		Namespace       *string `json:"namespace"`
-		WarmID          *string `json:"warm_id"`
-		State           *string `json:"state"`
-		ResetVerified   *bool   `json:"reset_verified"`
-		BaselineVersion *string `json:"baseline_version"`
+		Repo                *string `json:"repo"`
+		Namespace           *string `json:"namespace"`
+		WarmID              *string `json:"warm_id"`
+		State               *string `json:"state"`
+		ResetVerified       *bool   `json:"reset_verified"`
+		BaselineVersion     *string `json:"baseline_version"`
+		InfrastructureReady *bool   `json:"infrastructure_ready"`
 	}
 	if err := dec.Decode(&raw); err != nil {
 		return WarmState{}, false
@@ -86,6 +88,9 @@ func parseWarmState(b []byte) (WarmState, bool) {
 	}
 	if raw.Namespace != nil {
 		st.Namespace = *raw.Namespace
+	}
+	if raw.InfrastructureReady != nil {
+		st.InfrastructureReady = *raw.InfrastructureReady
 	}
 	return st, true
 }

@@ -52,10 +52,13 @@ type EvidenceURIs struct {
 
 // WarmState es el estado del entorno warm.
 type WarmState struct {
-	WarmID          string `json:"warm_id"`
-	State           string `json:"state"`
-	ResetVerified   bool   `json:"reset_verified"`
-	BaselineVersion string `json:"baseline_version"`
+	WarmID              string `json:"warm_id"`
+	State               string `json:"state"`
+	ResetVerified       bool   `json:"reset_verified"`
+	BaselineVersion     string `json:"baseline_version"`
+	InfrastructureReady bool   `json:"infrastructure_ready,omitempty"`
+	Namespace           string `json:"namespace,omitempty"`
+	Repo                string `json:"repo,omitempty"`
 }
 
 // Report es contracts/plans/report.schema.json (veredicto del reporter).

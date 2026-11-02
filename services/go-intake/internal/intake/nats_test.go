@@ -43,7 +43,7 @@ func evento(id string) Event {
 		EventID: id, Type: "notify.created", Version: 1,
 		OccurredAt: "2026-10-11T10:00:00Z", TraceID: "0af7651916cd43dd8448eb211c80319c",
 		Data: EventData{NotificationID: "n-1", GithubEvent: "commit", Repo: "acme/shop",
-			SHA: "1111111111111111111111111111111111111111", Artifact: Artifact{Kind: "build-from-repo", Ref: "main"}},
+			SHA: "1111111111111111111111111111111111111111", Artifact: &Artifact{Kind: "build-from-repo", Ref: "main"}},
 	}
 }
 

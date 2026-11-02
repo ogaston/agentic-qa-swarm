@@ -317,6 +317,7 @@ func OccurredAt() *rapid.Generator[string] {
 // Event es un notify.created v1 válido contra el esquema.
 func Event() *rapid.Generator[intake.Event] {
 	return rapid.Custom(func(t *rapid.T) intake.Event {
+		art := Artifact().Draw(t, "artifact")
 		return intake.Event{
 			EventID: uuid().Draw(t, "event_id"), Type: "notify.created", Version: 1,
 			OccurredAt: OccurredAt().Draw(t, "occurred_at"),
@@ -325,7 +326,7 @@ func Event() *rapid.Generator[intake.Event] {
 				NotificationID: "n-" + uuid().Draw(t, "nid"),
 				GithubEvent:    rapid.SampledFrom([]string{intake.EventCommit, intake.EventPullRequest, intake.EventTag}).Draw(t, "ge"),
 				Repo:           rapid.OneOf(Repo(), NonEmpty()).Draw(t, "repo"), SHA: Sha40().Draw(t, "sha"),
-				Artifact: Artifact().Draw(t, "artifact"),
+				Artifact:       &art,
 			},
 		}
 	})

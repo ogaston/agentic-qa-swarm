@@ -49,16 +49,17 @@ type NotificationStore interface {
 	Put(rec Record) error
 }
 
-// EventData es el campo data de notify.created.
+// EventData es el campo data de notify.created o webhook.validated.
 type EventData struct {
-	NotificationID string   `json:"notification_id"`
-	GithubEvent    string   `json:"github_event"`
-	Repo           string   `json:"repo"`
-	SHA            string   `json:"sha"`
-	Artifact       Artifact `json:"artifact"`
+	NotificationID string    `json:"notification_id,omitempty"`
+	GithubEvent    string    `json:"github_event"`
+	Repo           string    `json:"repo"`
+	SHA            string    `json:"sha,omitempty"`
+	Artifact       *Artifact `json:"artifact,omitempty"`
+	DeliveryID     string    `json:"delivery_id,omitempty"`
 }
 
-// Event es el sobre notify.created v1.
+// Event es el sobre de un evento de actividad v1.
 type Event struct {
 	EventID    string    `json:"event_id"`
 	Type       string    `json:"type"`

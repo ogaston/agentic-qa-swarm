@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch } from '../../api/client';
 import { ApiErrorNotice } from '../../api/errors';
 import type { components } from '../../api/schema.gen';
@@ -10,8 +11,6 @@ import { useSession } from '../../session/SessionContext';
 type Repository = components['schemas']['Repository'];
 type RepositoryActivity = components['schemas']['RepositoryActivity'];
 type WarmState = Repository['warm']['state'];
-
-const REPO_REGEX = /^[a-z0-9-]+\/[a-z0-9._-]+$/;
 
 const COLOR_WARM: Record<WarmState, TonoBadge> = {
   ready: 'ok',
@@ -48,25 +47,12 @@ export function RepositoriesPage() {
   // Webhook panel copy state
   const [copiado, setCopiado] = useState(false);
 
-  // Modal Añadir repositorio
-  const [modalCrearAbierto, setModalCrearAbierto] = useState(false);
-  const [repoInput, setRepoInput] = useState('');
-  const [imageInput, setImageInput] = useState('');
-  const [imageTouched, setImageTouched] = useState(false);
-  const [contractDb, setContractDb] = useState(false);
-  const [contractPort, setContractPort] = useState(false);
-  const [contractImage, setContractImage] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<unknown>(null);
-
   // Modal Eliminar repositorio
   const [repoAEliminar, setRepoAEliminar] = useState<Repository | null>(null);
   const [deleteError, setDeleteError] = useState<unknown>(null);
 
   // Focus refs
-  const btnAnadirRef = useRef<HTMLButtonElement>(null);
-  const inputRepoRef = useRef<HTMLInputElement>(null);
-  const tituloModalCrearRef = useRef<HTMLHeadingElement>(null);
+  const btnAnadirRef = useRef<HTMLAnchorElement>(null);
   const tituloModalEliminarRef = useRef<HTMLHeadingElement>(null);
 
   // La URL debe apuntar al intake público, no necesariamente al host del dashboard.
@@ -99,13 +85,6 @@ export function RepositoriesPage() {
     void cargarRepositorios();
   }, []);
 
-  // Foco en modal crear
-  useEffect(() => {
-    if (modalCrearAbierto) {
-      inputRepoRef.current?.focus();
-    }
-  }, [modalCrearAbierto]);
-
   // Foco en modal eliminar
   useEffect(() => {
     if (repoAEliminar !== null) {
@@ -123,73 +102,6 @@ export function RepositoriesPage() {
       navigator.clipboard.writeText(webhookUrl).catch(() => {});
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
-    }
-  };
-
-  const abrirModalCrear = () => {
-    setRepoInput('');
-    setImageInput('');
-    setImageTouched(false);
-    setContractDb(false);
-    setContractPort(false);
-    setContractImage(false);
-    setFormError(null);
-    setSubmitError(null);
-    setModalCrearAbierto(true);
-  };
-
-  const cerrarModalCrear = () => {
-    if (enVuelo) return;
-    setModalCrearAbierto(false);
-    btnAnadirRef.current?.focus();
-  };
-
-  const handleRepoInputChange = (val: string) => {
-    const limpio = val.trim().toLowerCase();
-    setRepoInput(limpio);
-    if (!imageTouched) {
-      setImageInput(limpio ? `ghcr.io/${limpio}` : '');
-    }
-    if (formError && REPO_REGEX.test(limpio)) {
-      setFormError(null);
-    }
-  };
-
-  const handleImageInputChange = (val: string) => {
-    setImageTouched(true);
-    setImageInput(val.trim());
-  };
-
-  const handleSubmitCrear = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!REPO_REGEX.test(repoInput)) {
-      setFormError('El formato debe ser owner/repo en minúsculas (ej. org/app)');
-      return;
-    }
-    if (!contractDb || !contractPort || !contractImage) {
-      setFormError('Debes confirmar todos los requisitos del App Contract.');
-      return;
-    }
-
-    setEnVuelo(true);
-    setSubmitError(null);
-    try {
-      const nuevo = await apiFetch<Repository>('/api/repositories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repo: repoInput,
-          image_repo: imageInput || undefined,
-        }),
-      });
-      setRepos((prev) => (prev ? [nuevo, ...prev] : [nuevo]));
-      setModalCrearAbierto(false);
-      btnAnadirRef.current?.focus();
-      cargarActividad(nuevo.repo);
-    } catch (err) {
-      setSubmitError(err);
-    } finally {
-      setEnVuelo(false);
     }
   };
 
@@ -239,24 +151,20 @@ export function RepositoriesPage() {
     }
   };
 
-  const formValido =
-    REPO_REGEX.test(repoInput) && contractDb && contractPort && contractImage;
-
   return (
     <main className="az-container repositories-page">
       <PageHeader
         titulo="Repositorios"
         descripcion="Configura tus repositorios de GitHub para pruebas continuas de caja negra."
         acciones={
-          <button
+          <Link
             ref={btnAnadirRef}
-            type="button"
+            to="/repositories/new"
             className="btn btn-primary"
             data-testid="btn-anadir-repo"
-            onClick={abrirModalCrear}
           >
             Añadir repositorio
-          </button>
+          </Link>
         }
       />
 
@@ -265,7 +173,7 @@ export function RepositoriesPage() {
       {/* Panel de instrucciones de Webhook */}
       <Card
         titulo="Configuración de Webhooks en GitHub"
-        sub="Configura tu repositorio en GitHub para enviar eventos de push a este clúster."
+        sub="Configura tu repositorio en GitHub para enviar eventos de push, pull request o tag a este clúster."
       >
         <dl className="kv-list" style={{ marginTop: '12px' }}>
           <dt>Payload URL</dt>
@@ -287,11 +195,14 @@ export function RepositoriesPage() {
           </dd>
           <dt>Events</dt>
           <dd>
-            Selecciona el evento <code>push</code>.
+            Selecciona <code>push</code>, <code>pull_request</code> y <code>release</code>.
           </dd>
           <dt>Secret</dt>
           <dd>
-            <em>Solicita el secreto de webhook a tu operador.</em>
+            <em>
+              Cada nuevo proyecto dispone de un secreto HMAC SHA-256 exclusivo generado durante el asistente de conexión.
+              Para repositorios heredados, se utiliza el secreto global de la plataforma.
+            </em>
           </dd>
         </dl>
       </Card>
@@ -304,21 +215,21 @@ export function RepositoriesPage() {
           {repos.length === 0 ? (
             <div className="dashboard-empty" style={{ padding: '24px 0', textAlign: 'center' }}>
               <p>Sin repositorios registrados aún. Añade el primero para comenzar.</p>
-              <button
-                type="button"
+              <Link
+                to="/repositories/new"
                 className="btn btn-primary"
-                onClick={abrirModalCrear}
                 style={{ marginTop: '12px' }}
               >
                 Añadir repositorio
-              </button>
+              </Link>
             </div>
           ) : (
             <div className="table-wrap">
               <table className="data-table" data-testid="repos-table">
                 <thead>
                   <tr>
-                    <th scope="col">Repositorio</th>
+                    <th scope="col">Proyecto / Repositorio</th>
+                    <th scope="col">Recursos</th>
                     <th scope="col">Prefijo de imagen</th>
                     <th scope="col">Entorno Warm</th>
                     <th scope="col">Actividad de Webhooks</th>
@@ -336,16 +247,49 @@ export function RepositoriesPage() {
 
                     return (
                       <tr key={repo.repo} data-testid={`repo-row-${repo.repo.replace('/', '-')}`}>
-                        <td data-label="Repositorio" className="mono">
-                          <strong>{repo.repo}</strong>
+                        <td data-label="Proyecto / Repositorio">
+                          {repo.name && repo.name !== repo.repo && (
+                            <div style={{ fontWeight: 600 }}>{repo.name}</div>
+                          )}
+                          <span
+                            className="mono"
+                            style={{
+                              fontSize: repo.name && repo.name !== repo.repo ? '12px' : 'inherit',
+                              color: repo.name && repo.name !== repo.repo ? 'var(--text-muted)' : 'inherit',
+                            }}
+                          >
+                            <strong>{repo.repo}</strong>
+                          </span>
+                        </td>
+                        <td data-label="Recursos">
+                          {repo.resources && repo.resources.length > 0 ? (
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              {repo.resources.map((res) => (
+                                <span key={res} className="badge badge-neutral mono" style={{ fontSize: '11px' }}>
+                                  {res}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="badge badge-neutral mono" style={{ fontSize: '11px' }}>
+                              stateless
+                            </span>
+                          )}
                         </td>
                         <td data-label="Prefijo de imagen" className="mono">
                           <code>{repo.image_repo}</code>
                         </td>
                         <td data-label="Entorno Warm">
-                          <Badge tono={COLOR_WARM[warmState] ?? 'neutral'} punto>
-                            {TEXTO_WARM[warmState] ?? warmState}
-                          </Badge>
+                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Badge tono={COLOR_WARM[warmState] ?? 'neutral'} punto>
+                              {TEXTO_WARM[warmState] ?? warmState}
+                            </Badge>
+                            {repo.warm?.infrastructure_ready && (
+                              <span className="badge badge-ok" title="Infraestructura lista" style={{ fontSize: '11px' }}>
+                                infra lista
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Actividad de Webhooks">
                           {act ? (
@@ -407,112 +351,6 @@ export function RepositoriesPage() {
             </div>
           )}
         </Card>
-      )}
-
-      {/* Modal Añadir Repositorio */}
-      {modalCrearAbierto && (
-        <div className="modal-backdrop open">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-crear-titulo"
-            className="modal-dialog"
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') cerrarModalCrear();
-            }}
-            style={{ maxWidth: '520px', width: '100%', padding: '24px' }}
-          >
-            <h2 id="modal-crear-titulo" ref={tituloModalCrearRef} tabIndex={-1}>
-              Añadir repositorio
-            </h2>
-            <form onSubmit={(e) => void handleSubmitCrear(e)}>
-              <div className="form-field" style={{ marginTop: '16px' }}>
-                <label htmlFor="repo-input">Repositorio (owner/repo en minúsculas)</label>
-                <input
-                  id="repo-input"
-                  ref={inputRepoRef}
-                  type="text"
-                  placeholder="ej. acme/backend-service"
-                  value={repoInput}
-                  onChange={(e) => handleRepoInputChange(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-field" style={{ marginTop: '16px' }}>
-                <label htmlFor="image-input">Prefijo de imagen en GHCR</label>
-                <input
-                  id="image-input"
-                  type="text"
-                  placeholder="ej. ghcr.io/acme/backend-service"
-                  value={imageInput}
-                  onChange={(e) => handleImageInputChange(e.target.value)}
-                />
-              </div>
-
-              <fieldset className="fieldset" style={{ marginTop: '20px' }}>
-                <legend>Checklist del App Contract</legend>
-                <label className="check" style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={contractDb}
-                    onChange={(e) => setContractDb(e.target.checked)}
-                    data-testid="check-contract-db"
-                  />
-                  <span>Lee <code>DATABASE_URL</code> del entorno de ejecución</span>
-                </label>
-                <label className="check" style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={contractPort}
-                    onChange={(e) => setContractPort(e.target.checked)}
-                    data-testid="check-contract-port"
-                  />
-                  <span>Expone el listener de línea base en el puerto <code>:9090</code></span>
-                </label>
-                <label className="check" style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={contractImage}
-                    onChange={(e) => setContractImage(e.target.checked)}
-                    data-testid="check-contract-image"
-                  />
-                  <span>Publica la imagen en GHCR al hacer push a <code>main</code></span>
-                </label>
-              </fieldset>
-
-              {formError && (
-                <div role="alert" className="alert-box alert-danger" style={{ marginTop: '16px' }}>
-                  {formError}
-                </div>
-              )}
-              {submitError !== null && (
-                <div style={{ marginTop: '16px' }}>
-                  <ApiErrorNotice error={submitError} />
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={cerrarModalCrear}
-                  disabled={enVuelo}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={!formValido || enVuelo}
-                  data-testid="btn-submit-repo"
-                >
-                  {enVuelo ? 'Registrando…' : 'Registrar repositorio'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
 
       {/* Modal Confirmar Eliminación */}

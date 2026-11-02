@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -47,6 +48,11 @@ func (f *FileSubscriber) Discarded() int {
 // Drain hace una pasada sobre lo nuevo del archivo y devuelve cuantos eventos
 // valido entrego. Un archivo inexistente no es error (aun no hay eventos).
 func (f *FileSubscriber) Drain(handle func(NotifyCreated)) (int, error) {
+	return f.DrainWith(handle, nil)
+}
+
+// DrainWith hace una pasada entregando notify.created y webhook.validated según corresponda.
+func (f *FileSubscriber) DrainWith(handleNotify func(NotifyCreated), handleValidated func(WebhookValidated)) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	file, err := os.Open(f.Path)
@@ -81,6 +87,21 @@ func (f *FileSubscriber) Drain(handle func(NotifyCreated)) (int, error) {
 		if len(line) <= 1 {
 			continue
 		}
+		if bytes.Contains(line, []byte(`"type":"webhook.validated"`)) {
+			ev, perr := ParseWebhookValidated(line)
+			if perr != nil {
+				f.discarded++
+				if f.Logger != nil {
+					f.Logger.Printf("evento descartado: %v", perr)
+				}
+				continue
+			}
+			if handleValidated != nil {
+				handleValidated(ev)
+			}
+			n++
+			continue
+		}
 		ev, perr := ParseNotifyCreated(line)
 		if perr != nil {
 			f.discarded++
@@ -89,7 +110,9 @@ func (f *FileSubscriber) Drain(handle func(NotifyCreated)) (int, error) {
 			}
 			continue
 		}
-		handle(ev)
+		if handleNotify != nil {
+			handleNotify(ev)
+		}
 		n++
 	}
 	return n, nil
@@ -97,6 +120,11 @@ func (f *FileSubscriber) Drain(handle func(NotifyCreated)) (int, error) {
 
 // Run implementa EventSubscriber con sondeo periodico.
 func (f *FileSubscriber) Run(ctx context.Context, handle func(NotifyCreated)) error {
+	return f.RunWith(ctx, handle, nil)
+}
+
+// RunWith implementa sondeo entregando notify.created y webhook.validated.
+func (f *FileSubscriber) RunWith(ctx context.Context, handleNotify func(NotifyCreated), handleValidated func(WebhookValidated)) error {
 	every := f.Every
 	if every <= 0 {
 		every = 500 * time.Millisecond
@@ -108,7 +136,7 @@ func (f *FileSubscriber) Run(ctx context.Context, handle func(NotifyCreated)) er
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
-			if _, err := f.Drain(handle); err != nil && f.Logger != nil {
+			if _, err := f.DrainWith(handleNotify, handleValidated); err != nil && f.Logger != nil {
 				f.Logger.Printf("leyendo eventos: %v", err)
 			}
 		}

@@ -39,6 +39,14 @@ type entry struct {
 	seq int
 }
 
+type activityRecord struct {
+	repo        string
+	githubEvent string
+	sha         string
+	at          time.Time
+	seq         int
+}
+
 // Store es la proyeccion del inbox. El estado confirmed sale del registro
 // de confirmaciones, no de memoria volatil.
 type Store struct {
@@ -46,6 +54,7 @@ type Store struct {
 	now       func() time.Time
 	path      string
 	items     map[string]*entry
+	activity  map[string]*activityRecord
 	events    map[string]struct{}
 	receipt   map[string]Receipt
 	flows     map[string][]string  // flujos confirmados por notification_id
@@ -71,7 +80,7 @@ func OpenStore(dir string, now func() time.Time) (*Store, error) {
 	}
 	s := &Store{
 		now: now, path: filepath.Join(dir, ConfirmationsFile),
-		items: map[string]*entry{}, events: map[string]struct{}{}, receipt: map[string]Receipt{},
+		items: map[string]*entry{}, activity: map[string]*activityRecord{}, events: map[string]struct{}{}, receipt: map[string]Receipt{},
 		flows: map[string][]string{}, traces: map[string]string{}, artifacts: map[string]*Artifact{}, pubDone: map[string]struct{}{},
 		pubPath: filepath.Join(dir, PublishedFile),
 	}
@@ -139,6 +148,38 @@ func (s *Store) Apply(ev NotifyCreated) bool {
 		},
 		at: ev.OccurredAt, seq: s.seq,
 	}
+	repoKey := strings.ToLower(strings.TrimSpace(ev.Data.Repo))
+	if cur, ok := s.activity[repoKey]; !ok || ev.OccurredAt.After(cur.at) || (ev.OccurredAt.Equal(cur.at) && s.seq > cur.seq) {
+		s.activity[repoKey] = &activityRecord{
+			repo:        ev.Data.Repo,
+			githubEvent: ev.Data.GithubEvent,
+			sha:         ev.Data.SHA,
+			at:          ev.OccurredAt,
+			seq:         s.seq,
+		}
+	}
+	return true
+}
+
+// ApplyWebhookValidated incorpora un webhook.validated ya validado. Es idempotente por event_id.
+func (s *Store) ApplyWebhookValidated(ev WebhookValidated) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, seen := s.events[ev.EventID]; seen {
+		return false
+	}
+	s.events[ev.EventID] = struct{}{}
+	s.seq++
+	repoKey := strings.ToLower(strings.TrimSpace(ev.Data.Repo))
+	if cur, ok := s.activity[repoKey]; !ok || ev.OccurredAt.After(cur.at) || (ev.OccurredAt.Equal(cur.at) && s.seq > cur.seq) {
+		s.activity[repoKey] = &activityRecord{
+			repo:        ev.Data.Repo,
+			githubEvent: ev.Data.GithubEvent,
+			sha:         "",
+			at:          ev.OccurredAt,
+			seq:         s.seq,
+		}
+	}
 	return true
 }
 
@@ -188,6 +229,10 @@ func (s *Store) Counts() map[string]int {
 func (s *Store) Activity(repo string) (hasWebhook bool, lastEvent, lastSHA string, lastSeenAt time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	repoKey := strings.ToLower(strings.TrimSpace(repo))
+	if act, ok := s.activity[repoKey]; ok && act != nil {
+		return true, act.githubEvent, act.sha, act.at
+	}
 	var latest *entry
 	for _, e := range s.items {
 		if !strings.EqualFold(e.n.Repo, repo) {

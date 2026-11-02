@@ -29,10 +29,35 @@ type NotifyCreated struct {
 var (
 	uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	shaRe  = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	repoRe = regexp.MustCompile(`^[a-z0-9-]+/[a-z0-9._-]+$`)
 )
 
 // ErrInvalidEvent marca un evento que no cumple notify.created.schema.json.
 var ErrInvalidEvent = errors.New("evento notify.created invalido")
+
+// ErrInvalidValidatedEvent marca un evento que no cumple webhook.validated.schema.json.
+var ErrInvalidValidatedEvent = errors.New("evento webhook.validated invalido")
+
+func invalidValidated(format string, a ...any) error {
+	return fmt.Errorf("%w: %s", ErrInvalidValidatedEvent, fmt.Sprintf(format, a...))
+}
+
+// WebhookValidatedData es el payload data de webhook.validated.
+type WebhookValidatedData struct {
+	Repo        string `json:"repo"`
+	GithubEvent string `json:"github_event"`
+	DeliveryID  string `json:"delivery_id"`
+}
+
+// WebhookValidated es el sobre de webhook.validated v1.
+type WebhookValidated struct {
+	EventID    string               `json:"event_id"`
+	Type       string               `json:"type"`
+	Version    int                  `json:"version"`
+	OccurredAt time.Time            `json:"occurred_at"`
+	TraceID    string               `json:"trace_id"`
+	Data       WebhookValidatedData `json:"data"`
+}
 
 func invalid(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalidEvent, fmt.Sprintf(format, a...))
@@ -170,6 +195,48 @@ func ParseNotifyCreated(line []byte) (NotifyCreated, error) {
 		return ev, invalid("data.artifact.kind")
 	case ev.Data.Artifact.Ref == "":
 		return ev, invalid("data.artifact.ref")
+	}
+	return ev, nil
+}
+
+// ParseWebhookValidated decodifica y valida una linea contra contracts/events/webhook.validated.schema.json.
+func ParseWebhookValidated(line []byte) (WebhookValidated, error) {
+	var ev WebhookValidated
+	if err := rejectDuplicateKeys(line); err != nil {
+		return ev, err
+	}
+	root, err := exactKeys(line, "evento", "event_id", "type", "version", "occurred_at", "trace_id", "data")
+	if err != nil {
+		return ev, err
+	}
+	if _, err := exactKeys(root["data"], "data", "repo", "github_event", "delivery_id"); err != nil {
+		return ev, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(line))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&ev); err != nil {
+		return ev, invalidValidated("json invalido")
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return ev, invalidValidated("datos tras el objeto")
+	}
+	switch {
+	case !uuidRe.MatchString(ev.EventID):
+		return ev, invalidValidated("event_id")
+	case ev.Type != "webhook.validated":
+		return ev, invalidValidated("type")
+	case ev.Version != 1:
+		return ev, invalidValidated("version")
+	case ev.OccurredAt.IsZero():
+		return ev, invalidValidated("occurred_at")
+	case ev.TraceID == "":
+		return ev, invalidValidated("trace_id")
+	case !repoRe.MatchString(ev.Data.Repo):
+		return ev, invalidValidated("data.repo")
+	case ev.Data.GithubEvent != "ping":
+		return ev, invalidValidated("data.github_event")
+	case ev.Data.DeliveryID == "":
+		return ev, invalidValidated("data.delivery_id")
 	}
 	return ev, nil
 }

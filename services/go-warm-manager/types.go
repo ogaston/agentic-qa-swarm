@@ -25,12 +25,13 @@ const (
 
 // WarmState es el WarmState del contrato.
 type WarmState struct {
-	WarmID          string `json:"warm_id"`
-	State           string `json:"state"`
-	ResetVerified   bool   `json:"reset_verified"`
-	BaselineVersion string `json:"baseline_version"`
-	Namespace       string `json:"namespace,omitempty"`
-	Repo            string `json:"repo,omitempty"`
+	WarmID              string `json:"warm_id"`
+	State               string `json:"state"`
+	ResetVerified       bool   `json:"reset_verified"`
+	BaselineVersion     string `json:"baseline_version"`
+	InfrastructureReady bool   `json:"infrastructure_ready"`
+	Namespace           string `json:"namespace,omitempty"`
+	Repo                string `json:"repo,omitempty"`
 }
 
 // Artefactos soportados.

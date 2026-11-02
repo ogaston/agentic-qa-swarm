@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -49,6 +50,13 @@ func (h *Handler) proxyRepositories(w http.ResponseWriter, r *http.Request, _ au
 		writeError(w, http.StatusServiceUnavailable, GovernanceUnavailable, "go-governance no configurado")
 		return
 	}
+	// La creación debe entregar el secreto una sola vez. Fallar antes de crear evita
+	// un repositorio parcialmente creado si ui-api no tiene la clave de derivación.
+	if r.Method == http.MethodPost && len(h.webhookKey) == 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(GovernanceRetryAfter))
+		writeError(w, http.StatusServiceUnavailable, "webhook_credentials_unavailable", "credenciales de webhook no configuradas")
+		return
+	}
 	var bodyBytes []byte
 	if r.Method == http.MethodPost {
 		b, ok := readRequestBody(w, r)
@@ -72,6 +80,16 @@ func (h *Handler) proxyRepositories(w http.ResponseWriter, r *http.Request, _ au
 			writeError(w, http.StatusServiceUnavailable, WarmUnavailable, "estado del warm no disponible")
 			return
 		}
+	}
+	if r.Method == http.MethodPost && status == http.StatusCreated {
+		wrapped, err := h.wrapRepositoryCredentials(body)
+		if err != nil {
+			h.logError(r, "no se pudo generar credenciales webhook", "error", err.Error())
+			w.Header().Set("Retry-After", strconv.Itoa(GovernanceRetryAfter))
+			writeError(w, http.StatusServiceUnavailable, GovernanceUnavailable, "no se pudo generar credencial webhook")
+			return
+		}
+		body = wrapped
 	}
 	if ra := hdrs.Get("Retry-After"); ra != "" {
 		w.Header().Set("Retry-After", ra)
@@ -169,11 +187,91 @@ func (h *Handler) repositoryActivity(w http.ResponseWriter, r *http.Request, _ a
 	}
 	if hasWebhook {
 		resp.LastEvent = &lastEvent
-		resp.LastSHA = &lastSHA
+		if lastSHA != "" {
+			resp.LastSHA = &lastSHA
+		}
 		seen := lastSeenAt.UTC().Format(time.RFC3339)
 		resp.LastSeenAt = &seen
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// wrapRepositoryCredentials toma un cuerpo JSON de Repository devuelto por go-governance
+// y lo envuelve en RepositoryCredentials calculando el webhook_secret derivado una sola vez.
+func (h *Handler) wrapRepositoryCredentials(body []byte) ([]byte, error) {
+	if len(h.webhookKey) == 0 {
+		return nil, errors.New("clave de webhook no configurada")
+	}
+	var repo struct {
+		Repo                 string `json:"repo"`
+		WebhookSecretVersion int    `json:"webhook_secret_version"`
+	}
+	if err := json.Unmarshal(body, &repo); err != nil {
+		return nil, fmt.Errorf("decodificando repositorio de gobernanza: %w", err)
+	}
+	sec, err := deriveWebhookSecret(h.webhookKey, repo.Repo, repo.WebhookSecretVersion)
+	if err != nil {
+		return nil, fmt.Errorf("derivando secreto webhook: %w", err)
+	}
+	var repoObj json.RawMessage = body
+	wrapped := struct {
+		Repository    json.RawMessage `json:"repository"`
+		WebhookSecret string          `json:"webhook_secret"`
+	}{
+		Repository:    repoObj,
+		WebhookSecret: sec,
+	}
+	return json.Marshal(wrapped)
+}
+
+// rotateRepositoryWebhookSecret atiende POST /repositories/{owner}/{repo}/webhook-secret/rotate.
+func (h *Handler) rotateRepositoryWebhookSecret(w http.ResponseWriter, r *http.Request, _ auth.Principal, owner, repo string) {
+	fullName := owner + "/" + repo
+	if !repoNameRe.MatchString(fullName) {
+		writeError(w, http.StatusBadRequest, "invalid_request", "nombre de repositorio invalido")
+		return
+	}
+	if h.govc == nil {
+		w.Header().Set("Retry-After", strconv.Itoa(GovernanceRetryAfter))
+		writeError(w, http.StatusServiceUnavailable, GovernanceUnavailable, "go-governance no configurado")
+		return
+	}
+	if len(h.webhookKey) == 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(GovernanceRetryAfter))
+		writeError(w, http.StatusServiceUnavailable, GovernanceUnavailable, "clave de webhook no configurada")
+		return
+	}
+	targetPath := "/repositories/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + "/webhook-secret/rotate"
+	tok, _ := auth.BearerToken(r.Header.Get("Authorization"))
+	status, hdrs, body, err := h.govc.do(r.Context(), http.MethodPost, targetPath, nil, nil, tok)
+	if err != nil {
+		w.Header().Set("Retry-After", strconv.Itoa(GovernanceRetryAfter))
+		writeError(w, http.StatusServiceUnavailable, GovernanceUnavailable, "go-governance no disponible")
+		return
+	}
+	if ra := hdrs.Get("Retry-After"); ra != "" {
+		w.Header().Set("Retry-After", ra)
+	}
+	if status == http.StatusUnauthorized {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+	}
+	if status == http.StatusOK {
+		wrapped, err := h.wrapRepositoryCredentials(body)
+		if err != nil {
+			h.logError(r, "no se pudo generar credenciales webhook rotadas", "error", err.Error())
+			w.Header().Set("Retry-After", strconv.Itoa(GovernanceRetryAfter))
+			writeError(w, http.StatusServiceUnavailable, GovernanceUnavailable, "no se pudo derivar credencial webhook")
+			return
+		}
+		body = wrapped
+	}
+	ct := hdrs.Get("Content-Type")
+	if ct == "" {
+		ct = "application/json"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
 }
 
 // overlayRepositoryWarm sustituye el estado persistido por la lectura actual del namespace.
@@ -212,6 +310,7 @@ func (h *Handler) overlayRepositoryWarm(r *http.Request, body []byte, list bool)
 		warm["state"], _ = json.Marshal(state.State)
 		warm["reset_verified"], _ = json.Marshal(state.ResetVerified)
 		warm["baseline_version"], _ = json.Marshal(state.BaselineVersion)
+		warm["infrastructure_ready"], _ = json.Marshal(state.InfrastructureReady)
 		repo["warm"], _ = json.Marshal(warm)
 	}
 	if list {

@@ -188,7 +188,14 @@ func TestWebhook(t *testing.T) {
 				t.Fatalf("code=%q, quiero %q", errCode(t, w), c.code)
 			}
 			if c.status != 202 {
-				if _, ok := e.store.GetByDelivery("d1"); ok || len(e.pub.events) != 0 {
+				if _, ok := e.store.GetByDelivery("d1"); ok {
+					t.Fatal("un ping o rechazo no debe persistir notificaciones")
+				}
+				if c.status == 200 {
+					if len(e.pub.events) != 1 || e.pub.events[0].Type != "webhook.validated" {
+						t.Fatalf("un ping permitido debe publicar webhook.validated, obtuve %d eventos", len(e.pub.events))
+					}
+				} else if len(e.pub.events) != 0 {
 					t.Fatal("un rechazo no debe persistir ni publicar")
 				}
 			}
@@ -527,4 +534,205 @@ func TestParseAllowedRepos(t *testing.T) {
 	if n := len(ParseAllowedRepos("")); n != 0 {
 		t.Fatalf("vacía debe dar lista vacía, dio %d", n)
 	}
+}
+
+type mockMetadataLookup struct {
+	meta map[string]RepoMetadata
+}
+
+func (m *mockMetadataLookup) Allowed(_ context.Context, repo string) bool {
+	info, ok := m.meta[strings.ToLower(strings.TrimSpace(repo))]
+	return ok && info.Allowed
+}
+
+func (m *mockMetadataLookup) Metadata(_ context.Context, repo string) (RepoMetadata, bool) {
+	info, ok := m.meta[strings.ToLower(strings.TrimSpace(repo))]
+	return info, ok
+}
+
+func TestWebhookPerProjectSecretsAndValidatedActivity(t *testing.T) {
+	dir := t.TempDir()
+	st, err := OpenJSONLStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub := &memPublisher{}
+	mock := &mockMetadataLookup{
+		meta: map[string]RepoMetadata{
+			"acme/shop":    {Allowed: true, WebhookSecretVersion: 1},
+			"acme/legacy":  {Allowed: true, WebhookSecretVersion: 0},
+			"acme/stopped": {Allowed: false, WebhookSecretVersion: 1},
+		},
+	}
+	handler, err := NewHandler(Deps{
+		Secret:     []byte(secret),
+		Verifier:   githubsig.HMACVerifier{},
+		Store:      st,
+		Publisher:  pub,
+		Resolver:   NewArtifactResolver(""),
+		RepoLookup: mock,
+		Now:        func() time.Time { return time.Date(2026, 11, 2, 1, 0, 0, 0, time.UTC) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sec1, err := deriveWebhookSecret([]byte(secret), "acme/shop", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec2, err := deriveWebhookSecret([]byte(secret), "acme/shop", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pingPayload := []byte(`{"zen":"Keep it logically awesome.","hook_id":123,"repository":{"full_name":"acme/shop"}}`)
+	pushPayload := []byte(`{"ref":"refs/heads/main","after":"` + strings.Repeat("a", 40) + `","repository":{"full_name":"acme/shop"}}`)
+
+	t.Run("managed con clave derivada valida: ping responde 200 y publica webhook.validated", func(t *testing.T) {
+		r := req{
+			event:    "ping",
+			delivery: "deliv-1",
+			ctype:    "application/json",
+			sig:      githubsig.Sign([]byte(sec1), pingPayload),
+			body:     pingPayload,
+		}
+		w := do(handler, r)
+		if w.Code != 200 {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+		if len(pub.events) != 1 {
+			t.Fatalf("se esperaba 1 evento, obtuve %d", len(pub.events))
+		}
+		ev := pub.events[0]
+		if ev.Type != "webhook.validated" || ev.Data.Repo != "acme/shop" || ev.Data.GithubEvent != "ping" || ev.Data.DeliveryID != "deliv-1" {
+			t.Fatalf("evento inesperado: %+v", ev)
+		}
+		if _, ok := st.GetByDelivery("deliv-1"); ok {
+			t.Fatal("ping no debe crear notificaciones en el store")
+		}
+
+		// Replay con mismo delivery: 200 pero no duplica publicación
+		w2 := do(handler, r)
+		if w2.Code != 200 {
+			t.Fatalf("replay status=%d", w2.Code)
+		}
+		if len(pub.events) != 1 {
+			t.Fatalf("replay no debe duplicar publicación: %d", len(pub.events))
+		}
+	})
+
+	t.Run("managed con clave global de plataforma: 401 invalid_signature", func(t *testing.T) {
+		r := req{
+			event:    "ping",
+			delivery: "deliv-wrong-key",
+			ctype:    "application/json",
+			sig:      githubsig.Sign([]byte(secret), pingPayload),
+			body:     pingPayload,
+		}
+		w := do(handler, r)
+		if w.Code != 401 || errCode(t, w) != "invalid_signature" {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("rotacion de clave: version vieja 401, nueva version 200", func(t *testing.T) {
+		mock.meta["acme/shop"] = RepoMetadata{Allowed: true, WebhookSecretVersion: 2}
+
+		// Version 1 debe fallar
+		rOld := req{
+			event:    "push",
+			delivery: "deliv-push-old",
+			ctype:    "application/json",
+			sig:      githubsig.Sign([]byte(sec1), pushPayload),
+			body:     pushPayload,
+		}
+		wOld := do(handler, rOld)
+		if wOld.Code != 401 || errCode(t, wOld) != "invalid_signature" {
+			t.Fatalf("old key status=%d %s", wOld.Code, wOld.Body.String())
+		}
+
+		// Version 2 debe ser aceptada
+		rNew := req{
+			event:    "push",
+			delivery: "deliv-push-new",
+			ctype:    "application/json",
+			sig:      githubsig.Sign([]byte(sec2), pushPayload),
+			body:     pushPayload,
+		}
+		wNew := do(handler, rNew)
+		if wNew.Code != 202 {
+			t.Fatalf("new key status=%d %s", wNew.Code, wNew.Body.String())
+		}
+	})
+
+	t.Run("proyecto legacy usa secreto global", func(t *testing.T) {
+		legacyPush := []byte(`{"ref":"refs/heads/main","after":"` + strings.Repeat("b", 40) + `","repository":{"full_name":"acme/legacy"}}`)
+		r := req{
+			event:    "push",
+			delivery: "deliv-legacy-1",
+			ctype:    "application/json",
+			sig:      githubsig.Sign([]byte(secret), legacyPush),
+			body:     legacyPush,
+		}
+		w := do(handler, r)
+		if w.Code != 202 {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("managed deshabilitado: con firma valida 422 repo_not_allowed, con firma invalida 401", func(t *testing.T) {
+		secStopped, _ := deriveWebhookSecret([]byte(secret), "acme/stopped", 1)
+		stoppedPush := []byte(`{"ref":"refs/heads/main","after":"` + strings.Repeat("c", 40) + `","repository":{"full_name":"acme/stopped"}}`)
+
+		rWrong := req{
+			event:    "push",
+			delivery: "deliv-stop-bad",
+			ctype:    "application/json",
+			sig:      "sha256=" + strings.Repeat("0", 64),
+			body:     stoppedPush,
+		}
+		wWrong := do(handler, rWrong)
+		if wWrong.Code != 401 {
+			t.Fatalf("status=%d, quiero 401", wWrong.Code)
+		}
+
+		rRight := req{
+			event:    "push",
+			delivery: "deliv-stop-right",
+			ctype:    "application/json",
+			sig:      githubsig.Sign([]byte(secStopped), stoppedPush),
+			body:     stoppedPush,
+		}
+		wRight := do(handler, rRight)
+		if wRight.Code != 422 || errCode(t, wRight) != "repo_not_allowed" {
+			t.Fatalf("status=%d %s", wRight.Code, wRight.Body.String())
+		}
+	})
+
+	t.Run("fallo al publicar ping devuelve 503 publish_failed", func(t *testing.T) {
+		pub.fail = true
+		defer func() { pub.fail = false }()
+
+		r := req{
+			event:    "ping",
+			delivery: "deliv-fail",
+			ctype:    "application/json",
+			sig:      githubsig.Sign([]byte(sec2), pingPayload),
+			body:     pingPayload,
+		}
+		w := do(handler, r)
+		if w.Code != 503 || errCode(t, w) != "publish_failed" {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("ausencia de secretos en eventos publicados y respuestas", func(t *testing.T) {
+		for _, ev := range pub.events {
+			evJSON, _ := json.Marshal(ev)
+			if strings.Contains(string(evJSON), "whsec_") || strings.Contains(string(evJSON), secret) {
+				t.Fatalf("fuga de secreto en evento: %s", string(evJSON))
+			}
+		}
+	})
 }

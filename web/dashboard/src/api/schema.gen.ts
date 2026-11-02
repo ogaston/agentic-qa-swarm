@@ -109,6 +109,23 @@ export interface paths {
         patch: operations["patchRepository"];
         trace?: never;
     };
+    "/repositories/{owner}/{repo}/webhook-secret/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rota el secreto webhook derivado (owner o admin) y lo devuelve una sola vez. */
+        post: operations["rotateRepositoryWebhookSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repositories/{owner}/{repo}/activity": {
         parameters: {
             query?: never;
@@ -471,6 +488,7 @@ export interface components {
             state: "ready" | "dirty" | "cuarentena" | "idle-escalado" | "provisioning" | "deleting";
             reset_verified: boolean;
             baseline_version: string;
+            infrastructure_ready: boolean;
             namespace?: string;
             repo?: string;
         };
@@ -482,10 +500,15 @@ export interface components {
             state: "ready" | "dirty" | "cuarentena" | "idle-escalado" | "provisioning" | "deleting";
             reset_verified?: boolean;
             baseline_version?: string;
+            infrastructure_ready: boolean;
         };
         Repository: {
             /** @description owner/repo en minúsculas */
             repo: string;
+            name: string;
+            description?: string;
+            resources: ("postgresql" | "redis")[];
+            webhook_secret_version: number;
             /** @description Prefijo de imagen en GHCR */
             image_repo: string;
             enabled: boolean;
@@ -501,13 +524,21 @@ export interface components {
                 state: "ready" | "dirty" | "cuarentena" | "idle-escalado" | "provisioning" | "deleting";
                 reset_verified?: boolean;
                 baseline_version?: string;
+                infrastructure_ready: boolean;
             };
         };
         RepositoryInput: {
             /** @description owner/repo en minúsculas */
             repo: string;
+            name?: string;
+            description?: string;
+            resources?: ("postgresql" | "redis")[];
             /** @description Prefijo de imagen en GHCR (opcional, default ghcr.io/<repo>) */
             image_repo?: string;
+        };
+        RepositoryCredentials: {
+            repository: components["schemas"]["Repository"];
+            webhook_secret: string;
         };
         RepositoryPatch: {
             enabled?: boolean;
@@ -769,13 +800,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Repositorio registrado. */
+            /** @description Repositorio registrado y secreto webhook disponible una sola vez. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Repository"];
+                    "application/json": components["schemas"]["RepositoryCredentials"];
                 };
             };
             400: components["responses"]["Error"];
@@ -888,6 +919,32 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    rotateRepositoryWebhookSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                owner: string;
+                repo: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nueva versión y secreto webhook. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryCredentials"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     getRepositoryActivity: {

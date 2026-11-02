@@ -171,3 +171,45 @@ func TestParseRejectsDuplicateKeys(t *testing.T) {
 		t.Fatal("ningun caso es valido para el esquema: la prueba no demuestra que el parser es mas estricto")
 	}
 }
+
+func TestParseWebhookValidatedAgreesWithSchema(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(events, "webhook.validated.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	c := jsonschema.NewCompiler()
+	c.DefaultDraft(jsonschema.Draft2020)
+	c.AssertFormat()
+	if err := c.AddResource("mem:///wv.json", doc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Compile("mem:///wv.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	valid := readFile(t, filepath.Join(events, "examples/valid/webhook.validated.json"))
+	var v any
+	if err := json.Unmarshal(valid, &v); err != nil || s.Validate(v) != nil {
+		t.Fatalf("ejemplo valido no valida contra esquema: %v", err)
+	}
+	ev, err := ParseWebhookValidated(valid)
+	if err != nil {
+		t.Fatalf("ParseWebhookValidated fallo con ejemplo valido: %v", err)
+	}
+	if ev.Type != "webhook.validated" || ev.Data.Repo != "acme/shop" || ev.Data.GithubEvent != "ping" || ev.Data.DeliveryID != "5e4f42f0-8a0c-4f0b-b0e2-9e8bc1e26a11" {
+		t.Fatalf("datos inesperados: %+v", ev)
+	}
+
+	invalidSecret := readFile(t, filepath.Join(events, "examples/invalid/webhook.validated.secret.json"))
+	if err := json.Unmarshal(invalidSecret, &v); err == nil && s.Validate(v) == nil {
+		t.Fatal("ejemplo invalido no debio validar contra esquema")
+	}
+	if _, err := ParseWebhookValidated(invalidSecret); err == nil {
+		t.Fatal("ParseWebhookValidated debio rechazar webhook.validated.secret.json")
+	}
+}

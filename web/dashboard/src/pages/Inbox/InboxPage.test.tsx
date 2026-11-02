@@ -790,4 +790,160 @@ describe('Inbox display updates', () => {
       expect(reg.listas).toEqual(['all']);
     } finally { vi.useRealTimers(); }
   });
+
+  describe('Inbox selector de proyectos (Step 6)', () => {
+    type Repository = components['schemas']['Repository'];
+    const repoA: Repository = {
+      repo: 'acme/api',
+      name: 'Acme API',
+      image_repo: 'ghcr.io/acme/api',
+      enabled: true,
+      owner: 'ana',
+      resources: ['postgresql', 'redis'],
+      webhook_secret_version: 1,
+      warm: {
+        namespace: 'aqs-warm-acme-api',
+        warm_id: 'warm-api-1',
+        state: 'ready',
+        reset_verified: true,
+        infrastructure_ready: true,
+      },
+    };
+
+    const repoB: Repository = {
+      repo: 'acme/web',
+      name: 'Acme Web',
+      image_repo: 'ghcr.io/acme/web',
+      enabled: true,
+      owner: 'ana',
+      resources: ['redis'],
+      webhook_secret_version: 1,
+      warm: {
+        namespace: 'aqs-warm-acme-web',
+        warm_id: 'warm-web-1',
+        state: 'dirty',
+        reset_verified: false,
+        infrastructure_ready: true,
+      },
+    };
+
+    it('muestra el selector de proyectos con etiqueta accesible, icono y opciones', async () => {
+      const reg = nuevoRegistro();
+      await abrirInbox([
+        listaPorEstado({ pending: [pendienteA, pendienteB] }, reg),
+        http.get('/api/repositories', () => HttpResponse.json([repoA, repoB])),
+      ]);
+      await screen.findByText('acme/api');
+
+      const select = screen.getByTestId('inbox-project-selector') as HTMLSelectElement;
+      expect(select).toBeTruthy();
+      expect(screen.getByLabelText(/Proyecto:/)).toBe(select);
+
+      const options = Array.from(select.options).map((o) => o.textContent);
+      expect(options).toEqual([
+        'Todos los proyectos',
+        'Acme API (acme/api)',
+        'Acme Web (acme/web)',
+        '+ Crear nuevo proyecto',
+      ]);
+    });
+
+    it('filtrar por proyecto actualiza filas, contadores, KPI de entorno y URL', async () => {
+      const reg = nuevoRegistro();
+      const user = await abrirInbox([
+        listaPorEstado({ pending: [pendienteA, pendienteB], confirmed: [confirmada] }, reg),
+        http.get('/api/repositories', () => HttpResponse.json([repoA, repoB])),
+      ]);
+      await screen.findByText('acme/api');
+      expect(screen.getByText('acme/web')).toBeTruthy();
+
+      const select = screen.getByTestId('inbox-project-selector');
+      await user.selectOptions(select, 'acme/api');
+
+      // Filas filtradas
+      expect(screen.getByText('acme/api')).toBeTruthy();
+      expect(screen.queryByText('acme/web')).toBeNull();
+
+      // Query param
+      expect(currentLocation()).toBe('/inbox?project=acme%2Fapi');
+
+      // Contadores en pestaña
+      const tabPendientes = screen.getByRole('tab', { name: /^Pendientes/ });
+      expect(tabPendientes.textContent).toContain('(1)');
+
+      // Estado de warm del proyecto seleccionado
+      expect(screen.getByText('Listo')).toBeTruthy();
+
+      // Cambiar a acme/web
+      await user.selectOptions(select, 'acme/web');
+      expect(screen.queryByText('acme/api')).toBeNull();
+      expect(screen.getByText('acme/web')).toBeTruthy();
+      expect(currentLocation()).toBe('/inbox?project=acme%2Fweb');
+      expect(screen.getByText('Requiere limpieza')).toBeTruthy();
+
+      // Volver a todos los proyectos
+      await user.selectOptions(select, '');
+      expect(screen.getByText('acme/api')).toBeTruthy();
+      expect(screen.getByText('acme/web')).toBeTruthy();
+      expect(currentLocation()).toBe('/inbox');
+    });
+
+    it('respeta ?project=acme%2Fapi en la entrada inicial', async () => {
+      server.use(
+        ...sesionOk(),
+        listaPorEstado({ pending: [pendienteA, pendienteB] }, nuevoRegistro()),
+        http.get('/api/repositories', () => HttpResponse.json([repoA, repoB])),
+      );
+      const user = userEvent.setup();
+      renderApp('/login?next=' + encodeURIComponent('/inbox?project=acme/api'));
+      await user.type(screen.getByLabelText('Usuario'), 'ana');
+      await user.type(screen.getByLabelText('Contraseña'), 'clave-larga-1');
+      await user.click(screen.getByRole('button', { name: 'Entrar' }));
+      await waitFor(() => expect(currentLocation()).toBe('/inbox?project=acme/api'));
+      await screen.findByText('acme/api');
+      expect(screen.queryByText('acme/web')).toBeNull();
+      const select = screen.getByTestId('inbox-project-selector') as HTMLSelectElement;
+      expect(select.value).toBe('acme/api');
+    });
+
+    it('seleccionar «Crear nuevo proyecto» navega a /new', async () => {
+      const user = await abrirInbox([
+        listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
+        http.get('/api/repositories', () => HttpResponse.json([repoA])),
+      ]);
+      await screen.findByText('acme/api');
+
+      const select = screen.getByTestId('inbox-project-selector');
+      await user.selectOptions(select, '__new__');
+      expect(currentLocation()).toBe('/new');
+    });
+
+    it('si la carga de repositorios falla, la lista de notificaciones sigue operativa', async () => {
+      await abrirInbox([
+        listaPorEstado({ pending: [pendienteA] }, nuevoRegistro()),
+        http.get('/api/repositories', () => HttpResponse.json({ code: 'internal' }, { status: 500 })),
+      ]);
+      await screen.findByText('acme/api');
+      const select = screen.getByTestId('inbox-project-selector') as HTMLSelectElement;
+      expect(select).toBeTruthy();
+      expect(select.value).toBe('');
+    });
+
+    it('cambiar de proyecto cierra el modal de detalle y resetea la página', async () => {
+      const user = await abrirInbox([
+        listaPorEstado({ pending: [pendienteA, pendienteB] }, nuevoRegistro()),
+        http.get('/api/repositories', () => HttpResponse.json([repoA, repoB])),
+      ]);
+      await screen.findByText('acme/api');
+
+      // Abrir modal de detalle
+      await user.click(within(filaDe('acme/api')).getByRole('button', { name: 'Revisar' }));
+      expect(screen.getByRole('dialog')).toBeTruthy();
+
+      // Cambiar de proyecto
+      const select = screen.getByTestId('inbox-project-selector');
+      await user.selectOptions(select, 'acme/web');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
 });

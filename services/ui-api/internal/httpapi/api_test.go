@@ -45,7 +45,8 @@ func newEnv(t *testing.T, v auth.TokenVerifier, mod func(*Config)) *env {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	env := &env{store: st, logs: &bytes.Buffer{}, clock: &now, dir: dir}
 	cfg := Config{Store: st, Verifier: v, AllowedOrigins: []string{"https://app.example"}, RateRPS: 1000, RateBurst: 1000,
-		Now: func() time.Time { return *env.clock }, Logger: log.New(env.logs, "", 0)}
+		Now: func() time.Time { return *env.clock }, Logger: log.New(env.logs, "", 0),
+		WebhookKey: []byte("test-webhook-platform-key")}
 	if mod != nil {
 		mod(&cfg)
 	}

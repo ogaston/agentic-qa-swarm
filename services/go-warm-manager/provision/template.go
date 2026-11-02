@@ -73,8 +73,10 @@ func WorkloadTemplate(target warmtarget.WarmTarget) (*WarmResources, error) {
 				Namespace: ns,
 			},
 			Data: map[string]string{
-				"idleScaleDownAfter": "30m",
-				"minReplicasIdle":    "0",
+				"idleScaleDownAfter":  "30m",
+				"minReplicasIdle":     "0",
+				"resources":           resourceSelectionJSON(target.Resources),
+				"infrastructureReady": "false",
 			},
 		},
 		DBCredentials: &corev1.Secret{
@@ -539,11 +541,36 @@ func WorkloadTemplate(target warmtarget.WarmTarget) (*WarmResources, error) {
 				Namespace: ns,
 			},
 			Data: map[string]string{
-				"state": fmt.Sprintf(`{"warm_id":%q,"state":"provisioning","reset_verified":false,"baseline_version":"unverified","namespace":%q,"repo":%q}`,
+				"state": fmt.Sprintf(`{"warm_id":%q,"state":"provisioning","reset_verified":false,"baseline_version":"unverified","infrastructure_ready":false,"namespace":%q,"repo":%q}`,
 					target.WarmID, ns, target.Repo),
 			},
 		},
 	}
 
+	if !target.HasResource(warmtarget.ResourcePostgreSQL) {
+		res.DBStatefulSet, res.DBService, res.DBCredentials = nil, nil, nil
+		env := res.AppDeployment.Spec.Template.Spec.Containers[0].Env[:0]
+		for _, item := range res.AppDeployment.Spec.Template.Spec.Containers[0].Env {
+			if item.Name != "PGPASSWORD" && item.Name != "DATABASE_URL" {
+				env = append(env, item)
+			}
+		}
+		res.AppDeployment.Spec.Template.Spec.Containers[0].Env = env
+	}
+	if !target.HasResource(warmtarget.ResourceRedis) {
+		res.RedisDeployment, res.RedisService = nil, nil
+	}
 	return res, nil
+}
+
+func resourceSelectionJSON(resources []string) string {
+	selected := warmtarget.NormalizeResources(resources)
+	out := "["
+	for i, resource := range selected {
+		if i > 0 {
+			out += ","
+		}
+		out += fmt.Sprintf("%q", resource)
+	}
+	return out + "]"
 }
