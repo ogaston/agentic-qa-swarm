@@ -3,8 +3,13 @@
 # (U12-T03). Sin esto, un clúster levantado antes de un cambio sigue corriendo las imágenes viejas:
 # el tag fijo :0.0.0 no cambia y los pods no se reinician aunque la imagen del nodo se recargue.
 #
-# Orden: guarda de contexto -> build-images.sh -> load-images.sh -> rollout restart/status de los
-# deployments que usan imágenes de la plataforma -> lectura de vuelta del startTime de sus pods.
+# Orden: guarda de contexto -> build-images.sh -> load-images.sh -> recrear los pods de los deployments
+# que usan imágenes de la plataforma -> lectura de vuelta del startTime de sus pods.
+#
+# Se borran los pods en vez de `kubectl rollout restart`: con Flux reconciliando deploy/flux/kind, Flux quita
+# la anotación restartedAt de la plantilla en la siguiente vuelta y el Deployment vuelve al ReplicaSet anterior.
+# Si un pod de ese ReplicaSet seguía vivo, se queda con la imagen vieja (pasó el 2026-11-02 con agent-planner).
+# Borrar el pod no toca la plantilla: el ReplicaSet lo recrea con la imagen recién cargada en el nodo.
 # AQS_IMAGES="ui-api go-identity" limita build, load y reinicio a ese subconjunto.
 set -euo pipefail
 
@@ -59,8 +64,11 @@ count=0
 restarted=()
 while IFS=$'\t' read -r ns name selector; do
   [ -n "$ns" ] || continue
-  kubectl --context "$KIND_CONTEXT" -n "$ns" rollout restart "deployment/$name" >/dev/null
+  # Sin selector no se borra nada: `delete pods` sin -l se llevaría todos los pods del namespace.
+  [ -n "$selector" ] || fail "el deployment $ns/$name no tiene matchLabels; no se recrean sus pods"
+  kubectl --context "$KIND_CONTEXT" -n "$ns" delete pods -l "$selector" --wait=true --timeout=120s >/dev/null
   kubectl --context "$KIND_CONTEXT" -n "$ns" rollout status "deployment/$name" --timeout=180s >/dev/null
+  kubectl --context "$KIND_CONTEXT" -n "$ns" wait --for=condition=Ready pods -l "$selector" --timeout=180s >/dev/null
   count=$((count + 1))
   restarted+=("$ns|$name|$selector")
 done <<<"$deployments"
@@ -71,8 +79,7 @@ if [ "$count" -eq 0 ]; then
   exit 0
 fi
 
-# Lectura de vuelta. Se excluyen los pods en terminación: `rollout status` da por bueno el rollout
-# en cuanto la réplica nueva está Ready y la vieja puede seguir en Running unos segundos.
+# Lectura de vuelta. Se excluyen los pods en terminación, por si alguno sigue cerrándose.
 bad=0
 for entry in "${restarted[@]}"; do
   IFS='|' read -r ns name selector <<<"$entry"

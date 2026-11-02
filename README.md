@@ -330,7 +330,8 @@ En kind salen del Secret `llm-upstream`, que `scripts/kind/secrets.sh` genera de
 #   LITELLM_UPSTREAM_STREAM=1     # solo si el modelo exige streaming (p. ej. Qwen-3.8-Flash en Together)
 #   LITELLM_UPSTREAM_DISABLE_THINKING=1   # apaga el razonamiento de modelos híbridos (Qwen-3.8-Flash: 150 s → 8,8 s)
 bash scripts/kind/secrets.sh                      # reaplica agents-llm-key y llm-upstream (model, stream, disable-thinking)
-kubectl -n aqs-system rollout restart deploy/agent-planner deploy/agent-reporter
+# recrea los pods (Flux revierte `rollout restart`); el ReplicaSet los levanta con el Secret nuevo
+kubectl -n aqs-system delete pods -l 'app.kubernetes.io/name in (agent-planner,agent-reporter)'
 ```
 
 **Doce casos que corremos contra cada modelo nuevo** ([`agents/dataset/`](agents/dataset/), [`agents/eval/`](agents/eval/)):

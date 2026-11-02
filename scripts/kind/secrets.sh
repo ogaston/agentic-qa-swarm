@@ -250,8 +250,11 @@ rotate_demo() {
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null \
     || fail "no se pudo aplicar el Secret go-identity-users (el anterior sigue vigente)"
   publish_go_identity_aux
-  kubectl rollout restart deployment/go-identity -n "$ns" >/dev/null || fail "no se pudo reiniciar go-identity"
+  # Se recrea el pod en vez de `rollout restart`: con Flux activo, la anotación restartedAt se revierte en la
+  # siguiente vuelta y el pod viejo puede sobrevivir con el Secret anterior (ver scripts/kind/refresh-images.sh).
+  kubectl delete pods -n "$ns" -l app.kubernetes.io/name=go-identity --wait=true --timeout=120s >/dev/null || fail "no se pudo reiniciar go-identity"
   kubectl rollout status deployment/go-identity -n "$ns" --timeout=180s >/dev/null || fail "go-identity no llegó a Ready tras la rotación"
+  kubectl wait --for=condition=Ready pods -n "$ns" -l app.kubernetes.io/name=go-identity --timeout=180s >/dev/null || fail "go-identity no llegó a Ready tras la rotación"
   echo "secrets: OK (--rotate-demo: go-identity-users rotado y go-identity reiniciado; ningún otro Secret tocado)"
   exit 0
 }

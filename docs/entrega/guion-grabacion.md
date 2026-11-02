@@ -6,10 +6,13 @@ repositorio, con el contexto de kubectl `kind-aqs`.
 
 ## Antes de grabar (unos 20 minutos, sin cámara)
 
-1. **Fusiona el PR #158 y deja Flux en `main`.** Así la grabación muestra `rama: main`:
+1. **Actualiza `main` y deja Flux en `main`.** Así la grabación muestra `rama: main`. El `git pull` va
+   **después** de fusionar el último PR y **antes** de `up.sh`, porque `up.sh` construye las imágenes desde tu
+   copia local. Si `main` está atrasado, los pods corren código viejo aunque Flux muestre la revisión nueva:
 
    ```bash
-   git switch main && git pull
+   git switch main && git pull --ff-only
+   git log --oneline -1 origin/main      # debe coincidir con tu HEAD
    bash scripts/kind/flux-up.sh          # debe terminar en «aqs-kind Ready en main@sha1:…»
    bash scripts/kind/flux-status.sh      # «rama: main» y «OK clúster en la revisión de Git»
    ```
@@ -20,8 +23,11 @@ repositorio, con el contexto de kubectl `kind-aqs`.
    bash scripts/demo/up.sh
    ```
 
-   Al final imprime la URL del dashboard y el archivo con las credenciales. `up.sh` vuelve a cargar y reiniciar
-   las imágenes de la plataforma, así que después hay que resetear el warm:
+   Al final imprime la URL del dashboard y el archivo con las credenciales. `up.sh` reconstruye y vuelve a
+   cargar las imágenes de la plataforma, y recrea sus pods (`scripts/kind/refresh-images.sh` los borra en vez
+   de usar `rollout restart`, que Flux revierte). Si termina con
+   `refresh-images: el pod … arrancó antes del reinicio`, repite `bash scripts/kind/refresh-images.sh`.
+   Después hay que resetear el warm:
 
    ```bash
    bash scripts/demo/up.sh --reset       # «reset: OK (state=ready, reset_verified=true)»
