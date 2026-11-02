@@ -272,7 +272,8 @@ salida al LLM**: el LLM piensa fuera y los runners ejecutan dentro, sin inferenc
 
 Corrida sana verificada el 2026-10-28: `run-d3fdad3c9118b08a`, 7/7 flujos, `done/sin-hallazgos`, reset verificado
 ([evidencia](aidlc-docs/construction/demo-setup/code/run-d3fdad3c9118b08a-verification.md)). Guion completo:
-[`docs/demo-real.md`](docs/demo-real.md). **Pendiente antes de presentar:** grabar el respaldo.
+[`docs/demo-real.md`](docs/demo-real.md). Guion de la grabación de respaldo:
+[`docs/entrega/guion-grabacion.md`](docs/entrega/guion-grabacion.md). **Pendiente antes de presentar:** grabarla y enlazarla aquí.
 
 ---
 
@@ -350,19 +351,28 @@ export LLM_BASE_URL=https://<gateway>/v1 LLM_API_KEY_FILE=<archivo-con-la-clave>
 
 Lo que ya está probado sin red (`tests/test_live_model.py`, 11 pruebas): con un gateway compatible con OpenAI en
 loopback, cambiar **solo** `LLM_MODEL` lleva al «modelo bueno» a 12/12 casos con rc 0, y al «modelo roto» a 2/12 con
-rc 1. **Medición con modelos reales (`Deepseek-V4-Flash` y `Qwen-3.8-Max-Quantized`, vía LiteLLM):**
+rc 1.
+
+**Medición con modelos reales.** Con los topes del clúster (120 s, 8000 tokens), vía el gateway LiteLLM del clúster:
 
 | llm | factualidad | precisión | ruido | adherencia | casos ok | umbrales |
 |---|---|---|---|---|---|---|
-| http:Deepseek-V4-Flash | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
-| http:Qwen-3.8-Max-Quantized | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
+| http:deepseek-flash | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
+| http:qwen-3.8-flash | *pendiente: no está en el gateway del clúster* | | | | | |
 
-**Esta tabla no mide a los modelos.** Dos modelos distintos con números idénticos apuntan al sistema. El planner
-falló en los 10 casos con superficie (`PlanRejected` en Deepseek, `BudgetExceeded` en Qwen), porque el arnés usaba
-los topes del LLM falso (25 s, 4000 tokens) y no los del clúster (120 s, 8000 tokens). Con esos topes, un modelo de
-razonamiento gasta la salida pensando y devuelve `content` vacío. Se corrigió el script, no el modelo, y ahora el
-informe guarda el código del error. Diagnóstico completo en la
-[evidencia §8](docs/entrega/evidencia-2026-11-02.md). **Pendiente:** repetir `run-models.sh` y reemplazar la tabla.
+**Lo que encontró: un defecto nuestro, no del modelo.** El planner rechazó los 10 planes con
+`PlanRejected:endpoint_no_observado`. La superficie declara rutas con plantilla (`GET /orders/{id}`) y el modelo
+las concreta (`GET /orders/1`), que es lo razonable. Nuestro validador exige la plantilla literal y rechaza el plan
+entero: falla cerrado, como está diseñado, pero sobre un plan correcto. La app de la demo casi no tiene rutas con
+parámetros, y por eso ahí la corrida da 7/7. Lo confirmamos con una llamada aislada a `deepseek-flash`. Arreglarlo
+toca el contrato del planner y el del runner (aceptar instancias de la plantilla y conservarla para la ejecución):
+queda como tarea. El reporter, en cambio, acertó el veredicto en los 7 casos golden y con bug (factualidad 1,00,
+ruido 0,00). En las trampas, el validador rechazó dos «sin hallazgos» con un flujo fallido (`ReportRejected`), que
+es el fallo cerrado esperado.
+
+Una primera corrida con los topes del LLM falso (25 s, 4000 tokens) dio números idénticos en dos modelos; está en
+la [evidencia §8](docs/entrega/evidencia-2026-11-02.md). Este resultado y su diagnóstico están en la
+[evidencia §9](docs/entrega/evidencia-2026-11-02.md).
 
 Límite honesto: son 12 casos sintéticos. Detectan regresiones entre modelos; no miden la calidad en apps reales.
 

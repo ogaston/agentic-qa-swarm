@@ -2359,3 +2359,18 @@ why is lasting so long?
 **Context**: Sin transición de etapa.
 
 ---
+
+## Comparación de modelos (ejecución por el asistente), guion de grabación y merge
+**Timestamp**: 2026-11-02T15:58:31-05:00
+**User Input**: "1. corre la comparacion de los modelos con deepseek vs qwen 3.8 flash 2. okay crea un MD con esto 3. puedo hacer merge antes de grabar?"
+**AI Response**: Autorización explícita para ejecutar la evaluación contra el gateway LLM del humano (gasta tokens). Se crea el guion de grabación en un .md. Se responde sobre el merge.
+**Context**: Sin transición de etapa.
+
+---
+
+## Comparación de modelos (ejecutada) y guion
+**Timestamp**: 2026-11-02T16:05:49-05:00
+**AI Response**: Gateway del clúster (litellm.env + deepseek.key) solo sirve deepseek-flash y deepseek-v4-pro; los nombres Qwen-3.8-* devuelven 400. run-models.sh deepseek-flash (topes del clúster, 5 min 10 s): 2/12, factualidad 1.00, precisión 0.80, ruido 0.00, adherencia 0.68. Causa (código de error nuevo): PlanRejected:endpoint_no_observado en 10/10; confirmado con una llamada aislada: el modelo concreta /orders/{id} → /orders/1 y validate.py exige la plantilla literal. Hallazgo del producto, no corregido (toca contratos del planner y del runner); propuesto como tarea. Creado docs/entrega/guion-grabacion.md. Respuesta sobre merge: sí, conviene fusionar antes de grabar.
+**Context**: Sin transición de etapa.
+
+---

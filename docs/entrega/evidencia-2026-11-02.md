@@ -176,3 +176,41 @@ Hay que repetir la corrida.
 
 Lectura para la sustentación: la prueba de cambio de modelo cumplió su función. Detectó que la configuración del
 arnés no era la del despliegue antes de que llegara a una demo.
+
+## 9. `deepseek-flash` con los topes del clúster: hallazgo de rutas con plantilla
+
+Gateway LiteLLM del clúster (`LITELLM_UPSTREAM_URL` de `litellm.env`, clave `deepseek.key`), topes de
+`deploy/flux/kind` (120 s, 16000/8000 tokens). Duración: 5 min 10 s. El gateway solo sirve `deepseek-flash` y
+`deepseek-v4-pro`; los nombres `Qwen-3.8-*` responden `400 The supported API model names are deepseek-flash,
+deepseek-v4-pro`.
+
+```console
+$ LLM_BASE_URL=<gateway> LLM_API_KEY_FILE=~/.local/state/aqs-kind/deepseek.key ./run-models.sh deepseek-flash
+topes: planner 120s/8000 tok, reporter 120s/8000 tok
+OK factualidad 1.0000 (umbral > 0.8)
+FALLA precision 0.8000 (umbral > 0.8)
+OK ruido 0.0000 (umbral < 0.2)
+FALLA adherencia 0.6774 (umbral == 1)
+| http:deepseek-flash | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
+```
+
+Por caso: el planner da `PlanRejected:endpoint_no_observado:<flujo>/0` en los 10 casos con superficie. El reporter
+da el veredicto esperado en los 7 golden y bug-sembrado. En trampa-fintech-01 da `inconcluso`, como se esperaba.
+En trampa-ecom-01 y trampa-logis-01 el validador da `ReportRejected:sin_hallazgos_con_flujo_no_pasado`, que es
+fallo cerrado. Los dos `no-arranca` dan `NoSurface`/`NoEvidence`, como se esperaba.
+
+Confirmación con una llamada aislada del planner sobre `golden-ecom-01` (superficie: `POST /orders`,
+`GET /orders/{id}`, `POST /orders/{id}/cancel`):
+
+```text
+create-order-happy          [('POST', '/orders')]
+get-order-happy             [('GET', '/orders/1')]
+cancel-order-happy          [('POST', '/orders/1/cancel')]
+get-missing-order-probe     [('GET', '/orders/999999999')]
+cancel-missing-order-probe  [('POST', '/orders/999999999/cancel')]
+```
+
+El modelo concreta los parámetros de ruta, y `validate.py` compara `(method, path)` contra la plantilla literal.
+Es un defecto del contrato del planner, no del modelo: un plan razonable se rechaza entero. Corrección propuesta
+como tarea: aceptar instancias de una plantilla observada (cada segmento `{x}` casa con un segmento no vacío, sin
+`/`, `..` ni host) y conservar la plantilla en el `FlowPlan` para A1 y para el runner.
