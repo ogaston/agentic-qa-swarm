@@ -6,6 +6,10 @@ repositorio, con el contexto de kubectl `kind-aqs`.
 
 ## Antes de grabar (unos 20 minutos, sin cámara)
 
+Cómo encender, apagar y reparar cada pieza del entorno (dashboard, túnel, webhook, warm):
+[docs/operaciones/demo-subir-bajar.md](../operaciones/demo-subir-bajar.md). `bash scripts/demo/status.sh` dice en
+segundos si todo está listo y, si no, qué comando lo arregla.
+
 1. **Actualiza `main` y deja Flux en `main`.** Así la grabación muestra `rama: main`. El `git pull` va
    **después** de fusionar el último PR y **antes** de `up.sh`, porque `up.sh` construye las imágenes desde tu
    copia local. Si `main` está atrasado, los pods corren código viejo aunque Flux muestre la revisión nueva:
@@ -26,13 +30,16 @@ repositorio, con el contexto de kubectl `kind-aqs`.
    Al final imprime la URL del dashboard y el archivo con las credenciales. `up.sh` reconstruye y vuelve a
    cargar las imágenes de la plataforma, y recrea sus pods (`scripts/kind/refresh-images.sh` los borra en vez
    de usar `rollout restart`, que Flux revierte). Si termina con
-   `refresh-images: el pod … arrancó antes del reinicio`, repite `bash scripts/kind/refresh-images.sh`.
+   `refresh-images: el pod … arrancó antes del reinicio`, repite `bash scripts/kind/refresh-images.sh` y luego `bash scripts/demo/reconnect.sh`.
    Después hay que resetear el warm:
 
    ```bash
    bash scripts/demo/up.sh --reset       # «reset: OK (state=ready, reset_verified=true)»
    bash scripts/kind/kind-smoke.sh --preflight   # «smoke: OK (sin FALLA…)»
+   bash scripts/demo/status.sh                   # «status: OK (listo para grabar)»
    ```
+
+   El warm se apaga solo tras 30 minutos sin corridas. Graba dentro de ese rato o repite el reset.
 
    Si el reset devuelve 409 con `cuarentena`, mira la imagen del warm:
    `kubectl -n aqs-test get pods -l app.kubernetes.io/name=warm-app`. Si está en `ImagePullBackOff`, borra el

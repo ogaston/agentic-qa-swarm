@@ -38,5 +38,12 @@ fi
 
 # 3. Guarda y espera de disponibilidad del nodo.
 require_kind_context
-kubectl wait --for=condition=Ready node --all --timeout=180s
+# Recién encendido el nodo (tras `podman start`), el API server responde antes de tener listo RBAC y
+# contesta Forbidden o connection refused por unos segundos: se reintenta hasta 180 s en total.
+ready=0
+for _ in $(seq 1 36); do
+  if kubectl wait --for=condition=Ready node --all --timeout=5s >/dev/null 2>&1; then ready=1; break; fi
+  sleep 5
+done
+[ "$ready" -eq 1 ] || { kubectl wait --for=condition=Ready node --all --timeout=5s; fail "el nodo no quedó Ready en 180 s"; }
 echo "kind-up: OK (contexto $KIND_CONTEXT)"

@@ -14,6 +14,12 @@ for entry in 'aqs-demo-pf-intake.pid:kubectl' 'aqs-demo-cloudflared.pid:cloudfla
     rm -f "$file"
   fi
 done
+# Sin pidfile (otra sesión, /tmp limpio), el port-forward de go-intake se reconoce por su comando exacto.
+for pid in $(ss -ltnpH 'sport = :18622' 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
+  if [ -r "/proc/$pid/cmdline" ] && tr '\0' ' ' < "/proc/$pid/cmdline" | grep -Eq 'kubectl .*port-forward .*svc/go-intake 18622:8080'; then
+    kill "$pid" 2>/dev/null || true
+  fi
+done
 if command -v podman >/dev/null && podman container exists aqs-control-plane; then
   if [ "$(podman inspect -f '{{.State.Running}}' aqs-control-plane)" = true ]; then
     podman stop aqs-control-plane >/dev/null

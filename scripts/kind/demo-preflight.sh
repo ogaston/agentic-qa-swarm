@@ -258,6 +258,9 @@ puerto_escucha() { # <puerto>: 0 si algo escucha en 127.0.0.1:<puerto>
 }
 
 tunnel_activo() {
+  # El conector puede ser el servicio de systemd (`cloudflared tunnel run --token-file …`, sin nombre en el
+  # comando): si está activo no se lanza otro, que fallaría con «aqs-demo is neither the ID nor the name».
+  systemctl is-active --quiet cloudflared 2>/dev/null && return 0
   pgrep -f "cloudflared tunnel.*(run $TUNNEL_NAME|--url http://127.0.0.1:$P_INTAKE)" >/dev/null 2>&1
 }
 
@@ -290,6 +293,17 @@ if [ "$fail" -eq 0 ]; then
     local i
     for i in $(seq 1 60); do
       curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$P_INTAKE/healthz" && return 0
+      # Un port-forward propio que escucha pero no responde quedó pegado a un pod que ya no existe:
+      # se mata (solo si es el kubectl de este script) para que la vuelta siguiente lo levante.
+      if [ "$i" -eq 5 ] && [ -f "$PF_PID" ]; then
+        local old
+        old=$(cat "$PF_PID")
+        if [[ "$old" =~ ^[0-9]+$ ]] && [ -r "/proc/$old/cmdline" ] &&
+          tr '\0' ' ' <"/proc/$old/cmdline" | grep -q 'kubectl.*port-forward.*go-intake'; then
+          kill "$old" 2>/dev/null || true
+          sleep 1
+        fi
+      fi
       if ! puerto_escucha "$P_INTAKE"; then
         pf_intake
       fi

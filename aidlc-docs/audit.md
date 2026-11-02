@@ -2478,3 +2478,34 @@ why is lasting so long?
 **AI Response**: refresh-images.sh recrea los pods por selector (delete pods -l + rollout status + wait Ready) en vez de rollout restart, que Flux revierte; falla si un deployment no tiene matchLabels. Mismo cambio en secrets.sh --rotate-demo (go-identity) y en el comando de cambio de modelo del README §5. Guion: git pull --ff-only de main antes de up.sh. Pruebas: demo-refresh-images-test.py 7 OK (nueva: sin selector no borra el namespace), u9-kind-state 0 fallos, check-secrets-test y u11-scripts-test OK. Verificado en kind: AQS_IMAGES=agent-planner refresh-images.sh OK y el pod nuevo sobrevive a la reconciliación de Flux.
 
 ---
+
+## Entrega módulo 8: PR #161 fusionado
+**Timestamp**: 2026-11-02T23:04:33Z
+**User Input**: "listo, ya fusioné el 161"
+**AI Response**: main local actualizado; se verifica Flux en main y el estado del clúster.
+
+---
+
+## Entrada del usuario — error de login en el dashboard
+**Timestamp**: 2026-11-02T00:00:00Z
+**User Input**: "(pegado) aqs / Agentic QA Swarm / Iniciar sesión / Introduce tus credenciales para acceder a la plataforma. / Usuario demo / Contraseña •••• / Tengo un código de verificación / Entrar / unexpected_response HTTP 500 sin cuerpo Error válido / Referencia para soporte: faef5ca5-3e5c-49c2-8e15-5bf6d8f7bdf2"
+**AI Response**: Investigar el HTTP 500 del login (go-identity / dashboard) por la referencia de soporte.
+**Context**: Preparación de la grabación de la demo.
+
+---
+
+## Entrada del usuario — falta el túnel de Cloudflare
+**Timestamp**: 2026-11-02T23:19:10Z
+**User Input**: "but we dont have the cloudlfare tunnel"
+**AI Response**: Revisar cómo llega el webhook de GitHub (https://aqs.ogaston.com) a go-intake y levantar el túnel.
+**Context**: Preparación de la grabación de la demo.
+
+---
+
+## Entrada del usuario — guía para bajar y subir el entorno
+**Timestamp**: 2026-11-02T23:20:26Z
+**User Input**: "make sure that I have a clear guide to down and up the whole env"
+**AI Response**: Revisar up.sh/down.sh y la documentación existente; dejar una guía única de bajar/subir el entorno de la demo y corregir lo que la haga fallar.
+**Context**: Preparación de la grabación de la demo.
+
+---
