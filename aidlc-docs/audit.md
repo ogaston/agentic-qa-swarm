@@ -2397,3 +2397,24 @@ why is lasting so long?
 **Context**: Sin transición de etapa.
 
 ---
+
+## Streaming y rutas con plantilla
+**Timestamp**: 2026-11-02T16:20:16-05:00
+**User Input**: "Streaming + validador, y re-correr (Recommended)"
+**AI Response**: (1) LLM_STREAM=1 opcional en agents/*/llm_http.py (SSE agregado, plazo total, usage estimado si falta), config del planner y servidor del reporter; en kind sale de LITELLM_UPSTREAM_STREAM → Secret llm-upstream (clave stream, opcional). (2) agent_planner.validate.match_endpoint: acepta instancias de plantillas observadas con reglas estrictas por segmento; A1 del eval usa la misma regla. Pruebas: planner 272, reporter 332, eval 113 OK; policies.sh 15 OK. Re-corrida de la comparación con LLM_STREAM=1 en curso.
+**Context**: Cambio de código de producto aprobado por el humano. Sin transición de etapa.
+
+---
+
+## Entrega módulo 8: espera de Qwen-3.8-Flash
+**Timestamp**: 2026-11-02T21:38:54Z
+**User Input**: "ok, avísame cuando termine qwen y revisa porque se demora"
+**AI Response**: Se revisa el progreso de la corrida y la latencia por llamada.
+
+---
+
+## Entrega módulo 8: resultado Deepseek-V4-Flash vs Qwen-3.8-Flash (streaming + plantillas)
+**Timestamp**: 2026-11-02T21:43:20Z
+**AI Response**: Corrida terminada (23 min 14 s, rc 1). Deepseek-V4-Flash 10/12 (precisión 0,90; adherencia 0,97); Qwen-3.8-Flash 6/12 (precisión 0,70; adherencia 0,84; 5 BudgetExceeded:time). Causa de la demora: Qwen razona ~6665 tokens por plan (150 s > tope 120 s); con enable_thinking=false tarda 8,8 s. README §5 y evidencia §11 actualizados. Se propone al usuario LLM_DISABLE_THINKING (pendiente de su decisión).
+
+---

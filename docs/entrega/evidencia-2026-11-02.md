@@ -237,3 +237,43 @@ Gateway `http://chalas-lab:4000` (`100.84.211.20`, Tailscale; excepción http ac
 Lectura: los 12 casos detectaron dos incompatibilidades antes de llegar a producción. Sin ellos, cambiar a
 `Qwen-3.8-Flash` en el Secret `llm-upstream` habría dejado toda corrida en `llm_unavailable`, y los planes con
 rutas `{id}` se habrían rechazado con cualquier modelo que concrete parámetros.
+
+## 11. Deepseek-V4-Flash contra Qwen-3.8-Flash, con streaming y rutas con plantilla
+
+Mismo gateway y topes que en §10, después del commit `df58b7d` (`LLM_STREAM` opcional en los dos agentes;
+`match_endpoint` acepta `/orders/1` como instancia de `/orders/{id}`). Comando:
+`LLM_STREAM=1 ./run-models.sh Deepseek-V4-Flash Qwen-3.8-Flash`, 23 min 14 s, rc 1.
+
+| llm | factualidad | precision | ruido | adherencia | casos ok | umbrales |
+|---|---|---|---|---|---|---|
+| http:Deepseek-V4-Flash | 1.00 | 0.90 | 0.00 | 0.97 | 10/12 | FALLA |
+| http:Qwen-3.8-Flash | 1.00 | 0.70 | 0.00 | 0.84 | 6/12 | FALLA |
+
+Casos que fallan (`out/<modelo>/report.json`, campos `planner.error` y `reporter.error`):
+
+| Caso | Deepseek-V4-Flash | Qwen-3.8-Flash |
+|---|---|---|
+| golden-fintech-01 | ok | planner `BudgetExceeded:time` |
+| bug-logis-01 | ok | planner `BudgetExceeded:time` |
+| bug-fintech-02 | planner `PlanRejected:json_invalido` | planner `BudgetExceeded:time` |
+| trampa-ecom-01 | ok | planner `BudgetExceeded:time`; reporter `ReportRejected:sin_hallazgos_con_flujo_no_pasado` |
+| trampa-fintech-01 | ok | planner `BudgetExceeded:time`; reporter `ReportRejected:sin_hallazgos_con_flujo_no_pasado` |
+| trampa-logis-01 | reporter `ReportRejected:sin_hallazgos_con_flujo_no_pasado` | reporter `ReportRejected:sin_hallazgos_con_flujo_no_pasado` |
+
+En los demás casos (golden, bug-sembrado y los dos `no-arranca`) el plan es válido y el veredicto es el esperado.
+
+**Por qué Qwen tarda.** Una llamada aislada con el prompt real del planner de `bug-fintech-01` (streaming, 8000
+tokens de salida):
+
+| Petición | Tiempo total | reasoning_tokens | completion_tokens |
+|---|---|---|---|
+| Por defecto | 150,9 s | 6665 | 7161 |
+| `chat_template_kwargs: {"enable_thinking": false}` | 8,8 s | 0 | 545 |
+
+`reasoning_effort: "low"` no está disponible: LiteLLM responde HTTP 400
+`together_ai does not support parameters: ['reasoning_effort']`. Con el tope de 120 s del clúster, el planner
+corta la llamada y falla cerrado (`BudgetExceeded:time`). Es el límite actuando, no un plan aceptado tarde.
+
+Lectura: con el arnés arreglado, la diferencia entre modelos es real y medible. Con esta configuración,
+Deepseek-V4-Flash es el modelo del clúster. Qwen-3.8-Flash necesitaría el razonamiento apagado o un tope mayor, y
+los dos fallan las trampas del esquema en el reporter, que el validador detiene.
