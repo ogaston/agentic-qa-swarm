@@ -13,8 +13,8 @@
       "required": ["artifacts", "labelled", "regressions"],
       "additionalProperties": false
     },
-    "llm": {"const": "fake"},
-    "valid_for": {"const": "pipeline"},
+    "llm": {"type": "string", "pattern": "^(fake|http:[^\\s]+)$"},
+    "valid_for": {"enum": ["pipeline", "model"]},
     "note": {"type": "string", "minLength": 1},
     "metrics": {
       "type": "object",

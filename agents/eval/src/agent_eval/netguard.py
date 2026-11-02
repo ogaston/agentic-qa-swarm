@@ -21,20 +21,40 @@ def is_loopback(host) -> bool:
 
 
 class NetworkGuard:
-    def __init__(self) -> None:
+    """`allow`: hosts permitidos ademas de loopback (modo con modelo real: solo el host del LLM). Los nombres se
+    resuelven ANTES de activar la guarda y se permiten tambien sus IPs; cualquier otro destino se bloquea y cuenta."""
+
+    def __init__(self, allow=()) -> None:
         self.attempts: list[str] = []
         self._saved: list[tuple[object, str, object]] = []
+        self._allow: set[str] = set()
+        for h in allow:
+            self._allow.add(str(h))
+            try:
+                ipaddress.ip_address(str(h))
+                continue  # IP literal: no hay nada que resolver
+            except ValueError:
+                pass
+            try:
+                self._allow.update(str(ai[4][0]) for ai in socket.getaddrinfo(h, None))
+            except OSError:
+                pass
+
+    def _allowed(self, host) -> bool:
+        if isinstance(host, bytes):
+            host = host.decode("latin-1")
+        return is_loopback(host) or str(host).split("%")[0] in self._allow
 
     def _deny(self, host) -> None:
         self.attempts.append(str(host))
         raise NetworkBlocked(f"destino no local: {host}")
 
     def _check_addr(self, address) -> None:
-        if isinstance(address, tuple) and address and not is_loopback(address[0]):
+        if isinstance(address, tuple) and address and not self._allowed(address[0]):
             self._deny(address[0])
 
     def _check_host(self, host) -> None:
-        if host is not None and not is_loopback(host):
+        if host is not None and not self._allowed(host):
             self._deny(host)
 
     def __enter__(self) -> "NetworkGuard":

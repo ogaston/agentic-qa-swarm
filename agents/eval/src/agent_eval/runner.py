@@ -1,4 +1,5 @@
-"""Ejecucion de planner y reporter sobre un artefacto. Cada agente corre como biblioteca, con su FakeLLM."""
+"""Ejecucion de planner y reporter sobre un artefacto. Cada agente corre como biblioteca, con su FakeLLM
+(respuestas canned del dataset) o, en modo con modelo real, con el cliente HTTP que se le pase."""
 from __future__ import annotations
 
 import json
@@ -42,6 +43,18 @@ class RecReporterLLM(_Rec, ReporterFake):
     pass
 
 
+class LiveRec:
+    """Modo con modelo real: registra los prompts y delega en el cliente HTTP configurado por entorno."""
+
+    def __init__(self, inner) -> None:
+        self.inner = inner
+        self.prompts: list[str] = []
+
+    def complete(self, prompt, **kw):
+        self.prompts.append(prompt)
+        return self.inner.complete(prompt, **kw)
+
+
 class StripReader(DirEvidenceReader):
     """Las URIs del dataset son s3://aqs-evidence/runs/<run>/<flujo>/<archivo>; se mapean a evidence/."""
 
@@ -75,14 +88,15 @@ def _err(e: BaseException) -> str:
     return type(e).__name__
 
 
-def run_planner(art: Artifact, surface: dict, plan_fn, limits: PlannerLimits):
-    llm = RecPlannerLLM()
+def run_planner(art: Artifact, surface: dict, plan_fn, limits: PlannerLimits, live=None):
+    llm = RecPlannerLLM() if live is None else LiveRec(live)
     result = {"outcome": "error", "flows": 0, "error": None}
     plan = None
     try:
-        resp = read_json(art.dir / "planner.response.json")
-        text = "{}" if "error" in resp else json.dumps(canned_plan(surface, WORKFLOW, resp))
-        llm.register(build_prompt(surface, WORKFLOW), text)
+        if live is None:
+            resp = read_json(art.dir / "planner.response.json")
+            text = "{}" if "error" in resp else json.dumps(canned_plan(surface, WORKFLOW, resp))
+            llm.register(build_prompt(surface, WORKFLOW), text)
         plan = plan_fn(surface, WORKFLOW, llm, limits)
         result.update(outcome="plan", flows=len(plan["flows"]))
     except Exception as e:  # el arnes registra y sigue: un agente roto es un dato, no un cierre
@@ -91,8 +105,8 @@ def run_planner(art: Artifact, surface: dict, plan_fn, limits: PlannerLimits):
     return result, plan, llm.prompts
 
 
-def run_reporter(art: Artifact, surface: dict, report_fn, limits: ReporterLimits):
-    llm = RecReporterLLM()
+def run_reporter(art: Artifact, surface: dict, report_fn, limits: ReporterLimits, live=None):
+    llm = RecReporterLLM() if live is None else LiveRec(live)
     result = {"verdict": "error", "findings": [], "error": None}
     report, uris = None, []
     try:
@@ -103,7 +117,7 @@ def run_reporter(art: Artifact, surface: dict, report_fn, limits: ReporterLimits
         else:
             run_id, uris = surface["run_id"], []
         reader = StripReader(art.dir / "evidence", f"/runs/{run_id}/")
-        if uris:
+        if uris and live is None:
             llm.register(prepare(run_id, uris, reader, limits).prompt, _canned(art.dir, uris))
         report = report_fn(run_id, uris, reader, llm, limits)
         result.update(
@@ -127,13 +141,15 @@ def run_artifact(
     report_fn=real_report,
     planner_limits: PlannerLimits | None = None,
     reporter_limits: ReporterLimits | None = None,
+    planner_llm=None,
+    reporter_llm=None,
 ) -> dict:
     planner_limits = planner_limits or PlannerLimits()
     reporter_limits = reporter_limits or ReporterLimits()
     surface = read_json(art.dir / "surface.json")
     before = len(guard.attempts)
-    p_res, plan, p_prompts = run_planner(art, surface, plan_fn, planner_limits)
-    r_res, report, uris, r_prompts = run_reporter(art, surface, report_fn, reporter_limits)
+    p_res, plan, p_prompts = run_planner(art, surface, plan_fn, planner_limits, planner_llm)
+    r_res, report, uris, r_prompts = run_reporter(art, surface, report_fn, reporter_limits, reporter_llm)
     attempts = len(guard.attempts) - before
 
     cks = []

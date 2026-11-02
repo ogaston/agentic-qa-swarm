@@ -2284,3 +2284,26 @@ Componentes por proyecto has not info, can you check
 ### User Interaction - 2026-11-02T12:14:57-05:00
 **User Input:**
 commit everything and push
+
+## Preparación de la entrega final (Módulo 8) — solicitud
+**Timestamp**: 2026-11-02T13:13:34-05:00
+**User Input**: "I need you to make this project ready to deliver: https://github.com/lfarizav/topicos-especiales/blob/main/modulo8/guia-entrega-proyecto-final.md"
+**AI Response**: Leída la guía de sustentación (README de 8 secciones, RBAC/Pod Security con evidencia, bucle GitOps funcionando, prueba de cambio de modelo, ≥10 casos por modelo). Brechas detectadas: sin README de entrega, kind sin Flux (apply manual), eval solo con FakeLLM, namespaces sin etiquetas de Pod Security. Preguntas al usuario sobre GitOps en kind, eval con modelo real y encabezado.
+**Context**: Fuera de etapa; entregable académico. Sin transición de etapa.
+
+---
+
+## Preparación de la entrega final — respuestas del usuario
+**Timestamp**: 2026-11-02T13:13:34-05:00
+**User Input**: "GitOps kind: Haz el script the Flux para kind, no importa si hay un prune, ejecutalo y asegurate de que funcione bien" | "Eval modelos: Sí, implementar y tú lo corres (Recommended)" [opción: implementar el modo --llm http; el humano lo ejecuta contra sus modelos] | "Grupo/fecha: Solo Omar Gaston, 21-nov"
+**AI Response**: Plan: (1) Flux en kind con script y verificación de una reconciliación real; (2) modo de evaluación con modelo real configurable solo por entorno; (3) etiquetas Pod Security; (4) README de entrega.
+**Context**: Aprobación explícita para instalar Flux en el clúster kind local (kind-aqs), con prune.
+
+---
+
+## Preparación de la entrega final — resultado
+**Timestamp**: 2026-11-02T13:30:13-05:00
+**AI Response**: Rama entrega/modulo8. (1) Flux v2.4.0 en kind con scripts flux-up/flux-status/flux-down y sync de deploy/flux/kind con prune; warm-app/warm-db/warm-redis con ssa IfNotPresent. Instalado en kind-aqs con aprobación del usuario; reinicio único del control plane al tomar propiedad. (2) Bucle GitOps verificado: commit 4d93c97 (Pod Security) empujado 13:25:06 y aplicado 13:26:10 sin kubectl apply. (3) Pod Security baseline/restricted en namespaces y en la plantilla de aqs-w-* (prueba de paridad ampliada; go test OK). (4) agents/eval: modo --llm http configurado solo por entorno, compare y run-models.sh; 111 pruebas OK. (5) README de entrega y evidencia. policies.sh OK en dev/prod/kind. No se reseteó el warm (en cuarentena desde antes). No se ejecutó la evaluación contra modelos reales (decisión del usuario: la ejecuta él).
+**Context**: Fuera de etapa; sin transición.
+
+---
