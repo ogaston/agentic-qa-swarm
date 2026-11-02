@@ -2284,3 +2284,116 @@ Componentes por proyecto has not info, can you check
 ### User Interaction - 2026-11-02T12:14:57-05:00
 **User Input:**
 commit everything and push
+
+## Preparación de la entrega final (Módulo 8) — solicitud
+**Timestamp**: 2026-11-02T13:13:34-05:00
+**User Input**: "I need you to make this project ready to deliver: https://github.com/lfarizav/topicos-especiales/blob/main/modulo8/guia-entrega-proyecto-final.md"
+**AI Response**: Leída la guía de sustentación (README de 8 secciones, RBAC/Pod Security con evidencia, bucle GitOps funcionando, prueba de cambio de modelo, ≥10 casos por modelo). Brechas detectadas: sin README de entrega, kind sin Flux (apply manual), eval solo con FakeLLM, namespaces sin etiquetas de Pod Security. Preguntas al usuario sobre GitOps en kind, eval con modelo real y encabezado.
+**Context**: Fuera de etapa; entregable académico. Sin transición de etapa.
+
+---
+
+## Preparación de la entrega final — respuestas del usuario
+**Timestamp**: 2026-11-02T13:13:34-05:00
+**User Input**: "GitOps kind: Haz el script the Flux para kind, no importa si hay un prune, ejecutalo y asegurate de que funcione bien" | "Eval modelos: Sí, implementar y tú lo corres (Recommended)" [opción: implementar el modo --llm http; el humano lo ejecuta contra sus modelos] | "Grupo/fecha: Solo Omar Gaston, 21-nov"
+**AI Response**: Plan: (1) Flux en kind con script y verificación de una reconciliación real; (2) modo de evaluación con modelo real configurable solo por entorno; (3) etiquetas Pod Security; (4) README de entrega.
+**Context**: Aprobación explícita para instalar Flux en el clúster kind local (kind-aqs), con prune.
+
+---
+
+## Preparación de la entrega final — resultado
+**Timestamp**: 2026-11-02T13:30:13-05:00
+**AI Response**: Rama entrega/modulo8. (1) Flux v2.4.0 en kind con scripts flux-up/flux-status/flux-down y sync de deploy/flux/kind con prune; warm-app/warm-db/warm-redis con ssa IfNotPresent. Instalado en kind-aqs con aprobación del usuario; reinicio único del control plane al tomar propiedad. (2) Bucle GitOps verificado: commit 4d93c97 (Pod Security) empujado 13:25:06 y aplicado 13:26:10 sin kubectl apply. (3) Pod Security baseline/restricted en namespaces y en la plantilla de aqs-w-* (prueba de paridad ampliada; go test OK). (4) agents/eval: modo --llm http configurado solo por entorno, compare y run-models.sh; 111 pruebas OK. (5) README de entrega y evidencia. policies.sh OK en dev/prod/kind. No se reseteó el warm (en cuarentena desde antes). No se ejecutó la evaluación contra modelos reales (decisión del usuario: la ejecuta él).
+**Context**: Fuera de etapa; sin transición.
+
+---
+
+## Reset del warm y humo
+**Timestamp**: 2026-11-02T15:25:35-05:00
+**User Input**: "resetea el warm y corre el humo otra vez"
+**AI Response**: Se revisa el camino de reset de scripts/demo/up.sh antes de ejecutarlo.
+**Context**: Aprobación explícita del humano para el reset verificado del warm en kind-aqs.
+
+---
+
+## 2026-11-02T15:26:46-05:00 - User Input
+can we do this with my litellm server (chalas-lab:4000):
+
+1. Correr agents/eval/run-models.sh <modelo-A> <modelo-B> contra tu gateway y pegar la tabla en el §5 del README.
+
+## Reset del warm — diagnóstico y decisión
+**Timestamp**: 2026-11-02T15:30:45-05:00
+**AI Response**: up.sh --reset devolvió HTTP 409 {state: cuarentena, reset_verified: false}. Causa: Deployment aqs-test/warm-app con imagen ghcr.io/ogaston/demo-target-app-qa-swarm:81b5ea9… inexistente (GHCR 404; commit inexistente, 422) → ImagePullBackOff → verificación app-ready falla. Pregunta al usuario sobre cómo restaurar.
+**User Input**: "Volver a Git vía Flux (Recommended)" — borrar warm-app y dejar que Flux lo recree desde Git con la imagen de referencia b97a719.
+**Context**: Aprobación explícita para borrar el Deployment aqs-test/warm-app.
+
+---
+
+## Reset del warm — resultado
+**Timestamp**: 2026-11-02T15:32:12-05:00
+**AI Response**: Deployment warm-app borrado 15:30:45; Flux lo recreó 15:30:48 con ghcr.io/ogaston/demo-target-app-qa-swarm:b97a719…; rollout OK. up.sh --reset: OK (state=ready, reset_verified=true). kind-smoke.sh --preflight: 24 OK, 0 FALLA. Evidencia en docs/entrega/evidencia-2026-11-02.md §7.
+**Context**: Sin transición de etapa.
+
+---
+
+## 2026-11-02T15:37:28-05:00 - User Input
+do option A
+
+## 2026-11-02T15:38:56-05:00 - User Input
+cancel, do deepseek flash vs qwen
+
+## 2026-11-02T15:48:50-05:00 - User Input
+why is lasting so long?
+
+## Comparación de modelos, respaldo y Flux en main
+**Timestamp**: 2026-11-02T15:53:13-05:00
+**User Input**: "1. ya corri en out/comparacion.md 2. explicame que hacer exactamete 3. eso se puede hacer ahora? si si, entonces hazlo"
+**AI Response**: Se lee agents/eval/out/comparacion.md para llevarlo al README §5; se explica la grabación de respaldo; se evalúa si flux-up en main es posible antes de fusionar el PR #158.
+**Context**: Sin transición de etapa.
+
+---
+
+## Comparación de modelos — diagnóstico
+**Timestamp**: 2026-11-02T15:54:44-05:00
+**AI Response**: comparacion.md del humano: Deepseek-V4-Flash y Qwen-3.8-Max-Quantized idénticos (2/12, adherencia 0.68). Causa: planner PlanRejected (Deepseek) y BudgetExceeded (Qwen) en los 10 casos con superficie, por topes por defecto del LLM falso (25 s/4000 tok) frente a los del clúster (120 s/8000 tok). Corregido run-models.sh (topes del clúster por defecto) y _err del eval (código fijo del error). 113 pruebas OK. Pide al humano repetir la corrida. flux-up en main no se ejecuta: requiere fusionar el PR #158 (lo fusiona el humano).
+**Context**: Sin transición de etapa.
+
+---
+
+## Comparación de modelos (ejecución por el asistente), guion de grabación y merge
+**Timestamp**: 2026-11-02T15:58:31-05:00
+**User Input**: "1. corre la comparacion de los modelos con deepseek vs qwen 3.8 flash 2. okay crea un MD con esto 3. puedo hacer merge antes de grabar?"
+**AI Response**: Autorización explícita para ejecutar la evaluación contra el gateway LLM del humano (gasta tokens). Se crea el guion de grabación en un .md. Se responde sobre el merge.
+**Context**: Sin transición de etapa.
+
+---
+
+## Comparación de modelos (ejecutada) y guion
+**Timestamp**: 2026-11-02T16:05:49-05:00
+**AI Response**: Gateway del clúster (litellm.env + deepseek.key) solo sirve deepseek-flash y deepseek-v4-pro; los nombres Qwen-3.8-* devuelven 400. run-models.sh deepseek-flash (topes del clúster, 5 min 10 s): 2/12, factualidad 1.00, precisión 0.80, ruido 0.00, adherencia 0.68. Causa (código de error nuevo): PlanRejected:endpoint_no_observado en 10/10; confirmado con una llamada aislada: el modelo concreta /orders/{id} → /orders/1 y validate.py exige la plantilla literal. Hallazgo del producto, no corregido (toca contratos del planner y del runner); propuesto como tarea. Creado docs/entrega/guion-grabacion.md. Respuesta sobre merge: sí, conviene fusionar antes de grabar.
+**Context**: Sin transición de etapa.
+
+---
+
+## Modelo Qwen para la comparación
+**Timestamp**: 2026-11-02T16:07:02-05:00
+**User Input**: "para together_ai/Qwen/Qwen3.8-Flash"
+**AI Response**: Se busca el gateway que sirve ese modelo y se corre la comparación deepseek-flash vs together_ai/Qwen/Qwen3.8-Flash.
+**Context**: Sin transición de etapa.
+
+---
+
+## Gateway LiteLLM para la comparación
+**Timestamp**: 2026-11-02T16:08:17-05:00
+**User Input**: "this is the litellm url http://chalas-lab:4000/"
+**AI Response**: Se resuelve el host a IP para usar la excepción http ya aprobada (IP privada exacta) y se prueba con litellm.key.
+**Context**: Sin transición de etapa.
+
+---
+
+## Comparación Deepseek-V4-Flash vs Qwen-3.8-Flash — resultado
+**Timestamp**: 2026-11-02T16:14:33-05:00
+**AI Response**: Gateway LiteLLM http://chalas-lab:4000 (100.84.211.20) con litellm.key. Deepseek-V4-Flash: 2/12 (PlanRejected:endpoint_no_observado, defecto de rutas con plantilla). Qwen-3.8-Flash: 2/12, LLMUnavailable en todas las llamadas; causa confirmada: Together exige stream=true (streaming_required) y el adaptador no soporta streaming. Qwen-3.8-Max-Quantized sí responde sin streaming. _err del eval ahora incluye el literal de LLMUnavailable/LLMTimeout. 113 pruebas OK. Evidencia §10. Se pregunta al humano cómo seguir.
+**Context**: Sin transición de etapa.
+
+---

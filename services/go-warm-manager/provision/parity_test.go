@@ -32,6 +32,16 @@ func TestWorkloadTemplateParityWithWarmYAML(t *testing.T) {
 	if res.Namespace.Labels["aqs.io/plane"] != "warm" {
 		t.Errorf("label aqs.io/plane = %s, esperado warm", res.Namespace.Labels["aqs.io/plane"])
 	}
+	// Pod Security Admission: misma postura que aqs-test (deploy/flux/base/namespaces.yaml).
+	for k, want := range map[string]string{
+		"pod-security.kubernetes.io/enforce": "baseline",
+		"pod-security.kubernetes.io/warn":    "restricted",
+		"pod-security.kubernetes.io/audit":   "restricted",
+	} {
+		if got := res.Namespace.Labels[k]; got != want {
+			t.Errorf("label %s = %q, esperado %q", k, got, want)
+		}
+	}
 	if res.Namespace.Annotations["aqs.io/repo"] != target.Repo {
 		t.Errorf("label aqs.io/repo = %s, esperado %s", res.Namespace.Annotations["aqs.io/repo"], target.Repo)
 	}

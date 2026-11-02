@@ -12,11 +12,33 @@ Evaluacion offline (U3-T05): ejecuta `agent-planner` y `agent-reporter` como bib
 
 ```
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m agent_eval run [--dataset ../dataset] [--out out]      # rc 0 umbrales OK, 1 FALLA, 2 dataset invalido
+.venv/bin/python -m agent_eval run [--dataset ../dataset] [--out out] [--llm fake|http]   # rc 0 umbrales OK, 1 FALLA, 2 dataset/config invalido
+.venv/bin/python -m agent_eval compare <report.json>...
 .venv/bin/python -m agent_eval add-regression --artifact <id> --finding <finding_id> --label sin-hallazgos|inconcluso [--dataset ../dataset]
 ```
 
 Sin `Dockerfile`: no es un servicio. No usa red (guarda propia que bloquea y cuenta conexiones no locales).
+
+## Modo con modelo real (`--llm http`, entrega del modulo 8)
+
+Los mismos 12 casos, contra un modelo de verdad. El modelo se elige **solo por entorno**, con las mismas variables y
+validaciones que los Deployments de `agent-planner` y `agent-reporter` (`LLM_BASE_URL`, `LLM_MODEL`,
+`LLM_API_KEY_FILE`; opcionales `PLANNER_*`/`REPORTER_*`). Cambiar de modelo = cambiar `LLM_MODEL`; ni codigo ni prompts.
+
+```
+export LLM_BASE_URL=https://<gateway compatible con OpenAI>/v1     # http solo hacia loopback
+export LLM_API_KEY_FILE=<archivo con la clave>                       # nunca se imprime
+./run-models.sh <modelo-1> <modelo-2>          # out/<modelo>/report.json + out/comparacion.md
+.venv/bin/python -m agent_eval compare out/*/report.json            # tabla markdown
+```
+
+- El informe queda etiquetado `llm: "http:<modelo>"`, `valid_for: "model"`. Con `fake` sigue siendo `pipeline`.
+- La guarda de red deja pasar **solo** el host de `LLM_BASE_URL`; cualquier otro destino cuenta contra A6.
+- `compare` cuenta un caso como acertado si planner y reporter dan el resultado esperado, sin falsos positivos, con la
+  causa raiz esperada cuando es `bug`, y con todas sus reglas A1-A7 en verde.
+- Limite honesto: 12 casos sinteticos miden regresiones entre modelos, no la calidad en apps reales.
+- Pruebas sin red: `tests/test_live_model.py` levanta un gateway OpenAI en loopback con dos «modelos» (uno correcto,
+  uno roto) y comprueba que el cambio de `LLM_MODEL` se refleja en el informe y en el codigo de salida.
 
 ## Metricas (definiciones fijas)
 

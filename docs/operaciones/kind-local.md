@@ -18,6 +18,24 @@ bash scripts/kind/kind-down.sh      # destruye el clúster aqs
 Tras `kind-down` el contexto de kubectl queda vacío; vuelve a dejarlo donde estabas
 (`kubectl config use-context <ctx>`).
 
+## GitOps con Flux (entrega del módulo 8)
+
+Alternativa a `deploy.sh`: Flux v2.4.0 sigue el repositorio y aplica `deploy/flux/kind` cada minuto, con `prune`.
+
+```bash
+bash scripts/kind/flux-up.sh                                   # instala Flux y sigue main
+AQS_FLUX_BRANCH=<rama-de-PR> bash scripts/kind/flux-up.sh     # prueba una rama antes de fusionar
+bash scripts/kind/flux-status.sh                               # ¿el clúster está en el commit de GitHub?
+bash scripts/kind/flux-down.sh                                 # retira Flux sin podar la plataforma
+```
+
+- Los Secrets siguen saliendo de `secrets.sh` (`flux-up.sh` lo llama); nunca van a Git y Flux no los poda.
+- warm-app, warm-db y warm-redis llevan `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent`: go-warm-manager cambia
+  su imagen y réplicas en runtime y Flux no lo revierte.
+- Con Flux activo, `deploy.sh` (apply manual) deja de ser la fuente de verdad: lo que no está en Git, Flux lo
+  devuelve a Git en la siguiente vuelta. Las imágenes `:0.0.0` cargadas con `load-images.sh` siguen valiendo.
+- Al instalarlo por primera vez sobre una plataforma aplicada con `kubectl`, el control plane se reinicia una vez.
+
 ## Qué comprueba `kind-smoke.sh`
 
 Cada línea sale como `OK <comprobación>` o `FALLA <comprobación>`; el script sale con 0 solo

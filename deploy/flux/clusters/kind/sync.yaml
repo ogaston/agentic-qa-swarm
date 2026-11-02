@@ -1,0 +1,32 @@
+# GitOps en el clúster kind local (entrega del módulo 8). Lo aplica scripts/kind/flux-up.sh una vez; a partir
+# de ahí Flux reconcilia deploy/flux/kind desde GitHub cada minuto. No hay auto-gestión de flux-system (a
+# diferencia de clusters/dev|prod): así el script puede apuntar el GitRepository a una rama de PR para probarla
+# antes de fusionar (AQS_FLUX_BRANCH), sin que Flux la devuelva a main.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: agentic-qa-swarm
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  ref:
+    branch: main
+  url: https://github.com/ogaston/agentic-qa-swarm
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: aqs-kind
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  retryInterval: 30s
+  timeout: 3m0s
+  path: ./deploy/flux/kind
+  # prune: lo que se borra de Git se borra del clúster. Los Secrets de scripts/kind/secrets.sh y los namespaces
+  # aqs-w-* de go-warm-manager no los creó Flux, así que no entran en su inventario y nunca se podan.
+  prune: true
+  wait: false
+  sourceRef:
+    kind: GitRepository
+    name: agentic-qa-swarm

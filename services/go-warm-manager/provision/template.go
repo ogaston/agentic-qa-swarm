@@ -64,6 +64,10 @@ func WorkloadTemplate(target warmtarget.WarmTarget) (*WarmResources, error) {
 				Labels: map[string]string{
 					"aqs.io/plane": "warm",
 					"aqs.io/repo":  warmtarget.Slug(target.Repo),
+					// Pod Security Admission, igual que aqs-test en deploy/flux/base/namespaces.yaml.
+					"pod-security.kubernetes.io/enforce": "baseline",
+					"pod-security.kubernetes.io/warn":    "restricted",
+					"pod-security.kubernetes.io/audit":   "restricted",
 				},
 			},
 		},
