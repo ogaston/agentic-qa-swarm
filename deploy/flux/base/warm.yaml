@@ -12,6 +12,10 @@ kind: Deployment
 metadata:
   name: warm-app
   namespace: aqs-test
+  annotations:
+    # Flux crea el objeto pero no lo sobrescribe: go-warm-manager cambia imagen y réplicas en runtime
+    # (deploy de cada corrida, escala a 0 en idle). Sin esto, cada reconciliación revertiría el warm.
+    kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
   labels:
     app.kubernetes.io/name: warm-app
 spec:
@@ -99,6 +103,10 @@ kind: StatefulSet
 metadata:
   name: warm-db
   namespace: aqs-test
+  annotations:
+    # Flux crea el objeto pero no lo sobrescribe: go-warm-manager cambia imagen y réplicas en runtime
+    # (deploy de cada corrida, escala a 0 en idle). Sin esto, cada reconciliación revertiría el warm.
+    kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
   labels:
     app.kubernetes.io/name: warm-db
 spec:
@@ -171,6 +179,10 @@ kind: Deployment
 metadata:
   name: warm-redis
   namespace: aqs-test
+  annotations:
+    # Flux crea el objeto pero no lo sobrescribe: go-warm-manager cambia imagen y réplicas en runtime
+    # (deploy de cada corrida, escala a 0 en idle). Sin esto, cada reconciliación revertiría el warm.
+    kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
   labels:
     app.kubernetes.io/name: warm-redis
 spec:
