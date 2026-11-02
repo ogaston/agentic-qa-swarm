@@ -2431,3 +2431,50 @@ why is lasting so long?
 **AI Response**: LLM_DISABLE_THINKING (0|1, otro valor impide el arranque) en planner y reporter; en kind, LITELLM_UPSTREAM_DISABLE_THINKING → Secret llm-upstream/disable-thinking → env opcional. Pruebas unitarias nuevas (cuerpo de la petición con y sin streaming, validación de config). Sin nueva corrida de modelos, por instrucción del usuario; el README lo declara.
 
 ---
+
+## Entrega módulo 8: PR #160 fusionado
+**Timestamp**: 2026-11-02T22:23:26Z
+**User Input**: "done!"
+**AI Response**: Se pasa Flux a main con scripts/kind/flux-up.sh y se verifica con flux-status.sh.
+
+---
+
+## Entrega módulo 8: PR #160 fusionado (confirmado)
+**Timestamp**: 2026-11-02T22:25:02Z
+**User Input**: "listo, ya fusioné el 160"
+**AI Response**: Se verifica que Flux aplique main con #160 y que los agentes reciban LLM_DISABLE_THINKING (opcional).
+
+---
+
+## Entrega módulo 8: preparar warm para grabar
+**Timestamp**: 2026-11-02T22:26:25Z
+**User Input**: "levanta el warm, haz reset y corre el preflight"
+**AI Response**: Se siguen los pasos de preparación de docs/entrega/guion-grabacion.md (up, reset, preflight).
+
+---
+
+## Entrega módulo 8: espera de la preparación
+**Timestamp**: 2026-11-02T22:27:30Z
+**User Input**: "ok, avísame cuando termine"
+**AI Response**: Se espera el fin de up.sh, reset y preflight.
+
+---
+
+## Entrega módulo 8: warm listo y preflight OK
+**Timestamp**: 2026-11-02T22:42:02Z
+**AI Response**: up.sh salió rc 1: refresh-images detectó agent-planner sin reiniciar porque Flux revierte la anotación de kubectl rollout restart (el pod viejo coincidía con la plantilla). Además el main local estaba en 5d7764e (sin #160). Se hizo ff a 9021e11, se reconstruyeron agent-planner y agent-reporter, se recrearon sus pods (delete pod) y se verificó el código nuevo en ellos. Reset: OK (state=ready, reset_verified=true). kind-smoke --preflight: OK, 0 FALLA. flux-status OK.
+
+---
+
+## Entrega módulo 8: refresh-images compatible con Flux y guion
+**Timestamp**: 2026-11-02T22:44:16Z
+**User Input**: "sí, arregla refresh-images y el guion"
+**AI Response**: refresh-images.sh pasa de rollout restart (que Flux revierte) a recrear los pods; el guion agrega git pull de main antes de up.sh.
+
+---
+
+## Entrega módulo 8: refresh-images y guion arreglados
+**Timestamp**: 2026-11-02T22:49:11Z
+**AI Response**: refresh-images.sh recrea los pods por selector (delete pods -l + rollout status + wait Ready) en vez de rollout restart, que Flux revierte; falla si un deployment no tiene matchLabels. Mismo cambio en secrets.sh --rotate-demo (go-identity) y en el comando de cambio de modelo del README §5. Guion: git pull --ff-only de main antes de up.sh. Pruebas: demo-refresh-images-test.py 7 OK (nueva: sin selector no borra el namespace), u9-kind-state 0 fallos, check-secrets-test y u11-scripts-test OK. Verificado en kind: AQS_IMAGES=agent-planner refresh-images.sh OK y el pod nuevo sobrevive a la reconciliación de Flux.
+
+---

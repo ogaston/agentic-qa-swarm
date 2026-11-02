@@ -46,7 +46,7 @@ if [ "${words[0]:-}" = get ] && [ "${words[1]:-}" = pods ]; then
   cat "$AQS_TEST_DIR/pods-$ns.json" 2>/dev/null || printf '{"items":[]}\n'
   exit 0
 fi
-if [ "${words[0]:-}" = rollout ]; then
+if [ "${words[0]:-}" = rollout ] || [ "${words[0]:-}" = delete ] || [ "${words[0]:-}" = wait ]; then
   exit 0
 fi
 exit 1
@@ -141,15 +141,29 @@ class RefreshImagesTest(unittest.TestCase):
         self.assertIn('refresh-images: OK (2 deployments reiniciados)', result.stdout)
         calls = self.calls('kubectl')
         self.assertFalse([line for line in calls if 'warm-app' in line], calls)
+        # Con Flux, `rollout restart` se revierte: se recrean los pods por selector y nunca se toca la plantilla.
+        self.assertFalse([line for line in calls if 'rollout restart' in line], calls)
         for name in ('go-run-controller', 'ui-api'):
-            restart = [i for i, line in enumerate(calls)
-                       if 'rollout restart deployment/' + name in line]
-            self.assertEqual(len(restart), 1, calls)
-            self.assertIn('-n aqs-system', calls[restart[0]], calls)
+            delete = [i for i, line in enumerate(calls)
+                      if line.startswith('--context kind-aqs -n aqs-system delete pods -l app=' + name + ' ')]
+            self.assertEqual(len(delete), 1, calls)
             status = [i for i, line in enumerate(calls)
                       if 'rollout status deployment/' + name in line]
             self.assertEqual(len(status), 1, calls)
-            self.assertLess(restart[0], status[0], calls)
+            ready = [i for i, line in enumerate(calls)
+                     if 'wait --for=condition=Ready pods -l app=' + name + ' ' in line]
+            self.assertEqual(len(ready), 1, calls)
+            self.assertLess(delete[0], status[0], calls)
+            self.assertLess(status[0], ready[0], calls)
+
+    def test_deployment_sin_selector_no_borra_el_namespace(self):
+        self.set_deployments([
+            deployment('aqs-system', 'ui-api', PREFIX + '/ui-api:0.0.0', {}),
+        ])
+        result = self.run_refresh()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('aqs-system/ui-api no tiene matchLabels', result.stderr)
+        self.assertFalse([line for line in self.calls('kubectl') if ' delete ' in ' ' + line], self.calls('kubectl'))
 
     def test_fails_if_pod_predates_restart(self):
         self.set_pods('aqs-system', [
@@ -184,7 +198,7 @@ class RefreshImagesTest(unittest.TestCase):
         self.assertTrue([line for line in kind if 'ui-api' in line], kind)
         self.assertFalse([line for line in kind if 'go-run-controller' in line], kind)
         kubectl = self.calls('kubectl')
-        self.assertTrue([line for line in kubectl if 'rollout restart deployment/ui-api' in line], kubectl)
+        self.assertTrue([line for line in kubectl if 'delete pods -l app=ui-api' in line], kubectl)
         self.assertFalse([line for line in kubectl if 'go-run-controller' in line], kubectl)
 
     def test_no_platform_deployments_is_a_noop(self):
@@ -195,7 +209,7 @@ class RefreshImagesTest(unittest.TestCase):
         result = self.run_refresh()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('refresh-images: OK (0 deployments reiniciados)', result.stdout)
-        self.assertFalse([line for line in self.calls('kubectl') if 'rollout' in line])
+        self.assertFalse([line for line in self.calls('kubectl') if 'rollout' in line or 'delete' in line])
 
     def test_up_refreshes_existing_cluster(self):
         start = UP.index('bash "$root/scripts/kind/kind-up.sh"')
