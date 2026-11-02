@@ -70,3 +70,12 @@ def test_config_llm_stream(tmp_path):
     for bad in ("true", "yes", "2"):
         with pytest.raises(ConfigError):
             load_config(_http_env(tmp_path, LLM_STREAM=bad, **base))
+
+
+def test_config_llm_disable_thinking(tmp_path):
+    base = dict(LLM_ALLOW_INSECURE_HTTP="1", LLM_INSECURE_HTTP_HOST="10.20.30.40")
+    assert load_config(_http_env(tmp_path, LLM_DISABLE_THINKING="1", **base)).llm._disable_thinking is True
+    assert load_config(_http_env(tmp_path, **base)).llm._disable_thinking is False
+    for bad in ("true", "no", "2"):
+        with pytest.raises(ConfigError):
+            load_config(_http_env(tmp_path, LLM_DISABLE_THINKING=bad, **base))

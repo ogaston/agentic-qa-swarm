@@ -280,6 +280,13 @@ patches:
                 name: llm-upstream
                 key: stream
                 optional: true
+          # 1 apaga el razonamiento de modelos híbridos (LITELLM_UPSTREAM_DISABLE_THINKING en litellm.env). Opcional: 0.
+          - name: LLM_DISABLE_THINKING
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: disable-thinking
+                optional: true
           # Opt-in de riesgo aceptado (ronda 4): http solo hacia el host exacto del gateway (Secret llm-upstream).
           - name: LLM_ALLOW_INSECURE_HTTP
             value: "1"
@@ -321,6 +328,13 @@ patches:
               secretKeyRef:
                 name: llm-upstream
                 key: stream
+                optional: true
+          # 1 apaga el razonamiento de modelos híbridos (LITELLM_UPSTREAM_DISABLE_THINKING en litellm.env). Opcional: 0.
+          - name: LLM_DISABLE_THINKING
+            valueFrom:
+              secretKeyRef:
+                name: llm-upstream
+                key: disable-thinking
                 optional: true
           # Opt-in de riesgo aceptado (ronda 4): http solo hacia el host exacto del gateway (Secret llm-upstream).
           - name: LLM_ALLOW_INSECURE_HTTP

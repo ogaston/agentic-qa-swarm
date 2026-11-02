@@ -87,3 +87,22 @@ def test_sin_stream_no_lo_pide(srv, key):
                               "usage": {"prompt_tokens": 1, "completion_tokens": 1}}).encode()
     r = HttpLLM(srv["url"], "m", key).complete("p", max_tokens=9, timeout_s=5)
     assert r.text == "ok" and "stream" not in srv["requests"][0]
+
+
+# LLM_DISABLE_THINKING=1: Qwen-3.8-Flash razonaba ~6665 tokens por plan (150 s > tope de 120 s); apagado, 8,8 s.
+@pytest.mark.parametrize("stream", [False, True])
+def test_disable_thinking_lo_pide_al_proveedor(srv, key, stream):
+    if stream:
+        srv["body"] = sse(delta("ok"))
+    else:
+        srv["body"] = json.dumps({"choices": [{"message": {"content": "ok"}}],
+                                  "usage": {"prompt_tokens": 1, "completion_tokens": 1}}).encode()
+    r = HttpLLM(srv["url"], "m", key, stream=stream, disable_thinking=True).complete("p", max_tokens=9, timeout_s=5)
+    assert r.text == "ok"
+    assert srv["requests"][0]["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+def test_por_defecto_no_toca_el_razonamiento(srv, key):
+    srv["body"] = sse(delta("ok"))
+    HttpLLM(srv["url"], "m", key, stream=True).complete("p", max_tokens=9, timeout_s=5)
+    assert "chat_template_kwargs" not in srv["requests"][0]

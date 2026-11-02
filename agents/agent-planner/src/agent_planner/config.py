@@ -67,8 +67,12 @@ def _http_llm(env: Mapping[str, str]) -> HttpLLM:
     stream = env.get("LLM_STREAM", "")
     if stream not in ("", "0", "1"):
         raise ConfigError("LLM_STREAM debe ser 0 o 1")
+    no_think = env.get("LLM_DISABLE_THINKING", "")
+    if no_think not in ("", "0", "1"):
+        raise ConfigError("LLM_DISABLE_THINKING debe ser 0 o 1")
     try:
-        return HttpLLM(base, model, key_file, insecure_http_host=insecure_host, stream=stream == "1")
+        return HttpLLM(base, model, key_file, insecure_http_host=insecure_host, stream=stream == "1",
+                       disable_thinking=no_think == "1")
     except (ValueError, OSError):
         raise ConfigError("configuracion LLM_PROVIDER=http invalida") from None
 

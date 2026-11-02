@@ -69,7 +69,8 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 class HttpLLM:
     def __init__(self, base_url: str, model: str, api_key_file: str | Path,
-                 insecure_http_host: str | None = None, stream: bool = False) -> None:
+                 insecure_http_host: str | None = None, stream: bool = False,
+                 disable_thinking: bool = False) -> None:
         self._base = check_base_url(base_url, insecure_http_host)
         if not model:
             raise ValueError("LLM_MODEL no configurado")
@@ -81,6 +82,9 @@ class HttpLLM:
         # LLM_STREAM=1: algunos proveedores (p. ej. Qwen-3.8-Flash en Together) solo responden en streaming.
         # Se pide stream y se agrega el texto aqui; el resto del agente no se entera.
         self._stream = stream
+        # LLM_DISABLE_THINKING=1: modelos híbridos (p. ej. Qwen-3.8-Flash) razonan miles de tokens antes de responder
+        # y se pasan del tope de tiempo. chat_template_kwargs.enable_thinking=false lo apaga en el proveedor.
+        self._disable_thinking = disable_thinking
 
     def complete(self, prompt: str, *, max_tokens: int, timeout_s: float) -> LLMResult:
         body = json.dumps({
@@ -89,6 +93,7 @@ class HttpLLM:
             "max_tokens": max_tokens,
             "temperature": 0,
             **({"stream": True, "stream_options": {"include_usage": True}} if self._stream else {}),
+            **({"chat_template_kwargs": {"enable_thinking": False}} if self._disable_thinking else {}),
         }).encode("utf-8")
         req = urllib.request.Request(
             self._base + "/chat/completions",

@@ -237,3 +237,16 @@ def test_http_privada_rfc1918_y_ula_aceptadas_con_host_exacto(host):
 def test_http_host_vacio_o_none_rechazado(host):
     with pytest.raises(ValueError):
         check_base_url(f"http://{GW}:8000/v1", insecure_http_host=host)
+
+
+def test_server_llm_disable_thinking(tmp_path):
+    from agent_reporter import server
+    key = tmp_path / "k"
+    key.write_text("x", encoding="utf-8")
+    base = {"LLM_PROVIDER": "http", "LLM_BASE_URL": f"http://{GW}:8000/v1", "LLM_MODEL": "m", "LLM_API_KEY_FILE": str(key),
+            "LLM_ALLOW_INSECURE_HTTP": "1", "LLM_INSECURE_HTTP_HOST": GW}
+    assert server._http_llm({**base, "LLM_DISABLE_THINKING": "1"})._disable_thinking is True
+    assert server._http_llm(base)._disable_thinking is False
+    for bad in ("true", "no", "2"):
+        with pytest.raises(SystemExit):
+            server._http_llm({**base, "LLM_DISABLE_THINKING": bad})
