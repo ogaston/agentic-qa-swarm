@@ -53,16 +53,35 @@ if [ "$repo" != "ogaston/demo-target-app-qa-swarm" ]; then
   exit 1
 fi
 export AQS_DEMO_PUBLIC_URL=${AQS_DEMO_PUBLIC_URL:-https://aqs.ogaston.com}
-for cmd in kind podman kubectl gh jq curl base64; do
+for cmd in kind podman kubectl gh jq curl base64 python3; do
   command -v "$cmd" >/dev/null || { echo "up: missing $cmd" >&2; exit 1; }
 done
 fresh=0
 if ! kind get clusters 2>/dev/null | grep -qx aqs; then fresh=1; fi
 # Existing stopped nodes must be started before kind-up waits for readiness.
+booted=''
 if podman container exists aqs-control-plane && [ "$(podman inspect -f '{{.State.Running}}' aqs-control-plane)" != true ]; then
+  booted=$(date -u +%FT%TZ)
   podman start aqs-control-plane >/dev/null
 fi
 bash "$root/scripts/kind/kind-up.sh"
+# Tras encender el nodo, los pods muestran el estado de antes del apagado y el kubelet los recrea unos
+# minutos después (SandboxChanged). Se espera a que cada pod de aqs-system haya arrancado DESPUÉS del
+# encendido y esté listo; si no, el preflight ve servicios que se reinician a mitad del humo.
+if [ -n "${booted:-}" ]; then
+  settled=0
+  for _ in $(seq 1 60); do
+    if kubectl --context kind-aqs -n aqs-system get pods -o json 2>/dev/null | jq -e --arg t "$booted" '
+        [.items[] | select(.status.phase != "Succeeded" and .status.phase != "Failed")] as $p
+        | ($p | length) > 0 and all($p[]; (.status.containerStatuses // []) as $c
+            | ($c | length) > 0 and all($c[]; .ready and ((.state.running.startedAt // "") >= $t)))' >/dev/null; then
+      settled=1; break
+    fi
+    sleep 5
+  done
+  [ "$settled" -eq 1 ] || { echo 'up: aqs-system pods did not restart and become ready within 5 min of booting the node' >&2; exit 1; }
+  echo 'up: node booted; aqs-system pods restarted and ready'
+fi
 if [ "$fresh" -eq 1 ]; then
   bash "$root/scripts/kind/build-images.sh"
   bash "$root/scripts/kind/load-images.sh"
@@ -73,7 +92,9 @@ bash "$root/scripts/kind/demo-preflight.sh" --deploy
 if [ "$fresh" -eq 0 ]; then
   bash "$root/scripts/kind/refresh-images.sh"
 fi
-bash "$root/scripts/kind/dashboard-up.sh"
+# Los port-forward se pegan a un pod: si refresh-images recreó los pods, el de go-intake que abrió el
+# preflight ya no responde. reconnect.sh lo rehace, levanta el dashboard y comprueba el túnel.
+bash "$root/scripts/demo/reconnect.sh"
 mkdir -p "$state"
 chmod 700 "$state"
 work=$(mktemp -d "${TMPDIR:-/tmp}/aqs-hook.XXXXXX")
@@ -94,6 +115,18 @@ secret=$(kubectl --context kind-aqs -n aqs-system get secret go-intake-webhook -
 # Keep the secret out of process arguments and logs.
 printf '%s' "$secret" > "$work/secret"
 unset secret
+# Si el repo está registrado en el asistente de proyectos (go-governance) con webhook_secret_version >= 1,
+# go-intake verifica con el secreto DERIVADO de esa versión, no con el de plataforma: hay que poner ese en
+# GitHub o cada push da 401 invalid_signature. Falla cerrado si no se puede leer el registro.
+reg=$(kubectl --context kind-aqs -n aqs-system exec deploy/go-governance -- cat /data/repositories.json) || {
+  echo 'up: could not read the go-governance repository registry' >&2; exit 1; }
+version=$(jq -r --arg r "$repo" '[.[] | select((.repo | ascii_downcase) == $r)][0].webhook_secret_version // 0' <<<"$reg")
+[[ "$version" =~ ^[0-9]+$ ]] || { echo 'up: invalid webhook_secret_version in the registry' >&2; exit 1; }
+if [ "$version" -ge 1 ]; then
+  python3 "$root/scripts/demo/webhook-secret.py" "$work/secret" "$repo" "$version" "$work/derived"
+  mv "$work/derived" "$work/secret"
+  echo "up: $repo is registered in the project wizard; webhook uses its derived secret v$version"
+fi
 jq -n --rawfile secret "$work/secret" --arg url "${AQS_DEMO_PUBLIC_URL%/}/webhooks/github" \
   '{name:"web",active:true,events:["push"],config:{url:$url,content_type:"json",secret:$secret,insecure_ssl:"0"}}' > "$work/request"
 if [ -n "$id" ]; then

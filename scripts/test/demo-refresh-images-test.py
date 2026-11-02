@@ -213,7 +213,7 @@ class RefreshImagesTest(unittest.TestCase):
 
     def test_up_refreshes_existing_cluster(self):
         start = UP.index('bash "$root/scripts/kind/kind-up.sh"')
-        end = UP.index('bash "$root/scripts/kind/dashboard-up.sh"')
+        end = UP.index('bash "$root/scripts/demo/reconnect.sh"')
         block = UP[start:end]
 
         def run(fresh):
@@ -242,6 +242,26 @@ class RefreshImagesTest(unittest.TestCase):
         self.assertLess(lines.index('scripts/kind/build-images.sh'), preflight, lines)
         self.assertLess(lines.index('scripts/kind/load-images.sh'), preflight, lines)
         self.assertNotIn('scripts/kind/refresh-images.sh', lines, lines)
+
+    def test_up_waits_for_pods_after_booting_the_node(self):
+        # Tras `podman start`, el estado de los pods es el de antes del apagado: el preflight no puede
+        # empezar hasta que todos arrancaron después del encendido.
+        boot = UP.index('podman start aqs-control-plane')
+        settle = UP.index('.state.running.startedAt')
+        self.assertLess(boot, settle)
+        self.assertLess(UP.index('bash "$root/scripts/kind/kind-up.sh"'), settle)
+        self.assertLess(settle, UP.index('bash "$root/scripts/kind/demo-preflight.sh" --deploy'))
+
+    def test_up_reconnects_after_recreating_pods(self):
+        # Un port-forward abierto antes de recrear los pods queda pegado a un pod muerto (500 en el login,
+        # 502 en el webhook): up.sh tiene que reconectar DESPUÉS de refresh-images, no antes.
+        self.assertLess(UP.index('bash "$root/scripts/kind/refresh-images.sh"'),
+                        UP.index('bash "$root/scripts/demo/reconnect.sh"'))
+        self.assertNotIn('bash "$root/scripts/kind/dashboard-up.sh"', UP)
+        reconnect = (ROOT / 'scripts/demo/reconnect.sh').read_text()
+        self.assertIn('scripts/kind/dashboard-up.sh', reconnect)
+        self.assertIn('svc/go-intake "$P_INTAKE:8080"', reconnect)
+        self.assertIn('require_kind_context', reconnect)
 
 
 if __name__ == '__main__':

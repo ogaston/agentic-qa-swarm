@@ -1,9 +1,15 @@
 # Local demo
 
-Start with `bash scripts/demo/up.sh` and stop with `bash scripts/demo/down.sh`. The first start creates the kind cluster, builds and loads platform images, deploys the services, starts the dashboard and tunnel, and registers a GitHub push webhook. Later starts reuse the cluster and webhook, and rebuild, load and restart the platform images so merged changes reach the demo cluster. Shutdown preserves their state.
+The full up/down guide, with every piece, what breaks it and how to fix it, is
+[docs/operaciones/demo-subir-bajar.md](../../docs/operaciones/demo-subir-bajar.md).
 
-Requirements: podman, kind, kubectl, cloudflared, gh, jq, Node dependencies, a configured Cloudflare tunnel named `aqs-demo`, and GitHub CLI authentication with permission to administer webhooks on the target repository. Existing platform secret requirements still apply. `AQS_DEMO_PUBLIC_URL` defaults to `https://aqs.ogaston.com`; The target repository is `ogaston/demo-target-app-qa-swarm`.
+| Command | What it does |
+|---|---|
+| `bash scripts/demo/up.sh` | Starts the kind node, deploys what is missing, rebuilds and recreates the platform images, reconnects the dashboard and the go-intake tunnel backend, and reconciles the GitHub push webhook. |
+| `bash scripts/demo/up.sh --reset` | Clears the warm database and cache and runs a verified reset. Fails if verification fails. |
+| `bash scripts/demo/status.sh` | Read-only check of every piece; each `FALLA` line prints the command that fixes it. |
+| `bash scripts/demo/reconnect.sh` | Restarts the local port-forwards (dashboard and go-intake) after pods were recreated, without rebuilding. |
+| `bash scripts/demo/down.sh` | Stops the dashboard, the port-forwards and the kind node. Cluster data and the webhook are preserved. |
+| `bash scripts/demo/10-push-commit.sh --repo-dir <target> --bug off\|oversell` | Pushes a demo commit to the target app; wait for its image, then confirm the notification in the dashboard. |
 
-Create a demo commit using `bash scripts/demo/10-push-commit.sh --repo-dir /path/to/target --bug off` (or `--bug oversell`). Wait until it reports the image published, then confirm the notification in the dashboard. The credentials are in the protected state file reported by `up.sh`.
-
-To clear the warm database and cache and run a verified reset, use `bash scripts/demo/up.sh --reset`. This requires the cluster and go-reset to be running. The command fails if reset verification fails.
+Requirements: podman, kind, kubectl, gh (with permission to administer webhooks on `ogaston/demo-target-app-qa-swarm`), jq, curl, python3, Node dependencies, and the `cloudflared` systemd service publishing `AQS_DEMO_PUBLIC_URL` (default `https://aqs.ogaston.com`) to `127.0.0.1:18622`. The webhook secret is the platform secret, or the per-repository derived secret when the repository is registered in the dashboard's project wizard; `up.sh` reads the registry and sets the right one.
