@@ -1,9 +1,15 @@
+# Pod Security Admission (entrega del módulo 8): enforce=baseline en ambos planos (todos los pods actuales lo
+# cumplen: `kubectl label --dry-run=server ... enforce=baseline` sin avisos) y warn/audit=restricted para
+# hacer visible la distancia hasta restricted (seccompProfile y capabilities pendientes en algunos pods).
 apiVersion: v1
 kind: Namespace
 metadata:
   name: aqs-system
   labels:
     aqs.io/plane: control
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
 ---
 apiVersion: v1
 kind: Namespace
@@ -11,3 +17,6 @@ metadata:
   name: aqs-test
   labels:
     aqs.io/plane: warm
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
