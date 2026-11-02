@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, UnknownType
@@ -16,6 +17,40 @@ def _bad_const(_):
 
 
 BODY_METHODS = {"POST", "PUT", "PATCH"}
+
+# Ruta con plantilla (OpenAPI): `{nombre}` ocupa un segmento entero. Un plan puede citar la plantilla literal o una
+# instancia concreta (`/orders/{id}` -> `/orders/1`), que es lo que el runner necesita ejecutar. Valor de un
+# parametro: un segmento no vacio de caracteres no reservados de RFC 3986, distinto de `.` y `..`; nunca `/`, `?`,
+# `#`, `%`, espacios ni un host.
+_PARAM_SEG = re.compile(r"\{[^{}/]+\}")
+_VALUE_SEG = re.compile(r"[A-Za-z0-9._~-]+")
+
+
+def _instance_of(path: str, template: str) -> bool:
+    ps, ts = path.split("/"), template.split("/")
+    if len(ps) != len(ts):
+        return False
+    for p, t in zip(ps, ts):
+        if _PARAM_SEG.fullmatch(t):
+            if not _VALUE_SEG.fullmatch(p) or p in (".", ".."):
+                return False
+        elif p != t:
+            return False
+    return True
+
+
+def match_endpoint(method: str, path: str, endpoints) -> tuple[str, str] | None:
+    """(method, plantilla) observada que cubre el paso, o None. Primero la coincidencia exacta; despues, la primera
+    plantilla de la que `path` es instancia. Una ruta sin `{...}` en la superficie solo casa exacta."""
+    if not isinstance(path, str):
+        return None
+    pairs = [(e["method"], e["path"]) for e in endpoints]
+    if (method, path) in pairs:
+        return (method, path)
+    for m, t in pairs:
+        if m == method and "{" in t and _instance_of(path, t):
+            return (m, t)
+    return None
 
 
 def _checkable(schema) -> bool:
@@ -74,7 +109,6 @@ def validate_plan_dict(plan: dict, surface: dict, workflow: str, limits: Limits)
     flows = plan["flows"]
     if len(flows) > limits.max_flows:
         raise PlanRejected("demasiados_flujos")
-    observed = {(e["method"], e["path"]) for e in surface["endpoints"]}
     surface_bodies = {(e["method"], e["path"]): e["request_body"] for e in surface["endpoints"] if "request_body" in e}
     seen = set()
     for i, fl in enumerate(flows):
@@ -87,7 +121,8 @@ def validate_plan_dict(plan: dict, surface: dict, workflow: str, limits: Limits)
         if len(fl["steps"]) > limits.max_steps:
             raise PlanRejected(f"demasiados_pasos:{i}")
         for j, st in enumerate(fl["steps"]):
-            if (st["method"], st["path"]) not in observed:
+            key = match_endpoint(st["method"], st["path"], surface["endpoints"])
+            if key is None:
                 raise PlanRejected(f"endpoint_no_observado:{i}/{j}")
-            _check_body(st, surface_bodies.get((st["method"], st["path"])), i, j)
+            _check_body(st, surface_bodies.get(key), i, j)
     return plan

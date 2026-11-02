@@ -33,6 +33,7 @@ Convierte un `SurfaceArtifact` y un workflow en un `FlowPlan` valido contra
 | (constante) `HANDLER_TIMEOUT_S` | `10` | timeout de lectura de socket por peticion |
 | `PLANNER_PORT` / `PLANNER_HOST` | `8080` / `0.0.0.0` | escucha |
 | `LLM_PROVIDER` | (obligatorio) | solo `fake`; otro valor: «proveedor no implementado» (el real es U3-T07) |
+| `LLM_STREAM` | `0` | `1`: pide la respuesta en streaming (SSE) y la agrega; para modelos que solo responden así (p. ej. Qwen-3.8-Flash en Together). Otro valor impide el arranque |
 | `PLANNER_ALLOW_FAKE` | | debe ser `true` para `fake`; con `PLANNER_ENV=prod` el arranque se rechaza |
 
 Valores no positivos o no numericos impiden el arranque. Un timeout del modelo es `BudgetExceeded("time")` (504).
@@ -55,3 +56,12 @@ si pasa de 35, 30 caracteres + `-` + 4 hex de sha256 del id original) y desambig
   en el controlador («plan guardado inválido»).
 - `jsonschema` en Python acepta `'a\n'` con `pattern` (usa `re.search`); el validador del planner usa `fullmatch`
   sobre el id y la normalización lo cubre.
+
+## Rutas con plantilla (entrega del módulo 8)
+
+Un paso puede citar la plantilla observada (`GET /orders/{id}`) o una instancia concreta (`GET /orders/1`): el
+runner ejecuta la ruta tal cual, así que la instancia es lo útil. `match_endpoint` acepta la instancia solo si cada
+`{param}` ocupa un segmento entero y el valor es un segmento no vacío de `[A-Za-z0-9._~-]`, distinto de `.` y `..`.
+No acepta `/`, `%`, `?`, `#`, espacios ni segmentos de más. La coincidencia exacta va primero, y el cuerpo se valida
+contra el `request_body` de la plantilla. Hallazgo de la evaluación con `deepseek-flash`: concretaba los parámetros
+y se rechazaban los 10 planes (`docs/entrega/evidencia-2026-11-02.md` §9). Pruebas: `tests/test_path_templates.py`.

@@ -50,3 +50,10 @@ se redactan aqui.
 - El tope de LECTURA (bytes traidos del almacen antes de redactar) lo impone el adaptador del lector: es de U3-T07.
   `EvidenceReader.get` es un puerto y devuelve el objeto completo; aqui solo se acota el costo de redactar.
 - Las URIs de entrada vienen de la plataforma (U2) y van tal cual al prompt (candidata: redactar su query/credenciales).
+
+## LLM_STREAM (entrega del módulo 8)
+
+`LLM_STREAM=1` pide la respuesta en streaming (SSE) y la agrega antes de validar; por defecto `0`. Lo necesitan
+los modelos que solo responden así (p. ej. Qwen-3.8-Flash en Together). El plazo total se respeta aunque cada
+fragmento llegue a tiempo. Sin `usage` en el stream, los tokens se estiman con ceil(len/4). Pruebas:
+`tests/test_llm_stream.py`. El adaptador está duplicado con el del planner: si cambia uno, cambia el otro.

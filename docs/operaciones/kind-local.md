@@ -165,7 +165,8 @@ clúster tiene egress al proveedor salvo los agentes, y solo hacia `IP/32:puerto
 
 Insumos del humano, fuera del repo (modo 600): `${AQS_KIND_STATE_DIR}/deepseek.key` (`~/.local/state/aqs-kind`) (la clave) y
 `${AQS_KIND_STATE_DIR}/litellm.env` (variables `LITELLM_UPSTREAM_IP`, `LITELLM_UPSTREAM_PORT`,
-`LITELLM_UPSTREAM_MODEL`). `scripts/kind/secrets.sh` los valida antes de tocar el clúster y crea:
+`LITELLM_UPSTREAM_MODEL` y, opcional, `LITELLM_UPSTREAM_STREAM=0|1` para modelos que solo responden en streaming).
+`scripts/kind/secrets.sh` los valida antes de tocar el clúster y crea:
 
 - Secret `agents-llm-key` (`api-key`): la clave del gateway, copiada de `deepseek.key`. Planner y reporter la
   montan en `/etc/aqs/llm/api-key` (`LLM_API_KEY_FILE`) y la presentan como Bearer. Se reaplica en cada ejecución.

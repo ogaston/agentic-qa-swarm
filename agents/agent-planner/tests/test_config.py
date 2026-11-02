@@ -61,3 +61,12 @@ def test_config_http_gateway_variable_distinta_de_1_rechazado(tmp_path):
 def test_config_http_gateway_variable_con_host_vacio_rechazado(tmp_path):
     with pytest.raises(ConfigError):
         load_config(_http_env(tmp_path, LLM_ALLOW_INSECURE_HTTP="1", LLM_INSECURE_HTTP_HOST=""))
+
+
+def test_config_llm_stream(tmp_path):
+    base = dict(LLM_ALLOW_INSECURE_HTTP="1", LLM_INSECURE_HTTP_HOST="10.20.30.40")
+    assert load_config(_http_env(tmp_path, LLM_STREAM="1", **base)).llm._stream is True
+    assert load_config(_http_env(tmp_path, **base)).llm._stream is False
+    for bad in ("true", "yes", "2"):
+        with pytest.raises(ConfigError):
+            load_config(_http_env(tmp_path, LLM_STREAM=bad, **base))

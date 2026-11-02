@@ -325,8 +325,10 @@ En kind salen del Secret `llm-upstream`, que `scripts/kind/secrets.sh` genera de
 `~/.local/state/aqs-kind/litellm.env`. Para cambiar de modelo:
 
 ```bash
-# en ~/.local/state/aqs-kind/litellm.env: LITELLM_UPSTREAM_MODEL=<otro-modelo>
-bash scripts/kind/secrets.sh                      # reaplica agents-llm-key y llm-upstream
+# en ~/.local/state/aqs-kind/litellm.env:
+#   LITELLM_UPSTREAM_MODEL=<otro-modelo>
+#   LITELLM_UPSTREAM_STREAM=1     # solo si el modelo exige streaming (p. ej. Qwen-3.8-Flash en Together)
+bash scripts/kind/secrets.sh                      # reaplica agents-llm-key y llm-upstream (model, stream)
 kubectl -n aqs-system rollout restart deploy/agent-planner deploy/agent-reporter
 ```
 
@@ -353,26 +355,39 @@ Lo que ya está probado sin red (`tests/test_live_model.py`, 11 pruebas): con un
 loopback, cambiar **solo** `LLM_MODEL` lleva al «modelo bueno» a 12/12 casos con rc 0, y al «modelo roto» a 2/12 con
 rc 1.
 
-**Medición con modelos reales.** Con los topes del clúster (120 s, 8000 tokens), vía el gateway LiteLLM del clúster:
+**Medición con modelos reales.** Con los topes del clúster (120 s y 8000 tokens por llamada), a través de un gateway
+LiteLLM compatible con OpenAI. Se corrió `LLM_STREAM=1 ./run-models.sh Deepseek-V4-Flash Qwen-3.8-Flash`; entre
+los dos modelos solo cambia `LLM_MODEL`:
 
 | llm | factualidad | precisión | ruido | adherencia | casos ok | umbrales |
 |---|---|---|---|---|---|---|
-| http:deepseek-flash | 1.00 | 0.80 | 0.00 | 0.68 | 2/12 | FALLA |
-| http:qwen-3.8-flash | *pendiente: no está en el gateway del clúster* | | | | | |
+| http:Deepseek-V4-Flash | 1.00 | 0.90 | 0.00 | 0.97 | 10/12 | FALLA |
+| http:Qwen-3.8-Flash | 1.00 | 0.70 | 0.00 | 0.84 | 6/12 | FALLA |
 
-**Lo que encontró: un defecto nuestro, no del modelo.** El planner rechazó los 10 planes con
-`PlanRejected:endpoint_no_observado`. La superficie declara rutas con plantilla (`GET /orders/{id}`) y el modelo
-las concreta (`GET /orders/1`), que es lo razonable. Nuestro validador exige la plantilla literal y rechaza el plan
-entero: falla cerrado, como está diseñado, pero sobre un plan correcto. La app de la demo casi no tiene rutas con
-parámetros, y por eso ahí la corrida da 7/7. Lo confirmamos con una llamada aislada a `deepseek-flash`. Arreglarlo
-toca el contrato del planner y el del runner (aceptar instancias de la plantilla y conservarla para la ejecución):
-queda como tarea. El reporter, en cambio, acertó el veredicto en los 7 casos golden y con bug (factualidad 1,00,
-ruido 0,00). En las trampas, el validador rechazó dos «sin hallazgos» con un flujo fallido (`ReportRejected`), que
-es el fallo cerrado esperado.
+Ninguno de los dos cumple los umbrales del PRD, y el arnés lo reporta sin tocar código (rc 1).
+
+- **Deepseek-V4-Flash** falla en 2 casos. En `bug-fintech-02` el plan no era JSON válido
+  (`PlanRejected:json_invalido`). En `trampa-logis-01` el reporter dijo «sin hallazgos» con un flujo fallido, y el
+  validador lo rechazó (`ReportRejected`).
+- **Qwen-3.8-Flash** falla en 6 casos. En 5 el planner se pasó del tope de 120 s (`BudgetExceeded:time`). Medido
+  aparte: un plan de `bug-fintech-01` tarda 150 s con 6665 tokens de razonamiento, y 8,8 s con el razonamiento
+  apagado (`enable_thinking: false`). En las 3 trampas, el reporter cayó en el mismo «sin hallazgos» que el validador
+  rechaza.
+- En los dos modelos el error es de fallo cerrado: ningún plan inválido llega a ejecutarse y ningún veredicto
+  inventado llega al post-mortem (ruido 0,00).
+
+**Lo que la medición obligó a cambiar.** Las corridas anteriores dieron 2/12 en los dos modelos por dos defectos
+nuestros, no de los modelos:
+
+1. El validador del planner exigía la ruta con plantilla literal (`GET /orders/{id}`) y rechazaba un plan correcto
+   que la concretaba (`GET /orders/1`). Ahora acepta las instancias de la plantilla (`match_endpoint` en
+   [`validate.py`](agents/agent-planner/src/agent_planner/validate.py)), y la regla A1 del eval usa la misma función.
+2. Qwen-3.8-Flash solo se sirve con streaming (Together: `streaming_required`). Los dos agentes aceptan ahora
+   `LLM_STREAM=1`, que en kind se configura con `LITELLM_UPSTREAM_STREAM=1`.
 
 Una primera corrida con los topes del LLM falso (25 s, 4000 tokens) dio números idénticos en dos modelos; está en
-la [evidencia §8](docs/entrega/evidencia-2026-11-02.md). Este resultado y su diagnóstico están en la
-[evidencia §9](docs/entrega/evidencia-2026-11-02.md).
+la [evidencia §8](docs/entrega/evidencia-2026-11-02.md). El diagnóstico está en la
+[evidencia §9 y §10](docs/entrega/evidencia-2026-11-02.md), y esta medición en la [§11](docs/entrega/evidencia-2026-11-02.md).
 
 Límite honesto: son 12 casos sintéticos. Detectan regresiones entre modelos; no miden la calidad en apps reales.
 
