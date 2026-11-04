@@ -273,7 +273,7 @@ salida al LLM**: el LLM piensa fuera y los runners ejecutan dentro, sin inferenc
 Corrida sana verificada el 2026-10-28: `run-d3fdad3c9118b08a`, 7/7 flujos, `done/sin-hallazgos`, reset verificado
 ([evidencia](aidlc-docs/construction/demo-setup/code/run-d3fdad3c9118b08a-verification.md)). Guion completo:
 [`docs/demo-real.md`](docs/demo-real.md). Guion de la grabación de respaldo:
-[`docs/entrega/guion-grabacion.md`](docs/entrega/guion-grabacion.md). **Pendiente antes de presentar:** grabarla y enlazarla aquí.
+[`docs/entrega/guion-grabacion.md`](docs/entrega/guion-grabacion.md). **Grabación de respaldo:** [youtu.be/PP2IKGA3m5w](https://youtu.be/PP2IKGA3m5w) (canal: [youtube.com/channel/UCrAmQDFzUURt2YQ3e1wm9kg](https://www.youtube.com/channel/UCrAmQDFzUURt2YQ3e1wm9kg)).
 
 ---
 
