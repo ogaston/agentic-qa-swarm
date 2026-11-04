@@ -9,9 +9,15 @@
 | Dashboard: lint, typecheck, build | ok |
 | Dashboard: vitest | 296 passed, 9 skipped, 24 archivos |
 
-## No ejecutado en esta pasada
-- Humo en kind (`kind-smoke.sh`), matriz RBAC y e2e de autoservicio: requieren el clúster local; su última ejecución en verde está en `docs/entrega/evidencia-2026-11-02.md`.
-- Pruebas de carga y de seguridad: fuera del alcance de la entrega (en el modal figuran como «Próximamente»).
-- Egress de `aqs-system` (C-51): abierto, declarado en el README.
+## Verificación en clúster kind (2026-11-04)
+Tras `scripts/demo/up.sh` y `up.sh --reset` (`reset_verified=true`):
+- `scripts/kind/kind-smoke.sh`: OK, sin FALLA. El caso `ciclo-webhook-confirm-corrida` daba 401 porque el repo objetivo está registrado en el asistente de proyectos y go-intake verifica con el secreto derivado; el humo ahora lo deriva igual que `up.sh`.
+- `scripts/ci/rbac-matrix.sh`: OK (dev y prod).
+- `scripts/test/u12-self-service-kind.sh`: 0 fallas.
 
-**Estado:** build y pruebas automatizadas en verde. Falta la aprobación del humano para cerrar la etapa.
+## Fuera de alcance / abierto
+- Pruebas de carga y de seguridad: «Próximamente» en el modal.
+- Egress de `aqs-system` (C-51): abierto, declarado en el README.
+- Entornos warm dinámicos de prueba en CrashLoopBackOff en el clúster local (restos de ensayos de autoservicio).
+
+**Estado:** build, pruebas automatizadas y verificación en kind en verde. Falta la aprobación del humano para cerrar la etapa.
