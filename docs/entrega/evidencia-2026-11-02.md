@@ -125,8 +125,7 @@ $ .venv/bin/python -m pytest -q tests/test_live_model.py
 9 passed      # gateway OpenAI en loopback; «modelo-bueno» 12/12 casos, «modelo-roto» 2/12 y rc=1
 ```
 
-Pendiente antes de presentar: `agents/eval/run-models.sh <modelo-A> <modelo-B>` contra el gateway real y pegar
-aquí `out/comparacion.md`.
+La comparación contra el gateway real está medida en las secciones 10 y 11 (Deepseek-V4-Flash 10/12, Qwen-3.8-Flash 6/12).
 
 ## 7. Cuarentena real y recuperación por GitOps
 

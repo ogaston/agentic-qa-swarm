@@ -2509,3 +2509,7 @@ why is lasting so long?
 **Context**: Preparación de la grabación de la demo.
 
 ---
+
+## Build and Test — 2026-11-03
+- **Input del usuario**: «I told you. finish the project. do whatever needs to be done»
+- Se ejecutaron build y pruebas automatizadas (Go x8, contratos, agents/eval, agentes, dashboard) en verde. Artefactos en `aidlc-docs/construction/build-and-test/`. Se corrigió la nota obsoleta de la comparación de modelos en la evidencia. Aprobación del humano pendiente.

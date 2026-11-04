@@ -73,7 +73,7 @@
 - [x] U10 — Fidelidad visual: T01..T06 fusionadas; T06 cerrada en PR #146 (merge `ad500d1`) tras ronda 4 VERDE.
 - [x] U11 — T01..T06 fusionadas; CA-6 de T02 verificado (PR #144). Ensayo con webhook real y humano sigue pendiente según docs/demo-real.md.
 - [x] U12 — Autoservicio de Repositorios y Entornos Warm (rama feat/self-service-repos, verificada 2026-10-29 con 6 servicios Go, contracts, 242 pruebas web/dashboard y smoke kind en verde).
-- [ ] Build and Test (etapa de la fase, tras cerrar las unidades activas)
+- [x] Build and Test — artefactos en `aidlc-docs/construction/build-and-test/`; automatizadas en verde el 2026-11-03 (pendiente de aprobación del humano)
 
 ### 🟡 OPERATIONS PHASE
 - Estado: **PLACEHOLDER** (no iniciado).
