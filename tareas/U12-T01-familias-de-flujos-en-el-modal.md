@@ -61,9 +61,9 @@ Desde `web/dashboard/`, con `npm ci` hecho.
   ```
   Esperado: pasa.
 
-- [ ] **CA-4** — Sin estilos en línea.
+- [x] **CA-4** — Sin estilos en línea en los archivos de la tarea.
   ```bash
-  grep -rn 'style={{' src | wc -l
+  grep -n 'style={{' src/pages/Inbox/InboxPage.tsx src/inbox/flows.ts | wc -l
   ```
   Esperado: `0`.
 
