@@ -303,6 +303,19 @@ ciclo_webhook_confirm_corrida() {
   local secret sig body code delivery notif run_id i after
   secret=$(kubectl get secret go-intake-webhook -n "$NS_SYS" -o jsonpath='{.data.secret}' | base64 -d) || return 1
   [ -n "$secret" ] || { echo "el secret go-intake-webhook está vacío"; return 1; }
+  # Un repo registrado en el asistente de proyectos (webhook_secret_version >= 1) se verifica con el secreto
+  # DERIVADO de esa versión, no con el de plataforma (misma regla que scripts/demo/up.sh).
+  local reg version
+  reg=$(kubectl -n "$NS_SYS" exec deploy/go-governance -- cat /data/repositories.json 2>/dev/null) || reg='[]'
+  version=$(jq -r --arg r "$(printf '%s' "$TARGET_REPO_FULL" | tr 'A-Z' 'a-z')" \
+    '[.[] | select((.repo | ascii_downcase) == $r)][0].webhook_secret_version // 0' <<<"$reg" 2>/dev/null) || version=0
+  [[ "$version" =~ ^[0-9]+$ ]] || version=0
+  if [ "$version" -ge 1 ]; then
+    printf '%s' "$secret" >"$work/platform-key"
+    python3 "$(dirname "${BASH_SOURCE[0]}")/../demo/webhook-secret.py" "$work/platform-key" "$TARGET_REPO_FULL" \
+      "$version" "$work/derived-secret" || { echo "no se pudo derivar el secreto del webhook v$version"; return 1; }
+    secret=$(cat "$work/derived-secret")
+  fi
   delivery=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'smoke-%s-%s' "$$" "$(date +%s)")
   # `after` debe ser un SHA (40 hex): el intake valida el payload del push (invalid_payload si no).
   after=$(printf '%s' "smoke-$(date +%s%N)-$$-$RANDOM" | sha1sum | cut -c1-40)
